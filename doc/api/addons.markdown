@@ -5,19 +5,19 @@ Addons are dynamically linked shared objects. They can provide glue to C and
 C++ libraries. The API (at the moment) is rather complex, involving
 knowledge of several libraries:
 -->
-�A�h�I���͓��I�ɋ��L�I�u�W�F�N�g�������N���܂��B
-�����́AC �� C++ �̃��C�u�����ɐڍ��_��񋟂��܂��B
-API �͂������̃��C�u�����̒m�����K�v�ŁA(�����_�ł�) ���Ȃ蕡�G�ł��B
+アドオンは動的に共有オブジェクトをリンクします。
+それらは、C や C++ のライブラリに接合点を提供します。
+API はいくつかのライブラリの知識が必要で、(現時点では) かなり複雑です。
 
 <!--
  - V8 JavaScript, a C++ library. Used for interfacing with JavaScript:
    creating objects, calling functions, etc.  Documented mostly in the
    `v8.h` header file (`deps/v8/include/v8.h` in the Node source tree).
 -->
- - V8 JavaScript �� C++ �̃��C�u�����ł��B
-   JavaScript �̃I�u�W�F�N�g�쐬��֐��Ăяo�����̃C���^�t�F�[�X�Ɏg�p����܂��B
-   �h�L�������g�͎�ɁA`v8.h` �̃w�b�_�t�@�C��
-   (Node �̃\�[�X�c���[�̒��� `deps/v8/include/v8.h`) �ɋL����Ă��܂��B
+ - V8 JavaScript は C++ のライブラリです。
+   JavaScript のオブジェクト作成や関数呼び出し等のインタフェースに使用されます。
+   ドキュメントは主に、`v8.h` のヘッダファイル
+   (Node のソースツリーの中の `deps/v8/include/v8.h`) に記されています。
 
 <!--
  - libev, C event loop library. Anytime one needs to wait for a file
@@ -26,12 +26,12 @@ API �͂������̃��C�u�����̒m�����K�v�ŁA(�����_�ł�) ���Ȃ蕡�G�ł��B
    any I/O, libev will need to be used.  Node uses the `EV_DEFAULT` event
    loop.  Documentation can be found http:/cvs.schmorp.de/libev/ev.html[here].
 -->
- - libev �� C �� event loop ���C�u�����ł��B
-   �t�@�C���L�q�q���ǂݎ��\�ɂȂ�̂�҂Ƃ��A�^�C�}�[��҂Ƃ��A�V�O�i������M����̂�҂Ƃ��͂��ł��A
-   libv �̃C���^�t�F�[�X���K�v�ɂȂ�܂��B
-   �܂�A���炩�� I/O ����������ƕK�� libev ���g���K�v������Ƃ������Ƃł��B
-   Node �� `EV_DEFAULT` �Ƃ����C�x���g���[�v���g���܂��B
-   �h�L�������g�́A[������](http:/cvs.schmorp.de/libev/ev.html) �ɂ���܂��B
+ - libev は C の event loop ライブラリです。
+   ファイル記述子が読み取り可能になるのを待つとき、タイマーを待つとき、シグナルを受信するのを待つときはいつでも、
+   libv のインタフェースが必要になります。
+   つまり、何らかの I/O 処理をすると必ず libev を使う必要があるということです。
+   Node は `EV_DEFAULT` というイベントループを使います。
+   ドキュメントは、[こちら](http:/cvs.schmorp.de/libev/ev.html) にあります。
 
 <!--
  - libeio, C thread pool library. Used to execute blocking POSIX system
@@ -39,45 +39,45 @@ API �͂������̃��C�u�����̒m�����K�v�ŁA(�����_�ł�) ���Ȃ蕡�G�ł��B
    `src/file.cc` so you will probably not need to use it. If you do need it,
    look at the header file `deps/libeio/eio.h`.
 -->
- - libeio �� C �̃X���b�h�v�[�����C�u�����ł��B
-   �u���b�N���� POSIX �V�X�e���R�[����񓯊��Ɏ��s���邽�߂Ɏg�p����܂��B
-   �����������Ăяo���̂��߂̑��̃��b�p�[�́A���� `src/file.cc` �ɗp�ӂ���Ă���̂ŁA
-   �����炭������g���K�v�͂Ȃ����傤�B
-   �K�v�ɂȂ�����A`deps/libeio/eio.h` �̃w�b�_�t�@�C�����Q�Ƃ��ĉ������B
+ - libeio は C のスレッドプールライブラリです。
+   ブロックする POSIX システムコールを非同期に実行するために使用されます。
+   こういった呼び出しのための大抵のラッパーは、既に `src/file.cc` に用意されているので、
+   おそらくこれを使う必要はないしょう。
+   必要になったら、`deps/libeio/eio.h` のヘッダファイルを参照して下さい。
 
 <!--
  - Internal Node libraries. Most importantly is the `node::ObjectWrap`
    class which you will likely want to derive from.
 -->
- - Node �̓������C�u�����B
-   �����Ƃ��d�v�Ȃ̂� `node::ObjectWrap` �N���X�ŁA
-   ���̃N���X����h�������邱�Ƃ������Ȃ�ł��傤�B
+ - Node の内部ライブラリ。
+   もっとも重要なのは `node::ObjectWrap` クラスで、
+   このクラスから派生させることが多くなるでしょう。
 
 <!--
  - Others. Look in `deps/` for what else is available.
 -->
- - ���̑��B�ǂ̂悤�ȕ������p�ł��邩�� `deps/` �ȉ����Q�Ƃ��Ă����B
+ - その他。どのような物が利用できるかは `deps/` 以下を参照してさい。
 
 <!--
 Node statically compiles all its dependencies into the executable. When
 compiling your module, you don't need to worry about linking to any of these
 libraries.
 -->
-Node �͑S�Ă̈ˑ����C�u���������s�t�@�C���ɐÓI�ɃR���p�C�����܂��B
-���W���[���̃R���p�C�����ɂ́A�����̃����N�ɂ��Ĉ�؋C�ɂ���K�v�͗L��܂���B
+Node は全ての依存ライブラリを実行ファイルに静的にコンパイルします。
+モジュールのコンパイル時には、それらのリンクについて一切気にする必要は有りません。
 
 <!--
 To get started let's make a small Addon which does the following except in
 C++:
 -->
-�ł́A C++ �ňȉ��̗l�ɓ��삷�鏬���ȃA�h�I�����쐬���Ă݂܂��傤�B
+では、 C++ で以下の様に動作する小さなアドオンを作成してみましょう。
 
     exports.hello = 'world';
 
 <!--
 To get started we create a file `hello.cc`:
 -->
-�܂� `hello.cc` �Ƃ����t�@�C�����쐬���܂�:
+まず `hello.cc` というファイルを作成します:
 
 
     #include <v8.h>
@@ -96,8 +96,8 @@ This source code needs to be built into `hello.node`, the binary Addon. To
 do this we create a file called `wscript` which is python code and looks
 like this:
 -->
-���̃\�[�X�R�[�h�́A`hello.node` �Ƃ����o�C�i���A�h�I���Ƃ��ăr���h�����K�v���L��܂��B
-���̂��߂� `wscript` �ƌĂ΂��ȉ��̂悤�ȃR�[�h�� Python �ŏ����܂���:
+このソースコードは、`hello.node` というバイナリアドオンとしてビルドされる必要が有ります。
+そのために `wscript` と呼ばれる以下のようなコードを Python で書きました:
 
     srcdir = '.'
     blddir = 'build'
@@ -119,19 +119,19 @@ like this:
 Running `node-waf configure build` will create a file
 `build/default/hello.node` which is our Addon.
 -->
-`node-waf configure build` �����s����ƁA`build/default/hello.node` ���쐬����܂��B���ꂪ�쐬�����A�h�I���ł��B
+`node-waf configure build` を実行すると、`build/default/hello.node` が作成されます。これが作成したアドオンです。
 
 <!--
 `node-waf` is just http://code.google.com/p/waf/[WAF], the python-based build system. `node-waf` is
 provided for the ease of users.
 -->
-`node-waf` �� [WAF](http://code.google.com/p/waf/) �ɂ��� Python �x�[�X�̃r���h�V�X�e���ł��B
-`node-waf` �́A���[�U�̕��S�����炷���߂ɒ񋟂���Ă��܂��B
+`node-waf` は [WAF](http://code.google.com/p/waf/) にある Python ベースのビルドシステムです。
+`node-waf` は、ユーザの負担を減らすために提供されています。
 
 <!--
 All Node addons must export a function called `init` with this signature:
 -->
-�S�Ă� Node �A�h�I���͎��̃V�O�l�`�������� `init` �Ƃ����֐����G�N�X�|�[�g����K�v���L��܂�:
+全ての Node アドオンは次のシグネチャを持つ `init` という関数をエクスポートする必要が有ります:
 
     extern 'C' void init (Handle<Object> target)
 
@@ -139,5 +139,5 @@ All Node addons must export a function called `init` with this signature:
 For the moment, that is all the documentation on addons. Please see
 <http://github.com/ry/node_postgres> for a real example.
 -->
-�����_�ł́A�A�h�I���̃h�L�������g�͂���őS�Ăł��B
-���ۂ̗�́A<http://github.com/ry/node_postgres> ���Q�Ƃ��Ă��������B
+現時点では、アドオンのドキュメントはこれで全てです。
+実際の例は、<http://github.com/ry/node_postgres> を参照してください。
