@@ -63,7 +63,7 @@ var Markdown = expose.Markdown = function Markdown(dialect) {
 expose.parse = function( source, dialect ) {
   // dialect will default if undefined
   var md = new Markdown( dialect );
-  return md.toTree( source );
+  return md.toTree( source.replace(/<!--[\s\S]*?-->/mg, '') );
 }
 
 /**
