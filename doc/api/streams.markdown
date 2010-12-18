@@ -117,30 +117,53 @@ Closes the underlying file descriptor. Stream will not emit any more events.
 
 ### stream.pipe(destination, [options])
 
+<!--
 This is a `Stream.prototype` method available on all `Stream`s.
+-->
+これは全ての `Stream` で利用可能な `Stream.prototype` メソッドです。
 
+<!--
 Connects this read stream to `destination` WriteStream. Incoming
 data on this stream gets written to `destination`. The destination and source
 streams are kept in sync by pausing and resuming as necessary.
+-->
+読み込みストリームを `destination` の書き込みストリームに接続します。
+このストリームに入ってきたデータは `destination` に書き込まれます。
+接続先と接続元のストリームは、必要に応じて中断と再開することで同期を保ちます。
 
+<!--
 Emulating the Unix `cat` command:
+-->
+Unix の `cat` コマンドのエミュレート:
 
     process.openStdin().pipe(process.stdout);
 
 
+<!--
 By default `end()` is called on the destination when the source stream emits
 `end`, so that `destination` is no longer writable. Pass `{ end: false }` as
 `options` to keep the destination stream open.
+-->
+デフォルトでは接続元ストリームで `end` イベントが生成されると、
+接続先の `end()` が呼ばれるので、もう書き込みはできません。
+`option` に `{ end: false }` を渡すと接続先はストリームはオープンされたままとなります。
 
+<!--
 This keeps `process.stdout` open so that "Goodbye" can be written at the end.
+-->
+これは `process.stdout` をオープンしたままにして最後に "Goodbye" と出力します。
 
     var stdin = process.openStdin();
     stdin.pipe(process.stdout, { end: false });
     stdin.on("end", function() { process.stdout.write("Goodbye\n"); });
 
+<!--
 NOTE: If the source stream does not support `pause()` and `resume()`, this function
 adds simple definitions which simply emit `'pause'` and `'resume'` events on
 the source stream.
+-->
+注意: もし接続元ストリームが `pauses()` と `resume()` をサポートしない場合、
+この関数は単に `'pause'` と `'resume'` イベントを接続もとストリームで生成します。
 
 ## Writable Stream
 

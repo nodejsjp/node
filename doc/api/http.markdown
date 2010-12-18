@@ -669,7 +669,7 @@ of CA certificates, as given in <http://mxr.mozilla.org/mozilla/source/security/
 -->
 コネクションがセキュアな場合、証明情報で認証局の証明書が明示的に渡されないと、
 node.js はデフォルトの信頼できる認証局のリストとして
-http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt を与えます。
+<http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt> を与えます。
 
 ### client.request(method='GET', path, [request_headers])
 
@@ -727,8 +727,8 @@ in the context of the defined or default list of trusted CA certificates.
 Returns a JSON structure detailing the server's certificate, containing a dictionary
 with keys for the certificate `'subject'`, `'issuer'`, `'valid_from'` and `'valid_to'`.
 -->
-サーバ証明書の詳細を、'subject'、'issuer'、'valid_from' そして
-'valid_to' をキーとする証明書の辞書を含む JSON 形式で返します。
+サーバ証明書の詳細を、`'subject'`、`'issuer'`、`'valid_from'` そして
+`'valid_to'` をキーとする証明書の辞書を含む JSON 形式で返します。
 
 
 ## http.ClientRequest

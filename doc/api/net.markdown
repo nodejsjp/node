@@ -76,9 +76,12 @@ on port 8124:
 
 <!--
 Test this by using `telnet`:
+-->
+`telnet` を使ってテストします:
 
     telnet localhost 8124
 
+<!--
 To listen on the socket `/tmp/echo.sock` the last line would just be
 changed to
 -->
@@ -86,14 +89,17 @@ changed to
 
     server.listen('/tmp/echo.sock');
 
+<!--
 Use `nc` to connect to a UNIX domain socket server:
+-->
+`nc` を使って UNIX ドメインソケットサーバへ接続します:
 
     nc -U /tmp/echo.sock
 
 <!--
 `net.Server` is an `EventEmitter` with the following events:
 -->
-これは以下のイベントを持つ `EventEmitter` です:
+`net.Server` は以下のイベントを持つ `EventEmitter` です:
 
 #### server.listen(port, [host], [callback])
 
@@ -112,9 +118,15 @@ when the server has been bound.
 -->
 この関数は非同期です。最後の引数の `callback` はサーバがバインドすると呼び出されます。
 
+<!--
 One issue some users run into is getting `EADDRINUSE` errors. Meaning
 another server is already running on the requested port. One way of handling this
 would be to wait a second and the try again. This can be done with
+-->
+一部のユーザが陥る問題の一つは、`EADDRINUSE` エラーです．
+これは、他のサーバが要求されたポートを使っているという意味です。
+これに対照する方法の一つは、1秒待機してリトライすることです。
+これは次のようになります
 
     server.on('error', function (e) {
       if (e.errno == require('constants').EADDRINUSE) {
@@ -126,7 +138,10 @@ would be to wait a second and the try again. This can be done with
       }
     });
 
+<!--
 (Note: All sockets in Node are set SO_REUSEADDR already)
+-->
+注意: Node の全てのソケットは SO_REUSEADDR が設定されます)
 
 
 #### server.listen(path, [callback])
@@ -282,8 +297,11 @@ the exception.
 接続で問題があった場合は `'connect'` イベントは生成されず、
 例外とともに `'error'` イベントが生成されます。
 
+<!--
 The `callback` paramenter will be added as an listener for the 'connect'
 event.
+-->
+`callback` 引数は 'connect' イベントのリスナに加えられます。
 
 
 #### stream.setEncoding(encoding=null)
@@ -330,8 +348,8 @@ context of the defined or default list of trusted CA certificates.
 Returns a JSON structure detailing the peer's certificate, containing a dictionary
 with keys for the certificate `'subject'`, `'issuer'`, `'valid_from'` and `'valid_to'`.
 -->
-相手の証明書の詳細を、'subject'、'issuer'、'valid_from'
-そして 'valid_to' をキーとする証明書の辞書を含む JSON 形式で返します。
+相手の証明書の詳細を、`'subject'`、`'issuer'`、`'valid_from'`
+そして `'valid_to'` をキーとする証明書の辞書を含む JSON 形式で返します。
 
 #### stream.write(data, [encoding], [callback])
 
@@ -339,7 +357,7 @@ with keys for the certificate `'subject'`, `'issuer'`, `'valid_from'` and `'vali
 Sends data on the stream. The second parameter specifies the encoding in the
 case of a string--it defaults to UTF8 encoding.
 -->ストリームにデータを送信します。
-文字列の場合、第 2 引数はエンコーディングを指定します － UTF8 はより遅いため、デフォルトは ASCII です。
+文字列の場合、第 2 引数はエンコーディングを指定します － デフォルトは UTF-8 です。
 
 <!--
 Returns `true` if the entire data was flushed successfully to the kernel
@@ -350,14 +368,22 @@ buffer. Returns `false` if all or part of the data was queued in user memory.
 データ全体または一部がユーザメモリ内のキューに入れられた場合は `false` を返します。
 再びバッファが空いた場合は `'drain'` イベントが生成されます。
 
+<!--
 The optional `callback` parameter will be executed when the data is finally
 written out - this may not be immediately.
+-->
+オプションの `callback` 引数はデータが最終的に出力された時に実行されます
+－ これはすぐには起きないでしょう。
 
 #### stream.write(data, [encoding], [fileDescriptor], [callback])
 
+<!--
 For UNIX sockets, it is possible to send a file descriptor through the
 stream. Simply add the `fileDescriptor` argument and listen for the `'fd'`
 event on the other end.
+-->
+UNIX ソケットの場合、ファイル記述子をストリームに送信することができます。
+単純に `fileDescriptor` 引数を加えることで、相手側には `'fd'` イベントが生成されます。
 
 
 #### stream.end([data], [encoding])
@@ -367,8 +393,7 @@ Half-closes the stream. I.E., it sends a FIN packet. It is possible the
 server will still send some data.
 -->
 ストリームをハーフクローズします。例えば FIN パケットを送信します。
-サーバがデータを送り続けてくることがあり得ます。
-このメソッドを呼び出した後の `readyState` は `'readOnly'` になります。
+サーバはまだデータを送り続けてくることができます。
 
 <!--
 If `data` is specified, it is equivalent to calling `stream.write(data, encoding)`
@@ -511,8 +536,6 @@ caveat that the user is required to `end()` their side now.
 しかし、`allowHalfOpen == true` が設定されていると、
 ユーザがデータを書き込めるようにしておくために、ストリームは自動的に `end()` を呼び出さないので、
 ユーザが `end()` を呼び出す必要があります。
-`allowHalfOpen == true` のケースでは、
-`'end'` が生成された後の `readyState` は `'writeOnly'` となります。
 
 
 #### Event: 'timeout'

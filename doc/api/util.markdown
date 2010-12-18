@@ -92,13 +92,23 @@ when an error occurs.
 
 ### util.inherits(constructor, superConstructor)
 
+<!--
 Inherit the prototype methods from one
 [constructor](https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/constructor)
 into another.  The prototype of `constructor` will be set to a new
 object created from `superConstructor`.
+-->
+ある
+[コンストラクタ](https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Object/constructor)
+からプロトタイプメソッドを継承します。
+`constructor` のプロトタイプは `superConstructor` から作られたオブジェクトに設定されます。
 
+<!--
 As an additional convenience, `superConstructor` will be accessible
 through the `constructor.super_` property.
+-->
+さらなる利便性のために、`superConstructor` は `constructor.super_`
+プロパティを通じてアクセスすることができるようになります。
 
     var util = require("util");
     var events = require("events");

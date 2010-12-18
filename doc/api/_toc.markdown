@@ -44,7 +44,7 @@
 * [バッファ](buffers.html)
 * [ストリーム](streams.html)
 * [暗号化](crypto.html)
-  * [安全なストリーム](securepair.html)
+* [TLS/SSL](tls.html)
 * [文字列デコーダ](string_decoder.html)
 * [ファイルシステム](fs.html)
 * [パス](path.html)
@@ -59,6 +59,8 @@
 * [VM](vm.html)
 * [子プロセス](child_processes.html)
 * [表明とテスティング](assert.html)
+* [TTY](tty.html)
+* [OS](os.html)
 * 付録
   * [付録 1: 推奨されるサードパーティ製のモジュール](appendix_1.html)
   * [付録 2: 廃止された API](appendix_2.html)

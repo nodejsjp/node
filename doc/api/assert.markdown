@@ -67,14 +67,16 @@ Tests strict non-equality, as determined by the strict not equal operator ( `!==
 ### assert.throws(block, [error], [message])
 
 <!--
-Expects `block` to throw an error.
--->
-`block` がエラーをスローすることを期待します。
-
 Expects `block` to throw an error. `error` can be constructor, regexp or 
 validation function.
+-->
+`block` がエラーをスローすることを期待します。
+`error` はコンストラクタ、正規表現、または検証関数にすることができます。
 
+<!--
 Validate instanceof using constructor:
+-->
+コンストラクタを使って instanceof で検証:
 
     assert.throws(
       function() {
@@ -83,7 +85,10 @@ Validate instanceof using constructor:
       Error
     );
 
+<!--
 Validate error message using RegExp:
+-->
+正規表現を使ってエラーメッセージを検証:
 
     assert.throws(
       function() {
@@ -92,7 +97,10 @@ Validate error message using RegExp:
       /value/
     );
 
+<!--
 Custom error validation:
+-->
+独自のエラー検証:
 
     assert.throws(
       function() {
@@ -112,6 +120,7 @@ Custom error validation:
 Expects `block` not to throw an error, see assert.throws for details.
 -->
 `block` がエラーをスローしないことを期待します。
+詳細は assert.throws を参照してください。
 
 ### assert.ifError(value)
 

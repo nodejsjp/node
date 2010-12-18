@@ -40,7 +40,7 @@ If no 'ca' details are given, then node.js will use the default publicly trusted
 <http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt>.
 -->
 'ca' の詳細が与えられなかった場合、node.js はデフォルトとして
-http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt
+<http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt>
 で与えられる、信頼できる認証局の公開されたリストを使用します。
 
 
@@ -60,7 +60,7 @@ On recent releases, `openssl list-message-digest-algorithms` will display the av
 -->
 `algorithm` は、プラットフォーム上の OpenSSL 
 のバージョンでサポートされている利用可能なアルゴリズムに依存します。
-例えば sha1、md5、sha256、sha512、などです。
+例えば `'sha1'`、`'md5'`、`'sha256'`、`'sha512'`、などです。
 最近のリリースでは、`openssl list-message-digest-algorithms`
 で利用可能なダイジェストアルゴリズムが表示されます。
 
@@ -80,7 +80,7 @@ Calculates the digest of all of the passed data to be hashed.
 The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
 -->
 渡された全てのデータがハッシュ化されたダイジェストを計算します。
-`encoding` は 'hex'、'binary'、または 'base64' のいずれかです。
+`encoding` は `'hex'`、`'binary'`、または `'base64'` のいずれかです。
 
 
 ### crypto.createHmac(algorithm, key)
@@ -113,7 +113,7 @@ Calculates the digest of all of the passed data to the hmac.
 The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
 -->
 渡された全てのデータが HMAC 化されたダイジェストを計算します。
-`encoding` は 'hex'、'binary'、または 'base64' のいずれかです。
+`encoding` は `'hex'`、`'binary'`、または `'base64'` のいずれかです。
 
 
 ### crypto.createCipher(algorithm, key)
@@ -127,7 +127,7 @@ Creates and returns a cipher object, with the given algorithm and key.
 `algorithm` is dependent on OpenSSL, examples are `'aes192'`, etc.
 On recent releases, `openssl list-cipher-algorithms` will display the available cipher algorithms.
 -->
-`algorithm` は、OpenSSL に依存します。例えば aes192 などです。
+`algorithm` は、OpenSSL に依存します。例えば `'aes192'` などです。
 最近のリリースでは、`openssl list-cipher-algorithms`
 で利用可能な暗号アルゴリズムが表示されます。
 
@@ -139,9 +139,9 @@ and can be `'utf8'`, `'ascii'` or `'binary'`. The `output_encoding` specifies
 the output format of the enciphered data, and can be `'binary'`, `'base64'` or `'hex'`.
 -->
 `data` で暗号を更新します。
-`input_encoding` で与えられるエンコーディングは 'utf8'、'ascii'、'binary' のいずれかです。
+`input_encoding` で与えられるエンコーディングは `'utf8'`、`'ascii'`、`'binary'` のいずれかです。
 `output_encoding` は暗号化されたデータの出力フォーマットを指定するもので、
-'binary'、'base64' または 'hex' のいずれかです。
+`'utf8'`、`'ascii'` または `'binary'` のいずれかです。
 
 <!--
 Returns the enciphered contents, and can be called many times with new data as it is streamed.
@@ -154,7 +154,7 @@ Returns the enciphered contents, and can be called many times with new data as i
 Returns any remaining enciphered contents, with `output_encoding` being one of: `'binary'`, `'ascii'` or `'utf8'`.
 -->
 暗号化されたコンテンツの残りを返します。
-`output_encoding` は次のいずれかです: 'binary'、'base64' または 'hex'
+`output_encoding` は次のいずれかです: `'binary'`、`'ascii'` または `'utf8'`
 
 ### crypto.createDecipher(algorithm, key)
 
@@ -171,9 +171,9 @@ This is the mirror of the cipher object above.
 Updates the decipher with `data`, which is encoded in `'binary'`, `'base64'` or `'hex'`.
 The `output_decoding` specifies in what format to return the deciphered plaintext: `'binary'`, `'ascii'` or `'utf8'`.
 -->
-'binary'、'base64' または 'hex' のいずれかでエンコードされた復号を `data` で更新します。
+`'binary'`、`'base64'` または `'hex'` のいずれかでエンコードされた復号を `data` で更新します。
 `output_decoding` は復号化されたプレーンテキストのフォーマットを指定するもので、
-'binary'、'ascii' あるいは 'utf8' のいずれかです。
+`'binary'`、`'ascii'` あるいは `'utf8'` のいずれかです。
 
 ### decipher.final(output_encoding='binary')
 
@@ -182,7 +182,7 @@ Returns any remaining plaintext which is deciphered,
 with `output_encoding' being one of: `'binary'`, `'ascii'` or `'utf8'`.
 -->
 復号化されたプレーンテキストの残りを返します。
-`output_decoding` は 'binary'、'ascii' あるいは 'utf8' のいずれかです。
+`output_decoding` は `'binary'`、`'ascii'` あるいは `'utf8'` のいずれかです。
 
 
 ### crypto.createSign(algorithm)
@@ -217,7 +217,7 @@ Calculates the signature on all the updated data passed through the signer.
 <!--
 Returns the signature in `output_format` which can be `'binary'`, `'hex'` or `'base64'`.
 -->
-'binary'、'hex'、あるいは 'base64' のいずれかを指定した `output_format` による署名を返します。
+`'binary'`、`'hex'`、あるいは `'base64'` のいずれかを指定した `output_format` による署名を返します。
 
 ### crypto.createVerify(algorithm)
 
@@ -246,7 +246,7 @@ signature for the data, in the `signature_format` which can be `'binary'`, `'hex
 署名されたデータを `public_key` と `signature` で検証します。
 `public_key` は PEM でエンコードされた公開鍵を含む文字列です。
 `signature` は先に計算したデータの署名で、
-その `signature_format` は 'binary'、'hex'、または 'base64' のいずれかです。
+その `signature_format` は `'binary'`、`'hex'`、または `'base64'` のいずれかです。
 
 <!--
 Returns true or false depending on the validity of the signature for the data and public key.

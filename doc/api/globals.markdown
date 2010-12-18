@@ -92,6 +92,6 @@ A reference to the current module. In particular
 `module.exports` is the same as the `exports` object. See `src/node.js`
 for more information.
 -->
-現在の (`process.Module` 型である) モジュールへの参照です。
+現在のモジュールへの参照です。
 特に `module.exports` は `exports` オブジェクトと同じです。
-より詳しくは `src/process.js` を参照してください。
+より詳しくは `src/node.js` を参照してください。

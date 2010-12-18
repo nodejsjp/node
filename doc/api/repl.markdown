@@ -51,7 +51,7 @@ is optional and defaults to `> `.  `stream` is optional and defaults to
 `process.openStdin()`.
 -->
 `prompt` でプロンプト記号を、 `stream` で I/O を引数に取って REPL を起動します。
-`prompt` は省略可能で、 デフォルトは `node> ` です。
+`prompt` は省略可能で、 デフォルトは `> ` です。
 `stream` は省略可能で、 デフォルトは `process.openStdin()`です。
 
 <!--
@@ -156,7 +156,7 @@ There are a few special REPL commands:
   - `.exit` - Close the I/O stream, which will cause the REPL to exit.
   - `.help` - Show this list of special commands.
 -->
-* `.break` - 複数行に渡って式を入力している間に、途中で分からなくなったり完了させなくても良くなることがあります。`.break` で最初からやり直します。
-* `.clear` - `context` オブジェクトを空の状態にリセットし、複数行に入力している式をクリアします。
-* `.exit` - I/Oストリームを閉じ、REPLを終了させます。
-* `.help` - このコマンドの一覧を表示します。
+  - `.break` - 複数行に渡って式を入力している間に、途中で分からなくなったり完了させなくても良くなることがあります。`.break` で最初からやり直します。
+  - `.clear` - `context` オブジェクトを空の状態にリセットし、複数行に入力している式をクリアします。
+  - `.exit` - I/Oストリームを閉じ、REPLを終了させます。
+  - `.help` - このコマンドの一覧を表示します。
