@@ -17,7 +17,7 @@ Example:
 例:
 
     var util = require('util');
-    
+
 <!--
 It is possible to extend node with other modules.  See `'Modules'`
 -->
@@ -93,7 +93,7 @@ That is, `circle.js` must be in the same directory as `foo.js` for
 <!--
 Without the leading `'./'`, like `require('assert')` the module is searched
 for in the `require.paths` array. `require.paths` on my system looks like
-this: 
+this:
 -->
 先頭の `'./'` 無しで、例えば `require('assert')` の様にモジュールを指定した場合、
 モジュールは `require.paths` の配列内の場所を起点に検索されます。

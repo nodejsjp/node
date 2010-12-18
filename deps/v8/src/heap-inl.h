@@ -1,4 +1,4 @@
-// Copyright 2006-2008 the V8 project authors. All rights reserved.
+// Copyright 2006-2010 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -330,6 +330,11 @@ void Heap::ScavengeObject(HeapObject** p, HeapObject* object) {
 }
 
 
+bool Heap::CollectGarbage(AllocationSpace space) {
+  return CollectGarbage(space, SelectGarbageCollector(space));
+}
+
+
 MaybeObject* Heap::PrepareForCompare(String* str) {
   // Always flatten small strings and force flattening of long strings
   // after we have accumulated a certain amount we failed to flatten.
@@ -404,8 +409,8 @@ void Heap::SetLastScriptId(Object* last_script_id) {
       v8::internal::V8::FatalProcessOutOfMemory("CALL_AND_RETRY_0", true);\
     }                                                                     \
     if (!__maybe_object__->IsRetryAfterGC()) RETURN_EMPTY;                \
-    Heap::CollectGarbage(Failure::cast(__maybe_object__)->                \
-                             allocation_space());                         \
+    Heap::CollectGarbage(                                                 \
+        Failure::cast(__maybe_object__)->allocation_space());             \
     __maybe_object__ = FUNCTION_CALL;                                     \
     if (__maybe_object__->ToObject(&__object__)) RETURN_VALUE;            \
     if (__maybe_object__->IsOutOfMemory()) {                              \
@@ -413,7 +418,7 @@ void Heap::SetLastScriptId(Object* last_script_id) {
     }                                                                     \
     if (!__maybe_object__->IsRetryAfterGC()) RETURN_EMPTY;                \
     Counters::gc_last_resort_from_handles.Increment();                    \
-    Heap::CollectAllGarbage(false);                                       \
+    Heap::CollectAllAvailableGarbage();                                   \
     {                                                                     \
       AlwaysAllocateScope __scope__;                                      \
       __maybe_object__ = FUNCTION_CALL;                                   \

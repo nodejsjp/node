@@ -88,8 +88,8 @@ Example: running `node example.js` from `/Users/mjr`
 ### module
 
 <!--
-A reference to the current module (of type `process.Module`). In particular
-`module.exports` is the same as the `exports` object. See `src/process.js`
+A reference to the current module. In particular
+`module.exports` is the same as the `exports` object. See `src/node.js`
 for more information.
 -->
 現在の (`process.Module` 型である) モジュールへの参照です。

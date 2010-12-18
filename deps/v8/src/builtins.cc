@@ -32,6 +32,7 @@
 #include "bootstrapper.h"
 #include "builtins.h"
 #include "ic-inl.h"
+#include "vm-state-inl.h"
 
 namespace v8 {
 namespace internal {
@@ -1031,9 +1032,7 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallHelper(
     {
       // Leaving JavaScript.
       VMState state(EXTERNAL);
-#ifdef ENABLE_LOGGING_AND_PROFILING
-      state.set_external_callback(v8::ToCData<Address>(callback_obj));
-#endif
+      ExternalCallbackScope call_scope(v8::ToCData<Address>(callback_obj));
       value = callback(new_args);
     }
     if (value.IsEmpty()) {
@@ -1081,38 +1080,29 @@ BUILTIN(FastHandleApiCall) {
   ASSERT(!CalledAsConstructor());
   const bool is_construct = false;
 
-  // We expect four more arguments: function, callback, call data, and holder.
+  // We expect four more arguments: callback, function, call data, and holder.
   const int args_length = args.length() - 4;
   ASSERT(args_length >= 0);
 
-  Handle<JSFunction> function = args.at<JSFunction>(args_length);
-  Object* callback_obj = args[args_length + 1];
-  Handle<Object> data = args.at<Object>(args_length + 2);
-  Handle<JSObject> checked_holder = args.at<JSObject>(args_length + 3);
-
-#ifdef DEBUG
-  VerifyTypeCheck(checked_holder, function);
-#endif
-
-  CustomArguments custom;
-  v8::ImplementationUtilities::PrepareArgumentsData(custom.end(),
-      *data, *function, *checked_holder);
+  Object* callback_obj = args[args_length];
 
   v8::Arguments new_args = v8::ImplementationUtilities::NewArguments(
-      custom.end(),
+      &args[args_length + 1],
       &args[0] - 1,
       args_length - 1,
       is_construct);
 
+#ifdef DEBUG
+  VerifyTypeCheck(Utils::OpenHandle(*new_args.Holder()),
+                  Utils::OpenHandle(*new_args.Callee()));
+#endif
   HandleScope scope;
   Object* result;
   v8::Handle<v8::Value> value;
   {
     // Leaving JavaScript.
     VMState state(EXTERNAL);
-#ifdef ENABLE_LOGGING_AND_PROFILING
-    state.set_external_callback(v8::ToCData<Address>(callback_obj));
-#endif
+    ExternalCallbackScope call_scope(v8::ToCData<Address>(callback_obj));
     v8::InvocationCallback callback =
         v8::ToCData<v8::InvocationCallback>(callback_obj);
 
@@ -1176,9 +1166,7 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallAsFunctionOrConstructor(
     {
       // Leaving JavaScript.
       VMState state(EXTERNAL);
-#ifdef ENABLE_LOGGING_AND_PROFILING
-      state.set_external_callback(v8::ToCData<Address>(callback_obj));
-#endif
+      ExternalCallbackScope call_scope(v8::ToCData<Address>(callback_obj));
       value = callback(new_args);
     }
     if (value.IsEmpty()) {
@@ -1336,6 +1324,11 @@ static void Generate_StoreIC_Megamorphic(MacroAssembler* masm) {
 
 static void Generate_StoreIC_ArrayLength(MacroAssembler* masm) {
   StoreIC::GenerateArrayLength(masm);
+}
+
+
+static void Generate_StoreIC_GlobalProxy(MacroAssembler* masm) {
+  StoreIC::GenerateGlobalProxy(masm);
 }
 
 
@@ -1587,5 +1580,6 @@ const char* Builtins::Lookup(byte* pc) {
   }
   return NULL;
 }
+
 
 } }  // namespace v8::internal

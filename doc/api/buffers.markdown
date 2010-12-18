@@ -99,7 +99,7 @@ Example: write a utf8 string into a buffer, then print it
     console.log(len + " bytes: " + buf.toString('utf8', 0, len));
 
     // 12 bytes: ½ + ¼ = ¾
-    
+
 
 ### buffer.toString(encoding, start=0, end=buffer.length)
 
@@ -146,7 +146,7 @@ Example: copy an ASCII string into a buffer, one byte at a time:
 ### Buffer.byteLength(string, encoding='utf8')
 
 <!--
-Gives the actual byte length of a string.  This is not the same as 
+Gives the actual byte length of a string.  This is not the same as
 `String.prototype.length` since that returns the number of *characters* in a
 string.
 -->
@@ -170,7 +170,7 @@ Example:
 
 <!--
 The size of the buffer in bytes.  Note that this is not necessarily the size
-of the contents. `length` refers to the amount of memory allocated for the 
+of the contents. `length` refers to the amount of memory allocated for the
 buffer object.  It does not change when the contents of the buffer are changed.
 -->
 バイト数によるバッファのサイズ。
@@ -186,7 +186,7 @@ buffer object.  It does not change when the contents of the buffer are changed.
     // 1234
     // 1234
 
-### buffer.copy(targetBuffer, targetStart, sourceStart, sourceEnd=buffer.length)
+### buffer.copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
 
 <!--
 Does a memcpy() between buffers.
@@ -202,7 +202,7 @@ into `buf2`, starting at the 8th byte in `buf2`.
 
     buf1 = new Buffer(26);
     buf2 = new Buffer(26);
-  
+
     for (var i = 0 ; i < 26 ; i++) {
       buf1[i] = i + 97; // 97 is ASCII a
       buf2[i] = 33; // ASCII !
@@ -212,7 +212,7 @@ into `buf2`, starting at the 8th byte in `buf2`.
     console.log(buf2.toString('ascii', 0, 25));
 
     // !!!!!!!!qrst!!!!!!!!!!!!!
-    
+
 
 ### buffer.slice(start, end=buffer.length)
 

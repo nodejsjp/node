@@ -1,7 +1,7 @@
 ## dgram
 
 <!--
-Datagram sockets are available through `require('dgram')`.  Datagrams are most commonly 
+Datagram sockets are available through `require('dgram')`.  Datagrams are most commonly
 handled as IP/UDP messages, but they can also be used over Unix domain sockets.
 -->
 データグラムソケットは `require('dgram')` で利用可能になります。
@@ -45,7 +45,7 @@ on this socket.
 
 <!--
 Creates a datagram socket of the specified types.  Valid types are:
-`udp4`, `udp6`, and `unix_dgram`.  
+`udp4`, `udp6`, and `unix_dgram`.
 -->
 指定された種類のデータグラムソケットを作成します。
 妥当な種類は: `udp4`、`udp6`、そして`unix_dgram` です。
@@ -60,7 +60,7 @@ Takes an optional callback which is added as a listener for `message` events.
 <!--
 For Unix domain datagram sockets, the destination address is a pathname in the filesystem.
 An optional callback may be supplied that is invoked after the `sendto` call is completed
-by the OS.  It is not safe to re-use `buf` until the callback is invoked.  Note that 
+by the OS.  It is not safe to re-use `buf` until the callback is invoked.  Note that
 unless the socket is bound to a pathname with `bind()` there is no way to receive messages
 on this socket.
 -->
@@ -90,7 +90,7 @@ UNIXドメインソケット `/var/run/syslog` を通じて OSX 上の syslogd �
 
 <!--
 For UDP sockets, the destination port and IP address must be specified.  A string
-may be supplied for the `address` parameter, and it will be resolved with DNS.  An 
+may be supplied for the `address` parameter, and it will be resolved with DNS.  An
 optional callback may be specified to detect any DNS errors and when `buf` may be
 re-used.  Note that DNS lookups will delay the time that a send takes place, at
 least until the next tick.  The only way to know for sure that a send has taken place
@@ -207,7 +207,7 @@ Example of a UDP server listening on port 41234:
 ### dgram.close()
 
 <!--
-Close the underlying socket and stop listening for data on it.  UDP sockets 
+Close the underlying socket and stop listening for data on it.  UDP sockets
 automatically listen for messages, even if they did not call `bind()`.
 -->
 下層のソケットをクローズし、データの待ち受けを終了します。
@@ -216,7 +216,7 @@ automatically listen for messages, even if they did not call `bind()`.
 ### dgram.address()
 
 <!--
-Returns an object containing the address information for a socket.  For UDP sockets, 
+Returns an object containing the address information for a socket.  For UDP sockets,
 this object will contain `address` and `port`.  For Unix domain sockets, it will contain
 only `address`.
 -->
@@ -237,9 +237,9 @@ may be sent to a local interface's broadcast address.
 
 <!--
 Sets the `IP_TTL` socket option.  TTL stands for "Time to Live," but in this context it
-specifies the number of IP hops that a packet is allowed to go through.  Each router or 
+specifies the number of IP hops that a packet is allowed to go through.  Each router or
 gateway that forwards a packet decrements the TTL.  If the TTL is decremented to 0 by a
-router, it will not be forwarded.  Changing TTL values is typically done for network 
+router, it will not be forwarded.  Changing TTL values is typically done for network
 probes or when multicasting.
 -->
 ソケットオプションの `IP_TTL` を設定します。

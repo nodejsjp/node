@@ -232,7 +232,7 @@ An object containing the user environment. See environ(7).
 ### process.exit(code=0)
 
 <!--
-Ends the process with the specified `code`.  If omitted, exit uses the 
+Ends the process with the specified `code`.  If omitted, exit uses the
 'success' code `0`.
 -->
 指定の `code` でプロセスを終了します。
@@ -254,7 +254,8 @@ node を実行したシェルで終了コードが 1 であることを見るこ
 ### process.getgid()
 
 <!--
-Gets the group identity of the process. (See getgid(2).)  This is the numerical group id, not the group name.
+Gets the group identity of the process. (See getgid(2).)
+This is the numerical group id, not the group name.
 -->
 プロセスのグループ識別子を取得します (getgid(2) 参照)。
 これは数値によるグループ ID で、グループ名ではありません。
@@ -265,7 +266,9 @@ Gets the group identity of the process. (See getgid(2).)  This is the numerical 
 ### process.setgid(id)
 
 <!--
-Sets the group identity of the process. (See setgid(2).)  This accepts either a numerical ID or a groupname string.  If a groupname is specified, this method blocks while resolving it to a numerical ID.
+Sets the group identity of the process. (See setgid(2).)  This accepts either
+a numerical ID or a groupname string. If a groupname is specified, this method
+blocks while resolving it to a numerical ID.
 -->
 プロセスのグループ識別子を設定します (setgid(2) 参照)。
 これは数値による ID もグループ名の文字列のどちらも受け入れます。
@@ -284,7 +287,8 @@ Sets the group identity of the process. (See setgid(2).)  This accepts either a 
 ### process.getuid()
 
 <!--
-Gets the user identity of the process. (See getuid(2).)  This is the numerical userid, not the username.
+Gets the user identity of the process. (See getuid(2).)
+This is the numerical userid, not the username.
 -->
 プロセスのユーザ識別子を取得します (getuid(2) 参照)。
 これは数値によるユーザ ID で、ユーザ名ではありません。
@@ -295,7 +299,9 @@ Gets the user identity of the process. (See getuid(2).)  This is the numerical u
 ### process.setuid(id)
 
 <!--
-Sets the user identity of the process. (See setuid(2).)  This accepts either a numerical ID or a username string.  If a username is specified, this method blocks while resolving it to a numerical ID.
+Sets the user identity of the process. (See setuid(2).)  This accepts either
+a numerical ID or a username string.  If a username is specified, this method
+blocks while resolving it to a numerical ID.
 -->
 プロセスのユーザ識別子を設定します (setuid(2) 参照)。
 これは数値による ID もユーザ名の文字列のどちらも受け入れます。
@@ -412,11 +418,10 @@ This will generate:
 -->
 このように生成されます:
 
-    { rss: 4935680
-    , vsize: 41893888
-    , heapTotal: 1826816
-    , heapUsed: 650472
-    }
+    { rss: 4935680,
+      vsize: 41893888,
+      heapTotal: 1826816,
+      heapUsed: 650472 }
 
 <!--
 `heapTotal` and `heapUsed` refer to V8's memory usage.

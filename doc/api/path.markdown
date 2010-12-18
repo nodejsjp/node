@@ -36,7 +36,7 @@ Example:
 -->
 例:
 
-    path.normalizeArray(['', 
+    path.normalizeArray(['',
       'foo', 'bar', 'baz', 'asdf', 'quux', '..'])
     // returns
     [ '', 'foo', 'bar', 'baz', 'asdf' ]
@@ -105,7 +105,7 @@ the first character, then it returns an empty string.  Examples:
 例:
 
     path.extname('index.html')
-    // returns 
+    // returns
     '.html'
 
     path.extname('index')
@@ -115,7 +115,8 @@ the first character, then it returns an empty string.  Examples:
 ### path.exists(p, [callback])
 
 <!--
-Test whether or not the given path exists.  Then, call the `callback` argument with either true or false.  Example:
+Test whether or not the given path exists.  Then, call the `callback` argument
+with either true or false. Example:
 -->
 与えられたパスが存在するかどうか検査します。
 そして引数の `callback` を真か偽か検査の結果とともに呼び出します。

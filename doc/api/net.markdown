@@ -2,7 +2,7 @@
 
 <!--
 The `net` module provides you with an asynchronous network wrapper. It contains
-methods for creating both servers and clients (called streams). You can include 
+methods for creating both servers and clients (called streams). You can include
 this module with `require("net");`
 -->
 `net` モジュールは非同期なネットワークのラッパーを提供します。
@@ -68,31 +68,30 @@ on port 8124:
 8124 番のポートへの接続を待ち受けるエコーサーバの例:
 
     var net = require('net');
-    var server = net.createServer(function (stream) {
-      stream.setEncoding('utf8');
-      stream.on('connect', function () {
-        stream.write('hello\r\n');
-      });
-      stream.on('data', function (data) {
-        stream.write(data);
-      });
-      stream.on('end', function () {
-        stream.write('goodbye\r\n');
-        stream.end();
-      });
+    var server = net.createServer(function (c) {
+      c.write('hello\r\n');
+      c.pipe(c);
     });
     server.listen(8124, 'localhost');
 
 <!--
-To listen on the socket `'/tmp/echo.sock'`, the last line would just be
+Test this by using `telnet`:
+
+    telnet localhost 8124
+
+To listen on the socket `/tmp/echo.sock` the last line would just be
 changed to
 -->
 `'/tmp/echo.sock'` へのソケットを待ち受けるには、最後の行をこのように変更します。
 
     server.listen('/tmp/echo.sock');
 
+Use `nc` to connect to a UNIX domain socket server:
+
+    nc -U /tmp/echo.sock
+
 <!--
-This is an `EventEmitter` with the following events:
+`net.Server` is an `EventEmitter` with the following events:
 -->
 これは以下のイベントを持つ `EventEmitter` です:
 
@@ -112,6 +111,23 @@ This function is asynchronous. The last parameter `callback` will be called
 when the server has been bound.
 -->
 この関数は非同期です。最後の引数の `callback` はサーバがバインドすると呼び出されます。
+
+One issue some users run into is getting `EADDRINUSE` errors. Meaning
+another server is already running on the requested port. One way of handling this
+would be to wait a second and the try again. This can be done with
+
+    server.on('error', function (e) {
+      if (e.errno == require('constants').EADDRINUSE) {
+        console.log('Address in use, retrying...');
+        setTimeout(function () {
+          server.close();
+          server.listen(PORT, HOST);
+        }, 1000);
+      }
+    });
+
+(Note: All sockets in Node are set SO_REUSEADDR already)
+
 
 #### server.listen(path, [callback])
 
@@ -231,8 +247,8 @@ Node によって作成されてサーバの `'connection'` イベントを通�
 -->
 `net.Stream` のインスタンスは以下のイベントを持つ EventEmitter です:
 
-#### stream.connect(port, [host])
-#### stream.connect(path)
+#### stream.connect(port, [host], [callback])
+#### stream.connect(path, [callback])
 
 <!--
 Opens the connection for a given stream. If `port` and `host` are given,
@@ -266,6 +282,9 @@ the exception.
 接続で問題があった場合は `'connect'` イベントは生成されず、
 例外とともに `'error'` イベントが生成されます。
 
+The `callback` paramenter will be added as an listener for the 'connect'
+event.
+
 
 #### stream.setEncoding(encoding=null)
 
@@ -290,7 +309,7 @@ for use in peer authentication.
 <!--
 If the credentials hold one ore more CA certificates, then the stream will request
 for the peer to submit a client certificate as part of the SSL connection handshake.
-The validity and content of this can be accessed via verifyPeer() and getPeerCertificate().
+The validity and content of this can be accessed via `verifyPeer()` and `getPeerCertificate()`.
 -->
 認証情報が一つ以上の認証局の証明書を持っている場合、
 ストリームは SSL コネクションにおけるハンドシェークの一部としてクライアント証明書を送るよう相手に要求します。
@@ -309,17 +328,16 @@ context of the defined or default list of trusted CA certificates.
 
 <!--
 Returns a JSON structure detailing the peer's certificate, containing a dictionary
-with keys for the certificate 'subject', 'issuer', 'valid\_from' and 'valid\_to'
+with keys for the certificate `'subject'`, `'issuer'`, `'valid_from'` and `'valid_to'`.
 -->
 相手の証明書の詳細を、'subject'、'issuer'、'valid_from'
 そして 'valid_to' をキーとする証明書の辞書を含む JSON 形式で返します。
 
-#### stream.write(data, encoding='ascii')
+#### stream.write(data, [encoding], [callback])
 
 <!--
-Sends data on the stream. The second parameter specifies the encoding in
-the case of a string--it defaults to ASCII because encoding to UTF8 is rather
-slow.
+Sends data on the stream. The second parameter specifies the encoding in the
+case of a string--it defaults to UTF8 encoding.
 -->ストリームにデータを送信します。
 文字列の場合、第 2 引数はエンコーディングを指定します － UTF8 はより遅いため、デフォルトは ASCII です。
 
@@ -332,12 +350,21 @@ buffer. Returns `false` if all or part of the data was queued in user memory.
 データ全体または一部がユーザメモリ内のキューに入れられた場合は `false` を返します。
 再びバッファが空いた場合は `'drain'` イベントが生成されます。
 
+The optional `callback` parameter will be executed when the data is finally
+written out - this may not be immediately.
+
+#### stream.write(data, [encoding], [fileDescriptor], [callback])
+
+For UNIX sockets, it is possible to send a file descriptor through the
+stream. Simply add the `fileDescriptor` argument and listen for the `'fd'`
+event on the other end.
+
+
 #### stream.end([data], [encoding])
 
 <!--
 Half-closes the stream. I.E., it sends a FIN packet. It is possible the
-server will still send some data. After calling this `readyState` will be
-`'readOnly'`.
+server will still send some data.
 -->
 ストリームをハーフクローズします。例えば FIN パケットを送信します。
 サーバがデータを送り続けてくることがあり得ます。
@@ -437,13 +464,6 @@ This member is only present in server-side connections.
 -->
 このメンバはサーバサイドのコネクションでのみ与えられます。
 
-#### stream.readyState
-
-<!--
-Either `'closed'`, `'open'`, `'opening'`, `'readOnly'`, or `'writeOnly'`.
--->
-`'closed'`、`'open'`、`'opening'`、`'readOnly'`、
-あるいは `'writeOnly'` のいずれかです。
 
 #### Event: 'connect'
 
@@ -455,17 +475,6 @@ See `connect()`.
 -->
 ストリームコネクションの確立が成功した場合に生成されます。
 `connect()` を参照してください。
-
-
-#### Event: 'secure'
-
-`function () { }`
-
-<!--
-Emitted when a stream connection successfully establishes an SSL handshake with its peer.
--->
-ストリームコネクションにおいて、接続相手との SSL ハンドシェークの確立が成功した場合に生成されます。
-
 
 #### Event: 'data'
 
@@ -495,9 +504,7 @@ By default (`allowHalfOpen == false`) the stream will destroy its file
 descriptor  once it has written out its pending write queue.  However, by
 setting `allowHalfOpen == true` the stream will not automatically `end()`
 its side allowing the user to write arbitrary amounts of data, with the
-caveat that the user is required to `end()` their side now. In the
-`allowHalfOpen == true` case after `'end'` is emitted the `readyState` will
-be `'writeOnly'`.
+caveat that the user is required to `end()` their side now.
 -->
 デフォルト (`allowHalfOpen == false`) では、
 保留されていた書き込みキューが出力されるとストリームはファイル識別子を破棄します。
@@ -547,9 +554,8 @@ following this event.
 `function (had_error) { }`
 
 <!--
-Emitted once the stream is fully closed. The argument `had_error` is a boolean which says if
-the stream was closed due to a transmission
-error.
+Emitted once the stream is fully closed. The argument `had_error` is a boolean
+which says if the stream was closed due to a transmission error.
 -->
 ストリームが完全にクローズした場合に生成されます。
 引数 `had_error` は boolean で、ストリームが転送エラーでクローズされたのかどうかを示します。

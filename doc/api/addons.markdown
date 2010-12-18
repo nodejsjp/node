@@ -85,10 +85,10 @@ To get started we create a file `hello.cc`:
     using namespace v8;
 
     extern "C" void
-    init (Handle<Object> target) 
+    init (Handle<Object> target)
     {
       HandleScope scope;
-      target->Set(String::New("hello"), String::New("World"));
+      target->Set(String::New("hello"), String::New("world"));
     }
 
 <!--
@@ -122,7 +122,7 @@ Running `node-waf configure build` will create a file
 `node-waf configure build` を実行すると、`build/default/hello.node` が作成されます。これが作成したアドオンです。
 
 <!--
-`node-waf` is just http://code.google.com/p/waf/[WAF], the python-based build system. `node-waf` is
+`node-waf` is just [WAF](http://code.google.com/p/waf/), the python-based build system. `node-waf` is
 provided for the ease of users.
 -->
 `node-waf` は [WAF](http://code.google.com/p/waf/) にある Python ベースのビルドシステムです。

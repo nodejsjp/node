@@ -37,7 +37,6 @@ namespace v8 {
 namespace internal {
 
 bool CodeStub::FindCodeInCache(Code** code_out) {
-  if (has_custom_cache()) return GetCustomCache(code_out);
   int index = Heap::code_stubs()->FindEntry(GetKey());
   if (index != NumberDictionary::kNotFound) {
     *code_out = Code::cast(Heap::code_stubs()->ValueAt(index));
@@ -104,18 +103,16 @@ Handle<Code> CodeStub::GetCode() {
         GetICState());
     Handle<Code> new_object = Factory::NewCode(desc, flags, masm.CodeObject());
     RecordCodeGeneration(*new_object, &masm);
+    FinishCode(*new_object);
 
-    if (has_custom_cache()) {
-      SetCustomCache(*new_object);
-    } else {
-      // Update the dictionary and the root in Heap.
-      Handle<NumberDictionary> dict =
-          Factory::DictionaryAtNumberPut(
-              Handle<NumberDictionary>(Heap::code_stubs()),
-              GetKey(),
-              new_object);
-      Heap::public_set_code_stubs(*dict);
-    }
+    // Update the dictionary and the root in Heap.
+    Handle<NumberDictionary> dict =
+        Factory::DictionaryAtNumberPut(
+            Handle<NumberDictionary>(Heap::code_stubs()),
+            GetKey(),
+            new_object);
+    Heap::public_set_code_stubs(*dict);
+
     code = *new_object;
   }
 
@@ -146,16 +143,13 @@ MaybeObject* CodeStub::TryGetCode() {
     }
     code = Code::cast(new_object);
     RecordCodeGeneration(code, &masm);
+    FinishCode(code);
 
-    if (has_custom_cache()) {
-      SetCustomCache(code);
-    } else {
-      // Try to update the code cache but do not fail if unable.
-      MaybeObject* maybe_new_object =
-          Heap::code_stubs()->AtNumberPut(GetKey(), code);
-      if (maybe_new_object->ToObject(&new_object)) {
-        Heap::public_set_code_stubs(NumberDictionary::cast(new_object));
-      }
+    // Try to update the code cache but do not fail if unable.
+    MaybeObject* maybe_new_object =
+        Heap::code_stubs()->AtNumberPut(GetKey(), code);
+    if (maybe_new_object->ToObject(&new_object)) {
+      Heap::public_set_code_stubs(NumberDictionary::cast(new_object));
     }
   }
 
@@ -174,6 +168,31 @@ const char* CodeStub::MajorName(CodeStub::Major major_key,
         UNREACHABLE();
       }
       return NULL;
+  }
+}
+
+
+int ICCompareStub::MinorKey() {
+  return OpField::encode(op_ - Token::EQ) | StateField::encode(state_);
+}
+
+
+void ICCompareStub::Generate(MacroAssembler* masm) {
+  switch (state_) {
+    case CompareIC::UNINITIALIZED:
+      GenerateMiss(masm);
+      break;
+    case CompareIC::SMIS:
+      GenerateSmis(masm);
+      break;
+    case CompareIC::HEAP_NUMBERS:
+      GenerateHeapNumbers(masm);
+      break;
+    case CompareIC::OBJECTS:
+      GenerateObjects(masm);
+      break;
+    default:
+      UNREACHABLE();
   }
 }
 

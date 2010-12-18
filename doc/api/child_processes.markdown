@@ -107,10 +107,9 @@ The third argument is used to specify additional options, which defaults to:
 -->
 第 3 引数は追加のオプションを指定するために使われ、そのデフォルトは:
 
-    { cwd: undefined
-    , env: process.env,
-    , customFds: [-1, -1, -1]
-    }
+    { cwd: undefined,
+      env: process.env,
+      customFds: [-1, -1, -1] }
 
 <!--
 `cwd` allows you to specify the working directory from which the process is spawned.
@@ -217,7 +216,7 @@ output, and return it all in a callback.
         exec  = require('child_process').exec,
         child;
 
-    child = exec('cat *.js bad_file | wc -l', 
+    child = exec('cat *.js bad_file | wc -l',
       function (error, stdout, stderr) {
         console.log('stdout: ' + stdout);
         console.log('stderr: ' + stderr);
@@ -244,13 +243,12 @@ There is a second optional argument to specify several options. The default opti
 任意の第 2 引数でいくつかのオプションを指定することができます。
 オプションのデフォルトは
 
-    { encoding: 'utf8'
-    , timeout: 0
-    , maxBuffer: 200*1024
-    , killSignal: 'SIGTERM'
-    , cwd: null
-    , env: null
-    }
+    { encoding: 'utf8',
+      timeout: 0,
+      maxBuffer: 200*1024,
+      killSignal: 'SIGTERM',
+      cwd: null,
+      env: null }
 
 <!--
 If `timeout` is greater than 0, then it will kill the child process

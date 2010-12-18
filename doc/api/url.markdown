@@ -20,17 +20,17 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
 `'http://user:pass@host.com:8080/p/a/t/h?query=string#hash'`
 
 <!--
-* `href`: The full URL that was originally parsed. 
-  
+* `href`: The full URL that was originally parsed.
+
   Example: `'http://user:pass@host.com:8080/p/a/t/h?query=string#hash'`
 * `protocol`: The request protocol.
-  
+
   Example: `'http:'`
-* `host`: The full host portion of the URL, including port and authentication information. 
-  
+* `host`: The full host portion of the URL, including port and authentication information.
+
   Example: `'user:pass@host.com:8080'`
 * `auth`: The authentication information portion of a URL.
-  
+
   Example: `'user:pass'`
 * `hostname`: Just the hostname portion of the host.
 

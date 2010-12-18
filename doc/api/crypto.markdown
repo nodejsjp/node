@@ -6,7 +6,9 @@ Use `require('crypto')` to access this module.
 このモジュールにアクセスするには `require('crypto')` を使用します。
 
 <!--
-The crypto module requires OpenSSL to be available on the underlying platform. It offers a way of encapsulating secure credentials to be used as part of a secure HTTPS net or http connection.
+The crypto module requires OpenSSL to be available on the underlying platform.
+It offers a way of encapsulating secure credentials to be used as part
+of a secure HTTPS net or http connection.
 -->
 暗号化モジュールは下層のプラットフォームで OpenSSL が有効であることを必要とします。
 それは安全な HTTPS ネットワークや http コネクションの一部として使われる、
@@ -34,8 +36,8 @@ Creates a credentials object, with the optional details being a dictionary with 
 * `ca` : 信頼できる認証局の証明書が PEM でエンコードされた文字列または文字列の配列
 
 <!--
-If no 'ca' details are given, then node.js will use the default publicly trusted list of CAs as given in 
-http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt
+If no 'ca' details are given, then node.js will use the default publicly trusted list of CAs as given in
+<http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt>.
 -->
 'ca' の詳細が与えられなかった場合、node.js はデフォルトとして
 http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt
@@ -45,13 +47,16 @@ http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.tx
 ### crypto.createHash(algorithm)
 
 <!--
-Creates and returns a hash object, a cryptographic hash with the given algorithm which can be used to generate hash digests.
+Creates and returns a hash object, a cryptographic hash with the given algorithm
+which can be used to generate hash digests.
 -->
 ハッシュオブジェクトを生成して返します。
 与えられたアルゴリズムによる暗号ハッシュ関数はダイジェストの生成に使われます。
 
 <!--
-`algorithm` is dependent on the available algorithms supported by the version of OpenSSL on the platform. Examples are sha1, md5, sha256, sha512, etc. On recent releases, `openssl list-message-digest-algorithms` will display the available digest algorithms.
+`algorithm` is dependent on the available algorithms supported by the version
+of OpenSSL on the platform. Examples are `'sha1'`, `'md5'`, `'sha256'`, `'sha512'`, etc.
+On recent releases, `openssl list-message-digest-algorithms` will display the available digest algorithms.
 -->
 `algorithm` は、プラットフォーム上の OpenSSL 
 のバージョンでサポートされている利用可能なアルゴリズムに依存します。
@@ -62,7 +67,8 @@ Creates and returns a hash object, a cryptographic hash with the given algorithm
 ### hash.update(data)
 
 <!--
-Updates the hash content with the given `data`. This can be called many times with new data as it is streamed.
+Updates the hash content with the given `data`.
+This can be called many times with new data as it is streamed.
 -->
 与えられた `data` でハッシュの内容を更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
@@ -70,7 +76,8 @@ Updates the hash content with the given `data`. This can be called many times wi
 ### hash.digest(encoding='binary')
 
 <!--
-Calculates the digest of all of the passed data to be hashed. The `encoding` can be 'hex', 'binary' or 'base64'.
+Calculates the digest of all of the passed data to be hashed.
+The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
 -->
 渡された全てのデータがハッシュ化されたダイジェストを計算します。
 `encoding` は 'hex'、'binary'、または 'base64' のいずれかです。
@@ -93,7 +100,8 @@ Creates and returns a hmac object, a cryptographic hmac with the given algorithm
 ### hmac.update(data)
 
 <!--
-Update the hmac content with the given `data`. This can be called many times with new data as it is streamed.
+Update the hmac content with the given `data`.
+This can be called many times with new data as it is streamed.
 -->
 与えられた `data` で HMAC の内容を更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
@@ -101,7 +109,8 @@ Update the hmac content with the given `data`. This can be called many times wit
 ### hmac.digest(encoding='binary')
 
 <!--
-Calculates the digest of all of the passed data to the hmac. The `encoding` can be 'hex', 'binary' or 'base64'.
+Calculates the digest of all of the passed data to the hmac.
+The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
 -->
 渡された全てのデータが HMAC 化されたダイジェストを計算します。
 `encoding` は 'hex'、'binary'、または 'base64' のいずれかです。
@@ -115,7 +124,8 @@ Creates and returns a cipher object, with the given algorithm and key.
 与えられたアルゴリズムとキーを使用する暗号オブジェクトを作成して返します。
 
 <!--
-`algorithm` is dependent on OpenSSL, examples are aes192, etc. On recent releases, `openssl list-cipher-algorithms` will display the available cipher algorithms.
+`algorithm` is dependent on OpenSSL, examples are `'aes192'`, etc.
+On recent releases, `openssl list-cipher-algorithms` will display the available cipher algorithms.
 -->
 `algorithm` は、OpenSSL に依存します。例えば aes192 などです。
 最近のリリースでは、`openssl list-cipher-algorithms`
@@ -124,7 +134,9 @@ Creates and returns a cipher object, with the given algorithm and key.
 ### cipher.update(data, input_encoding='binary', output_encoding='binary')
 
 <!--
-Updates the cipher with `data`, the encoding of which is given in `input_encoding` and can be 'utf8', 'ascii' or 'binary'. The `output_encoding` specifies the output format of the enciphered data, and can be 'binary', 'base64'  or 'hex'.
+Updates the cipher with `data`, the encoding of which is given in `input_encoding`
+and can be `'utf8'`, `'ascii'` or `'binary'`. The `output_encoding` specifies
+the output format of the enciphered data, and can be `'binary'`, `'base64'` or `'hex'`.
 -->
 `data` で暗号を更新します。
 `input_encoding` で与えられるエンコーディングは 'utf8'、'ascii'、'binary' のいずれかです。
@@ -139,7 +151,7 @@ Returns the enciphered contents, and can be called many times with new data as i
 ### cipher.final(output_encoding='binary')
 
 <!--
-Returns any remaining enciphered contents, with `output_encoding` being one of: 'binary', 'ascii' or 'utf8'.
+Returns any remaining enciphered contents, with `output_encoding` being one of: `'binary'`, `'ascii'` or `'utf8'`.
 -->
 暗号化されたコンテンツの残りを返します。
 `output_encoding` は次のいずれかです: 'binary'、'base64' または 'hex'
@@ -147,7 +159,8 @@ Returns any remaining enciphered contents, with `output_encoding` being one of: 
 ### crypto.createDecipher(algorithm, key)
 
 <!--
-Creates and returns a decipher object, with the given algorithm and key. This is the mirror of the cipher object above.
+Creates and returns a decipher object, with the given algorithm and key.
+This is the mirror of the cipher object above.
 -->
 与えられたアルゴリズムとキーを使用する復号オブジェクトを作成して返します。
 これは前述の暗号オブジェクトの鏡写しです。
@@ -155,7 +168,8 @@ Creates and returns a decipher object, with the given algorithm and key. This is
 ### decipher.update(data, input_encoding='binary', output_encoding='binary')
 
 <!--
-Updates the decipher with `data`, which is encoded in 'binary', 'base64' or 'hex'. The `output_decoding` specifies in what format to return the deciphered plaintext - either 'binary', 'ascii' or 'utf8'.
+Updates the decipher with `data`, which is encoded in `'binary'`, `'base64'` or `'hex'`.
+The `output_decoding` specifies in what format to return the deciphered plaintext: `'binary'`, `'ascii'` or `'utf8'`.
 -->
 'binary'、'base64' または 'hex' のいずれかでエンコードされた復号を `data` で更新します。
 `output_decoding` は復号化されたプレーンテキストのフォーマットを指定するもので、
@@ -164,7 +178,8 @@ Updates the decipher with `data`, which is encoded in 'binary', 'base64' or 'hex
 ### decipher.final(output_encoding='binary')
 
 <!--
-Returns any remaining plaintext which is deciphered, with `output_encoding' being one of: 'binary', 'ascii' or 'utf8'.
+Returns any remaining plaintext which is deciphered,
+with `output_encoding' being one of: `'binary'`, `'ascii'` or `'utf8'`.
 -->
 復号化されたプレーンテキストの残りを返します。
 `output_decoding` は 'binary'、'ascii' あるいは 'utf8' のいずれかです。
@@ -173,7 +188,9 @@ Returns any remaining plaintext which is deciphered, with `output_encoding' bein
 ### crypto.createSign(algorithm)
 
 <!--
-Creates and returns a signing object, with the given algorithm. On recent OpenSSL releases, `openssl list-public-key-algorithms` will display the available signing algorithms. Examples are 'RSA-SHA256'.
+Creates and returns a signing object, with the given algorithm.
+On recent OpenSSL releases, `openssl list-public-key-algorithms` will display
+the available signing algorithms. Examples are `'RSA-SHA256'`.
 -->
 与えられたアルゴリズムで署名オブジェクトを作成して返します。
 最近のOpenSSLのリリースでは、`openssl list-public-key-algorithms`
@@ -182,7 +199,8 @@ Creates and returns a signing object, with the given algorithm. On recent OpenSS
 ### signer.update(data)
 
 <!--
-Updates the signer object with data. This can be called many times with new data as it is streamed.
+Updates the signer object with data.
+This can be called many times with new data as it is streamed.
 -->
 署名オブジェクトをデータで更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
@@ -190,27 +208,30 @@ Updates the signer object with data. This can be called many times with new data
 ### signer.sign(private_key, output_format='binary')
 
 <!--
-Calculates the signature on all the updated data passed through the signer. `private_key` is a string containing the PEM encoded private key for signing.
+Calculates the signature on all the updated data passed through the signer.
+`private_key` is a string containing the PEM encoded private key for signing.
 -->
 署名オブジェクトに渡された全ての更新データで署名を計算します。
 `private_key` は PEM でエンコードされた秘密鍵を内容とする文字列です。
 
 <!--
-Returns the signature in `output_format` which can be 'binary', 'hex' or 'base64'
+Returns the signature in `output_format` which can be `'binary'`, `'hex'` or `'base64'`.
 -->
 'binary'、'hex'、あるいは 'base64' のいずれかを指定した `output_format` による署名を返します。
 
 ### crypto.createVerify(algorithm)
 
 <!--
-Creates and returns a verification object, with the given algorithm. This is the mirror of the signing object above.
+Creates and returns a verification object, with the given algorithm.
+This is the mirror of the signing object above.
 -->
 与えられたアルゴリズムで検証オブジェクトを作成して返します。これは前述の署名オブジェクトと鏡写しです。
 
 ### verifier.update(data)
 
 <!--
-Updates the verifyer object with data. This can be called many times with new data as it is streamed.
+Updates the verifyer object with data.
+This can be called many times with new data as it is streamed.
 -->
 検証オブジェクトをデータで更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
@@ -218,7 +239,9 @@ Updates the verifyer object with data. This can be called many times with new da
 ### verifier.verify(public_key, signature, signature_format='binary')
 
 <!--
-Verifies the signed data by using the `public_key` which is a string containing the PEM encoded public key, and `signature`, which is the previously calculates signature for the data, in the `signature_format` which can be 'binary', 'hex' or 'base64'.
+Verifies the signed data by using the `public_key` which is a string containing
+the PEM encoded public key, and `signature`, which is the previously calculates
+signature for the data, in the `signature_format` which can be `'binary'`, `'hex'` or `'base64'`.
 -->
 署名されたデータを `public_key` と `signature` で検証します。
 `public_key` は PEM でエンコードされた公開鍵を含む文字列です。

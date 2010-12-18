@@ -2,7 +2,7 @@
 
 <!--
 Many objects in Node emit events: a `net.Server` emits an event each time
-a peer connects to it, a `fs.readStream` emits an event when the file is 
+a peer connects to it, a `fs.readStream` emits an event when the file is
 opened. All objects which emit events are instances of `events.EventEmitter`.
 You can access this module by doing: `require("events");`
 -->
@@ -13,7 +13,7 @@ Node のオブジェクトの多くはイベントを生成します:
 次のようにすることでこのモジュールにアクセスできます: `require("events");`
 
 <!--
-Typically, event names are represented by a camel-cased string, however, 
+Typically, event names are represented by a camel-cased string, however,
 there aren't any strict restrictions on that, as any string will be accepted.
 -->
 通常、イベント名はキャメル記法による文字列で表現されますが、
@@ -35,9 +35,9 @@ To access the EventEmitter class, `require('events').EventEmitter`.
 EventEmitterクラスにアクセスするには、`require('events').EventEmitter` を使います。
 
 <!--
-When an `EventEmitter` instance experiences an error, the typical action is 
+When an `EventEmitter` instance experiences an error, the typical action is
 to emit an `'error'` event.  Error events are treated as a special case in node.
-If there is no listener for it, then the default action is to print a stack 
+If there is no listener for it, then the default action is to print a stack
 trace and exit the program.
 -->
 `EventEmitter` のインスタンスがエラーに遭遇した時、
@@ -59,9 +59,9 @@ Adds a listener to the end of the listeners array for the specified event.
 -->
 指定されたイベントに対するリスナー配列の最後にリスナーを追加します。
 
-	server.on('connection', function (stream) {
-		console.log('someone connected!');
-	});
+    server.on('connection', function (stream) {
+      console.log('someone connected!');
+    });
 
 #### emitter.once(event, listener)
 
@@ -73,9 +73,9 @@ it is removed.
 **一回限り**のリスナーをイベントに追加します。
 このリスナーはイベントが最初に発生した時に限り起動され、その後で削除されます。
 
-	server.once('connection', function (stream) {
-		console.log('Ah, we have our first user!');
-	});
+    server.once('connection', function (stream) {
+      console.log('Ah, we have our first user!');
+    });
 
 #### emitter.removeListener(event, listener)
 
@@ -86,12 +86,12 @@ Remove a listener from the listener array for the specified event.
 指定されたイベントに対するリスナー配列からリスナーを削除します。
 **注意**: リスナーの背後にあるリスナー配列のインデックスが変化します。
 
-	var callback = function(stream) {
-		console.log('someone connected!');
-	};
-	server.on('connection', callback);
-	// ...
-	server.removeListener('connection', callback);
+    var callback = function(stream) {
+      console.log('someone connected!');
+    };
+    server.on('connection', callback);
+    // ...
+    server.removeListener('connection', callback);
 
 
 #### emitter.removeAllListeners(event)
@@ -111,10 +111,10 @@ manipulated, e.g. to remove listeners.
 指定されたイベントに対するリスナー配列を返します。
 この配列は変更することができます、例えばリスナーを削除するなど。
 
-	server.on('connection', function (stream) {
-		console.log('someone connected!');
-	});
-	console.log(util.inspect(server.listeners('connection')); // [ [Function] ]
+    server.on('connection', function (stream) {
+      console.log('someone connected!');
+    });
+    console.log(util.inspect(server.listeners('connection')); // [ [Function] ]
 
 #### emitter.emit(event, [arg1], [arg2], [...])
 

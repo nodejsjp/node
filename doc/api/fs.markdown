@@ -3,7 +3,7 @@
 <!--
 File I/O is provided by simple wrappers around standard POSIX functions.  To
 use this module do `require('fs')`. All the methods have asynchronous and
-synchronous forms. 
+synchronous forms.
 -->
 File I/O は POSIX 標準の関数に対する単純なラッパーとして提供されます。
 このモジュールを使用するには `require('fs')` してください。
@@ -84,7 +84,8 @@ the entire process until they complete--halting all connections.
 ### fs.rename(path1, path2, [callback])
 
 <!--
-Asynchronous rename(2). No arguments other than a possible exception are given to the completion callback.
+Asynchronous rename(2). No arguments other than a possible exception are given
+to the completion callback.
 -->
 非同期の rename(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
@@ -98,7 +99,8 @@ Synchronous rename(2).
 ### fs.truncate(fd, len, [callback])
 
 <!--
-Asynchronous ftruncate(2). No arguments other than a possible exception are given to the completion callback.
+Asynchronous ftruncate(2). No arguments other than a possible exception are
+given to the completion callback.
 -->
 非同期の ftruncate(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
@@ -112,7 +114,8 @@ Synchronous ftruncate(2).
 ### fs.chmod(path, mode, [callback])
 
 <!--
-Asynchronous chmod(2). No arguments other than a possible exception are given to the completion callback.
+Asynchronous chmod(2). No arguments other than a possible exception are given
+to the completion callback.
 -->
 非同期の chmod(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
@@ -126,25 +129,25 @@ Synchronous chmod(2).
 ### fs.stat(path, [callback])
 
 <!--
-Asynchronous stat(2). The callback gets two arguments `(err, stats)` where `stats` is a `fs.Stats` object. It looks like this:
+Asynchronous stat(2). The callback gets two arguments `(err, stats)` where
+`stats` is a `fs.Stats` object. It looks like this:
 -->
 非同期の stat(2)。コールバックは 2 つの引数を受け取る `(err, stats)`で、
 `stats` は `fs.Stats` オブジェクトです。次のようになります。
 
-    { dev: 2049
-    , ino: 305352
-    , mode: 16877
-    , nlink: 12
-    , uid: 1000
-    , gid: 1000
-    , rdev: 0
-    , size: 4096
-    , blksize: 4096
-    , blocks: 8
-    , atime: '2009-06-29T11:11:55Z'
-    , mtime: '2009-06-29T11:11:40Z'
-    , ctime: '2009-06-29T11:11:40Z' 
-    }
+    { dev: 2049,
+      ino: 305352,
+      mode: 16877,
+      nlink: 12,
+      uid: 1000,
+      gid: 1000,
+      rdev: 0,
+      size: 4096,
+      blksize: 4096,
+      blocks: 8,
+      atime: '2009-06-29T11:11:55Z',
+      mtime: '2009-06-29T11:11:40Z',
+      ctime: '2009-06-29T11:11:40Z' }
 
 <!--
 See the `fs.Stats` section below for more information.
@@ -154,7 +157,10 @@ See the `fs.Stats` section below for more information.
 ### fs.lstat(path, [callback])
 
 <!--
-Asynchronous lstat(2). The callback gets two arguments `(err, stats)` where `stats` is a `fs.Stats` object.
+Asynchronous lstat(2). The callback gets two arguments `(err, stats)` where
+`stats` is a `fs.Stats` object. lstat() is identical to stat(), except that if
+path is a symbolic link, then the link itself is stat-ed, not the file that it
+refers to.
 -->
 非同期の lstat(2)。コールバックは 2 つの引数を受け取る `(err, stats)`で、
 `stats` は `fs.Stats` オブジェクトです。
@@ -162,7 +168,8 @@ Asynchronous lstat(2). The callback gets two arguments `(err, stats)` where `sta
 ### fs.fstat(fd, [callback])
 
 <!--
-Asynchronous fstat(2). The callback gets two arguments `(err, stats)` where `stats` is a `fs.Stats` object.
+Asynchronous fstat(2). The callback gets two arguments `(err, stats)` where
+`stats` is a `fs.Stats` object.
 -->
 非同期の fstat(2)。コールバックは 2 つの引数を受け取る `(err, stats)` で、
 `stats` は `fs.Stats` オブジェクトです。
@@ -191,7 +198,8 @@ Synchronous fstat(2). Returns an instance of `fs.Stats`.
 ### fs.link(srcpath, dstpath, [callback])
 
 <!--
-Asynchronous link(2). No arguments other than a possible exception are given to the completion callback.
+Asynchronous link(2). No arguments other than a possible exception are given to
+the completion callback.
 -->
 非同期の link(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
@@ -205,7 +213,8 @@ Synchronous link(2).
 ### fs.symlink(linkdata, path, [callback])
 
 <!--
-Asynchronous symlink(2). No arguments other than a possible exception are given to the completion callback.
+Asynchronous symlink(2). No arguments other than a possible exception are given
+to the completion callback.
 -->
 非同期の symlink(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
@@ -219,7 +228,8 @@ Synchronous symlink(2).
 ### fs.readlink(path, [callback])
 
 <!--
-Asynchronous readlink(2). The callback gets two arguments `(err, resolvedPath)`. 
+Asynchronous readlink(2). The callback gets two arguments `(err,
+resolvedPath)`.
 -->
 非同期の readlink(2)。コールバックは 2 つの引数を受け取る `(err, resolvedPath)`です。
 
@@ -233,7 +243,8 @@ Synchronous readlink(2). Returns the resolved path.
 ### fs.realpath(path, [callback])
 
 <!--
-Asynchronous realpath(2).  The callback gets two arguments `(err, resolvedPath)`.
+Asynchronous realpath(2).  The callback gets two arguments `(err,
+resolvedPath)`.
 -->
 非同期の realpath(2)。コールバックは 2 つの引数を受け取る `(err, resolvedPath)`です。
 
@@ -247,7 +258,8 @@ Synchronous realpath(2). Returns the resolved path.
 ### fs.unlink(path, [callback])
 
 <!--
-Asynchronous unlink(2). No arguments other than a possible exception are given to the completion callback.
+Asynchronous unlink(2). No arguments other than a possible exception are given
+to the completion callback.
 -->
 非同期の unlink(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
@@ -261,7 +273,8 @@ Synchronous unlink(2).
 ### fs.rmdir(path, [callback])
 
 <!--
-Asynchronous rmdir(2). No arguments other than a possible exception are given to the completion callback.
+Asynchronous rmdir(2). No arguments other than a possible exception are given
+to the completion callback.
 -->
 非同期の rmdir(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
@@ -275,7 +288,8 @@ Synchronous rmdir(2).
 ### fs.mkdir(path, mode, [callback])
 
 <!--
-Asynchronous mkdir(2). No arguments other than a possible exception are given to the completion callback.
+Asynchronous mkdir(2). No arguments other than a possible exception are given
+to the completion callback.
 -->
 非同期の mkdir(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
@@ -308,7 +322,8 @@ Synchronous readdir(3). Returns an array of filenames excluding `'.'` and
 ### fs.close(fd, [callback])
 
 <!--
-Asynchronous close(2).  No arguments other than a possible exception are given to the completion callback.
+Asynchronous close(2).  No arguments other than a possible exception are given
+to the completion callback.
 -->
 非同期の close(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
@@ -323,7 +338,7 @@ Synchronous close(2).
 
 <!--
 Asynchronous file open. See open(2). Flags can be 'r', 'r+', 'w', 'w+', 'a',
-or 'a+'. The callback gets two arguments `(err, fd)`. 
+or 'a+'. The callback gets two arguments `(err, fd)`.
 -->
 非同期のファイルオープン。open(2) を参照してください。
 フラグは 'r'、'r+'、'w'、'w+'、'a'、あるいは 'a+' です。
@@ -332,7 +347,7 @@ or 'a+'. The callback gets two arguments `(err, fd)`.
 ### fs.openSync(path, flags, mode=0666)
 
 <!--
-Synchronous open(2). 
+Synchronous open(2).
 -->
 同期の open(2)。
 
@@ -367,14 +382,16 @@ specifies how many _bytes_ were written.
 ### fs.writeSync(fd, buffer, offset, length, position)
 
 <!--
-Synchronous version of buffer-based `fs.write()`. Returns the number of bytes written.
+Synchronous version of buffer-based `fs.write()`. Returns the number of bytes
+written.
 -->
 同期版のバッファに基づく `fs.write()`。書き込まれたバイト数を返します。
 
 ### fs.writeSync(fd, str, position, encoding='utf8')
 
 <!--
-Synchronous version of string-based `fs.write()`. Returns the number of bytes written.
+Synchronous version of string-based `fs.write()`. Returns the number of bytes
+written.
 -->
 同期版の文字列に基づく `fs.write()`。書き込まれたバイト数を返します。
 
@@ -415,14 +432,16 @@ The callback is given the two arguments, `(err, bytesRead)`.
 ### fs.readSync(fd, buffer, offset, length, position)
 
 <!--
-Synchronous version of buffer-based `fs.read`. Returns the number of `bytesRead`.
+Synchronous version of buffer-based `fs.read`. Returns the number of
+`bytesRead`.
 -->
 同期版のバッファに基づく `fs.read`。`bytesRead` の数を返します。
 
 ### fs.readSync(fd, length, position, encoding)
 
 <!--
-Synchronous version of string-based `fs.read`. Returns the number of `bytesRead`.
+Synchronous version of string-based `fs.read`. Returns the number of
+`bytesRead`.
 -->
 同期版の文字列に基づく `fs.read`。`bytesRead` の数を返します。
 
@@ -515,7 +534,7 @@ stat object:
     });
 
 <!--
-These stat objects are instances of `fs.Stat`. 
+These stat objects are instances of `fs.Stat`.
 -->
 これらの状態オブジェクトは `fs.Stat` のインスタンスです。
 
@@ -569,11 +588,10 @@ Returns a new ReadStream object (See `Readable Stream`).
 -->
 `options` は以下のデフォルト値を持つオブジェクトです:
 
-    { 'flags': 'r'
-    , 'encoding': null
-    , 'mode': 0666
-    , 'bufferSize': 4 * 1024
-    }
+    { flags: 'r',
+      encoding: null,
+      mode: 0666,
+      bufferSize: 4096 }
 
 <!--
 `options` can include `start` and `end` values to read a range of bytes from
@@ -621,7 +639,6 @@ Returns a new WriteStream object (See `Writable Stream`).
 -->
 `options` は以下のデフォルト値を持つオブジェクトです:
 
-    { 'flags': 'w'
-    , 'encoding': null
-    , 'mode': 0666
-    }
+    { flags: 'w',
+      encoding: null,
+      mode: 0666 }

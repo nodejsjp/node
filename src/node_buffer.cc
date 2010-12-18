@@ -135,20 +135,6 @@ Buffer* Buffer::New(char *data, size_t length,
 }
 
 
-char* Buffer::Data(Handle<Object> obj) {
-  if (Buffer::HasInstance(obj))
-    return (char*)obj->GetIndexedPropertiesExternalArrayData();
-  return NULL;
-}
-
-
-size_t Buffer::Length(Handle<Object> obj) {
-  if (Buffer::HasInstance(obj))
-    return (size_t)obj->GetIndexedPropertiesExternalArrayDataLength();
-  return 0;
-}
-
-
 Handle<Value> Buffer::New(const Arguments &args) {
   if (!args.IsConstructCall()) {
     return FromConstructorTemplate(constructor_template, args);
@@ -190,7 +176,7 @@ void Buffer::Replace(char *data, size_t length,
   if (callback_) {
     callback_(data_, callback_hint_);
   } else if (length_) {
-    delete data_;
+    delete [] data_;
     V8::AdjustAmountOfExternalAllocatedMemory(-(sizeof(Buffer) + length_));
   }
 
@@ -395,7 +381,7 @@ Handle<Value> Buffer::Copy(const Arguments &args) {
   ssize_t to_copy = MIN(MIN(source_end - source_start,
                             target_length - target_start),
                             source->length_ - source_start);
-  
+
 
   // need to use slightly slower memmove is the ranges might overlap
   memmove((void *)(target_data + target_start),
@@ -420,7 +406,7 @@ Handle<Value> Buffer::Utf8Write(const Arguments &args) {
 
   size_t offset = args[1]->Uint32Value();
 
-  if (s->Utf8Length() > 0 && offset >= buffer->length_) {
+  if (s->Length() > 0 && offset >= buffer->length_) {
     return ThrowException(Exception::TypeError(String::New(
             "Offset is out of bounds")));
   }

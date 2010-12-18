@@ -87,8 +87,8 @@ the error in English.
 ### dns.resolve4(domain, callback)
 
 <!--
-The same as `dns.resolve()`, but only for IPv4 queries (`A` records). 
-`addresses` is an array of IPv4 addresses (e.g.  
+The same as `dns.resolve()`, but only for IPv4 queries (`A` records).
+`addresses` is an array of IPv4 addresses (e.g.
 `['74.125.79.104', '74.125.79.105', '74.125.79.106']`).
 -->
 `dns.resolve()` と同じですが、IPv4 アドレス (`A` レコード) だけを問い合わせます。
@@ -133,7 +133,7 @@ The same as `dns.resolve()`, but only for text queries (`TXT` records).
 <!--
 The same as `dns.resolve()`, but only for service records (`SRV` records).
 `addresses` is an array of the SRV records available for `domain`. Properties
-of SRV records are priority, weight, port, and name (e.g., 
+of SRV records are priority, weight, port, and name (e.g.,
 `[{'priority': 10, {'weight': 5, 'port': 21223, 'name': 'service.example.com'}, ...]`).
 -->
 `dns.resolve()` と同じですが、サービスレコード (`SRV` レコード) だけを問い合わせます。
@@ -149,7 +149,7 @@ Reverse resolves an ip address to an array of domain names.
 IP アドレスからドメイン名の配列へ逆引きで解決します。
 
 <!--
-The callback has arguments `(err, domains)`. 
+The callback has arguments `(err, domains)`.
 -->
 コールバックは引数 `(err, domains)` を持ちます。
 

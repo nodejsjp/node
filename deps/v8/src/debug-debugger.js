@@ -858,6 +858,7 @@ Debug.debuggerFlags = function() {
   return debugger_flags;
 };
 
+Debug.MakeMirror = MakeMirror;
 
 function MakeExecutionState(break_id) {
   return new ExecutionState(break_id);
@@ -876,9 +877,11 @@ ExecutionState.prototype.prepareStep = function(opt_action, opt_count) {
   return %PrepareStep(this.break_id, action, count);
 }
 
-ExecutionState.prototype.evaluateGlobal = function(source, disable_break) {
-  return MakeMirror(
-      %DebugEvaluateGlobal(this.break_id, source, Boolean(disable_break)));
+ExecutionState.prototype.evaluateGlobal = function(source, disable_break,
+    opt_additional_context) {
+  return MakeMirror(%DebugEvaluateGlobal(this.break_id, source,
+                                         Boolean(disable_break),
+                                         opt_additional_context));
 };
 
 ExecutionState.prototype.frameCount = function() {
@@ -895,10 +898,6 @@ ExecutionState.prototype.frame = function(opt_index) {
   if (opt_index < 0 || opt_index >= this.frameCount())
     throw new Error('Illegal frame index.');
   return new FrameMirror(this.break_id, opt_index);
-};
-
-ExecutionState.prototype.cframesValue = function(opt_from_index, opt_to_index) {
-  return %GetCFrames(this.break_id);
 };
 
 ExecutionState.prototype.setSelectedFrame = function(index) {
@@ -1751,11 +1750,6 @@ DebugCommandProcessor.prototype.backtraceRequest_ = function(request, response) 
 };
 
 
-DebugCommandProcessor.prototype.backtracec = function(cmd, args) {
-  return this.exec_state_.cframesValue();
-};
-
-
 DebugCommandProcessor.prototype.frameRequest_ = function(request, response) {
   // No frames no source.
   if (this.exec_state_.frameCount() == 0) {
@@ -1846,6 +1840,7 @@ DebugCommandProcessor.prototype.evaluateRequest_ = function(request, response) {
   var frame = request.arguments.frame;
   var global = request.arguments.global;
   var disable_break = request.arguments.disable_break;
+  var additional_context = request.arguments.additional_context;
 
   // The expression argument could be an integer so we convert it to a
   // string.
@@ -1859,12 +1854,30 @@ DebugCommandProcessor.prototype.evaluateRequest_ = function(request, response) {
   if (!IS_UNDEFINED(frame) && global) {
     return response.failed('Arguments "frame" and "global" are exclusive');
   }
+  
+  var additional_context_object;
+  if (additional_context) {
+    additional_context_object = {};
+    for (var i = 0; i < additional_context.length; i++) {
+      var mapping = additional_context[i];
+      if (!IS_STRING(mapping.name) || !IS_NUMBER(mapping.handle)) {
+        return response.failed("Context element #" + i + 
+            " must contain name:string and handle:number");
+      } 
+      var context_value_mirror = LookupMirror(mapping.handle);
+      if (!context_value_mirror) {
+        return response.failed("Context object '" + mapping.name +
+            "' #" + mapping.handle + "# not found");
+      }
+      additional_context_object[mapping.name] = context_value_mirror.value(); 
+    }
+  }
 
   // Global evaluate.
   if (global) {
     // Evaluate in the global context.
-    response.body =
-        this.exec_state_.evaluateGlobal(expression, Boolean(disable_break));
+    response.body = this.exec_state_.evaluateGlobal(
+        expression, Boolean(disable_break), additional_context_object);
     return;
   }
 
@@ -1886,12 +1899,12 @@ DebugCommandProcessor.prototype.evaluateRequest_ = function(request, response) {
     }
     // Evaluate in the specified frame.
     response.body = this.exec_state_.frame(frame_number).evaluate(
-        expression, Boolean(disable_break));
+        expression, Boolean(disable_break), additional_context_object);
     return;
   } else {
     // Evaluate in the selected frame.
     response.body = this.exec_state_.frame().evaluate(
-        expression, Boolean(disable_break));
+        expression, Boolean(disable_break), additional_context_object);
     return;
   }
 };
@@ -2204,29 +2217,6 @@ function NumberToHex8Str(n) {
   }
   return r;
 };
-
-DebugCommandProcessor.prototype.formatCFrames = function(cframes_value) {
-  var result = "";
-  if (cframes_value == null || cframes_value.length == 0) {
-    result += "(stack empty)";
-  } else {
-    for (var i = 0; i < cframes_value.length; ++i) {
-      if (i != 0) result += "\n";
-      result += this.formatCFrame(cframes_value[i]);
-    }
-  }
-  return result;
-};
-
-
-DebugCommandProcessor.prototype.formatCFrame = function(cframe_value) {
-  var result = "";
-  result += "0x" + NumberToHex8Str(cframe_value.address);
-  if (!IS_UNDEFINED(cframe_value.text)) {
-    result += " " + cframe_value.text;
-  }
-  return result;
-}
 
 
 /**

@@ -19,9 +19,9 @@ REPL は Emacs 風の簡易な行編集機能を備えています。
 
     mjr:~$ node
     Type '.help' for options.
-    node> a = [ 1, 2, 3];
+    > a = [ 1, 2, 3];
     [ 1, 2, 3 ]
-    node> a.forEach(function (v) {
+    > a.forEach(function (v) {
     ...   console.log(v);
     ...   });
     1
@@ -43,11 +43,11 @@ For example, you could add this to your bashrc file:
     alias node="env NODE_NO_READLINE=1 rlwrap node"
 
 
-### repl.start(prompt='node> ', stream=process.openStdin())
+### repl.start(prompt='> ', stream=process.openStdin())
 
 <!--
 Starts a REPL with `prompt` as the prompt and `stream` for all I/O.  `prompt`
-is optional and defaults to `node> `.  `stream` is optional and defaults to 
+is optional and defaults to `> `.  `stream` is optional and defaults to
 `process.openStdin()`.
 -->
 `prompt` でプロンプト記号を、 `stream` で I/O を引数に取って REPL を起動します。
@@ -95,7 +95,7 @@ TCP sockets.
 `socat` は Unix ドメイン /TCP 両方のソケットへの接続に利用できます。
 
 <!--
-By starting a REPL from a Unix socket-based server instead of stdin, you can 
+By starting a REPL from a Unix socket-based server instead of stdin, you can
 connect to a long-running node process without restarting it.
 -->
 標準入力の代わりに Unix ドメインソケットをベースとしたサーバから REPL を起動することによって、
@@ -114,15 +114,15 @@ The special variable `_` (underscore) contains the result of the last expression
 -->
 特別な変数である `_` (アンダースコア) は一番最後の式の結果を保持します。
 
-    node> [ "a", "b", "c" ]
+    > [ "a", "b", "c" ]
     [ 'a', 'b', 'c' ]
-    node> _.length 
+    > _.length
     3
-    node> _ += 1
+    > _ += 1
     4
 
 <!--
-The REPL provides access to any variables in the global scope. You can expose a variable 
+The REPL provides access to any variables in the global scope. You can expose a variable
 to the REPL explicitly by assigning it to the `context` object associated with each
 `REPLServer`.  For example:
 -->
@@ -141,8 +141,8 @@ Things in the `context` object appear as local within the REPL:
 -->
 `context` オブジェクトに設定された変数は、REPL の中ではローカルな変数として現れます:
 
-    mjr:~$ node repl_test.js 
-    node> m
+    mjr:~$ node repl_test.js
+    > m
     'message'
 
 <!--
@@ -150,8 +150,8 @@ There are a few special REPL commands:
 -->
 
 <!--
-  - `.break` - While inputting a multi-line expression, sometimes you get lost or just don't care 
-  about completing it.  `.break` will start over.
+  - `.break` - While inputting a multi-line expression, sometimes you get lost
+    or just don't care about completing it. `.break` will start over.
   - `.clear` - Resets the `context` object to an empty object and clears any multi-line expression.
   - `.exit` - Close the I/O stream, which will cause the REPL to exit.
   - `.help` - Show this list of special commands.

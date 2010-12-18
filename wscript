@@ -9,6 +9,9 @@ from logging import fatal
 cwd = os.getcwd()
 APPNAME="node.js"
 
+# Use the directory that this file is found in to find the tools
+# directory where the js2c.py file can be found.
+sys.path.append(sys.argv[0] + '/tools');
 import js2c
 
 srcdir = '.'
@@ -95,6 +98,13 @@ def set_options(opt):
                 , dest='shared_v8_libname'
                 )
 
+  opt.add_option( '--oprofile'
+                , action='store_true'
+                , default=False
+                , help="add oprofile support"
+                , dest='use_oprofile'
+                )
+
 
   opt.add_option('--shared-cares'
                 , action='store_true'
@@ -169,11 +179,18 @@ def configure(conf):
 
   conf.env["USE_DEBUG"] = o.debug
   conf.env["SNAPSHOT_V8"] = not o.without_snapshot
+  if sys.platform.startswith("sunos"):
+    conf.env["SNAPSHOT_V8"] = False
   conf.env["USE_PROFILING"] = o.profile
 
   conf.env["USE_SHARED_V8"] = o.shared_v8 or o.shared_v8_includes or o.shared_v8_libpath or o.shared_v8_libname
   conf.env["USE_SHARED_CARES"] = o.shared_cares or o.shared_cares_includes or o.shared_cares_libpath
   conf.env["USE_SHARED_LIBEV"] = o.shared_libev or o.shared_libev_includes or o.shared_libev_libpath
+
+  conf.env["USE_OPROFILE"] = o.use_oprofile
+
+  if o.use_oprofile:
+    conf.check(lib=['bfd', 'opagent'], uselib_store="OPROFILE")
 
   conf.check(lib='dl', uselib_store='DL')
   if not sys.platform.startswith("sunos") and not sys.platform.startswith("cygwin"):
@@ -203,7 +220,7 @@ def configure(conf):
       Options.options.use_openssl = conf.env["USE_OPENSSL"] = True
       conf.env.append_value("CPPFLAGS", "-DHAVE_OPENSSL=1")
     else:
-      libssl = conf.check_cc(lib='ssl',
+      libssl = conf.check_cc(lib=['ssl', 'crypto'],
                              header_name='openssl/ssl.h',
                              function_name='SSL_library_init',
                              libpath=['/usr/lib', '/usr/local/lib', '/opt/local/lib', '/usr/sfw/lib'],
@@ -220,6 +237,9 @@ def configure(conf):
                    "Use configure --without-ssl to disable this message.")
   else:
     Options.options.use_openssl = conf.env["USE_OPENSSL"] = False
+
+  conf.check(lib='util', libpath=['/usr/lib', '/usr/local/lib'],
+             uselib_store='UTIL')
 
   # normalize DEST_CPU from --dest-cpu, DEST_CPU or built-in value
   if Options.options.dest_cpu and Options.options.dest_cpu:
@@ -353,6 +373,10 @@ def configure(conf):
   # platform
   conf.env.append_value('CPPFLAGS', '-DPLATFORM="' + conf.env['DEST_OS'] + '"')
 
+  # posix?
+  if not sys.platform.startswith('win'):
+    conf.env.append_value('CPPFLAGS', '-D__POSIX__=1')
+
   platform_file = "src/platform_%s.cc" % conf.env['DEST_OS']
   if os.path.exists(join(cwd, platform_file)):
     Options.options.platform_file = True
@@ -364,6 +388,9 @@ def configure(conf):
   if conf.env['USE_PROFILING'] == True:
     conf.env.append_value('CPPFLAGS', '-pg')
     conf.env.append_value('LINKFLAGS', '-pg')
+
+  conf.env.append_value('CPPFLAGS', '-Wno-unused-parameter');
+  conf.env.append_value('CPPFLAGS', '-D_FORTIFY_SOURCE=2');
 
   # Split off debug variant before adding variant specific defines
   debug_env = conf.env.copy()
@@ -413,7 +440,12 @@ def v8_cmd(bld, variant):
   else:
     snapshot = ""
 
-  cmd_R = 'python "%s" -j %d -C "%s" -Y "%s" visibility=default mode=%s %s library=static %s'
+  if bld.env["USE_OPROFILE"]:
+    profile = "prof=oprofile"
+  else:
+    profile = ""
+
+  cmd_R = sys.executable + ' "%s" -j %d -C "%s" -Y "%s" visibility=default mode=%s %s library=static %s %s'
 
   cmd = cmd_R % ( scons
                 , Options.options.jobs
@@ -422,6 +454,7 @@ def v8_cmd(bld, variant):
                 , mode
                 , arch
                 , snapshot
+		, profile
                 )
   
   return ("echo '%s' && " % cmd) + cmd
@@ -545,7 +578,7 @@ def build(bld):
   node = bld.new_task_gen("cxx", product_type)
   node.name         = "node"
   node.target       = "node"
-  node.uselib = 'RT EV OPENSSL CARES EXECINFO DL KVM SOCKET NSL'
+  node.uselib = 'RT EV OPENSSL CARES EXECINFO DL KVM SOCKET NSL UTIL OPROFILE'
   node.add_objects = 'eio http_parser'
   if product_type_is_lib:
     node.install_path = '${PREFIX}/lib'
@@ -570,6 +603,7 @@ def build(bld):
     src/node_stdio.cc
     src/node_timer.cc
     src/node_script.cc
+    src/node_os.cc
   """
   node.source += bld.env["PLATFORM_FILE"]
   if not product_type_is_lib:
@@ -604,7 +638,7 @@ def build(bld):
         , 'CPPFLAGS'  : " ".join(program.env["CPPFLAGS"]).replace('"', '\\"')
         , 'LIBFLAGS'  : " ".join(program.env["LIBFLAGS"]).replace('"', '\\"')
         , 'PREFIX'    : program.env["PREFIX"]
-        , 'VERSION'   : '0.3.1-pre' # FIXME should not be hard-coded, see NODE_VERSION_STRING in src/node_version.h
+        , 'VERSION'   : '0.3.2' # FIXME should not be hard-coded, see NODE_VERSION_STRING in src/node_version.
         }
     return x
 
