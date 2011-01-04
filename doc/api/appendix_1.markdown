@@ -4,7 +4,7 @@
 
 There are many third party modules for Node. At the time of writing, August
 2010, the master repository of modules is
-http://github.com/ry/node/wiki/modules[the wiki page].
+[the wiki page](http://github.com/ry/node/wiki/modules).
 
 -->
 Node 向けにサードパーティ製のモジュールが数多くあります。

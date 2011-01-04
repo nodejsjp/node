@@ -1,3 +1,13 @@
+// There is a bug with 'openssl s_server' which makes it not flush certain
+// important events to stdout when done over a pipe. Therefore we skip this
+// test for all openssl versions less than 1.0.0.
+if (!process.versions.openssl ||
+    parseInt(process.versions.openssl[0]) < 1) {
+  console.error("Skipping due to old OpenSSL version.");
+  process.exit(0);
+}
+
+
 var common = require('../common');
 var join = require('path').join;
 var net = require('net');
@@ -66,8 +76,9 @@ var timeout = setTimeout(function () {
   process.exit(1);
 }, 5000);
 
-
+var gotWriteCallback = false;
 var serverExitCode = -1;
+
 server.on('exit', function(code) {
   serverExitCode = code;
   clearTimeout(timeout);
@@ -101,7 +112,9 @@ function startClient() {
     console.log('client pair.cleartext.getCipher(): %j',
                 pair.cleartext.getCipher());
     setTimeout(function() {
-      pair.cleartext.write('hello\r\n');
+      pair.cleartext.write('hello\r\n', function () {
+        gotWriteCallback = true;
+      });
     }, 500);
   });
 
@@ -130,4 +143,5 @@ function startClient() {
 process.on('exit', function() {
   assert.equal(0, serverExitCode);
   assert.equal('WAIT-SERVER-CLOSE', state);
+  assert.ok(gotWriteCallback);
 });

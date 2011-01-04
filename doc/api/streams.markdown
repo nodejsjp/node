@@ -166,7 +166,8 @@ Emulating the Unix `cat` command:
 -->
 Unix の `cat` コマンドのエミュレート:
 
-    process.openStdin().pipe(process.stdout);
+    process.stdin.resume();
+    process.stdin.pipe(process.stdout);
 
 
 <!--
@@ -187,9 +188,13 @@ This keeps `process.stdout` open so that "Goodbye" can be written at the end.
 -->
 これは `process.stdout` をオープンしたままにして最後に "Goodbye" と出力します。
 
-    var stdin = process.openStdin();
-    stdin.pipe(process.stdout, { end: false });
-    stdin.on("end", function() { process.stdout.write("Goodbye\n"); });
+    process.stdin.resume();
+
+    process.stdin.pipe(process.stdout, { end: false });
+
+    process.stdin.on("end", function() {
+      process.stdout.write("Goodbye\n");
+    });
 
 <!--
 

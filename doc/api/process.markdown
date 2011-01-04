@@ -109,7 +109,8 @@ Example of listening for `SIGINT`:
 -->
 `SIGINT`を監視する例:
 
-    var stdin = process.openStdin();
+    // Start reading from stdin so we don't exit.
+    process.stdin.resume();
 
     process.on('SIGINT', function () {
       console.log('Got SIGINT.  Press Control-D to exit.');
@@ -145,14 +146,17 @@ Example: the definition of `console.log`
     };
 
 
-### process.openStdin()
+### process.stdin
 
 <!--
 
-Opens the standard input stream, returns a `Readable Stream`.
+A `Readable Stream` for stdin. The stdin stream is paused by default, so one
+must call `process.stdin.resume()` to read from it.
 
 -->
-標準入力ストリームをオープンし、`Readable Stream` を返します。
+標準入力に対する `Readable Stream` です。
+デフォルトでは、標準入力に対するストリームは中断されているため、
+読み込みのためには `process.stdin.resume()` を呼び出さなければなりません。
 
 <!--
 
@@ -161,15 +165,14 @@ Example of opening standard input and listening for both events:
 -->
 標準入力をオープンして二つのイベントを監視する例:
 
-    var stdin = process.openStdin();
+    process.stdin.resume();
+    process.stdin.setEncoding('utf8');
 
-    stdin.setEncoding('utf8');
-
-    stdin.on('data', function (chunk) {
+    process.stdin.on('data', function (chunk) {
       process.stdout.write('data: ' + chunk);
     });
 
-    stdin.on('end', function () {
+    process.stdin.on('end', function () {
       process.stdout.write('end');
     });
 

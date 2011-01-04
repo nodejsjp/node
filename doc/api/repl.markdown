@@ -51,13 +51,13 @@ For example, you could add this to your bashrc file:
     alias node="env NODE_NO_READLINE=1 rlwrap node"
 
 
-### repl.start(prompt='> ', stream=process.openStdin())
+### repl.start(prompt='> ', stream=process.stdin)
 
 <!--
 
 Starts a REPL with `prompt` as the prompt and `stream` for all I/O.  `prompt`
 is optional and defaults to `> `.  `stream` is optional and defaults to
-`process.openStdin()`.
+`process.stdin`.
 
 -->
 `prompt` でプロンプト記号を、 `stream` で I/O を引数に取って REPL を起動します。

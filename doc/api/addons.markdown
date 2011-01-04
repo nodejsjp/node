@@ -29,7 +29,7 @@ API はいくつかのライブラリの知識が必要で、(現時点では) �
    descriptor to become readable, wait for a timer, or wait for a signal to
    received one will need to interface with libev.  That is, if you perform
    any I/O, libev will need to be used.  Node uses the `EV_DEFAULT` event
-   loop.  Documentation can be found http:/cvs.schmorp.de/libev/ev.html[here].
+   loop.  Documentation can be found [here](http://cvs.schmorp.de/libev/ev.html).
 
 -->
  - libev は C の event loop ライブラリです。
@@ -145,11 +145,11 @@ Running `node-waf configure build` will create a file
 
 <!--
 
-`node-waf` is just [WAF](http://code.google.com/p/waf/), the python-based build system. `node-waf` is
+`node-waf` is just [WAF](http://code.google.com/p/waf), the python-based build system. `node-waf` is
 provided for the ease of users.
 
 -->
-`node-waf` は [WAF](http://code.google.com/p/waf/) にある Python ベースのビルドシステムです。
+`node-waf` は [WAF](http://code.google.com/p/waf) にある Python ベースのビルドシステムです。
 `node-waf` は、ユーザの負担を減らすために提供されています。
 
 <!--

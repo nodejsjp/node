@@ -1,3 +1,8 @@
+if (!process.versions.openssl) {
+  console.error("Skipping because node compiled without OpenSSL.");
+  process.exit(0);
+}
+
 // This is a rather complex test which sets up various TLS servers with node
 // and connects to them using the 'openssl s_client' command line utility
 // with various keys. Depending on the certificate authority and other
@@ -190,7 +195,8 @@ function runTest (testIndex) {
   var server = tls.Server(serverOptions, function (c) {
     connections++;
     if (c.authorized) {
-      console.error('- authed connection');
+      console.error('- authed connection: ' +
+                    c.getPeerCertificate().subject.CN);
       c.write('\n_authed\n');
     } else {
       console.error('- unauthed connection: %s', c.authorizationError);
