@@ -62,7 +62,7 @@ is optional and defaults to `> `.  `stream` is optional and defaults to
 -->
 `prompt` でプロンプト記号を、 `stream` で I/O を引数に取って REPL を起動します。
 `prompt` は省略可能で、 デフォルトは `> ` です。
-`stream` は省略可能で、 デフォルトは `process.openStdin()`です。
+`stream` は省略可能で、 デフォルトは `process.stdin` です。
 
 <!--
 

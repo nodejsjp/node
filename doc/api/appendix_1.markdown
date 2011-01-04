@@ -9,7 +9,7 @@ There are many third party modules for Node. At the time of writing, August
 -->
 Node 向けにサードパーティ製のモジュールが数多くあります。
 執筆時点 (2010 年 8 月) では、モジュールのマスタリポジトリは
-http://github.com/ry/node/wiki/modules[wiki ページ] です。
+[wiki ページ](http://github.com/ry/node/wiki/modules) です。
 
 <!--
 
