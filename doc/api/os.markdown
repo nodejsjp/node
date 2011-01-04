@@ -13,39 +13,80 @@ Use `require('os')` to access this module.
 
 Returns the hostname of the operating system.
 
-<<<<<<< HEAD
 -->
 オペレーティングシステムのホスト名を返します。
-=======
+
 ### os.type()
+
+<!--
 
 Returns the operating system name.
 
+-->
+オペレーティングシステムの名前を返します。
+
 ### os.release()
+
+<!--
 
 Returns the operating system release.
 
+->
+オペレーティングシステムのリリースを返します。
+
 ### os.uptime()
+
+<!--
 
 Returns the system uptime in seconds.
 
+-->
+
+システムが起動してからの秒数を返します。
+
 ### os.loadavg()
+
+<!--
 
 Returns an array containing the 1, 5, and 15 minute load averages.
 
+-->
+1 分、5 分、15 分間のロードアベレージを含んだ配列を返します。
+
 ### os.totalmem()
+
+<!--
 
 Returns the total amount of system memory in bytes.
 
+-->
+システム全体が使用しているメモリのバイト数を返します。
+
 ### os.freemem()
+
+<!--
 
 Returns the amount of free system memory in bytes.
 
+-->
+システム全体で空いているメモリのバイト数を返します。
+
 ### os.cpus()
+
+<!--
 
 Returns an array of objects containing information about each CPU/core installed: model, speed (in MHz), and times (an object containing the number of CPU ticks spent in: user, nice, sys, idle, and irq).
 
+-->
+インストールされている CPU/ コアごとの情報を含んだオブジェクトの配列を返します。
+情報はモデル、スピード (MHz)、そして時間 (CPU が使用した user, nice, sys, idle, irq 時間を含んだオブジェクト) です。
+
+<!--
+
 Example inspection of os.cpus:
+
+-->
+os.cpus の例:
 
     [ { model: 'Intel(R) Core(TM) i7 CPU         860  @ 2.80GHz',
         speed: 2926,
@@ -111,4 +152,3 @@ Example inspection of os.cpus:
            sys: 34920,
            idle: 1072572010,
            irq: 30 } } ]
->>>>>>> master
