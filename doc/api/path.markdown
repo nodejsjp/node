@@ -19,9 +19,16 @@ Normalize a string path, taking care of `'..'` and `'.'` parts.
 -->
 文字列によるパスを正規化します。`'..'` と `'.'` の要素には注意してください。
 
+<!--
+
 When multiple slashes are found, they're replaces by a single one;
 when the path contains a trailing slash, it is preserved.
 On windows backslashes are used. 
+
+-->
+複数のスラッシュが見つかると、それらは一つに置換されます;
+パスの最後にスラッシュが含まれていると、それは維持されます。
+Windows ではバックスラッシュが使われます。
 
 <!--
 
@@ -56,18 +63,39 @@ Example:
 
 ### path.resolve([from ...], to)
 
+<!--
+
 Resolves `to` to an absolute path name and normalizes it.
 
+-->
+`to` の絶対パスを解決して正規化します。
+
+<!--
 One ore more `from` arguments may be provided to specify the the starting
 point from where the path will be resolved. `resolve` will prepend `from`
 arguments from right to left until an absolute path is found. If no `from`
 arguments are specified, or after prepending them still no absolute path is
 found, the current working directory will be prepended eventually.
+-->
+パスを解決する際の基準点を指定するために一つ以上の `from` 引数を与えることができます。
+ `resolve()` は絶対パスが見つかるまで `from` 引数を右から左へ先頭に追加します。
+`from` 引数が指定されなかった場合や、絶対パスが見つからなかった場合は、
+最終的に現在の作業ディレクトリを先頭に追加されます。
+
+<!--
 
 Trailing slashes are removed unless the path gets resolved to the root
 directory.
 
+-->
+解決した結果がルートディレクトリの場合を除いて、末尾のスラッシュは削除されます。
+
+<!--
+
 Examples:
+
+-->
+例:
 
     path.resolve('index.html')
     // returns
@@ -99,6 +127,7 @@ Return the directory name of a path.  Similar to the Unix `dirname` command.
 Example:
 
 -->
+例:
 
     path.dirname('/foo/bar/baz/asdf/quux')
     // returns

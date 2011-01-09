@@ -31,8 +31,8 @@ Construct a new socket object and opens a socket to the given location. When
 the socket is established the `'connect'` event will be emitted.
 
 -->
-新しいストリームオブジェクトを構築し、与えられたロケーションへのストリームをオープンします。
-ストリームが確立されると、`'connect'` イベントが生成されます。
+新しいソケットオブジェクトを構築し、与えられたロケーションへのソケットをオープンします。
+ソケットが確立されると、`'connect'` イベントが生成されます。
 
 <!--
 
@@ -281,7 +281,7 @@ Emitted when a new connection is made. `socket` is an instance of
 
 -->
 新しいコネクションが作成されると生成されます。
-`stream` は `net.Stream` のインスタンスです。
+`socket` は `net.Socket` のインスタンスです。
 
 #### Event: 'close'
 
@@ -316,7 +316,7 @@ Node によって作成されてサーバの `'connection'` イベントを通�
 `net.Socket` instances are EventEmitters with the following events:
 
 -->
-`net.Stream` のインスタンスは以下のイベントを持つ EventEmitter です:
+`net.Socket` のインスタンスは以下のイベントを持つ EventEmitter です:
 
 #### socket.connect(port, [host], [callback])
 #### socket.connect(path, [callback])
@@ -329,12 +329,12 @@ then the socket will be opened as a TCP socket, if `host` is omitted,
 opened as a unix socket to that path.
 
 -->
-与えられたストリームでコネクションをオープンします。
+与えられたソケットでコネクションをオープンします。
 `port` と `host` が与えられた場合、
-ストリームは TCP ストリームとしてオープンされます。
+ソケットは TCP ソケットとしてオープンされます。
 `host` が省略された場合は `localhost` が仮定されます。
 `path` が与えられた場合は、
-ストリームはそのパスへの UNIX ドメインソケットとしてオープンされます。
+ソケットはそのパスへの UNIX ドメインソケットとしてオープンされます。
 
 <!--
 
@@ -343,9 +343,9 @@ socket. Use this only if you are implementing a custom Socket or if a
 Socket is closed and you want to reuse it to connect to another server.
 
 -->
-通常このメソッドは必要なく、`net.createConnection` でストリームをオープンします。
-これを使うのは、カスタマイズされたストリームを実装している場合や、
-ストリームがクローズされた後にコネクションを再利用して別のサーバに接続する場合だけです。
+通常このメソッドは必要なく、`net.createConnection` でソケットをオープンします。
+これを使うのは、カスタマイズされたソケットを実装している場合や、
+ソケットがクローズされた後にコネクションを再利用して別のサーバに接続する場合だけです。
 
 <!--
 
@@ -355,7 +355,7 @@ event will not be emitted, the `'error'` event will be emitted with
 the exception.
 
 -->
-この関数は非同期です。ストリームが確立されると `'connect'` イベントが生成されます。
+この関数は非同期です。ソケットが確立されると `'connect'` イベントが生成されます。
 接続で問題があった場合は `'connect'` イベントは生成されず、
 例外とともに `'error'` イベントが生成されます。
 
@@ -387,6 +387,9 @@ This function has been removed in v0.3. It used to upgrade the connection to
 SSL/TLS. See the TLS for the new API.
 
 -->
+この関数は v0.3 で削除されました。
+これはコネクションを SSL/TLS にアップグレードするために使われていました。
+新しい API である TLS を参照してください。
 
 #### socket.write(data, [encoding], [callback])
 
@@ -395,7 +398,8 @@ SSL/TLS. See the TLS for the new API.
 Sends data on the socket. The second parameter specifies the encoding in the
 case of a string--it defaults to UTF8 encoding.
 
--->ストリームにデータを送信します。
+-->
+ソケットにデータを送信します。
 文字列の場合、第 2 引数はエンコーディングを指定します － デフォルトは UTF-8 です。
 
 <!--
@@ -427,7 +431,7 @@ socket. Simply add the `fileDescriptor` argument and listen for the `'fd'`
 event on the other end.
 
 -->
-UNIX ソケットの場合、ファイル記述子をストリームに送信することができます。
+UNIX ソケットの場合、ファイル記述子をソケットに送信することができます。
 単純に `fileDescriptor` 引数を加えることで、相手側には `'fd'` イベントが生成されます。
 
 
@@ -439,7 +443,7 @@ Half-closes the socket. I.E., it sends a FIN packet. It is possible the
 server will still send some data.
 
 -->
-ストリームをハーフクローズします。例えば FIN パケットを送信します。
+ソケットをハーフクローズします。例えば FIN パケットを送信します。
 サーバはまだデータを送り続けてくることができます。
 
 <!--
@@ -449,7 +453,7 @@ followed by `socket.end()`.
 
 -->
 `data` が指定された場合は、
-`stream.write(data, encoding)` に続けて `stream.end()` を呼び出すのと等価です。
+`socket.write(data, encoding)` に続けて `socket.end()` を呼び出すのと等価です。
 
 #### socket.destroy()
 
@@ -459,7 +463,7 @@ Ensures that no more I/O activity happens on this socket. Only necessary in
 case of errors (parse error or so).
 
 -->
-このストリーム上でどんな I/O も起こらないことを保証します。
+このソケット上でどんな I/O も起こらないことを保証します。
 (パースエラーなどの) エラーの場合にだけ必要です。
 
 #### socket.pause()
@@ -498,7 +502,7 @@ event but the connection will not be severed. The user must manually `end()`
 or `destroy()` the socket.
 
 -->
-アイドルタイムアウトが引き起こされると、ストリームは `'timeout'` イベントを受信しますが、
+アイドルタイムアウトが引き起こされると、ソケットは `'timeout'` イベントを受信しますが、
 コネクションは切断されません。
 ユーザは手動で `end()` または `destroy()` を呼び出す必要があります。
 
@@ -520,7 +524,7 @@ immediately fire off data each time `socket.write()` is called.
 -->
 Nagle アルゴリズムを無効にします。
 デフォルトでは TCP コネクションは Nagle アルゴリズムを使用し、データを送信する前にバッファリングします。
-`noDelay` に設定すると、データは `stream.write()` を呼び出す度に即座に送信されます。
+`noDelay` に設定すると、データは `socket.write()` を呼び出す度に即座に送信されます。
 
 #### socket.setKeepAlive(enable=false, [initialDelay])
 
@@ -535,7 +539,7 @@ initialDelay will leave the value unchanged from the default
 
 -->
 キープアライブ機能を有効/無効にします。
-オプションで最初の keepalive probe がアイドルストリームに送信されるまでの初期遅延を設定します。
+オプションで最初の keepalive probe がアイドルソケットに送信されるまでの初期遅延を設定します。
 `initialDelay` (ミリ秒) が設定されると、
 最後にデータパケットを受信してから最初の keepalive probe までの遅延が設定されます。
 初期遅延に 0 が設定されると、デフォルト設定から値を変更されないようにします。
@@ -569,7 +573,7 @@ Emitted when a socket connection successfully is established.
 See `connect()`.
 
 -->
-ストリームコネクションの確立が成功した場合に生成されます。
+ソケットコネクションの確立が成功した場合に生成されます。
 `connect()` を参照してください。
 
 #### Event: 'data'
@@ -585,7 +589,7 @@ Emitted when data is received.  The argument `data` will be a `Buffer` or
 -->
 データを受信した場合に生成されます。
 `data` 引数は `Buffer` または `String` です。
-データのエンコーディングは `stream.setEncoding()` で設定されます。
+データのエンコーディングは `socket.setEncoding()` で設定されます。
 (より詳しい情報は `Readable Stream` を参照してください)。
 
 #### Event: 'end'
@@ -597,7 +601,7 @@ Emitted when data is received.  The argument `data` will be a `Buffer` or
 Emitted when the other end of the socket sends a FIN packet.
 
 -->
-ストリームの相手側が FIN パケットを送信した場合に生成されます。
+ソケットの相手側が FIN パケットを送信した場合に生成されます。
 
 <!--
 
@@ -609,9 +613,9 @@ caveat that the user is required to `end()` their side now.
 
 -->
 デフォルト (`allowHalfOpen == false`) では、
-保留されていた書き込みキューが出力されるとストリームはファイル識別子を破棄します。
+保留されていた書き込みキューが出力されるとソケットはファイル識別子を破棄します。
 しかし、`allowHalfOpen == true` が設定されていると、
-ユーザがデータを書き込めるようにしておくために、ストリームは自動的に `end()` を呼び出さないので、
+ユーザがデータを書き込めるようにしておくために、ソケットは自動的に `end()` を呼び出さないので、
 ユーザが `end()` を呼び出す必要があります。
 
 
@@ -625,8 +629,8 @@ Emitted if the socket times out from inactivity. This is only to notify that
 the socket has been idle. The user must manually close the connection.
 
 -->
-ストリームがタイムアウトして非アクティブになった場合に生成されます。
-これはストリームがアイドルになったことを通知するだけです。
+ソケットがタイムアウトして非アクティブになった場合に生成されます。
+これはソケットがアイドルになったことを通知するだけです。
 利用者は手動でコネクションをクローズする必要があります。
 
 See also: `socket.setTimeout()`
@@ -665,8 +669,8 @@ Emitted once the socket is fully closed. The argument `had_error` is a boolean
 which says if the socket was closed due to a transmission error.
 
 -->
-ストリームが完全にクローズした場合に生成されます。
-引数 `had_error` は boolean で、ストリームが転送エラーでクローズされたのかどうかを示します。
+ソケットが完全にクローズした場合に生成されます。
+引数 `had_error` は boolean で、ソケットが転送エラーでクローズされたのかどうかを示します。
 
 ---
 

@@ -64,6 +64,7 @@
 * [表明とテスティング](assert.html)
 * [TTY](tty.html)
 * [OS](os.html)
+* [デバッガ](debugger.html)
 * 付録
   * [付録 1: 推奨されるサードパーティ製のモジュール](appendix_1.html)
   * [付録 2: 廃止された API](appendix_2.html)

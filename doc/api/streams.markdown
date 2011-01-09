@@ -141,7 +141,12 @@ Closes the underlying file descriptor. Stream will not emit any more events.
 
 ### stream.destroySoon()
 
+<!--
+
 After the write queue is drained, close the file descriptor.
+
+-->
+書き込みキューがからになった後、ファイル記述子をクローズします。
 
 ### stream.pipe(destination, [options])
 
