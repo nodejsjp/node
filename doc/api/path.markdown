@@ -48,7 +48,7 @@ Example:
 Join all arguments together and normalize the resulting path.
 
 -->
-全ての引数を一つに結合し、結果として得られるパスを決定します。
+全ての引数を一つに結合し、結果として得られるパスを正規化します。
 
 <!--
 

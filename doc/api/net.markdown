@@ -307,7 +307,7 @@ and passed to the user through the `'connection'` event of a server.
 
 -->
 このオブジェクトは TCP または UNIX ドメインのソケットを抽象化したものです。
-`net.Stream` のインスタンスは双方向のストリームインタフェースを実装します。
+`net.Socket` のインスタンスは双方向のストリームインタフェースを実装します。
 それらはユーザによって (`connect()` によって) 作成されてクライアントとして使われるか、
 Node によって作成されてサーバの `'connection'` イベントを通じてユーザに渡されます。
 

@@ -31,7 +31,7 @@ Returns the operating system name.
 
 Returns the operating system release.
 
-->
+-->
 オペレーティングシステムのリリースを返します。
 
 ### os.isWindows
