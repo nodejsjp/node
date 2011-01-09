@@ -11,13 +11,19 @@
 #include <assert.h>
 #include <unistd.h>
 #include <errno.h>
-#include <dlfcn.h> /* dlopen(), dlsym() */
 #include <sys/types.h>
 #include <unistd.h> /* setuid, getuid */
-#include <pwd.h> /* getpwnam() */
-#include <grp.h> /* getgrnam() */
 
 #include "platform.h"
+
+#ifdef __MINGW32__
+# include <platform_win32.h> /* winapi_perror() */
+# include <platform_win32_winsock.h> /* wsa_init() */
+#else // __POSIX__
+# include <dlfcn.h> /* dlopen(), dlsym() */
+# include <pwd.h> /* getpwnam() */
+# include <grp.h> /* getgrnam() */
+#endif
 
 #include <node_buffer.h>
 #include <node_io_watcher.h>
@@ -87,6 +93,7 @@ static ev_idle tick_spinner;
 static bool need_tick_cb;
 static Persistent<String> tick_callback_sym;
 
+static ev_async enable_debug;
 static ev_async eio_want_poll_notifier;
 static ev_async eio_done_poll_notifier;
 static ev_idle  eio_poller;
@@ -679,7 +686,10 @@ const char *signo_string(int signo) {
 #endif
 
   SIGNO_CASE(SIGTERM);
+
+#ifdef SIGCHLD
   SIGNO_CASE(SIGCHLD);
+#endif
 
 #ifdef SIGSTKFLT
   SIGNO_CASE(SIGSTKFLT);
@@ -1069,6 +1079,9 @@ static Handle<Value> Cwd(const Arguments& args) {
   return scope.Close(cwd);
 }
 
+
+#ifdef __POSIX__
+
 static Handle<Value> Umask(const Arguments& args){
   HandleScope scope;
   unsigned int old;
@@ -1172,6 +1185,8 @@ static Handle<Value> SetUid(const Arguments& args) {
   return Undefined();
 }
 
+#endif // __POSIX__
+
 
 v8::Handle<v8::Value> Exit(const v8::Arguments& args) {
   HandleScope scope;
@@ -1240,6 +1255,8 @@ v8::Handle<v8::Value> MemoryUsage(const v8::Arguments& args) {
   return scope.Close(info);
 }
 
+
+#ifdef __POSIX__
 
 Handle<Value> Kill(const Arguments& args) {
   HandleScope scope;
@@ -1336,6 +1353,8 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
   // coverity[leaked_storage]
   return Undefined();
 }
+
+#endif // __POSIX__
 
 
 // TODO remove me before 0.4
@@ -1561,7 +1580,11 @@ static Handle<Value> EnvSetter(Local<String> property,
                                const AccessorInfo& info) {
   String::Utf8Value key(property);
   String::Utf8Value val(value);
+#ifdef __POSIX__
   setenv(*key, *val, 1);
+#else  // __WIN32__
+  NO_IMPL_MSG(setenv)
+#endif
   return value;
 }
 
@@ -1581,7 +1604,11 @@ static Handle<Boolean> EnvDeleter(Local<String> property,
                                   const AccessorInfo& info) {
   String::Utf8Value key(property);
   if (getenv(*key)) {
+#ifdef __POSIX__
     unsetenv(*key);	// prototyped as `void unsetenv(const char*)` on some platforms
+#else
+    NO_IMPL_MSG(unsetenv)
+#endif
     return True();
   }
   return False();
@@ -1657,7 +1684,7 @@ static void Load(int argc, char *argv[]) {
 
 
   // process.platform
-  process->Set(String::NewSymbol("platform"), String::New("PLATFORM"));
+  process->Set(String::NewSymbol("platform"), String::New(PLATFORM));
 
   // process.argv
   Local<Array> arguments = Array::New(argc - option_end_index + 1);
@@ -1716,6 +1743,8 @@ static void Load(int argc, char *argv[]) {
   NODE_SET_METHOD(process, "reallyExit", Exit);
   NODE_SET_METHOD(process, "chdir", Chdir);
   NODE_SET_METHOD(process, "cwd", Cwd);
+
+#ifdef __POSIX__
   NODE_SET_METHOD(process, "getuid", GetUid);
   NODE_SET_METHOD(process, "setuid", SetUid);
 
@@ -1725,6 +1754,8 @@ static void Load(int argc, char *argv[]) {
   NODE_SET_METHOD(process, "umask", Umask);
   NODE_SET_METHOD(process, "dlopen", DLOpen);
   NODE_SET_METHOD(process, "_kill", Kill);
+#endif // __POSIX__
+
   NODE_SET_METHOD(process, "memoryUsage", MemoryUsage);
 
   NODE_SET_METHOD(process, "binding", Binding);
@@ -1879,6 +1910,42 @@ static void SignalExit(int signal) {
 }
 
 
+static void EnableDebugSignalHandler(int signal) {
+  // can't do much here, marshal this back into the main thread where we'll
+  // enable the debugger.
+  ev_async_send(EV_DEFAULT_UC_ &enable_debug);
+}
+
+
+static void EnableDebug(bool wait_connect) {
+  // Start the debug thread and it's associated TCP server on port 5858.
+  bool r = Debug::EnableAgent("node " NODE_VERSION, debug_port);
+
+  if (wait_connect) {
+    // Set up an empty handler so v8 will not continue until a debugger
+    // attaches. This is the same behavior as Debug::EnableAgent(_,_,true)
+    // except we don't break at the beginning of the script.
+    // see Debugger::StartAgent in debug.cc of v8/src
+    Debug::SetMessageHandler2(node::DebugBreakMessageHandler);
+  }
+
+  // Crappy check that everything went well. FIXME
+  assert(r);
+
+  // Print out some information.
+  fprintf(stderr, "debugger listening on port %d\r\n", debug_port);
+}
+
+
+static void EnableDebug2(EV_P_ ev_async *watcher, int revents) {
+  assert(watcher == &enable_debug);
+  assert(revents == EV_ASYNC);
+  EnableDebug(false);
+}
+
+
+#ifdef __POSIX__
+
 static int RegisterSignalHandler(int signal, void (*handler)(int)) {
   struct sigaction sa;
 
@@ -1887,6 +1954,7 @@ static int RegisterSignalHandler(int signal, void (*handler)(int)) {
   sigfillset(&sa.sa_mask);
   return sigaction(signal, &sa, NULL);
 }
+#endif // __POSIX__
 
 
 int Start(int argc, char *argv[]) {
@@ -1926,11 +1994,17 @@ int Start(int argc, char *argv[]) {
   }
   V8::SetFlagsFromCommandLine(&v8argc, v8argv, false);
 
+#ifdef __POSIX__
   // Ignore SIGPIPE
   RegisterSignalHandler(SIGPIPE, SIG_IGN);
   RegisterSignalHandler(SIGINT, SignalExit);
   RegisterSignalHandler(SIGTERM, SignalExit);
+#endif // __POSIX__
 
+#ifdef __MINGW32__
+  // Initialize winsock and soem related caches
+  wsa_init();
+#endif // __MINGW32__
 
   // Initialize the default ev loop.
 #if defined(__sun)
@@ -1984,37 +2058,33 @@ int Start(int argc, char *argv[]) {
 
   V8::SetFatalErrorHandler(node::OnFatalError);
 
+
+  // Initialize the async watcher for receiving messages from the debug
+  // thread and marshal it into the main thread. DebugMessageCallback()
+  // is called from the main thread to execute a random bit of javascript
+  // - which will give V8 control so it can handle whatever new message
+  // had been received on the debug thread.
+  ev_async_init(&node::debug_watcher, node::DebugMessageCallback);
+  ev_set_priority(&node::debug_watcher, EV_MAXPRI);
+  // Set the callback DebugMessageDispatch which is called from the debug
+  // thread.
+  Debug::SetDebugMessageDispatchHandler(node::DebugMessageDispatch);
+  // Start the async watcher.
+  ev_async_start(EV_DEFAULT_UC_ &node::debug_watcher);
+  // unref it so that we exit the event loop despite it being active.
+  ev_unref(EV_DEFAULT_UC);
+
+
   // If the --debug flag was specified then initialize the debug thread.
   if (node::use_debug_agent) {
-    // Initialize the async watcher for receiving messages from the debug
-    // thread and marshal it into the main thread. DebugMessageCallback()
-    // is called from the main thread to execute a random bit of javascript
-    // - which will give V8 control so it can handle whatever new message
-    // had been received on the debug thread.
-    ev_async_init(&node::debug_watcher, node::DebugMessageCallback);
-    ev_set_priority(&node::debug_watcher, EV_MAXPRI);
-    // Set the callback DebugMessageDispatch which is called from the debug
-    // thread.
-    Debug::SetDebugMessageDispatchHandler(node::DebugMessageDispatch);
-    // Start the async watcher.
-    ev_async_start(EV_DEFAULT_UC_ &node::debug_watcher);
-    // unref it so that we exit the event loop despite it being active.
+    EnableDebug(debug_wait_connect);
+  } else {
+#ifdef __POSIX__
+    RegisterSignalHandler(SIGUSR1, EnableDebugSignalHandler);
+    ev_async_init(&enable_debug, EnableDebug2);
+    ev_async_start(EV_DEFAULT_UC_ &enable_debug);
     ev_unref(EV_DEFAULT_UC);
-
-    // Start the debug thread and it's associated TCP server on port 5858.
-    bool r = Debug::EnableAgent("node " NODE_VERSION, node::debug_port);
-    if (node::debug_wait_connect) {
-      // Set up an empty handler so v8 will not continue until a debugger
-      // attaches. This is the same behavior as Debug::EnableAgent(_,_,true)
-      // except we don't break at the beginning of the script.
-      // see Debugger::StartAgent in debug.cc of v8/src
-      Debug::SetMessageHandler2(node::DebugBreakMessageHandler);
-    }
-
-    // Crappy check that everything went well. FIXME
-    assert(r);
-    // Print out some information.
-    printf("debugger listening on port %d\n", node::debug_port);
+#endif // __POSIX__
   }
 
   // Create the one and only Context.

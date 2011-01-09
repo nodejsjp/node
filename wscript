@@ -22,6 +22,8 @@ jobs=1
 if os.environ.has_key('JOBS'):
   jobs = int(os.environ['JOBS'])
 
+def safe_path(path):
+  return path.replace("\\", "/")
 
 def canonical_cpu_type(arch):
   m = {'x86': 'ia32', 'i386':'ia32', 'x86_64':'x64', 'amd64':'x64'}
@@ -178,7 +180,8 @@ def configure(conf):
   o = Options.options
 
   conf.env["USE_DEBUG"] = o.debug
-  conf.env["SNAPSHOT_V8"] = not o.without_snapshot
+  # Snapshot building does noet seem to work on mingw32
+  conf.env["SNAPSHOT_V8"] = not o.without_snapshot and not sys.platform.startswith("win32")
   if sys.platform.startswith("sunos"):
     conf.env["SNAPSHOT_V8"] = False
   conf.env["USE_PROFILING"] = o.profile
@@ -193,7 +196,7 @@ def configure(conf):
     conf.check(lib=['bfd', 'opagent'], uselib_store="OPROFILE")
 
   conf.check(lib='dl', uselib_store='DL')
-  if not sys.platform.startswith("sunos") and not sys.platform.startswith("cygwin"):
+  if not sys.platform.startswith("sunos") and not sys.platform.startswith("cygwin") and not sys.platform.startswith("win32"):
     conf.env.append_value("CCFLAGS", "-rdynamic")
     conf.env.append_value("LINKFLAGS_DL", "-rdynamic")
 
@@ -281,7 +284,12 @@ def configure(conf):
                             libpath=v8_libpath):
         conf.fatal("Cannot find v8_g")
 
-  if conf.env['USE_SHARED_CARES']:
+  if sys.platform.startswith("win32"):
+    # On win32 CARES is always static, so we can call internal functions like ares_inet_pton et al. 
+    # CARES_STATICLIB must be defined or gcc will try to make DLL stub calls
+    conf.env.append_value('CPPFLAGS', '-DCARES_STATICLIB=1')
+    conf.sub_config('deps/c-ares')
+  elif conf.env['USE_SHARED_CARES']:
     cares_includes = [];
     if o.shared_cares_includes: cares_includes.append(o.shared_cares_includes);
     cares_libpath = [];
@@ -317,7 +325,7 @@ def configure(conf):
     conf.env.append_value ('CCFLAGS', '-threads')
     conf.env.append_value ('CXXFLAGS', '-threads')
     #conf.env.append_value ('LINKFLAGS', ' -threads')
-  elif not sys.platform.startswith("cygwin"):
+  elif not sys.platform.startswith("cygwin") and not sys.platform.startswith("win32"):
     threadflags='-pthread'
     conf.env.append_value ('CCFLAGS', threadflags)
     conf.env.append_value ('CXXFLAGS', threadflags)
@@ -354,6 +362,10 @@ def configure(conf):
   conf.env.append_value('CPPFLAGS',  '-D_FILE_OFFSET_BITS=64')
   conf.env.append_value('CPPFLAGS',  '-DEV_MULTIPLICITY=0')
 
+  # Makes select on windows support more than 64 FDs
+  if sys.platform.startswith("win32"):
+    conf.env.append_value('CPPFLAGS', '-DFD_SETSIZE=1024');
+
   ## needed for node_file.cc fdatasync
   ## Strangely on OSX 10.6 the g++ doesn't see fdatasync but gcc does?
   code =  """
@@ -389,12 +401,23 @@ def configure(conf):
     conf.env.append_value('CPPFLAGS', '-pg')
     conf.env.append_value('LINKFLAGS', '-pg')
 
+  if sys.platform.startswith("win32"):
+    conf.env.append_value('LIB', 'ws2_32')
+    conf.env.append_value('LIB', 'winmm')
+
   conf.env.append_value('CPPFLAGS', '-Wno-unused-parameter');
   conf.env.append_value('CPPFLAGS', '-D_FORTIFY_SOURCE=2');
 
   # Split off debug variant before adding variant specific defines
   debug_env = conf.env.copy()
   conf.set_env_name('debug', debug_env)
+
+  if (sys.platform.startswith("win32")):
+    # Static pthread - crashes
+    #conf.env.append_value('LINKFLAGS', '../deps/pthreads-w32/libpthreadGC2.a')
+    #debug_env.append_value('LINKFLAGS', '../deps/pthreads-w32/libpthreadGC2d.a')
+    # Pthread dll
+    conf.env.append_value('LIB', 'pthread.dll')
 
   # Configure debug variant
   conf.setenv('debug')
@@ -449,8 +472,8 @@ def v8_cmd(bld, variant):
 
   cmd = cmd_R % ( scons
                 , Options.options.jobs
-                , bld.srcnode.abspath(bld.env_of_name(variant))
-                , v8dir_src
+                , safe_path(bld.srcnode.abspath(bld.env_of_name(variant)))
+                , safe_path(v8dir_src)
                 , mode
                 , arch
                 , snapshot
@@ -640,7 +663,7 @@ def build(bld):
     x = { 'CCFLAGS'   : " ".join(program.env["CCFLAGS"]).replace('"', '\\"')
         , 'CPPFLAGS'  : " ".join(program.env["CPPFLAGS"]).replace('"', '\\"')
         , 'LIBFLAGS'  : " ".join(program.env["LIBFLAGS"]).replace('"', '\\"')
-        , 'PREFIX'    : program.env["PREFIX"]
+        , 'PREFIX'    : safe_path(program.env["PREFIX"])
         , 'VERSION'   : '0.3.2' # FIXME should not be hard-coded, see NODE_VERSION_STRING in src/node_version.
         }
     return x
@@ -704,10 +727,20 @@ def shutdown():
       print "WARNING: Platform not fully supported. Using src/platform_none.cc"
 
   elif not Options.commands['clean']:
-    if os.path.exists('build/default/node') and not os.path.exists('node'):
-      os.symlink('build/default/node', 'node')
-    if os.path.exists('build/debug/node_g') and not os.path.exists('node_g'):
-      os.symlink('build/debug/node_g', 'node_g')
+    if sys.platform.startswith("win32"):
+      if os.path.exists('build/default/node.exe'):
+        os.system('cp build/default/node.exe .')
+      if os.path.exists('build/debug/node_g.exe'):
+        os.system('cp build/debug/node_g.exe .')
+    else:
+      if os.path.exists('build/default/node') and not os.path.exists('node'):
+        os.symlink('build/default/node', 'node')
+      if os.path.exists('build/debug/node_g') and not os.path.exists('node_g'):
+        os.symlink('build/debug/node_g', 'node_g')
   else:
-    if os.path.exists('node'): os.unlink('node')
-    if os.path.exists('node_g'): os.unlink('node_g')
+    if sys.platform.startswith("win32"):
+      if os.path.exists('node.exe'): os.unlink('node.exe')
+      if os.path.exists('node_g.exe'): os.unlink('node_g.exe')
+    else:
+      if os.path.exists('node'): os.unlink('node')
+      if os.path.exists('node_g'): os.unlink('node_g')

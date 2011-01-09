@@ -78,6 +78,11 @@
 
   var internalModuleCache = {};
 
+  var moduleWrapper =
+    ['(function (exports, require, module, __filename, __dirname) { ',
+     '\n});'];
+
+
   // This contains the source code for the files in lib/
   // Like, natives.fs is the contents of lib/fs.js
   var natives = process.binding('natives');
@@ -85,15 +90,18 @@
   // Native modules don't need a full require function. So we can bootstrap
   // most of the system with this mini-require.
   function requireNative(id) {
+    if (id == 'module') return module;
     if (internalModuleCache[id]) return internalModuleCache[id].exports;
     if (!natives[id]) throw new Error('No such native module ' + id);
 
+    var filename = id + '.js';
+
     var fn = runInThisContext(
-        '(function (module, exports, require) {' + natives[id] + '\n})',
-        id + '.js',
+        moduleWrapper[0] + natives[id] + moduleWrapper[1],
+        filename,
         true);
     var m = {id: id, exports: {}};
-    fn(m, m.exports, requireNative);
+    fn(m.exports, requireNative, m, filename);
     m.loaded = true;
     internalModuleCache[id] = m;
     return m.exports;
@@ -123,9 +131,8 @@
 
     // Modules
 
-    var debugLevel = parseInt(process.env['NODE_DEBUG'], 16);
     var debug;
-    if (debugLevel & 1) {
+    if (process.env.NODE_DEBUG && /module/.test(process.env.NODE_DEBUG)) {
       debug = function(x) { console.error(x); };
     } else {
       debug = function() { };
@@ -133,11 +140,15 @@
 
     var path = requireNative('path');
 
-    var modulePaths = [path.join(process.execPath, '..', '..', 'lib', 'node')];
+    var modulePaths = [path.resolve(process.execPath,
+                                    '..',
+                                    '..',
+                                    'lib',
+                                    'node')];
 
     if (process.env['HOME']) {
-      modulePaths.unshift(path.join(process.env['HOME'], '.node_libraries'));
-      modulePaths.unshift(path.join(process.env['HOME'], '.node_modules'));
+      modulePaths.unshift(path.resolve(process.env['HOME'], '.node_libraries'));
+      modulePaths.unshift(path.resolve(process.env['HOME'], '.node_modules'));
     }
 
     if (process.env['NODE_PATH']) {
@@ -170,7 +181,7 @@
         try {
           var stats = fs.statSync(requestPath);
           if (stats && !stats.isDirectory()) {
-            return requestPath;
+            return fs.realpathSync(requestPath);
           }
         } catch (e) {}
         return false;
@@ -189,11 +200,11 @@
       for (var i = 0, PL = paths.length; i < PL; i++) {
         var p = paths[i],
             // try to join the request to the path
-            f = tryFile(path.join(p, request)) ||
+            f = tryFile(path.resolve(p, request)) ||
             // try it with each of the extensions
-            tryExtensions(path.join(p, request)) ||
+            tryExtensions(path.resolve(p, request)) ||
             // try it with each of the extensions at "index"
-            tryExtensions(path.join(p, request, 'index'));
+            tryExtensions(path.resolve(p, request, 'index'));
         if (f) { return f; }
       }
       return false;
@@ -221,7 +232,7 @@
       // as it already has been accepted as a module.
       var isIndex = /^index\.\w+?$/.test(path.basename(parent.filename)),
           parentIdPath = isIndex ? parent.id : path.dirname(parent.id),
-          id = path.join(parentIdPath, request);
+          id = path.resolve(parentIdPath, request);
 
       // make sure require('./path') and require('path') get distinct ids, even
       // when called from the toplevel js file
@@ -278,6 +289,7 @@
       if (!filename) {
         throw new Error("Cannot find module '" + request + "'");
       }
+      id = filename;
       return [id, filename];
     }
 
@@ -350,10 +362,7 @@
 
       } else {
         // create wrapper function
-        var wrapper =
-            '(function (exports, require, module, __filename, __dirname) { ' +
-            content +
-            '\n});';
+        var wrapper = moduleWrapper[0] + content + moduleWrapper[1];
 
         var compiledWrapper = runInThisContext(wrapper, filename, true);
         if (filename === process.argv[1] && global.v8debug) {
@@ -364,6 +373,7 @@
       }
     };
 
+    exports.wrapper = moduleWrapper;
 
     // Native extension for .js
     extensions['.js'] = function(module, filename) {
@@ -537,21 +547,35 @@
 
   var cwd = process.cwd();
   var path = requireNative('path');
+  var isWindows = process.platform === 'win32';
 
-  // Make process.argv[0] and process.argv[1] into full paths.
-  if (process.argv[0].indexOf('/') > 0) {
+  // Make process.argv[0] and process.argv[1] into full paths, but only
+  // touch argv[0] if it's not a system $PATH lookup.
+  // TODO: Make this work on Windows as well.  Note that "node" might
+  // execute cwd\node.exe, or some %PATH%\node.exe on Windows,
+  // and that every directory has its own cwd, so d:node.exe is valid.
+  var argv0 = process.argv[0];
+  if (!isWindows && argv0.indexOf('/') !== -1 && argv0.charAt(0) !== '/') {
     process.argv[0] = path.join(cwd, process.argv[0]);
   }
 
   if (process.argv[1]) {
-    // Load module
-    if (process.argv[1].charAt(0) != '/' &&
-        !(/^http:\/\//).exec(process.argv[1])) {
-      process.argv[1] = path.join(cwd, process.argv[1]);
+
+    if (process.argv[1] == 'debug') {
+      // Start the debugger agent
+      var d = requireNative('_debugger');
+      d.start();
+
+    } else {
+      // Load module
+      // make process.argv[1] into a full path
+      if (!(/^http:\/\//).exec(process.argv[1])) {
+        process.argv[1] = path.resolve(process.argv[1]);
+      }
+      // REMOVEME: nextTick should not be necessary. This hack to get
+      // test/simple/test-exception-handler2.js working.
+      process.nextTick(module.runMain);
     }
-    // REMOVEME: nextTick should not be necessary. This hack to get
-    // test/simple/test-exception-handler2.js working.
-    process.nextTick(module.runMain);
 
   } else if (process._eval) {
     // -e, --eval

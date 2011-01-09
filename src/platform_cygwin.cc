@@ -22,11 +22,11 @@ static char *process_title = NULL;
 
 // Does the about the same as perror(), but for windows api functions
 static void _winapi_perror(const char* prefix = NULL) {
-  DWORD errno = GetLastError();
+  DWORD errorno = GetLastError();
   char *errmsg;
 
   FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                NULL, errno, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&errmsg, 0, NULL);
+                NULL, errorno, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&errmsg, 0, NULL);
 
   // FormatMessage messages include a newline character
 
@@ -92,7 +92,7 @@ static inline char* _getProcessTitle() {
   char *title;
   int length, length_w;
 
-  length_w = GetConsoleTitleW(L"\0", sizeof(WCHAR));
+  length_w = GetConsoleTitleW((WCHAR*)L"\0", sizeof(WCHAR));
 
   // If length is zero, there may be an error or the title may be empty
   if (!length_w) {

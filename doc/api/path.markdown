@@ -10,11 +10,35 @@ This module contains utilities for dealing with file paths.  Use
 利用するには`require('path')`を呼び出してください。
 このモジュールは以下のメソッドを提供します。
 
+### path.normalize(p)
+
+<!--
+
+Normalize a string path, taking care of `'..'` and `'.'` parts.
+
+-->
+文字列によるパスを正規化します。`'..'` と `'.'` の要素には注意してください。
+
+When multiple slashes are found, they're replaces by a single one;
+when the path contains a trailing slash, it is preserved.
+On windows backslashes are used. 
+
+<!--
+
+Example:
+
+-->
+例:
+
+    path.normalize('/foo/bar//baz/asdf/quux/..')
+    // returns
+    '/foo/bar/baz/asdf'
+
 ### path.join([path1], [path2], [...])
 
 <!--
 
-Join all arguments together and resolve the resulting path.
+Join all arguments together and normalize the resulting path.
 
 -->
 全ての引数を一つに結合し、結果として得られるパスを決定します。
@@ -30,46 +54,36 @@ Example:
     ...   '/foo', 'bar', 'baz/asdf', 'quux', '..')
     '/foo/bar/baz/asdf'
 
-### path.normalizeArray(arr)
+### path.resolve([from ...], to)
 
-<!--
+Resolves `to` to an absolute path name and normalizes it.
 
-Normalize an array of path parts, taking care of `'..'` and `'.'` parts.
+One ore more `from` arguments may be provided to specify the the starting
+point from where the path will be resolved. `resolve` will prepend `from`
+arguments from right to left until an absolute path is found. If no `from`
+arguments are specified, or after prepending them still no absolute path is
+found, the current working directory will be prepended eventually.
 
--->
-パスの要素の配列を正規化します。`'..'` と `'.'` の要素には注意してください。
+Trailing slashes are removed unless the path gets resolved to the root
+directory.
 
-<!--
+Examples:
 
-Example:
-
--->
-例:
-
-    path.normalizeArray(['',
-      'foo', 'bar', 'baz', 'asdf', 'quux', '..'])
+    path.resolve('index.html')
     // returns
-    [ '', 'foo', 'bar', 'baz', 'asdf' ]
+    '/home/tank/index.html'
 
-### path.normalize(p)
-
-<!--
-
-Normalize a string path, taking care of `'..'` and `'.'` parts.
-
--->
-文字列によるパスを正規化します。`'..'` と `'.'` の要素には注意してください。
-
-<!--
-
-Example:
-
--->
-例:
-
-    path.normalize('/foo/bar/baz/asdf/quux/..')
+    path.resolve('/foo/bar', './baz')
     // returns
-    '/foo/bar/baz/asdf'
+    '/foo/baz/baz'
+
+    path.resolve('/foo/bar', '/tmp/file/')
+    // returns
+    '/tmp/file'
+
+    path.resolve('wwwroot', 'static_files/png/', '../gif/image.gif')
+    // returns
+    '/home/tank/wwwroot/static_files/gif/image.gif'
 
 ### path.dirname(p)
 

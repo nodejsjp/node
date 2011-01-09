@@ -27,8 +27,8 @@ automatically set as a listener for the `'connection'` event.
 
 <!--
 
-Construct a new stream object and opens a stream to the given location. When
-the stream is established the `'connect'` event will be emitted.
+Construct a new socket object and opens a socket to the given location. When
+the socket is established the `'connect'` event will be emitted.
 
 -->
 新しいストリームオブジェクトを構築し、与えられたロケーションへのストリームをオープンします。
@@ -272,12 +272,12 @@ The number of concurrent connections on the server.
 
 #### Event: 'connection'
 
-`function (stream) {}`
+`function (socket) {}`
 
 <!--
 
-Emitted when a new connection is made. `stream` is an instance of
-`net.Stream`.
+Emitted when a new connection is made. `socket` is an instance of
+`net.Socket`.
 
 -->
 新しいコネクションが作成されると生成されます。
@@ -296,12 +296,12 @@ Emitted when the server closes.
 
 ---
 
-### net.Stream
+### net.Socket
 
 <!--
 
-This object is an abstraction of of a TCP or UNIX socket.  `net.Stream`
-instance implement a duplex stream interface.  They can be created by the
+This object is an abstraction of of a TCP or UNIX socket.  `net.Socket`
+instances implement a duplex Stream interface.  They can be created by the
 user and used as a client (with `connect()`) or they can be created by Node
 and passed to the user through the `'connection'` event of a server.
 
@@ -313,19 +313,19 @@ Node によって作成されてサーバの `'connection'` イベントを通�
 
 <!--
 
-`net.Stream` instances are EventEmitters with the following events:
+`net.Socket` instances are EventEmitters with the following events:
 
 -->
 `net.Stream` のインスタンスは以下のイベントを持つ EventEmitter です:
 
-#### stream.connect(port, [host], [callback])
-#### stream.connect(path, [callback])
+#### socket.connect(port, [host], [callback])
+#### socket.connect(path, [callback])
 
 <!--
 
-Opens the connection for a given stream. If `port` and `host` are given,
-then the stream will be opened as a TCP stream, if `host` is omitted,
-`localhost` will be assumed. If a `path` is given, the stream will be
+Opens the connection for a given socket. If `port` and `host` are given,
+then the socket will be opened as a TCP socket, if `host` is omitted,
+`localhost` will be assumed. If a `path` is given, the socket will be
 opened as a unix socket to that path.
 
 -->
@@ -339,8 +339,8 @@ opened as a unix socket to that path.
 <!--
 
 Normally this method is not needed, as `net.createConnection` opens the
-stream. Use this only if you are implementing a custom Stream or if a
-Stream is closed and you want to reuse it to connect to another server.
+socket. Use this only if you are implementing a custom Socket or if a
+Socket is closed and you want to reuse it to connect to another server.
 
 -->
 通常このメソッドは必要なく、`net.createConnection` でストリームをオープンします。
@@ -350,7 +350,7 @@ Stream is closed and you want to reuse it to connect to another server.
 <!--
 
 This function is asynchronous. When the `'connect'` event is emitted the
-stream is established. If there is a problem connecting, the `'connect'`
+socket is established. If there is a problem connecting, the `'connect'`
 event will not be emitted, the `'error'` event will be emitted with
 the exception.
 
@@ -368,7 +368,7 @@ event.
 `callback` 引数は 'connect' イベントのリスナに加えられます。
 
 
-#### stream.setEncoding(encoding=null)
+#### socket.setEncoding(encoding=null)
 
 <!--
 
@@ -379,57 +379,20 @@ received.
 受信したデータのエンコーディングを設定します (`'ascii'`、`'utf8'`、
 あるいは `'base64'` のいずれかです)。
 
-#### stream.setSecure([credentials])
+#### socket.setSecure()
 
 <!--
 
-Enables SSL support for the stream, with the crypto module credentials specifying
-the private key and certificate of the stream, and optionally the CA certificates
-for use in peer authentication.
+This function has been removed in v0.3. It used to upgrade the connection to
+SSL/TLS. See the TLS for the new API.
 
 -->
-秘密鍵とサーバ証明書を指定した暗号モジュールの認証情報で、
-ストリームに対して SSL サポートを有効にします。
-オプションで認証局で証明された相手側の認証を使うこともできます。
+
+#### socket.write(data, [encoding], [callback])
 
 <!--
 
-If the credentials hold one ore more CA certificates, then the stream will request
-for the peer to submit a client certificate as part of the SSL connection handshake.
-The validity and content of this can be accessed via `verifyPeer()` and `getPeerCertificate()`.
-
--->
-認証情報が一つ以上の認証局の証明書を持っている場合、
-ストリームは SSL コネクションにおけるハンドシェークの一部としてクライアント証明書を送るよう相手に要求します。
-その有効性と内容は、`verifyPeer()` と `getPeerCertificate()` を通じてアクセスできます。
-
-#### stream.verifyPeer()
-
-<!--
-
-Returns true or false depending on the validity of the peers's certificate in the
-context of the defined or default list of trusted CA certificates.
-
--->
-指定された、あるいはデフォルトの信頼された認証局の証明書において、
-相手の証明書の妥当性に応じて true または false を返します。
-
-#### stream.getPeerCertificate()
-
-<!--
-
-Returns a JSON structure detailing the peer's certificate, containing a dictionary
-with keys for the certificate `'subject'`, `'issuer'`, `'valid_from'` and `'valid_to'`.
-
--->
-相手の証明書の詳細を、`'subject'`、`'issuer'`、`'valid_from'`
-そして `'valid_to'` をキーとする証明書の辞書を含む JSON 形式で返します。
-
-#### stream.write(data, [encoding], [callback])
-
-<!--
-
-Sends data on the stream. The second parameter specifies the encoding in the
+Sends data on the socket. The second parameter specifies the encoding in the
 case of a string--it defaults to UTF8 encoding.
 
 -->ストリームにデータを送信します。
@@ -455,12 +418,12 @@ written out - this may not be immediately.
 オプションの `callback` 引数はデータが最終的に出力された時に実行されます
 － これはすぐには起きないでしょう。
 
-#### stream.write(data, [encoding], [fileDescriptor], [callback])
+#### socket.write(data, [encoding], [fileDescriptor], [callback])
 
 <!--
 
 For UNIX sockets, it is possible to send a file descriptor through the
-stream. Simply add the `fileDescriptor` argument and listen for the `'fd'`
+socket. Simply add the `fileDescriptor` argument and listen for the `'fd'`
 event on the other end.
 
 -->
@@ -468,11 +431,11 @@ UNIX ソケットの場合、ファイル記述子をストリームに送信す
 単純に `fileDescriptor` 引数を加えることで、相手側には `'fd'` イベントが生成されます。
 
 
-#### stream.end([data], [encoding])
+#### socket.end([data], [encoding])
 
 <!--
 
-Half-closes the stream. I.E., it sends a FIN packet. It is possible the
+Half-closes the socket. I.E., it sends a FIN packet. It is possible the
 server will still send some data.
 
 -->
@@ -481,25 +444,25 @@ server will still send some data.
 
 <!--
 
-If `data` is specified, it is equivalent to calling `stream.write(data, encoding)`
-followed by `stream.end()`.
+If `data` is specified, it is equivalent to calling `socket.write(data, encoding)`
+followed by `socket.end()`.
 
 -->
 `data` が指定された場合は、
 `stream.write(data, encoding)` に続けて `stream.end()` を呼び出すのと等価です。
 
-#### stream.destroy()
+#### socket.destroy()
 
 <!--
 
-Ensures that no more I/O activity happens on this stream. Only necessary in
+Ensures that no more I/O activity happens on this socket. Only necessary in
 case of errors (parse error or so).
 
 -->
 このストリーム上でどんな I/O も起こらないことを保証します。
 (パースエラーなどの) エラーの場合にだけ必要です。
 
-#### stream.pause()
+#### socket.pause()
 
 <!--
 
@@ -510,7 +473,7 @@ Useful to throttle back an upload.
 データの読み込みを中断します。つまり、`'data'` イベントは生成されません。
 アップロード速度を落とすために便利です。
 
-#### stream.resume()
+#### socket.resume()
 
 <!--
 
@@ -519,20 +482,20 @@ Resumes reading after a call to `pause()`.
 -->
 `pause()` を呼び出した後で読み込みを再開します。
 
-#### stream.setTimeout(timeout)
+#### socket.setTimeout(timeout)
 
 <!--
 
-Sets the stream to timeout after `timeout` milliseconds of inactivity on
-the stream. By default `net.Stream` do not have a timeout.
+Sets the socket to timeout after `timeout` milliseconds of inactivity on
+the socket. By default `net.Socket` do not have a timeout.
 
 -->
 
 <!--
 
-When an idle timeout is triggered the stream will receive a `'timeout'`
+When an idle timeout is triggered the socket will receive a `'timeout'`
 event but the connection will not be severed. The user must manually `end()`
-or `destroy()` the stream.
+or `destroy()` the socket.
 
 -->
 アイドルタイムアウトが引き起こされると、ストリームは `'timeout'` イベントを受信しますが、
@@ -546,25 +509,25 @@ If `timeout` is 0, then the existing idle timeout is disabled.
 -->
 `timeout` が 0 の場合、アイドルタイムアウトは無効にされます。
 
-#### stream.setNoDelay(noDelay=true)
+#### socket.setNoDelay(noDelay=true)
 
 <!--
 
 Disables the Nagle algorithm. By default TCP connections use the Nagle
 algorithm, they buffer data before sending it off. Setting `noDelay` will
-immediately fire off data each time `stream.write()` is called.
+immediately fire off data each time `socket.write()` is called.
 
 -->
 Nagle アルゴリズムを無効にします。
 デフォルトでは TCP コネクションは Nagle アルゴリズムを使用し、データを送信する前にバッファリングします。
 `noDelay` に設定すると、データは `stream.write()` を呼び出す度に即座に送信されます。
 
-#### stream.setKeepAlive(enable=false, [initialDelay])
+#### socket.setKeepAlive(enable=false, [initialDelay])
 
 <!--
 
 Enable/disable keep-alive functionality, and optionally set the initial
-delay before the first keepalive probe is sent on an idle stream.
+delay before the first keepalive probe is sent on an idle socket.
 Set `initialDelay` (in milliseconds) to set the delay between the last
 data packet received and the first keepalive probe. Setting 0 for
 initialDelay will leave the value unchanged from the default
@@ -577,7 +540,7 @@ initialDelay will leave the value unchanged from the default
 最後にデータパケットを受信してから最初の keepalive probe までの遅延が設定されます。
 初期遅延に 0 が設定されると、デフォルト設定から値を変更されないようにします。
 
-#### stream.remoteAddress
+#### socket.remoteAddress
 
 <!--
 
@@ -602,7 +565,7 @@ This member is only present in server-side connections.
 
 <!--
 
-Emitted when a stream connection successfully is established.
+Emitted when a socket connection successfully is established.
 See `connect()`.
 
 -->
@@ -616,8 +579,8 @@ See `connect()`.
 <!--
 
 Emitted when data is received.  The argument `data` will be a `Buffer` or
-`String`.  Encoding of data is set by `stream.setEncoding()`.
-(See the section on `Readable Stream` for more information.)
+`String`.  Encoding of data is set by `socket.setEncoding()`.
+(See the section on `Readable Socket` for more information.)
 
 -->
 データを受信した場合に生成されます。
@@ -631,16 +594,16 @@ Emitted when data is received.  The argument `data` will be a `Buffer` or
 
 <!--
 
-Emitted when the other end of the stream sends a FIN packet.
+Emitted when the other end of the socket sends a FIN packet.
 
 -->
 ストリームの相手側が FIN パケットを送信した場合に生成されます。
 
 <!--
 
-By default (`allowHalfOpen == false`) the stream will destroy its file
+By default (`allowHalfOpen == false`) the socket will destroy its file
 descriptor  once it has written out its pending write queue.  However, by
-setting `allowHalfOpen == true` the stream will not automatically `end()`
+setting `allowHalfOpen == true` the socket will not automatically `end()`
 its side allowing the user to write arbitrary amounts of data, with the
 caveat that the user is required to `end()` their side now.
 
@@ -658,15 +621,15 @@ caveat that the user is required to `end()` their side now.
 
 <!--
 
-Emitted if the stream times out from inactivity. This is only to notify that
-the stream has been idle. The user must manually close the connection.
+Emitted if the socket times out from inactivity. This is only to notify that
+the socket has been idle. The user must manually close the connection.
 
 -->
 ストリームがタイムアウトして非アクティブになった場合に生成されます。
 これはストリームがアイドルになったことを通知するだけです。
 利用者は手動でコネクションをクローズする必要があります。
 
-See also: `stream.setTimeout()`
+See also: `socket.setTimeout()`
 
 
 #### Event: 'drain'
@@ -698,8 +661,8 @@ following this event.
 
 <!--
 
-Emitted once the stream is fully closed. The argument `had_error` is a boolean
-which says if the stream was closed due to a transmission error.
+Emitted once the socket is fully closed. The argument `had_error` is a boolean
+which says if the socket was closed due to a transmission error.
 
 -->
 ストリームが完全にクローズした場合に生成されます。

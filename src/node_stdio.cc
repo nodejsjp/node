@@ -1,3 +1,9 @@
+#ifdef __MINGW32__
+# include "node_stdio_win32.cc"
+#endif
+
+#ifdef __POSIX__
+
 #include <node_stdio.h>
 #include <node_events.h>
 
@@ -43,8 +49,8 @@ static int EnableRawMode(int fd) {
   /* input modes: no break, no CR to NL, no parity check, no strip char,
    * no start/stop output control. */
   raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
-  /* output modes - disable post processing */
-  raw.c_oflag &= ~(OPOST);
+  /* output modes */
+  raw.c_oflag |= (ONLCR);
   /* control modes - set 8 bit chars */
   raw.c_cflag |= (CS8);
   /* local modes - choing off, canonical off, no extended functions,
@@ -292,3 +298,5 @@ void Stdio::Initialize(v8::Handle<v8::Object> target) {
 }  // namespace node
 
 NODE_MODULE(node_stdio, node::Stdio::Initialize);
+
+#endif // __POSIX__

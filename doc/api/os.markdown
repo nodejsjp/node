@@ -34,6 +34,10 @@ Returns the operating system release.
 ->
 オペレーティングシステムのリリースを返します。
 
+### os.isWindows
+
+True on windows, false otherwise.
+
 ### os.uptime()
 
 <!--
