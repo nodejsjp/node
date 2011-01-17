@@ -76,47 +76,81 @@
     process._needTickCallback();
   };
 
-  var internalModuleCache = {};
-
-  var moduleWrapper =
-    ['(function (exports, require, module, __filename, __dirname) { ',
-     '\n});'];
-
-
-  // This contains the source code for the files in lib/
-  // Like, natives.fs is the contents of lib/fs.js
-  var natives = process.binding('natives');
-
   // Native modules don't need a full require function. So we can bootstrap
-  // most of the system with this mini-require.
-  function requireNative(id) {
-    if (id == 'module') return module;
-    if (internalModuleCache[id]) return internalModuleCache[id].exports;
-    if (!natives[id]) throw new Error('No such native module ' + id);
+  // most of the system with this mini module system.
+  var NativeModule = (function() {
+    function NativeModule(id) {
+      this.filename = id + '.js';
+      this.id = id;
+      this.exports = {};
+      this.loaded = false;
+    }
 
-    var filename = id + '.js';
+    NativeModule._source = process.binding('natives');
+    NativeModule._cache = {};
 
-    var fn = runInThisContext(
-        moduleWrapper[0] + natives[id] + moduleWrapper[1],
-        filename,
-        true);
-    var m = {id: id, exports: {}};
-    fn(m.exports, requireNative, m, filename);
-    m.loaded = true;
-    internalModuleCache[id] = m;
-    return m.exports;
-  }
+    NativeModule.require = function(id) {
+      if (id == 'module') {
+        return Module;
+      }
+
+      var cached = NativeModule.getCached(id);
+      if (cached) {
+        return cached.exports;
+      }
+
+      if (!NativeModule.exists(id)) {
+        throw new Error('No such native module ' + id);
+      }
+
+      var nativeModule = new NativeModule(id);
+
+      nativeModule.compile();
+      nativeModule.cache();
+
+      return nativeModule.exports;
+    };
+
+    NativeModule.getCached = function(id) {
+      return NativeModule._cache[id];
+    }
+
+    NativeModule.exists = function(id) {
+      return (id in NativeModule._source);
+    }
+
+    NativeModule.getSource = function(id) {
+      return NativeModule._source[id];
+    }
+
+    NativeModule.wrap = function(script) {
+      return NativeModule.wrapper[0] + script + NativeModule.wrapper[1];
+    };
+
+    NativeModule.wrapper = [
+      '(function (exports, require, module, __filename, __dirname) { ',
+      '\n});'
+    ];
+
+    NativeModule.prototype.compile = function() {
+      var source = NativeModule.getSource(this.id);
+      source = NativeModule.wrap(source);
+
+      var fn = runInThisContext(source, this.filename, true);
+      fn(this.exports, NativeModule.require, this, this.filename);
+
+      this.loaded = true;
+    };
+
+    NativeModule.prototype.cache = function() {
+      NativeModule._cache[this.id] = this;
+    };
+
+    return NativeModule;
+  })();
 
   // Module System
-  var module = (function() {
-    var exports = {};
-    // Set the environ variable NODE_MODULE_CONTEXTS=1 to make node load all
-    // modules in thier own context.
-    var contextLoad = false;
-    if (+process.env['NODE_MODULE_CONTEXTS'] > 0) contextLoad = true;
-
-    var moduleCache = {};
-
+  var Module = (function() {
     function Module(id, parent) {
       this.id = id;
       this.exports = {};
@@ -128,37 +162,28 @@
       this.children = [];
     };
 
+    // Set the environ variable NODE_MODULE_CONTEXTS=1 to make node load all
+    // modules in thier own context.
+    Module._contextLoad = (+process.env['NODE_MODULE_CONTEXTS'] > 0);
+    Module._cache = {};
+    Module._pathCache = {};
+    Module._extensions = {};
+    Module._paths = [];
 
-    // Modules
+    Module.wrapper = NativeModule.wrapper;
+    Module.wrap = NativeModule.wrap;
 
-    var debug;
+    var path = NativeModule.require('path');
+
+    Module._debug = function() {};
     if (process.env.NODE_DEBUG && /module/.test(process.env.NODE_DEBUG)) {
-      debug = function(x) { console.error(x); };
-    } else {
-      debug = function() { };
+      Module._debug = function(x) {
+        console.error(x);
+      };
     }
 
-    var path = requireNative('path');
-
-    var modulePaths = [path.resolve(process.execPath,
-                                    '..',
-                                    '..',
-                                    'lib',
-                                    'node')];
-
-    if (process.env['HOME']) {
-      modulePaths.unshift(path.resolve(process.env['HOME'], '.node_libraries'));
-      modulePaths.unshift(path.resolve(process.env['HOME'], '.node_modules'));
-    }
-
-    if (process.env['NODE_PATH']) {
-      modulePaths = process.env['NODE_PATH'].split(':').concat(modulePaths);
-    }
-
-    var extensions = {};
-    var registerExtension =
-        removed('require.registerExtension() removed.' +
-                ' Use require.extensions instead');
+    // We use this alias for the preprocessor that filters it out
+    var debug = Module._debug;
 
     // given a module name, and a list of paths to test, returns the first
     // matching file in the following precedence.
@@ -170,14 +195,16 @@
     //   -> a
     //   -> a.<ext>
     //   -> a/index.<ext>
-    function findModulePath(request, paths) {
-      var fs = requireNative('fs'),
-          exts = Object.keys(extensions);
+    Module._findPath = function(request, paths) {
+      var fs = NativeModule.require('fs');
+      var exts = Object.keys(Module._extensions);
 
-      paths = request.charAt(0) === '/' ? [''] : paths;
+      if (request.charAt(0) === '/') {
+        paths = [''];
+      }
 
       // check if the file exists and is not a directory
-      var tryFile = function(requestPath) {
+      function tryFile(requestPath) {
         try {
           var stats = fs.statSync(requestPath);
           if (stats && !stats.isDirectory()) {
@@ -188,104 +215,130 @@
       };
 
       // given a path check a the file exists with any of the set extensions
-      var tryExtensions = function(p, extension) {
+      function tryExtensions(p, extension) {
         for (var i = 0, EL = exts.length; i < EL; i++) {
-          f = tryFile(p + exts[i]);
-          if (f) { return f; }
+          var filename = tryFile(p + exts[i]);
+
+          if (filename) {
+            return filename;
+          }
         }
         return false;
       };
 
+      var cacheKey = JSON.stringify({request: request, paths: paths});
+      if (Module._pathCache[cacheKey]) {
+        return Module._pathCache[cacheKey];
+      }
+
       // For each path
       for (var i = 0, PL = paths.length; i < PL; i++) {
-        var p = paths[i],
-            // try to join the request to the path
-            f = tryFile(path.resolve(p, request)) ||
-            // try it with each of the extensions
-            tryExtensions(path.resolve(p, request)) ||
-            // try it with each of the extensions at "index"
-            tryExtensions(path.resolve(p, request, 'index'));
-        if (f) { return f; }
+        var basePath = path.resolve(paths[i], request);
+
+        // try to join the request to the path
+        var filename = tryFile(basePath);
+
+        if (!filename) {
+          // try it with each of the extensions
+          filename = tryExtensions(basePath)
+        }
+
+        if (!filename) {
+          // try it with each of the extensions at "index"
+          filename = tryExtensions(path.resolve(basePath, 'index'))
+        }
+
+        if (filename) {
+          Module._pathCache[cacheKey] = filename;
+          return filename;
+        }
       }
       return false;
     }
 
-    // sync - no i/o performed
-    function resolveModuleLookupPaths(request, parent) {
-
-      if (natives[request]) return [request, []];
+    Module._resolveLookupPaths = function(request, parent) {
+      if (NativeModule.exists(request)) {
+        return [request, []];
+      }
 
       var start = request.substring(0, 2);
       if (start !== './' && start !== '..') {
-        return [request, modulePaths];
+        return [request, Module._paths];
       }
 
       // with --eval, parent.id is not set and parent.filename is null
       if (!parent || !parent.id || !parent.filename) {
         // make require('./path/to/foo') work - normally the path is taken
         // from realpath(__filename) but with eval there is no filename
-        return [request, ['.'].concat(modulePaths)];
+        return [request, ['.'].concat(Module._paths)];
       }
 
       // Is the parent an index module?
       // We can assume the parent has a valid extension,
       // as it already has been accepted as a module.
-      var isIndex = /^index\.\w+?$/.test(path.basename(parent.filename)),
-          parentIdPath = isIndex ? parent.id : path.dirname(parent.id),
-          id = path.resolve(parentIdPath, request);
+      var isIndex = /^index\.\w+?$/.test(path.basename(parent.filename));
+      var parentIdPath = isIndex ? parent.id : path.dirname(parent.id);
+      var id = path.resolve(parentIdPath, request);
 
       // make sure require('./path') and require('path') get distinct ids, even
       // when called from the toplevel js file
       if (parentIdPath === '.' && id.indexOf('/') === -1) {
         id = './' + id;
       }
+
       debug('RELATIVE: requested:' + request +
             ' set ID to: ' + id + ' from ' + parent.id);
+
       return [id, [path.dirname(parent.filename)]];
     }
 
 
-    function loadModule(request, parent) {
-      debug('loadModule REQUEST  ' + (request) + ' parent: ' + parent.id);
+    Module._load = function(request, parent) {
+      debug('Module._load REQUEST  ' + (request) +
+            ' parent: ' + parent.id);
 
-      var resolved = resolveModuleFilename(request, parent);
+      var resolved = Module._resolveFilename(request, parent);
       var id = resolved[0];
       var filename = resolved[1];
 
-      var cachedModule = moduleCache[filename];
-      if (cachedModule) return cachedModule.exports;
+      var cachedModule = Module._cache[filename];
+      if (cachedModule) {
+        return cachedModule.exports;
+      }
 
-      // With natives id === request
-      // We deal with these first
-      if (natives[id]) {
+      if (NativeModule.exists(id)) {
         // REPL is a special case, because it needs the real require.
         if (id == 'repl') {
           var replModule = new Module('repl');
-          replModule._compile(natives.repl, 'repl.js');
-          internalModuleCache.repl = replModule;
+          replModule._compile(NativeModule.getSource('repl'), 'repl.js');
+          NativeModule._cache.repl = replModule;
           return replModule.exports;
         }
 
         debug('load native module ' + request);
-        return requireNative(id);
+        return NativeModule.require(id);
       }
 
       var module = new Module(id, parent);
-      moduleCache[filename] = module;
+      Module._cache[filename] = module;
       module.load(filename);
       return module.exports;
     };
 
-    function resolveModuleFilename(request, parent) {
-      if (natives[request]) return [request, request];
-      var resolvedModule = resolveModuleLookupPaths(request, parent),
-          id = resolvedModule[0],
-          paths = resolvedModule[1];
+    Module._resolveFilename = function(request, parent) {
+      if (NativeModule.exists(request)) {
+        return [request, request];
+      }
+
+      var resolvedModule = Module._resolveLookupPaths(request, parent);
+      var id = resolvedModule[0];
+      var paths = resolvedModule[1];
 
       // look up the filename first, since that's the cache key.
       debug('looking for ' + JSON.stringify(id) +
             ' in ' + JSON.stringify(paths));
-      var filename = findModulePath(request, paths);
+
+      var filename = Module._findPath(request, paths);
       if (!filename) {
         throw new Error("Cannot find module '" + request + "'");
       }
@@ -302,8 +355,8 @@
       this.filename = filename;
 
       var extension = path.extname(filename) || '.js';
-      if (!extensions[extension]) extension = '.js';
-      extensions[extension](this, filename);
+      if (!Module._extensions[extension]) extension = '.js';
+      Module._extensions[extension](this, filename);
       this.loaded = true;
     };
 
@@ -315,23 +368,25 @@
       content = content.replace(/^\#\!.*/, '');
 
       function require(path) {
-        return loadModule(path, self);
+        return Module._load(path, self);
       }
 
       require.resolve = function(request) {
-        return resolveModuleFilename(request, self)[1];
+        return Module._resolveFilename(request, self)[1];
       }
-      require.paths = modulePaths;
+      require.paths = Module._paths;
       require.main = process.mainModule;
       // Enable support to add extra extension types
-      require.extensions = extensions;
-      // TODO: Insert depreciation warning
-      require.registerExtension = registerExtension;
-      require.cache = moduleCache;
+      require.extensions = Module._extensions;
+      require.registerExtension = removed('require.registerExtension() ' +
+                                          'removed. Use require.extensions ' +
+                                          'instead.');
+
+      require.cache = Module._cache;
 
       var dirname = path.dirname(filename);
 
-      if (contextLoad) {
+      if (Module._contextLoad) {
         if (self.id !== '.') {
           debug('load submodule');
           // not root module
@@ -348,66 +403,82 @@
           sandbox.root = root;
 
           return runInNewContext(content, sandbox, filename, true);
-        } else {
-          debug('load root module');
-          // root module
-          global.require = require;
-          global.exports = self.exports;
-          global.__filename = filename;
-          global.__dirname = dirname;
-          global.module = self;
-
-          return runInThisContext(content, filename, true);
         }
 
-      } else {
-        // create wrapper function
-        var wrapper = moduleWrapper[0] + content + moduleWrapper[1];
+        debug('load root module');
+        // root module
+        global.require = require;
+        global.exports = self.exports;
+        global.__filename = filename;
+        global.__dirname = dirname;
+        global.module = self;
 
-        var compiledWrapper = runInThisContext(wrapper, filename, true);
-        if (filename === process.argv[1] && global.v8debug) {
-          global.v8debug.Debug.setBreakPoint(compiledWrapper, 0, 0);
-        }
-        var args = [self.exports, require, self, filename, dirname];
-        return compiledWrapper.apply(self.exports, args);
+        return runInThisContext(content, filename, true);
       }
+
+      // create wrapper function
+      var wrapper = Module.wrap(content);
+
+      var compiledWrapper = runInThisContext(wrapper, filename, true);
+      if (filename === process.argv[1] && global.v8debug) {
+        global.v8debug.Debug.setBreakPoint(compiledWrapper, 0, 0);
+      }
+      var args = [self.exports, require, self, filename, dirname];
+      return compiledWrapper.apply(self.exports, args);
     };
 
-    exports.wrapper = moduleWrapper;
-
     // Native extension for .js
-    extensions['.js'] = function(module, filename) {
-      var content = requireNative('fs').readFileSync(filename, 'utf8');
+    Module._extensions['.js'] = function(module, filename) {
+      var content = NativeModule.require('fs').readFileSync(filename, 'utf8');
       module._compile(content, filename);
     };
 
 
     // Native extension for .node
-    extensions['.node'] = function(module, filename) {
+    Module._extensions['.node'] = function(module, filename) {
       process.dlopen(filename, module.exports);
     };
 
 
     // bootstrap main module.
-    exports.runMain = function() {
+    Module.runMain = function() {
       // Load the main module--the command line argument.
       process.mainModule = new Module('.');
       process.mainModule.load(process.argv[1]);
     };
 
+    Module._initPaths = function() {
+      var paths = [path.resolve(process.execPath, '..', '..', 'lib', 'node')];
+
+      if (process.env['HOME']) {
+        paths.unshift(path.resolve(process.env['HOME'], '.node_libraries'));
+        paths.unshift(path.resolve(process.env['HOME'], '.node_modules'));
+      }
+
+      if (process.env['NODE_PATH']) {
+        paths = process.env['NODE_PATH'].split(':').concat(paths);
+      }
+
+      Module._paths = paths;
+    };
+
     // bootstrap repl
-    exports.requireRepl = function() { return loadModule('repl', '.'); };
+    Module.requireRepl = function() {
+      return Module._load('repl', '.');
+    };
 
-    // export for --eval
-    exports.Module = Module;
+    Module._initPaths();
 
-    return exports;
+    // backwards compatibility
+    Module.Module = Module;
+
+    return Module;
   })();
 
 
   // Load events module in order to access prototype elements on process like
   // process.addListener.
-  var events = requireNative('events');
+  var events = NativeModule.require('events');
 
   // Signal Handlers
   (function() {
@@ -454,22 +525,22 @@
 
 
   global.setTimeout = function() {
-    var t = requireNative('timers');
+    var t = NativeModule.require('timers');
     return t.setTimeout.apply(this, arguments);
   };
 
   global.setInterval = function() {
-    var t = requireNative('timers');
+    var t = NativeModule.require('timers');
     return t.setInterval.apply(this, arguments);
   };
 
   global.clearTimeout = function() {
-    var t = requireNative('timers');
+    var t = NativeModule.require('timers');
     return t.clearTimeout.apply(this, arguments);
   };
 
   global.clearInterval = function() {
-    var t = requireNative('timers');
+    var t = NativeModule.require('timers');
     return t.clearInterval.apply(this, arguments);
   };
 
@@ -481,8 +552,8 @@
     if (stdout) return stdout;
 
     var binding = process.binding('stdio'),
-        net = requireNative('net'),
-        fs = requireNative('fs'),
+        net = NativeModule.require('net'),
+        fs = NativeModule.require('fs'),
         fd = binding.stdoutFD;
 
     if (binding.isStdoutBlocking()) {
@@ -504,8 +575,8 @@
     if (stdin) return stdin;
 
     var binding = process.binding('stdio'),
-        net = requireNative('net'),
-        fs = requireNative('fs'),
+        net = NativeModule.require('net'),
+        fs = NativeModule.require('fs'),
         fd = binding.openStdin();
 
     if (binding.isStdinBlocking()) {
@@ -527,11 +598,11 @@
 
   // Lazy load console object
   global.__defineGetter__('console', function() {
-    return requireNative('console');
+    return NativeModule.require('console');
   });
 
 
-  global.Buffer = requireNative('buffer').Buffer;
+  global.Buffer = NativeModule.require('buffer').Buffer;
 
   process.exit = function(code) {
     process.emit('exit', code || 0);
@@ -546,7 +617,7 @@
 
 
   var cwd = process.cwd();
-  var path = requireNative('path');
+  var path = NativeModule.require('path');
   var isWindows = process.platform === 'win32';
 
   // Make process.argv[0] and process.argv[1] into full paths, but only
@@ -559,31 +630,42 @@
     process.argv[0] = path.join(cwd, process.argv[0]);
   }
 
-  if (process.argv[1]) {
-
-    if (process.argv[1] == 'debug') {
-      // Start the debugger agent
-      var d = requireNative('_debugger');
-      d.start();
-
-    } else {
-      // Load module
-      // make process.argv[1] into a full path
-      if (!(/^http:\/\//).exec(process.argv[1])) {
-        process.argv[1] = path.resolve(process.argv[1]);
-      }
-      // REMOVEME: nextTick should not be necessary. This hack to get
-      // test/simple/test-exception-handler2.js working.
-      process.nextTick(module.runMain);
-    }
-
-  } else if (process._eval) {
-    // -e, --eval
-    var rv = new module.Module()._compile('return eval(process._eval)', 'eval');
-    console.log(rv);
-  } else {
-    // REPL
-    module.requireRepl().start();
+  // To allow people to extend Node in different ways, this hook allows
+  // one to drop a file lib/_third_party_main.js into the build directory
+  // which will be executed instead of Node's normal loading.
+  if (NativeModule.exists('_third_party_main')) {
+    process.nextTick(function () {
+      NativeModule.require('_third_party_main');
+    });
+    return;
   }
 
+  if (process.argv[1]) {
+    if (process.argv[1] == 'debug') {
+      // Start the debugger agent
+      var d = NativeModule.require('_debugger');
+      d.start();
+      return;
+    }
+
+    // Load Module
+    // make process.argv[1] into a full path
+    if (!(/^http:\/\//).exec(process.argv[1])) {
+      process.argv[1] = path.resolve(process.argv[1]);
+    }
+    // REMOVEME: nextTick should not be necessary. This hack to get
+    // test/simple/test-exception-handler2.js working.
+    process.nextTick(Module.runMain);
+    return;
+  }
+
+  if (process._eval) {
+    // -e, --eval
+    var rv = new Module()._compile('return eval(process._eval)', 'eval');
+    console.log(rv);
+    return;
+  }
+
+  // REPL
+  Module.requireRepl().start();
 });

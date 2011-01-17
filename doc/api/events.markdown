@@ -122,6 +122,22 @@ Removes all listeners from the listener array for the specified event.
 指定されたイベントに対するリスナー配列から全てのリスナーを削除します。
 
 
+#### emitter.setMaxListeners(n)
+
+<!--
+
+By default EventEmitters will print a warning if more than 10 listeners are
+added to it. This is a useful default which helps finding memory leaks.
+Obviously not all Emitters should be limited to 10. This function allows
+that to be increased. Set to zero for unlimited.
+
+-->
+デフォルトでは、EventEmitter は 10 を越えるリスナが追加されると警告を出力します。
+これはメモリリークを見つけるために役に立つデフォルト値です。
+全ての EventEmitter が 10 に制限されなければならないわけではないことは明らかです。
+この関数は制限を増やすことを許可します。
+0 を設定すると無制限になります。
+
 #### emitter.listeners(event)
 
 <!--

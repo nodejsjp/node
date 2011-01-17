@@ -137,20 +137,24 @@ The third argument is used to specify additional options, which defaults to:
 
     { cwd: undefined,
       env: process.env,
-      customFds: [-1, -1, -1] }
+      customFds: [-1, -1, -1],
+      setsid: false
+    }
 
 <!--
 
 `cwd` allows you to specify the working directory from which the process is spawned.
 Use `env` to specify environment variables that will be visible to the new process.
 With `customFds` it is possible to hook up the new process' [stdin, stout, stderr] to
-existing streams; `-1` means that a new stream should be created.
+existing streams; `-1` means that a new stream should be created. `setsid`,
+if set true, will cause the subprocess to be run in a new session.
 
 -->
 `cwd` で起動されたプロセスのワーキングディレクトリを指定することができます。
 `env` は新しいプロセスに見える環境変数を指定するために使います。
 `customFds` は新しいプロセスの [stdin, stout, stderr] を既存のストリームに接続することを可能にします;
 `-1` は新しいストリームが作られなければならないことを意味します。
+`setsid` に true が設定されると、サブプロセスは新しいセッションで実行されます。
 
 <!--
 

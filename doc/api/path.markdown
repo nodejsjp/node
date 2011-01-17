@@ -65,30 +65,29 @@ Example:
 
 <!--
 
-Resolves `to` to an absolute path name and normalizes it.
+Resolves `to` to an absolute path.
 
 -->
-`to` の絶対パスを解決して正規化します。
-
-<!--
-One ore more `from` arguments may be provided to specify the the starting
-point from where the path will be resolved. `resolve` will prepend `from`
-arguments from right to left until an absolute path is found. If no `from`
-arguments are specified, or after prepending them still no absolute path is
-found, the current working directory will be prepended eventually.
--->
-パスを解決する際の基準点を指定するために一つ以上の `from` 引数を与えることができます。
- `resolve()` は絶対パスが見つかるまで `from` 引数を右から左へ先頭に追加します。
-`from` 引数が指定されなかった場合や、絶対パスが見つからなかった場合は、
-最終的に現在の作業ディレクトリを先頭に追加されます。
+`to` の絶対パスを解決します。
 
 <!--
 
-Trailing slashes are removed unless the path gets resolved to the root
-directory.
+If `to` isn't already absolute `from` arguments are prepended in right to left
+order, until an absolute path is found. If after using all `from` paths still
+no absolute path is found, the current working directory is used as well. The
+resulting path is normalized, and trailing slashes are removed unless the path 
+gets resolved to the root directory.
+-->
+もし `to` が既に絶対パスでなければ、絶対パスが見つかるまで `from` 引数を右から左の順で先頭に加えます。
+全ての `from` を加えた後、パスがまだ絶対パスでなければ、カレントワーキングディレクトリが同様に使われます。
+結果のパスは正規化され、解決されたパスがルートディレクトリでない限り末尾のスラッシュは削除されます。
+
+<!--
+
+Another way to think of it is as a sequence of `cd` commands in a shell.
 
 -->
-解決した結果がルートディレクトリの場合を除いて、末尾のスラッシュは削除されます。
+それはシェルにおける `cd` コマンドの列だと考えることができます。
 
 <!--
 
@@ -97,21 +96,47 @@ Examples:
 -->
 例:
 
-    path.resolve('index.html')
-    // returns
-    '/home/tank/index.html'
+    path.resolve('foo/bar', '/tmp/file/', '..', 'a/../subfile')
+
+<!--
+
+Is similar to:
+
+-->
+これは以下と同様です。
+
+    cd foo/bar
+    cd /tmp/file/
+    cd ..
+    cd a/../subfile
+    pwd
+
+<!--
+
+The difference is that the different paths don't need to exist and may also be
+files.
+
+-->
+違いは、それぞれのパスが必ずしも存在する必要がないことと、ファイルでも構わないことです。
+
+<!--
+
+Examples:
+
+-->
+例:
 
     path.resolve('/foo/bar', './baz')
     // returns
-    '/foo/baz/baz'
+    '/foo/bar/baz'
 
     path.resolve('/foo/bar', '/tmp/file/')
     // returns
     '/tmp/file'
 
     path.resolve('wwwroot', 'static_files/png/', '../gif/image.gif')
-    // returns
-    '/home/tank/wwwroot/static_files/gif/image.gif'
+    // if currently in /home/myself/node, it returns
+    '/home/myself/node/wwwroot/static_files/gif/image.gif'
 
 ### path.dirname(p)
 

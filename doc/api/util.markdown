@@ -85,7 +85,7 @@ Example of inspecting all properties of the `util` object:
     console.log(util.inspect(util, true, null));
 
 
-### util.pump(readableStream, writeableStream, [callback])
+### util.pump(readableStream, writableStream, [callback])
 
 <!--
 
@@ -97,14 +97,14 @@ Experimental
 <!--
 
 Read the data from `readableStream` and send it to the `writableStream`.
-When `writeableStream.write(data)` returns `false` `readableStream` will be
+When `writableStream.write(data)` returns `false` `readableStream` will be
 paused until the `drain` event occurs on the `writableStream`. `callback` gets
 an error as its only argument and is called when `writableStream` is closed or
 when an error occurs.
 
 -->
 `readableStream` からデータを読み、それ を`writableStream` に送ります。
-`writeableStream.write(data)` が `false` を返す場合、
+`writableStream.write(data)` が `false` を返す場合、
 `writableStream` が `drain` イベントを生成するまで、
 `readableStream` は中断します。
 `writableStream` がクローズされるかエラーが発生すると、`callback` は error を唯一の引数として呼び出されます。

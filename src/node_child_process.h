@@ -58,7 +58,17 @@ class ChildProcess : ObjectWrap {
   // are readable.
   // The user of this class has responsibility to close these pipes after
   // the child process exits.
-  int Spawn(const char *file, char *const argv[], const char *cwd, char **env, int stdio_fds[3], int custom_fds[3]);
+  int Spawn(const char *file,
+            char *const argv[],
+            const char *cwd,
+            char **env,
+            int stdio_fds[3],
+            int custom_fds[3],
+            bool do_setsid,
+            int custom_uid,
+            char *custom_uname,
+            int custom_gid,
+            char *custom_gname);
 
   // Simple syscall wrapper. Does not disable the watcher. onexit will be
   // called still.

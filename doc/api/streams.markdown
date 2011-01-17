@@ -259,7 +259,7 @@ Emitted when the underlying file descriptor has been closed.
 -->
 下層でファイル記述子がクローズされた時に生成されます。
 
-### stream.writeable
+### stream.writable
 
 <!--
 
