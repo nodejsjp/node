@@ -1,9 +1,3 @@
-#ifdef __MINGW32__
-# include <node_child_process_win32.cc>
-#endif
-
-#ifdef __POSIX__
-
 // Copyright 2009 Ryan Dahl <ry@tinyclouds.org>
 #include <node_child_process.h>
 #include <node.h>
@@ -240,7 +234,8 @@ Handle<Value> ChildProcess::Kill(const Arguments& args) {
   assert(child);
 
   if (child->pid_ < 1) {
-    return ThrowException(Exception::Error(String::New("No such process")));
+    // nothing to do
+    return False();
   }
 
   int sig = SIGTERM;
@@ -249,15 +244,15 @@ Handle<Value> ChildProcess::Kill(const Arguments& args) {
     if (args[0]->IsNumber()) {
       sig = args[0]->Int32Value();
     } else {
-      return ThrowException(Exception::Error(String::New("Bad argument.")));
+      return ThrowException(Exception::TypeError(String::New("Bad argument.")));
     }
   }
 
   if (child->Kill(sig) != 0) {
-    return ThrowException(Exception::Error(String::New(strerror(errno))));
+    return ThrowException(ErrnoException(errno, "Kill"));
   }
 
-  return Undefined();
+  return True();
 }
 
 
@@ -502,5 +497,3 @@ int ChildProcess::Kill(int sig) {
 }  // namespace node
 
 NODE_MODULE(node_child_process, node::ChildProcess::Initialize);
-
-#endif // __POSIX__

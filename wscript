@@ -107,6 +107,13 @@ def set_options(opt):
                 , dest='use_oprofile'
                 )
 
+  opt.add_option( '--gdb'
+                , action='store_true'
+                , default=False
+                , help="add gdb support"
+                , dest='use_gdbjit'
+                )
+
 
   opt.add_option('--shared-cares'
                 , action='store_true'
@@ -191,6 +198,7 @@ def configure(conf):
   conf.env["USE_SHARED_LIBEV"] = o.shared_libev or o.shared_libev_includes or o.shared_libev_libpath
 
   conf.env["USE_OPROFILE"] = o.use_oprofile
+  conf.env["USE_GDBJIT"] = o.use_gdbjit
 
   if o.use_oprofile:
     conf.check(lib=['bfd', 'opagent'], uselib_store="OPROFILE")
@@ -477,8 +485,11 @@ def v8_cmd(bld, variant):
                 , mode
                 , arch
                 , snapshot
-		, profile
+                , profile
                 )
+
+  if bld.env["USE_GDBJIT"]:
+    cmd += ' gdbjit=on '
 
   if sys.platform.startswith("sunos"): cmd += ' toolchain=gcc'
 
@@ -619,18 +630,24 @@ def build(bld):
     src/node_http_parser.cc
     src/node_net.cc
     src/node_io_watcher.cc
-    src/node_child_process.cc
     src/node_constants.cc
     src/node_cares.cc
     src/node_events.cc
     src/node_file.cc
     src/node_signal_watcher.cc
     src/node_stat_watcher.cc
-    src/node_stdio.cc
     src/node_timer.cc
     src/node_script.cc
     src/node_os.cc
   """
+
+  if sys.platform.startswith("win32"):
+    node.source += " src/node_stdio_win32.cc "
+    node.source += " src/node_child_process_win32.cc "
+  else:
+    node.source += " src/node_stdio.cc "
+    node.source += " src/node_child_process.cc "
+
   node.source += bld.env["PLATFORM_FILE"]
   if not product_type_is_lib:
     node.source = 'src/node_main.cc '+node.source

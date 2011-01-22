@@ -1,31 +1,61 @@
-#include "node.h"
-#include "platform.h"
-#include "platform_win32.h"
+
+#include <node.h>
+#include <platform.h>
 
 #include <v8.h>
 
 #include <errno.h>
+#include <stdlib.h>
 #include <sys/param.h> // for MAXPATHLEN
 #include <unistd.h> // getpagesize
-#include <windows.h>
 
-#include "platform_win32_winsock.cc"
+#include <platform_win32.h>
+
+#include <platform_win32_winsock.cc>
 
 namespace node {
 
 using namespace v8;
 
-static char buf[MAXPATHLEN + 1];
 static char *process_title = NULL;
+
+
+// Does the about the same as strerror(),
+// but supports all windows errror messages
+const char *winapi_strerror(const int errorno) {
+  char *errmsg = NULL;
+
+  FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+      FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errorno,
+      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&errmsg, 0, NULL);
+
+  if (errmsg) {
+    // Remove trailing newlines
+    for (int i = strlen(errmsg) - 1;
+        i >= 0 && (errmsg[i] == '\n' || errmsg[i] == '\r'); i--) {
+      errmsg[i] = '\0';
+    }
+
+    return errmsg;
+  } else {
+    // FormatMessage failed
+    return "Unknown error";
+  }
+}
 
 
 // Does the about the same as perror(), but for windows api functions
 void winapi_perror(const char* prefix = NULL) {
   DWORD errorno = GetLastError();
-  char *errmsg;
+  const char *errmsg = NULL;
 
-  FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                NULL, errorno, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&errmsg, 0, NULL);
+  FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+      FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errorno,
+      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&errmsg, 0, NULL);
+
+  if (!errmsg) {
+    errmsg = "Unknown error\n";
+  }
 
   // FormatMessage messages include a newline character
 

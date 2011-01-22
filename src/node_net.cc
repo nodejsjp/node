@@ -1,9 +1,11 @@
-#include <node_net.h>
-#include <v8.h>
 
 #include <node.h>
 #include <node_buffer.h>
+#include <node_net.h>
 
+#include <v8.h>
+
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -12,16 +14,15 @@
 #include <fcntl.h>
 
 #ifdef __MINGW32__
-# include <winsock2.h>
-# include <ws2tcpip.h>
+# include <platform_win32.h>
+# include <platform_win32_winsock.h>
+#endif
 
-#else // __POSIX__
+#ifdef __POSIX__
 # include <sys/ioctl.h>
 # include <sys/socket.h>
 # include <sys/un.h>
-
 # include <arpa/inet.h> /* inet_pton */
-
 # include <netdb.h>
 # include <netinet/in.h>
 # include <netinet/tcp.h>
@@ -30,19 +31,18 @@
 #ifdef __linux__
 # include <linux/sockios.h> /* For the SIOCINQ / FIONREAD ioctl */
 #endif
+
 /* Non-linux platforms like OS X define this ioctl elsewhere */
 #ifndef FIONREAD
-#include <sys/filio.h>
+# include <sys/filio.h>
 #endif
 
-#include <errno.h>
-
 #ifdef __OpenBSD__
-#include <sys/uio.h>
+# include <sys/uio.h>
 #endif
 
 /*
- * HACK to use inet_pton/inet_ntop from c-ares because mingw32 doesn't have it /*
+ * HACK to use inet_pton/inet_ntop from c-ares because mingw32 doesn't have it
  * This trick is used in node_ares.cc as well
  * TODO fixme
  */
@@ -448,7 +448,7 @@ static Handle<Value> Connect(const Arguments& args) {
 #else // __MINGW32__
   int r = connect(_get_osfhandle(fd), addr, addrlen);
 
-  if (r == INVALID_SOCKET) {
+  if (r == SOCKET_ERROR) {
     int wsaErrno = WSAGetLastError();
     if (wsaErrno != WSAEWOULDBLOCK && wsaErrno != WSAEINPROGRESS) {
       return ThrowException(ErrnoException(wsaErrno, "connect"));
@@ -642,7 +642,7 @@ static Handle<Value> Accept(const Arguments& args) {
 #else // __MINGW32__
   int peer_handle = accept(_get_osfhandle(fd), (struct sockaddr*) &address_storage, &len);
 
-  if (peer_handle == INVALID_SOCKET) {
+  if (peer_handle == SOCKET_ERROR) {
     int wsaErrno = WSAGetLastError();
     if (wsaErrno == WSAEWOULDBLOCK) return scope.Close(Null());
     return ThrowException(ErrnoException(wsaErrno, "accept"));

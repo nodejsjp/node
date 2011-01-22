@@ -53,12 +53,6 @@ parse the actual headers or the body.
 Node の HTTP API はとても低水準です。それはストリームのハンドリングとメッセージの解析だけに対処します。
 解析はメッセージをヘッダとボディに分けますが、実際のヘッダとボディは解析しません。
 
-<!--
-
-HTTPS is supported if OpenSSL is available on the underlying platform.
-
--->
-プラットフォームで OpenSSL が利用可能であれば HTTPS がサポートされます。
 
 ## http.Server
 
@@ -663,55 +657,113 @@ followed by `response.end()`.
 `response.write(data, encoding)` に続けて `response.end()` を呼び出すのと等価です。
 
 
-## http.Client
+## http.request(options, callback)
 
 <!--
 
-An HTTP client is constructed with a server address as its
-argument, the returned handle is then used to issue one or more
-requests.  Depending on the server connected to, the client might
-pipeline the requests or reestablish the stream after each
-stream. _Currently the implementation does not pipeline requests._
+Node maintains several connections per server to make HTTP requests.
+This function allows one to transparently issue requests.
 
 -->
-HTTP クライアントは引数として渡されるサーバアドレスによって構築され、
-戻り値のハンドルは一つまたはそれ以上のリクエストを発行するのに使われます。
-接続されたサーバに応じて、クライアントはパイプライン化されたリクエストまたは、
-それぞれのストリームの後でストリームを再確立するかもしれません。
-_現在の実装はリクエストをパイプライン化しません。_
+Node は HTTP リクエストを行うために、サーバごとにいくつかのコネクションを保持します。
+この関数はその一つを使って透過的にリクエストを発行できるようにします。
 
 <!--
 
-Example of connecting to `google.com`:
+Options:
 
 -->
-`google.com` に接続する例:
+オプション:
 
-    var http = require('http');
-    var google = http.createClient(80, 'www.google.com');
-    var request = google.request('GET', '/',
-      {'host': 'www.google.com'});
-    request.end();
-    request.on('response', function (response) {
-      console.log('STATUS: ' + response.statusCode);
-      console.log('HEADERS: ' + JSON.stringify(response.headers));
-      response.setEncoding('utf8');
-      response.on('data', function (chunk) {
+<!--
+
+- `host`: A domain name or IP address of the server to issue the request to.
+- `port`: Port of remote server.
+- `method`: A string specifing the HTTP request method. Possible values:
+  `'GET'` (default), `'POST'`, `'PUT'`, and `'DELETE'`.
+- `path`: Request path. Should include query string and fragments if any.
+   E.G. `'/index.html?page=12'`
+- `headers`: An object containing request headers.
+
+-->
+- `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
+- `port`: リモートサーバのポート。
+- `method`: HTTP リクエストのメソッドを指定する文字列。 可能な値:
+  `'GET'` (デフォルト), `'POST'`, `'PUT'`, そして `'DELETE'`。
+- `path`: リクエストのパス。問い合わせ文字列やフラグメントがあるなら含めるべきです。
+   例. `'/index.html?page=12'`
+- `headers`: リクエストヘッダを含むオブジェクト。
+
+<!--
+
+`http.request()` returns an instance of the `http.ClientRequest`
+class. The `ClientRequest` instance is a writable stream. If one needs to
+upload a file with a POST request, then write to the `ClientRequest` object.
+
+-->
+`http.request()` は `http.ClientRequest` クラスのインスタンスを返します。
+`http.ClientRequest` のインスタンスは書き込み可能なストリームです。
+もし POST リクエストでファイルのアップロードがしたければ、
+`http.ClientRequest` オブジェクトに出力してください。
+
+<!--
+
+Example:
+
+-->
+例:
+
+    var options = {
+      host: 'www.google.com',
+      port: 80,
+      path: '/upload',
+      method: 'POST'
+    };
+
+    var req = http.request(options, function(res) {
+      console.log('STATUS: ' + res.statusCode);
+      console.log('HEADERS: ' + JSON.stringify(res.headers));
+      res.setEncoding('utf8');
+      res.on('data', function (chunk) {
         console.log('BODY: ' + chunk);
       });
     });
+
+    // write data to request body
+    req.write('data\n');
+    req.write('data\n');
+    req.end();
+
+<!--
+
+Note that in the example `req.end()` was called. With `http.request()` one
+must always call `req.end()` to signify that you're done with the request -
+even if there is no data being written to the request body.
+
+-->
+この例で `req.end()` が呼ばれていることに注意してください。
+`http.request()` では、リクエストが終了したことを示すために、
+常に `req.end()` を呼び出さなければなりません
+- リクエストのボディに出力するデータがなかったとしても。
+
+<!--
+
+If any error is encountered during the request (be that with DNS resolution,
+TCP level errors, or actual HTTP parse errors) an `'error'` event is emitted
+on the returned request object.
+
+-->
+リクエスト中に何らかのエラー (DNS 解決、TCP レベルのエラー、HTTP パースエラーなど) が発生すると、戻り値のリクエストオブジェクトで `'error'` イベントが生成されます。
+
 
 <!--
 
 There are a few special headers that should be noted.
 
 -->
-少数の特別なヘッダがあることに注意してください。
+いくつかの特別なヘッダに注意が必要です。
 
 <!--
-
-* The 'Host' header is not added by Node, and is usually required by
-  website.
 
 * Sending a 'Connection: keep-alive' will notify Node that the connection to
   the server should be persisted until the next request.
@@ -724,16 +776,60 @@ There are a few special headers that should be noted.
   information.
 
 -->
-* 'Host' ヘッダは Node によって加えられませんが、通常の Web サイトに必要とされます。
+* 'Connection: keep-alive' の送信は、サーバへのコネクションを次のリクエストまで持続することを Node に通知します。
 
-* 'Connection: keep-alive' を送信することで、サーバへの接続を次のリクエストまで維持することを Node に通知します。
+* 'Content-length' ヘッダの送信は、デフォルトのチャンクエンコーディングを無効にします。
 
-* 'Content-length' ヘッダを送信することで、デフォルトのチャンクエンコーディングが無効になります。
+* 'Expect' ヘッダの送信は、リクエストヘッダを即時に送信します。
+  通常、'Expect: 100-continue' を送信すると、タイムアウトと `continue` イベントを待ち受けます。詳細は RFC2616 の 8.2.3 節を参照してください。
 
-* 'Expect' ヘッダを送信することで、リクエストヘッダを直ちに送信します。
-通常、'Expect: 100-continue' を送信する場合、タイムアウトと `continue` イベントの両方を設定します。
-より詳しくは RFC2616 の 8.2.3 節を参照してください。
+## http.get(options, callback)
 
+<!--
+
+Since most requests are GET requests without bodies, Node provides this
+convience method. The only difference between this method and `http.request()` is
+that it sets the method to GET and calls `req.end()` automatically.
+
+-->
+ほとんどのリクエストは本文のない GET リクエストであるため、
+Node は便利なメソッドを提供します。
+このメソッドと `http.request()` の間の違いは、メソッドを GET に設定して `req.end()` を自動的に呼び出すことだけです。
+
+<!--
+
+Example:
+
+-->
+例:
+
+    var options = {
+      host: 'www.google.com',
+      port: 80,
+      path: '/index.html'
+    };
+
+    http.get(options, function(res) {
+      console.log("Got response: " + res.statusCode);
+    }).on('error', function(e) {
+      console.log("Got error: " + e.message);
+    });
+
+
+## http.Agent
+## http.getAgent(host, port)
+
+<!--
+
+`http.request()` uses a special `Agent` for managing multiple connections to
+an HTTP server. Normally `Agent` instances should not be exposed to user
+code, however in certain situations it's useful to check the status of the
+agent. The `http.getAgent()` function allows you to access the agents.
+
+-->
+`http.request()` は HTTP サーバへの複数のコネクションを管理する特別な `Agent` を使用します。
+通常 `Agent` インスタンスはユーザコードに出てきませんが、特定の状況ではエージェントの状態をチェックすることが役に立ちます。
+`http.getAgent()` 関数はエージェントへのアクセスを可能にします。
 
 ### Event: 'upgrade'
 
@@ -771,127 +867,44 @@ the client should send the request body.
 サーバが '100 Continue' HTTP レスポンスを送信することで生成されます。
 これはクライアントがリクエストボディを送信すべき事を示します。
 
-
-### http.createClient(port, host='localhost', secure=false, [credentials])
-
-<!--
-
-Constructs a new HTTP client. `port` and
-`host` refer to the server to be connected to. A
-stream is not established until a request is issued.
-
--->
-新しい HTTP クライアントを構築します。
-`port` と `host` は接続先となるサーバを参照します。
-リクエストが発行されるまでストリームは確立されません。
+### agent.maxSockets
 
 <!--
 
-`secure` is an optional boolean flag to enable https support and `credentials` is an optional
-credentials object from the crypto module, which may hold the client's private key,
-certificate, and a list of trusted CA certificates.
+By default set to 5. Determines how many concurrent sockets the agent can have open.
 
 -->
-オプションの`secure` は boolean のフラグで HTTPS サポートを有効にし、
-オプションの`credentials` は暗号モジュールの認証情報オブジェクトで、
-クライアントの秘密鍵、証明書、そして信頼できる認証局の証明書のリストを含むことができます。
+デフォルトでは 5 に設定されます。
+エージェントがいくつのソケットを並行にオープンするかを決定します。
+
+### agent.sockets
 
 <!--
 
-If the connection is secure, but no explicit CA certificates are passed
-in the credentials, then node.js will default to the publicly trusted list
-of CA certificates, as given in <http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt>.
+An array of sockets currently inuse by the Agent. Do not modify.
 
 -->
-コネクションがセキュアな場合、証明情報で認証局の証明書が明示的に渡されないと、
-node.js はデフォルトの信頼できる認証局のリストとして
-<http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt> を与えます。
+エージェントが現在使っているソケットの配列です。
+変更しないでください。
 
-### client.request(method='GET', path, [request_headers])
+### agent.queue
 
 <!--
 
-Issues a request; if necessary establishes stream. Returns a `http.ClientRequest` instance.
+A queue of requests waiting to be sent to sockets.
 
 -->
-リクエストを発行します; 必要であればストリームを確立します。
-`http.ClientRequest` のインスタンスを返します。
-
-<!--
-
-`method` is optional and defaults to 'GET' if omitted.
-
--->
-`method` はオプションで、省略された場合のデフォルトは 'GET'です。
-
-<!--
-
-`request_headers` is optional.
-Additional request headers might be added internally
-by Node. Returns a `ClientRequest` object.
-
--->
-`request_headers` はオプションです。
-Node 内部で付加的なリクエストヘッダが加えられることがあります。
-`ClientRequest` オブジェクトを返します。
-
-<!--
-
-Do remember to include the `Content-Length` header if you
-plan on sending a body. If you plan on streaming the body, perhaps
-set `Transfer-Encoding: chunked`.
-
--->
-ボディを送信しようとしている場合は、`Content-Length` ヘッダを含めることを忘れないでください。
-ボディをストリーム化する場合は、おそらく `Transfer-Encoding: chunked` をセットしてください。
-
-<!--
-
-*NOTE*: the request is not complete. This method only sends the header of
-the request. One needs to call `request.end()` to finalize the request and
-retrieve the response.  (This sounds convoluted but it provides a chance for
-the user to stream a body to the server with `request.write()`.)
-
--->
-*注意*: リクエストは完了していません。このメソッドはリクエストのヘッダを送信するだけです。
-リクエストを完了してレスポンスを読み出すには `request.end()` を呼ぶ必要があります。
-(複雑に感じるかもしれませんが、
-これは `request.write()` でボディをストリーム化するチャンスをユーザに提供します))。
-
-### client.verifyPeer()
-
-<!--
-
-Returns true or false depending on the validity of the server's certificate
-in the context of the defined or default list of trusted CA certificates.
-
--->
-指定された、あるいはデフォルトの信頼された認証局の証明書において、
-サーバの証明書の妥当性に応じて true または false を返します。
-
-### client.getPeerCertificate()
-
-<!--
-
-Returns a JSON structure detailing the server's certificate, containing a dictionary
-with keys for the certificate `'subject'`, `'issuer'`, `'valid_from'` and `'valid_to'`.
-
--->
-サーバ証明書の詳細を、`'subject'`、`'issuer'`、`'valid_from'` そして
-`'valid_to'` をキーとする証明書の辞書を含む JSON 形式で返します。
-
+ソケットへの送信を待機しているリクエストのキューです。
 
 ## http.ClientRequest
 
 <!--
 
-This object is created internally and returned from the `request()` method
-of a `http.Client`. It represents an _in-progress_ request whose header has
-already been sent.
+This object is created internally and returned from `http.request()`.  It
+represents an _in-progress_ request whose header has already been sent.
 
 -->
-このオブジェクトは HTTP サーバ内部で作成され、`http.Client` の
-`request()` メソッドから返されます。
+このオブジェクトは HTTP サーバ内部で作成され、`http.request()` から返されます。
 それはヘッダが送信された _進行中_ のリクエストを表現します。
 
 <!--
@@ -1028,11 +1041,11 @@ followed by `request.end()`.
 
 <!--
 
-This object is created when making a request with `http.Client`. It is
+This object is created when making a request with `http.request()`. It is
 passed to the `'response'` event of the request object.
 
 -->
-このオブジェクトは `http.Client` によってリクエストと一緒に作成されます。
+このオブジェクトは `http.request()` によってリクエストと一緒に作成されます。
 これはリクエストオブジェクトの `'response'` イベントに渡されます。
 
 <!--
@@ -1053,18 +1066,6 @@ Emitted when a piece of the message body is received.
 -->
 メッセージボディの断片を受信した場合に生成されます。
 
-<!--
-
-    Example: A chunk of the body is given as the single
-    argument. The transfer-encoding has been decoded.  The
-    body chunk a String.  The body encoding is set with
-    `response.setBodyEncoding()`.
-
--->
-    例: ボディのチャンクは一つの引数として与えられます。
-    転送エンコーディングでデコードされます。
-    ボディのチャンクは文字列です。
-    ボディエンコーディングは `response.setBodyEncoding()` によって設定されます。
 
 ### Event: 'end'
 
@@ -1152,12 +1153,3 @@ Resumes a paused response.
 
 -->
 中断されていたレスポンスを再開します。
-
-### response.client
-
-<!--
-
-A reference to the `http.Client` that this response belongs to.
-
--->
-このレスポンスを所有する `http.Client` への参照です。

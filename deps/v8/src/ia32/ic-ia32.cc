@@ -1199,7 +1199,7 @@ void KeyedStoreIC::GenerateExternalArray(MacroAssembler* masm,
         break;
       case kExternalShortArray:
       case kExternalUnsignedShortArray:
-        __ xor_(ecx, Operand(ecx));
+        __ Set(ecx, Immediate(0));
         __ mov_w(Operand(edi, ebx, times_2, 0), ecx);
         break;
       case kExternalIntArray:
@@ -1219,9 +1219,6 @@ void KeyedStoreIC::GenerateExternalArray(MacroAssembler* masm,
 }
 
 
-// Defined in ic.cc.
-Object* CallIC_Miss(Arguments args);
-
 // The generated code does not accept smi keys.
 // The generated code falls through if both probes miss.
 static void GenerateMonomorphicCacheProbe(MacroAssembler* masm,
@@ -1234,8 +1231,12 @@ static void GenerateMonomorphicCacheProbe(MacroAssembler* masm,
   Label number, non_number, non_string, boolean, probe, miss;
 
   // Probe the stub cache.
-  Code::Flags flags =
-      Code::ComputeFlags(kind, NOT_IN_LOOP, MONOMORPHIC, NORMAL, argc);
+  Code::Flags flags = Code::ComputeFlags(kind,
+                                         NOT_IN_LOOP,
+                                         MONOMORPHIC,
+                                         Code::kNoExtraICState,
+                                         NORMAL,
+                                         argc);
   StubCache::GenerateProbe(masm, flags, edx, ecx, ebx, eax);
 
   // If the stub cache probing failed, the receiver might be a value.
@@ -1328,7 +1329,9 @@ static void GenerateCallNormal(MacroAssembler* masm, int argc) {
 }
 
 
-static void GenerateCallMiss(MacroAssembler* masm, int argc, IC::UtilityId id) {
+static void GenerateCallMiss(MacroAssembler* masm,
+                             int argc,
+                             IC::UtilityId id) {
   // ----------- S t a t e -------------
   //  -- ecx                 : name
   //  -- esp[0]              : return address
@@ -1567,9 +1570,6 @@ void KeyedCallIC::GenerateMiss(MacroAssembler* masm, int argc) {
 }
 
 
-// Defined in ic.cc.
-Object* LoadIC_Miss(Arguments args);
-
 void LoadIC::GenerateMegamorphic(MacroAssembler* masm) {
   // ----------- S t a t e -------------
   //  -- eax    : receiver
@@ -1795,10 +1795,6 @@ bool KeyedStoreIC::PatchInlinedStore(Address address, Object* map) {
 }
 
 
-// Defined in ic.cc.
-Object* KeyedLoadIC_Miss(Arguments args);
-
-
 void KeyedLoadIC::GenerateMiss(MacroAssembler* masm) {
   // ----------- S t a t e -------------
   //  -- eax    : key
@@ -1981,9 +1977,6 @@ void StoreIC::GenerateGlobalProxy(MacroAssembler* masm) {
   __ TailCallRuntime(Runtime::kSetProperty, 3, 1);
 }
 
-
-// Defined in ic.cc.
-Object* KeyedStoreIC_Miss(Arguments args);
 
 void KeyedStoreIC::GenerateRuntimeSetProperty(MacroAssembler* masm) {
   // ----------- S t a t e -------------

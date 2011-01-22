@@ -23,25 +23,18 @@
     block; on windows a libeio thread is used to call CreateProcess.
     So this can't really be fixed, but it could be worked around by adding a
     'spawn' or 'pid' event.
-  * kill() doesn't work when the pid is not available yet. All the plumbing
-    is there to make it work, but lib/child_process.js just doesn't call
-    ChildProcess::Kill() as long as the pid is not known.
   * passing socket custom_fds is not supported
   * child_process.exec() only works on systems with msys installed.
     It's because it relies on the 'sh' shell. The default windows shell
     is 'cmd' and it works a little differently. Maybe add an option to
     specify the shell to exec()?
 
-- Stdio (make TTY's / repl / readline work)
-  This will be hard: there is no ANSI escape code support in windows.
-  Select() doesn't work on TTYs -- use a dedicated `getchar()` thread 
-  that relays everything to an internal socket?
-  Also verify writeError and isStdoutBlocking correctness.
+- Make colorful util.inspect work on windows.
 
-- Think about exposing the platform through the process object
-  It sucks but it may be necessary to know which platfom you're running on, e.g.
-  you can't do spawn('grep') on windows (unless there's msys).
-  Something like process.os or process.platform?
+- Stdio: support passing sockets between master/child process
+  Normal windows applications wouldn't like this, but it can be useful for
+  communication between node processes. This requires 
+  stdio.isStdinBlocking/isStdoutBlocking to be smarter.
 
 - Skip/fix tests that can never pass on windows
 
@@ -54,9 +47,6 @@
   Now socket() can fail by itself and _open_osfhandle can fail by itself too.
   If socket() fails it returns -1 so _open_osfhandle fails as well, but and we'll always return/throw EBADF.
   If _open_osfhandle fails but socket doesn't, a stray handle is left open. It should be fixed.
-
-- Check error number mappings.
-  Winsock errnos are sometimes different. Subtracting WSABASEERR from errnos works in most cases.
 
 - Think about `make install`
 
@@ -76,10 +66,6 @@
   headers must have `dllimport`.
 
 - V8: push MINGW32 build fixes upstream
-  (mostly done, V8 3.0.0 introduces some new issues)
-
-- Work with the V8 team to get the stack corruption bug fixed
-  (fixed in 3.0.0)
 
 - Work around missing pread/pwrite more elegantly
   Currently it's exported from libeio, while it wasn't intended to be exported.

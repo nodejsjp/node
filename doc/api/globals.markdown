@@ -13,26 +13,37 @@ These object are available in the global scope and can be accessed from anywhere
 
 The global namespace object.
 
+In browsers, the top-level scope is the global scope. That means that in
+browsers if you're in the global scope `var something` will define a global
+variable. In Node this is different. The top-level scope is not the global
+scope; `var something` inside a Node module will be local to that module.
+
 -->
 グローバルなネームスペースのオブジェクトです。
+
+ブラウザでは、トップレベルのスコープはグローバルスコープです。
+これは、ブラウザではグローバルスコープで `var something` と定義するとグローバル変数になることを意味します。
+Node では異なります。
+トップレベルのスコープはグローバルスコープではありません;
+Node のモジュール内での `var something` はそのモジュールでローカルになります。
 
 ### process
 
 <!--
 
-The process object. See the `'process object'` section.
+The process object. See the 'process object' section.
 
 -->
-プロセスオブジェクトです。`'process object'` の節を参照してください。
+プロセスオブジェクトです。'process object' の節を参照してください。
 
 ### require()
 
 <!--
 
-To require modules. See the `'Modules'` section.
+To require modules. See the 'Modules' section.
 
 -->
-require モジュールを指します。`'Modules'` の節を参照してください。
+require モジュールを指します。'Modules' の節を参照してください。
 
 ### require.resolve()
 

@@ -1,20 +1,22 @@
-#include <node_os.h>
 
 #include <node.h>
-#include <v8.h>
+#include <node_os.h>
+#include <platform.h>
 
-#include "platform.h"
+#include <v8.h>
 
 #include <errno.h>
 #include <string.h>
 
+#ifdef __MINGW32__
+# include <platform_win32.h>
+# include <platform_win32_winsock.h>
+#endif
+
 #ifdef __POSIX__
 # include <unistd.h>  // gethostname, sysconf
 # include <sys/utsname.h>
-#else // __MINGW32__
-# include <windows.h> // GetVersionEx
-# include <winsock2.h> // gethostname
-#endif // __MINGW32__
+#endif
 
 namespace node {
 
@@ -26,10 +28,11 @@ static Handle<Value> GetHostname(const Arguments& args) {
   int r = gethostname(s, 255);
 
   if (r < 0) {
-#ifdef __MINGW32__
-    errno = WSAGetLastError() - WSABASEERR;
-#endif
+#ifdef __POSIX__
     return ThrowException(ErrnoException(errno, "gethostname"));
+#else // __MINGW32__
+    return ThrowException(ErrnoException(WSAGetLastError(), "gethostname"));
+#endif // __MINGW32__
   }
 
   return scope.Close(String::New(s));
@@ -71,7 +74,8 @@ static Handle<Value> GetOSRelease(const Arguments& args) {
     return Undefined();
   }
 
-  sprintf(release, "%d.%d.%d", info.dwMajorVersion, info.dwMinorVersion, info.dwBuildNumber);
+  sprintf(release, "%d.%d.%d", static_cast<int>(info.dwMajorVersion),
+      static_cast<int>(info.dwMinorVersion), static_cast<int>(info.dwBuildNumber));
 #endif
 
   return scope.Close(String::New(release));

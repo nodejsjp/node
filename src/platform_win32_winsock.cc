@@ -7,16 +7,9 @@
  */
 
 
-#include <windows.h>
-#include <winsock2.h>
-#include <mswsock.h>
-#include <ws2tcpip.h>
-#include <ws2spi.h>
 #include <platform_win32_winsock.h>
 
-
 namespace node {
-
 
 /*
  * Guids and typedefs for winsock extension functions
@@ -117,11 +110,15 @@ static struct WINSOCK_EXTENSION_FUNCTIONS {
  */
 void wsa_perror(const char *prefix) {
   DWORD errorno = WSAGetLastError();
-  char *errmsg;
+  const char *errmsg = NULL;
 
-  FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                NULL, errorno, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&errmsg, 0, NULL);
+  FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM |
+      FORMAT_MESSAGE_IGNORE_INSERTS, NULL, errorno,
+      MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&errmsg, 0, NULL);
 
+  if (!errmsg) {
+    errmsg = "Unknown error\n";
+  }
   // FormatMessage messages include a newline character
 
   if (prefix) {
@@ -232,10 +229,10 @@ int wsa_socketpair(int af, int type, int proto, SOCKET sock[2]) {
   if ((sock[1] = accept(listen_sock, 0, 0)) == INVALID_SOCKET)
     goto error;
 
-  if (getpeername(sock[0], (SOCKADDR*)&addr1, &addr1_len) == INVALID_SOCKET)
+  if (getpeername(sock[0], (SOCKADDR*)&addr1, &addr1_len) == SOCKET_ERROR)
     goto error;
 
-  if (getsockname(sock[1], (SOCKADDR*)&addr2, &addr2_len) == INVALID_SOCKET)
+  if (getsockname(sock[1], (SOCKADDR*)&addr2, &addr2_len) == SOCKET_ERROR)
     goto error;
 
   if (addr1_len != addr2_len
@@ -311,10 +308,10 @@ int wsa_sync_async_socketpair(int af, int type, int proto, SOCKET *syncSocket, S
   if ((sock2 = accept(listen_sock, 0, 0)) == INVALID_SOCKET)
     goto error;
 
-  if (getpeername(sock1, (SOCKADDR*)&addr1, &addr1_len) == INVALID_SOCKET)
+  if (getpeername(sock1, (SOCKADDR*)&addr1, &addr1_len) == SOCKET_ERROR)
     goto error;
 
-  if (getsockname(sock2, (SOCKADDR*)&addr2, &addr2_len) == INVALID_SOCKET)
+  if (getsockname(sock2, (SOCKADDR*)&addr2, &addr2_len) == SOCKET_ERROR)
     goto error;
 
   if (addr1_len != addr2_len
@@ -392,8 +389,6 @@ error:
  * Initializes (fills) the WSAPROTOCOL_INFOW structure cache
  */
 static void wsa_init_proto_info_cache() {
-  WSAPROTOCOL_INFOW *cache = (WSAPROTOCOL_INFOW*)&proto_info_cache;
-
   wsa_get_proto_info(AF_INET,  SOCK_STREAM, IPPROTO_TCP, &proto_info_cache[0]);
   wsa_get_proto_info(AF_INET,  SOCK_DGRAM,  IPPROTO_UDP, &proto_info_cache[1]);
   wsa_get_proto_info(AF_INET6, SOCK_STREAM, IPPROTO_TCP, &proto_info_cache[2]);
@@ -430,7 +425,7 @@ inline static void wsa_get_extension_function(SOCKET socket, GUID guid, void **t
 inline static void wsa_init_extension_functions() {
   SOCKET dummy = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
 
-  if (dummy == SOCKET_ERROR) {
+  if (dummy == INVALID_SOCKET) {
     memset((void*)&wsexf, 0, sizeof(wsexf));
     wsa_perror("socket");
     return;
