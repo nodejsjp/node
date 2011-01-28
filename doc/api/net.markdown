@@ -486,7 +486,7 @@ Resumes reading after a call to `pause()`.
 -->
 `pause()` を呼び出した後で読み込みを再開します。
 
-#### socket.setTimeout(timeout)
+#### socket.setTimeout(timeout, [callback])
 
 <!--
 
@@ -512,6 +512,13 @@ If `timeout` is 0, then the existing idle timeout is disabled.
 
 -->
 `timeout` が 0 の場合、アイドルタイムアウトは無効にされます。
+
+<!--
+
+The optional `callback` parameter will be added as a one time listener for the `'timeout'` event.
+
+-->
+オプションの `callback` 引数は、`timeouot` イベントの一回限りのリスナを追加します。
 
 #### socket.setNoDelay(noDelay=true)
 

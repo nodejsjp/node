@@ -247,7 +247,7 @@ the completion callback.
 -->
 非同期の link(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.linkSync(dstpath, srcpath)
+### fs.linkSync(srcpath, dstpath)
 
 <!--
 

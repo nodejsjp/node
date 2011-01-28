@@ -396,20 +396,20 @@ A compiled-in property that exposes `NODE_PREFIX`.
     console.log('Prefix: ' + process.installPrefix);
 
 
-### process.kill(pid, signal='SIGINT')
+### process.kill(pid, signal='SIGTERM')
 
 <!--
 
 Send a signal to a process. `pid` is the process id and `signal` is the
 string describing the signal to send.  Signal names are strings like
-'SIGINT' or 'SIGUSR1'.  If omitted, the signal will be 'SIGINT'.
+'SIGINT' or 'SIGUSR1'.  If omitted, the signal will be 'SIGTERM'.
 See kill(2) for more information.
 
 -->
 プロセスにシグナルを送ります。
 `pid` はプロセス ID で `signal` は送信されるシグナルを文字列で記述したものです。
 シグナルの名前は 'SIGINT' や 'SIGUSR1' のような文字列です。
-省略すると、シグナルは 'SIGINT' となります。
+省略すると、シグナルは 'SIGTERM' となります。
 詳細は kill(2) を参照してください。
 
 <!--

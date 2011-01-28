@@ -51,6 +51,17 @@ static Persistent<String> buf_symbol;
   static char getbuf[PATH_MAX + 1];
 #endif
 
+
+static inline bool SetCloseOnExec(int fd) {
+#ifdef __POSIX__
+  return (fcntl(fd, F_SETFD, FD_CLOEXEC) != -1);
+#else // __MINGW32__
+  /* no-op on windows */
+  return false;
+#endif
+}
+
+
 static int After(eio_req *req) {
   HandleScope scope;
 
@@ -100,6 +111,8 @@ static int After(eio_req *req) {
         break;
 
       case EIO_OPEN:
+        SetCloseOnExec(req->result);
+        /* pass thru */
       case EIO_SENDFILE:
         argv[1] = Integer::New(req->result);
         break;
@@ -621,6 +634,7 @@ static Handle<Value> Open(const Arguments& args) {
     ASYNC_CALL(open, args[3], *path, flags, mode)
   } else {
     int fd = open(*path, flags, mode);
+    SetCloseOnExec(fd);
     if (fd < 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
     return scope.Close(Integer::New(fd));
   }

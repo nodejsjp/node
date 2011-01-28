@@ -98,7 +98,7 @@ Allocates a new buffer containing the given `str`.
 
 Writes `string` to the buffer at `offset` using the given encoding. Returns
 number of octets written.  If `buffer` did not contain enough space to fit
-the entire string it will write a partial amount of the string. In the case
+the entire string, it will write a partial amount of the string. In the case
 of `'utf8'` encoding, the method will not write partial characters.
 
 -->
