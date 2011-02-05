@@ -745,35 +745,31 @@ static MaybeObject* Runtime_GetOwnProperty(Arguments args) {
   if (!result.IsProperty()) {
     return Heap::undefined_value();
   }
-  if (result.type() == CALLBACKS) {
-    Object* structure = result.GetCallbackObject();
-    if (structure->IsProxy() || structure->IsAccessorInfo()) {
-      // Property that is internally implemented as a callback or
-      // an API defined callback.
-      Object* value;
-      { MaybeObject* maybe_value = obj->GetPropertyWithCallback(
-            *obj, structure, *name, result.holder());
-        if (!maybe_value->ToObject(&value)) return maybe_value;
-      }
-      elms->set(IS_ACCESSOR_INDEX, Heap::false_value());
-      elms->set(VALUE_INDEX, value);
-      elms->set(WRITABLE_INDEX, Heap::ToBoolean(!result.IsReadOnly()));
-    } else if (structure->IsFixedArray()) {
-      // __defineGetter__/__defineSetter__ callback.
-      elms->set(IS_ACCESSOR_INDEX, Heap::true_value());
-      elms->set(GETTER_INDEX, FixedArray::cast(structure)->get(0));
-      elms->set(SETTER_INDEX, FixedArray::cast(structure)->get(1));
-    } else {
-      return Heap::undefined_value();
-    }
-  } else {
-    elms->set(IS_ACCESSOR_INDEX, Heap::false_value());
-    elms->set(VALUE_INDEX, result.GetLazyValue());
-    elms->set(WRITABLE_INDEX, Heap::ToBoolean(!result.IsReadOnly()));
-  }
 
   elms->set(ENUMERABLE_INDEX, Heap::ToBoolean(!result.IsDontEnum()));
   elms->set(CONFIGURABLE_INDEX, Heap::ToBoolean(!result.IsDontDelete()));
+
+  bool is_js_accessor = (result.type() == CALLBACKS) &&
+                        (result.GetCallbackObject()->IsFixedArray());
+
+  if (is_js_accessor) {
+    // __defineGetter__/__defineSetter__ callback.
+    FixedArray* structure = FixedArray::cast(result.GetCallbackObject());
+    elms->set(IS_ACCESSOR_INDEX, Heap::true_value());
+    elms->set(GETTER_INDEX, structure->get(0));
+    elms->set(SETTER_INDEX, structure->get(1));
+  } else {
+    elms->set(IS_ACCESSOR_INDEX, Heap::false_value());
+    elms->set(WRITABLE_INDEX, Heap::ToBoolean(!result.IsReadOnly()));
+
+    PropertyAttributes attrs;
+    Object* value;
+    { MaybeObject* maybe_value = obj->GetProperty(*obj, &result, *name, &attrs);
+      if (!maybe_value->ToObject(&value)) return maybe_value;
+    }
+    elms->set(VALUE_INDEX, value);
+  }
+
   return *desc;
 }
 
@@ -6944,15 +6940,9 @@ static MaybeObject* Runtime_CompileForOnStackReplacement(Arguments args) {
   Handle<Code> check_code = check_stub.GetCode();
   Handle<Code> replacement_code(
       Builtins::builtin(Builtins::OnStackReplacement));
-  // Iterate the unoptimized code and revert all the patched stack checks.
-  for (RelocIterator it(*unoptimized, RelocInfo::kCodeTargetMask);
-       !it.done();
-       it.next()) {
-    RelocInfo* rinfo = it.rinfo();
-    if (rinfo->target_address() == replacement_code->entry()) {
-      Deoptimizer::RevertStackCheckCode(rinfo, *check_code);
-    }
-  }
+  Deoptimizer::RevertStackCheckCode(*unoptimized,
+                                    *check_code,
+                                    *replacement_code);
 
   // Allow OSR only at nesting level zero again.
   unoptimized->set_allow_osr_at_loop_nesting_level(0);
@@ -7049,7 +7039,7 @@ static MaybeObject* Runtime_PushCatchContext(Arguments args) {
 }
 
 
-static MaybeObject* Runtime_LookupContext(Arguments args) {
+static MaybeObject* Runtime_DeleteContextSlot(Arguments args) {
   HandleScope scope;
   ASSERT(args.length() == 2);
 
@@ -7059,16 +7049,31 @@ static MaybeObject* Runtime_LookupContext(Arguments args) {
   int index;
   PropertyAttributes attributes;
   ContextLookupFlags flags = FOLLOW_CHAINS;
-  Handle<Object> holder =
-      context->Lookup(name, flags, &index, &attributes);
+  Handle<Object> holder = context->Lookup(name, flags, &index, &attributes);
 
-  if (index < 0 && !holder.is_null()) {
-    ASSERT(holder->IsJSObject());
-    return *holder;
+  // If the slot was not found the result is true.
+  if (holder.is_null()) {
+    return Heap::true_value();
   }
 
-  // No intermediate context found. Use global object by default.
-  return Top::context()->global();
+  // If the slot was found in a context, it should be DONT_DELETE.
+  if (holder->IsContext()) {
+    return Heap::false_value();
+  }
+
+  // The slot was found in a JSObject, either a context extension object,
+  // the global object, or an arguments object.  Try to delete it
+  // (respecting DONT_DELETE).  For consistency with V8's usual behavior,
+  // which allows deleting all parameters in functions that mention
+  // 'arguments', we do this even for the case of slots found on an
+  // arguments object.  The slot was found on an arguments object if the
+  // index is non-negative.
+  Handle<JSObject> object = Handle<JSObject>::cast(holder);
+  if (index >= 0) {
+    return object->DeleteElement(index, JSObject::NORMAL_DELETION);
+  } else {
+    return object->DeleteProperty(*name, JSObject::NORMAL_DELETION);
+  }
 }
 
 
@@ -7141,8 +7146,7 @@ static ObjectPair LoadContextSlotHelper(Arguments args, bool throw_error) {
   int index;
   PropertyAttributes attributes;
   ContextLookupFlags flags = FOLLOW_CHAINS;
-  Handle<Object> holder =
-      context->Lookup(name, flags, &index, &attributes);
+  Handle<Object> holder = context->Lookup(name, flags, &index, &attributes);
 
   // If the index is non-negative, the slot has been found in a local
   // variable or a parameter. Read it from the context object or the
@@ -7209,8 +7213,7 @@ static MaybeObject* Runtime_StoreContextSlot(Arguments args) {
   int index;
   PropertyAttributes attributes;
   ContextLookupFlags flags = FOLLOW_CHAINS;
-  Handle<Object> holder =
-      context->Lookup(name, flags, &index, &attributes);
+  Handle<Object> holder = context->Lookup(name, flags, &index, &attributes);
 
   if (index >= 0) {
     if (holder->IsContext()) {
@@ -10744,6 +10747,45 @@ static MaybeObject* Runtime_GetFromCache(Arguments args) {
 
   return *value;
 }
+
+
+static MaybeObject* Runtime_NewMessageObject(Arguments args) {
+  HandleScope scope;
+  CONVERT_ARG_CHECKED(String, type, 0);
+  CONVERT_ARG_CHECKED(JSArray, arguments, 1);
+  return *Factory::NewJSMessageObject(type,
+                                      arguments,
+                                      0,
+                                      0,
+                                      Factory::undefined_value(),
+                                      Factory::undefined_value(),
+                                      Factory::undefined_value());
+}
+
+
+static MaybeObject* Runtime_MessageGetType(Arguments args) {
+  CONVERT_CHECKED(JSMessageObject, message, args[0]);
+  return message->type();
+}
+
+
+static MaybeObject* Runtime_MessageGetArguments(Arguments args) {
+  CONVERT_CHECKED(JSMessageObject, message, args[0]);
+  return message->arguments();
+}
+
+
+static MaybeObject* Runtime_MessageGetStartPosition(Arguments args) {
+  CONVERT_CHECKED(JSMessageObject, message, args[0]);
+  return Smi::FromInt(message->start_position());
+}
+
+
+static MaybeObject* Runtime_MessageGetScript(Arguments args) {
+  CONVERT_CHECKED(JSMessageObject, message, args[0]);
+  return message->script();
+}
+
 
 #ifdef DEBUG
 // ListNatives is ONLY used by the fuzz-natives.js in debug mode

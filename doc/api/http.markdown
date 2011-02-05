@@ -1032,9 +1032,15 @@ chunked, this will send the terminating `'0\r\n\r\n'`.
 If `data` is specified, it is equivalent to calling `request.write(data, encoding)`
 followed by `request.end()`.
 
+<<<<<<< HEAD
 -->
 `data` が指定された場合は、
 `request.write(data, encoding)` に続けて `request.end()` を呼び出すのと等価です。
+=======
+### request.abort()
+
+Aborts a request.  (New since v0.3.80.)
+>>>>>>> master
 
 
 ## http.ClientResponse

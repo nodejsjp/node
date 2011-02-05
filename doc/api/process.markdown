@@ -146,6 +146,17 @@ Example: the definition of `console.log`
     };
 
 
+### process.stderr
+
+<!--
+
+A writable stream to stderr. Writes on this stream are blocking.
+
+-->
+`stderr` に対する `Writable Stream` です。
+このストリームへの書き込みはブロックします。
+
+
 ### process.stdin
 
 <!--

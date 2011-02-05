@@ -23,10 +23,14 @@ var server = https.createServer(options, function (req, res) {
   console.log('got request');
   res.writeHead(200, { 'content-type': 'text/plain' });
   res.end(body);
-})
+});
 
 var count = 0;
 var gotResEnd = false;
+
+var timeout = setTimeout(function() {
+  process.exit(1);
+}, 10*1000);
 
 server.listen(common.PORT, function () {
   https.get({ port: common.PORT }, function(res) {
@@ -35,6 +39,10 @@ server.listen(common.PORT, function () {
     res.on('data', function(d) {
       process.stdout.write('.');
       count += d.length;
+      res.pause();
+      process.nextTick(function () {
+        res.resume();
+      });
     });
 
     res.on('end', function(d) {
@@ -43,6 +51,8 @@ server.listen(common.PORT, function () {
       console.log("     got: ", count);
       server.close();
       gotResEnd = true;
+
+      clearTimeout(timeout);
     });
   });
 });

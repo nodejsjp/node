@@ -1,9 +1,9 @@
-## dgram
+## UDP / Datagram Sockets
 
 <!--
 
 Datagram sockets are available through `require('dgram')`.  Datagrams are most commonly
-handled as IP/UDP messages, but they can also be used over Unix domain sockets.
+handled as IP/UDP messages but they can also be used over Unix domain sockets.
 
 -->
 データグラムソケットは `require('dgram')` で利用可能になります。
@@ -294,3 +294,64 @@ systems is 64.
 -->
 `setTTL()` の引数は 1 から 255 のホップ数でです。ほとんどのシステムでデフォルトは 64 です。
 
+### dgram.setMulticastTTL(ttl)
+
+<!--
+
+Sets the `IP_MULTICAST_TTL` socket option.  TTL stands for "Time to Live," but in this
+context it specifies the number of IP hops that a packet is allowed to go through,
+specifically for multicast traffic.  Each router or gateway that forwards a packet
+decrements the TTL. If the TTL is decremented to 0 by a router, it will not be forwarded.
+
+The argument to `setMulticastTTL()` is a number of hops between 0 and 255.  The default on most
+systems is 64.
+
+-->
+`IP_MULTICAST_TTL` ソケットオプションを設定します。
+TTL は「生存期間」を表しますが、この文脈では特にマルチキャストのトラフィックにおいてパケットが通過できるIPホップの数を指定します。
+それぞれのルーターまたはゲートウェイは、パケットを転送する際に TTL をデクリメントします。
+TTL がルーターによって 0 までデクリメントされると、それは転送されません。
+`setMulticastTTL()` の引数はホップを表す数値で、0 から 255 の間です。
+ほとんどのシステムでデフォルトは 64 です。
+
+### dgram.setMulticastLoopback(flag)
+
+<!--
+
+Sets or clears the `IP_MULTICAST_LOOP` socket option.  When this option is set, multicast
+packets will also be received on the local interface.
+
+-->
+`IP_MULTICAST_LOOP` ソケットオプションを設定またはクリアします。
+このオプションが設定されると、マルチキャストのパケットはローカルインタフェースでも受信できるようになります。
+
+### dgram.addMembership(multicastAddress, [multicastInterface])
+
+<!--
+
+Tells the kernel to join a multicast group with `IP_ADD_MEMBERSHIP` socket option.
+
+If `multicastAddress` is not specified, the OS will try to add membership to all valid
+interfaces.
+
+-->
+`IP_ADD_MEMBERSHIP` ソケットオプションを設定し、マルチキャストグループに参加することをカーネルに伝えます。
+`multicastAddress` が指定されなかった場合は、全ての妥当なインタフェースをメンバーシップに加えようとします。
+
+### dgram.dropMembership(multicastAddress, [multicastInterface])
+
+<!--
+
+Opposite of `dropMembership` - tells the kernel to leave a multicast group with
+`IP_DROP_MEMBERSHIP` socket option. This is automatically called by the kernel
+when the socket is closed or process terminates, so most apps will never need to call
+this.
+
+If `multicastAddress` is not specified, the OS will try to add membership to all valid
+interfaces.
+
+-->
+`addMembership` の反対です - `IP_DROP_MEMBERSHIP` ソケットオプションによって、マルチキャストグループから抜けることをカーネルに伝えます。
+これはソケットのクローズ時やプロセスの終了時にカーネルによって自動的に呼び出されるため、ほとんどのアプリケーションはこれを呼び出す必要がありません。
+
+`multicastAddress` が指定されなかった場合は、全ての妥当なインタフェースをメンバーシップから削除しようとします。

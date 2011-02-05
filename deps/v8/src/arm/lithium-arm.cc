@@ -655,16 +655,16 @@ LInstruction* LChunkBuilder::AssignEnvironment(LInstruction* instr) {
 
 LInstruction* LChunkBuilder::SetInstructionPendingDeoptimizationEnvironment(
     LInstruction* instr, int ast_id) {
-  ASSERT(instructions_pending_deoptimization_environment_ == NULL);
+  ASSERT(instruction_pending_deoptimization_environment_ == NULL);
   ASSERT(pending_deoptimization_ast_id_ == AstNode::kNoNumber);
-  instructions_pending_deoptimization_environment_ = instr;
+  instruction_pending_deoptimization_environment_ = instr;
   pending_deoptimization_ast_id_ = ast_id;
   return instr;
 }
 
 
 void LChunkBuilder::ClearInstructionPendingDeoptimizationEnvironment() {
-  instructions_pending_deoptimization_environment_ = NULL;
+  instruction_pending_deoptimization_environment_ = NULL;
   pending_deoptimization_ast_id_ = AstNode::kNoNumber;
 }
 
@@ -819,6 +819,7 @@ LInstruction* LChunkBuilder::DoArithmeticT(Token::Value op,
   LArithmeticT* result = new LArithmeticT(op, left_operand, right_operand);
   return MarkAsCall(DefineFixed(result, r0), instr);
 }
+
 
 void LChunkBuilder::DoBasicBlock(HBasicBlock* block, HBasicBlock* next_block) {
   ASSERT(is_building());
@@ -1018,11 +1019,8 @@ LInstruction* LChunkBuilder::DoTest(HTest* instr) {
       HIsObject* compare = HIsObject::cast(v);
       ASSERT(compare->value()->representation().IsTagged());
 
-      LOperand* temp1 = TempRegister();
-      LOperand* temp2 = TempRegister();
-      return new LIsObjectAndBranch(UseRegisterAtStart(compare->value()),
-                                    temp1,
-                                    temp2);
+      LOperand* temp = TempRegister();
+      return new LIsObjectAndBranch(UseRegisterAtStart(compare->value()), temp);
     } else if (v->IsCompareJSObjectEq()) {
       HCompareJSObjectEq* compare = HCompareJSObjectEq::cast(v);
       return new LCmpJSObjectEqAndBranch(UseRegisterAtStart(compare->left()),
@@ -1030,8 +1028,8 @@ LInstruction* LChunkBuilder::DoTest(HTest* instr) {
     } else if (v->IsInstanceOf()) {
       HInstanceOf* instance_of = HInstanceOf::cast(v);
       LInstruction* result =
-          new LInstanceOfAndBranch(Use(instance_of->left()),
-                                   Use(instance_of->right()));
+          new LInstanceOfAndBranch(UseFixed(instance_of->left(), r0),
+                                   UseFixed(instance_of->right(), r1));
       return MarkAsCall(result, instr);
     } else if (v->IsTypeofIs()) {
       HTypeofIs* typeof_is = HTypeofIs::cast(v);
@@ -1133,7 +1131,7 @@ LInstruction* LChunkBuilder::DoUnaryMathOperation(HUnaryMathOperation* instr) {
     case kMathAbs:
       return AssignEnvironment(AssignPointerMap(DefineSameAsFirst(result)));
     case kMathFloor:
-      return AssignEnvironment(DefineAsRegister(result));
+      return AssignEnvironment(AssignPointerMap(DefineAsRegister(result)));
     case kMathSqrt:
       return DefineSameAsFirst(result);
     case kMathRound:
@@ -1313,8 +1311,8 @@ LInstruction* LChunkBuilder::DoSub(HSub* instr) {
   if (instr->representation().IsInteger32()) {
     ASSERT(instr->left()->representation().IsInteger32());
     ASSERT(instr->right()->representation().IsInteger32());
-    LOperand* left = UseRegisterAtStart(instr->LeastConstantOperand());
-    LOperand* right = UseOrConstantAtStart(instr->MostConstantOperand());
+    LOperand* left = UseRegisterAtStart(instr->left());
+    LOperand* right = UseOrConstantAtStart(instr->right());
     LSubI* sub = new LSubI(left, right);
     LInstruction* result = DefineSameAsFirst(sub);
     if (instr->CheckFlag(HValue::kCanOverflow)) {
@@ -1404,7 +1402,7 @@ LInstruction* LChunkBuilder::DoIsObject(HIsObject* instr) {
   ASSERT(instr->value()->representation().IsTagged());
   LOperand* value = UseRegisterAtStart(instr->value());
 
-  return DefineAsRegister(new LIsObject(value, TempRegister()));
+  return DefineAsRegister(new LIsObject(value));
 }
 
 
@@ -1462,6 +1460,13 @@ LInstruction* LChunkBuilder::DoValueOf(HValueOf* instr) {
 LInstruction* LChunkBuilder::DoBoundsCheck(HBoundsCheck* instr) {
   return AssignEnvironment(new LBoundsCheck(UseRegisterAtStart(instr->index()),
                                             UseRegister(instr->length())));
+}
+
+
+LInstruction* LChunkBuilder::DoAbnormalExit(HAbnormalExit* instr) {
+  // The control instruction marking the end of a block that completed
+  // abruptly (e.g., threw an exception).  There is nothing specific to do.
+  return NULL;
 }
 
 
@@ -1604,7 +1609,14 @@ LInstruction* LChunkBuilder::DoLoadGlobal(HLoadGlobal* instr) {
 
 
 LInstruction* LChunkBuilder::DoStoreGlobal(HStoreGlobal* instr) {
-  return new LStoreGlobal(UseRegisterAtStart(instr->value()));
+  if (instr->check_hole_value()) {
+    LOperand* temp = TempRegister();
+    LOperand* value = UseRegister(instr->value());
+    return AssignEnvironment(new LStoreGlobal(value, temp));
+  } else {
+    LOperand* value = UseRegisterAtStart(instr->value());
+    return new LStoreGlobal(value, NULL);
+  }
 }
 
 
@@ -1832,7 +1844,7 @@ LInstruction* LChunkBuilder::DoSimulate(HSimulate* instr) {
   if (pending_deoptimization_ast_id_ == instr->ast_id()) {
     LInstruction* result = new LLazyBailout;
     result = AssignEnvironment(result);
-    instructions_pending_deoptimization_environment_->
+    instruction_pending_deoptimization_environment_->
         set_deoptimization_environment(result->environment());
     ClearInstructionPendingDeoptimizationEnvironment();
     return result;

@@ -215,17 +215,28 @@ bool IsEqualString(void* first, void* second) {
   return (*h1)->Equals(*h2);
 }
 
-bool IsEqualSmi(void* first, void* second) {
-  ASSERT((*reinterpret_cast<Smi**>(first))->IsSmi());
-  ASSERT((*reinterpret_cast<Smi**>(second))->IsSmi());
-  Handle<Smi> h1(reinterpret_cast<Smi**>(first));
-  Handle<Smi> h2(reinterpret_cast<Smi**>(second));
-  return (*h1)->value() == (*h2)->value();
+
+bool IsEqualNumber(void* first, void* second) {
+  ASSERT((*reinterpret_cast<Object**>(first))->IsNumber());
+  ASSERT((*reinterpret_cast<Object**>(second))->IsNumber());
+
+  Handle<Object> h1(reinterpret_cast<Object**>(first));
+  Handle<Object> h2(reinterpret_cast<Object**>(second));
+  if (h1->IsSmi()) {
+    return h2->IsSmi() && *h1 == *h2;
+  }
+  if (h2->IsSmi()) return false;
+  Handle<HeapNumber> n1 = Handle<HeapNumber>::cast(h1);
+  Handle<HeapNumber> n2 = Handle<HeapNumber>::cast(h2);
+  ASSERT(isfinite(n1->value()));
+  ASSERT(isfinite(n2->value()));
+  return n1->value() == n2->value();
 }
+
 
 void ObjectLiteral::CalculateEmitStore() {
   HashMap properties(&IsEqualString);
-  HashMap elements(&IsEqualSmi);
+  HashMap elements(&IsEqualNumber);
   for (int i = this->properties()->length() - 1; i >= 0; i--) {
     ObjectLiteral::Property* property = this->properties()->at(i);
     Literal* literal = property->key();
@@ -238,16 +249,19 @@ void ObjectLiteral::CalculateEmitStore() {
     uint32_t hash;
     HashMap* table;
     void* key;
-    uint32_t index;
     if (handle->IsSymbol()) {
       Handle<String> name(String::cast(*handle));
-      ASSERT(!name->AsArrayIndex(&index));
-      key = name.location();
-      hash = name->Hash();
-      table = &properties;
-    } else if (handle->ToArrayIndex(&index)) {
+      if (name->AsArrayIndex(&hash)) {
+        Handle<Object> key_handle = Factory::NewNumberFromUint(hash);
+        key = key_handle.location();
+        table = &elements;
+      } else {
+        key = name.location();
+        hash = name->Hash();
+        table = &properties;
+      }
+    } else if (handle->ToArrayIndex(&hash)) {
       key = handle.location();
-      hash = index;
       table = &elements;
     } else {
       ASSERT(handle->IsNumber());
@@ -514,6 +528,8 @@ void Property::RecordTypeFeedback(TypeFeedbackOracle* oracle) {
   if (key()->IsPropertyName()) {
     if (oracle->LoadIsBuiltin(this, Builtins::LoadIC_ArrayLength)) {
       is_array_length_ = true;
+    } else if (oracle->LoadIsBuiltin(this, Builtins::LoadIC_StringLength)) {
+      is_string_length_ = true;
     } else if (oracle->LoadIsBuiltin(this,
                                      Builtins::LoadIC_FunctionPrototype)) {
       is_function_prototype_ = true;
@@ -570,7 +586,14 @@ static bool CanCallWithoutIC(Handle<JSFunction> target, int arity) {
 
 
 bool Call::ComputeTarget(Handle<Map> type, Handle<String> name) {
-  holder_ = Handle<JSObject>::null();
+  if (check_type_ == RECEIVER_MAP_CHECK) {
+    // For primitive checks the holder is set up to point to the
+    // corresponding prototype object, i.e. one step of the algorithm
+    // below has been already performed.
+    // For non-primitive checks we clear it to allow computing targets
+    // for polymorphic calls.
+    holder_ = Handle<JSObject>::null();
+  }
   while (true) {
     LookupResult lookup;
     type->LookupInDescriptors(NULL, *name, &lookup);
@@ -640,27 +663,20 @@ void Call::RecordTypeFeedback(TypeFeedbackOracle* oracle) {
       map = receiver_types_->at(0);
     } else {
       ASSERT(check_type_ != RECEIVER_MAP_CHECK);
-      map = Handle<Map>(
-          oracle->GetPrototypeForPrimitiveCheck(check_type_)->map());
+      holder_ = Handle<JSObject>(
+          oracle->GetPrototypeForPrimitiveCheck(check_type_));
+      map = Handle<Map>(holder_->map());
     }
     is_monomorphic_ = ComputeTarget(map, name);
   }
 }
 
 
-void BinaryOperation::RecordTypeFeedback(TypeFeedbackOracle* oracle) {
-  TypeInfo left = oracle->BinaryType(this, TypeFeedbackOracle::LEFT);
-  TypeInfo right = oracle->BinaryType(this, TypeFeedbackOracle::RIGHT);
-  is_smi_only_ = left.IsSmi() && right.IsSmi();
-}
-
-
 void CompareOperation::RecordTypeFeedback(TypeFeedbackOracle* oracle) {
-  TypeInfo left = oracle->CompareType(this, TypeFeedbackOracle::LEFT);
-  TypeInfo right = oracle->CompareType(this, TypeFeedbackOracle::RIGHT);
-  if (left.IsSmi() && right.IsSmi()) {
+  TypeInfo info = oracle->CompareType(this);
+  if (info.IsSmi()) {
     compare_type_ = SMI_ONLY;
-  } else if (left.IsNonPrimitive() && right.IsNonPrimitive()) {
+  } else if (info.IsNonPrimitive()) {
     compare_type_ = OBJECT_ONLY;
   } else {
     ASSERT(compare_type_ == NONE);

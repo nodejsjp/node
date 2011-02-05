@@ -297,7 +297,7 @@ class HGraph: public HSubgraph {
 
   CompilationInfo* info() const { return info_; }
 
-  bool AllowAggressiveOptimizations() const;
+  bool AllowCodeMotion() const;
 
   const ZoneList<HBasicBlock*>* blocks() const { return &blocks_; }
   const ZoneList<HPhi*>* phi_list() const { return phi_list_; }
@@ -307,6 +307,7 @@ class HGraph: public HSubgraph {
   void InitializeInferredTypes();
   void InsertTypeConversions();
   void InsertRepresentationChanges();
+  void ComputeMinusZeroChecks();
   bool ProcessArgumentsObject();
   void EliminateRedundantPhis();
   void Canonicalize();

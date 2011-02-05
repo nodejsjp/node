@@ -253,6 +253,7 @@ bool HValue::Equals(HValue* other) const {
   if (other->opcode() != opcode()) return false;
   if (!other->representation().Equals(representation())) return false;
   if (!other->type_.Equals(type_)) return false;
+  if (other->flags() != flags()) return false;
   if (OperandCount() != other->OperandCount()) return false;
   for (int i = 0; i < OperandCount(); ++i) {
     if (OperandAt(i)->id() != other->OperandAt(i)->id()) return false;
@@ -490,7 +491,7 @@ void HInstruction::InsertAfter(HInstruction* previous) {
 
 
 #ifdef DEBUG
-void HInstruction::Verify() const {
+void HInstruction::Verify() {
   // Verify that input operands are defined before use.
   HBasicBlock* cur_block = block();
   for (int i = 0; i < OperandCount(); ++i) {
@@ -517,6 +518,11 @@ void HInstruction::Verify() const {
   if (HasSideEffects() && !IsOsrEntry()) {
     ASSERT(next()->IsSimulate());
   }
+
+  // Verify that instructions that can be eliminated by GVN have overridden
+  // HValue::DataEquals.  The default implementation is UNREACHABLE.  We
+  // don't actually care whether DataEquals returns true or false here.
+  if (CheckFlag(kUseGVN)) DataEquals(this);
 }
 #endif
 
@@ -524,7 +530,7 @@ void HInstruction::Verify() const {
 HCall::HCall(int count) : arguments_(Zone::NewArray<HValue*>(count), count) {
   for (int i = 0; i < count; ++i) arguments_[i] = NULL;
   set_representation(Representation::Tagged());
-  SetFlagMask(AllSideEffects());
+  SetAllSideEffects();
 }
 
 
@@ -1119,10 +1125,10 @@ void HCompare::PrintDataTo(StringStream* stream) const {
 void HCompare::SetInputRepresentation(Representation r) {
   input_representation_ = r;
   if (r.IsTagged()) {
-    SetFlagMask(AllSideEffects());
+    SetAllSideEffects();
     ClearFlag(kUseGVN);
   } else {
-    ClearFlagMask(AllSideEffects());
+    ClearAllSideEffects();
     SetFlag(kUseGVN);
   }
 }
@@ -1388,7 +1394,7 @@ HValue* HAdd::EnsureAndPropagateNotMinusZero(BitVector* visited) {
 // Node-specific verification code is only included in debug mode.
 #ifdef DEBUG
 
-void HPhi::Verify() const {
+void HPhi::Verify() {
   ASSERT(OperandCount() == block()->predecessors()->length());
   for (int i = 0; i < OperandCount(); ++i) {
     HValue* value = OperandAt(i);
@@ -1400,49 +1406,49 @@ void HPhi::Verify() const {
 }
 
 
-void HSimulate::Verify() const {
+void HSimulate::Verify() {
   HInstruction::Verify();
   ASSERT(HasAstId());
 }
 
 
-void HBoundsCheck::Verify() const {
+void HBoundsCheck::Verify() {
   HInstruction::Verify();
   ASSERT(HasNoUses());
 }
 
 
-void HCheckSmi::Verify() const {
+void HCheckSmi::Verify() {
   HInstruction::Verify();
   ASSERT(HasNoUses());
 }
 
 
-void HCheckNonSmi::Verify() const {
+void HCheckNonSmi::Verify() {
   HInstruction::Verify();
   ASSERT(HasNoUses());
 }
 
 
-void HCheckInstanceType::Verify() const {
+void HCheckInstanceType::Verify() {
   HInstruction::Verify();
   ASSERT(HasNoUses());
 }
 
 
-void HCheckMap::Verify() const {
+void HCheckMap::Verify() {
   HInstruction::Verify();
   ASSERT(HasNoUses());
 }
 
 
-void HCheckFunction::Verify() const {
+void HCheckFunction::Verify() {
   HInstruction::Verify();
   ASSERT(HasNoUses());
 }
 
 
-void HCheckPrototypeMaps::Verify() const {
+void HCheckPrototypeMaps::Verify() {
   HInstruction::Verify();
   ASSERT(HasNoUses());
 }

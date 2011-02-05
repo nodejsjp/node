@@ -157,7 +157,7 @@ would be to wait a second and the try again. This can be done with
 これは次のようになります
 
     server.on('error', function (e) {
-      if (e.errno == require('constants').EADDRINUSE) {
+      if (e.code == 'EADDRINUSE') {
         console.log('Address in use, retrying...');
         setTimeout(function () {
           server.close();
@@ -367,6 +367,38 @@ event.
 -->
 `callback` 引数は 'connect' イベントのリスナに加えられます。
 
+
+#### socket.bufferSize
+
+<!--
+
+`net.Socket` has the property that `socket.write()` always works. This is to
+help users get up an running quickly. The computer cannot necessarily keep up
+with the amount of data that is written to a socket - the network connection simply
+might be too slow. Node will internally queue up the data written to a socket and
+send it out over the wire when it is possible. (Internally it is polling on
+the socket's file descriptor for being writable).
+
+The consequence of this internal buffering is that memory may grow. This
+property shows the number of characters currently buffered to be written.
+(Number of characters is approximately equal to the number of bytes to be
+written, but the buffer may contain strings, and the strings are lazily
+encoded, so the exact number of bytes is not known.)
+
+Users who experience large or growing `bufferSize` should attempt to
+"throttle" the data flows in their program with `pause()` and resume()`.
+
+-->
+`net.Socket` には、`socket.write()` と常に協調するプロパティがあります。
+これはユーザが実行速度を向上させる手助けになります。
+コンピュータはソケットに書き込まれるデータ量と必ずしも同じ速度で進むわけではありません － ネットワーク接続は、単純に遅すぎます。
+Node は、ソケットに書き込まれるデータを内部のキューに入れ、可能になった時にワイヤ上に送信します (内部ではソケットのファイル記述子が書き込み可能になるのをポーリングします)。
+
+内部的なバッファリングの結果、メモリ消費が増大するかもしれません。
+このプロパティは、現在書き込みのためにバッファリングされている文字数を示します。
+(文字数は書き込まれるバイト数とほぼ同じですが、バッファが文字列を含んでいる場合、文字列は遅延的にエンコードされるため、正確なバイト数は分かっていません)
+
+大きな、あるいは増大する `bufferSize` を体験したユーザは、そのプログラムで `pause()` および `resume()` を使ってデータフローを「抑えよう」としなければなりません。
 
 #### socket.setEncoding(encoding=null)
 

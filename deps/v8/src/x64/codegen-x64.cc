@@ -206,7 +206,7 @@ void CodeGenerator::Generate(CompilationInfo* info) {
     frame_->AllocateStackSlots();
 
     // Allocate the local context if needed.
-    int heap_slots = scope()->num_heap_slots();
+    int heap_slots = scope()->num_heap_slots() - Context::MIN_CONTEXT_SLOTS;
     if (heap_slots > 0) {
       Comment cmnt(masm_, "[ allocate local context");
       // Allocate local context.
@@ -6969,10 +6969,12 @@ void CodeGenerator::GenerateMathPow(ZoneList<Expression*>* args) {
   __ j(not_equal, &not_minus_half);
 
   // Calculates reciprocal of square root.
-  // Note that 1/sqrt(x) = sqrt(1/x))
-  __ divsd(xmm3, xmm0);
-  __ movsd(xmm1, xmm3);
+  // sqrtsd returns -0 when input is -0.  ECMA spec requires +0.
+  __ xorpd(xmm1, xmm1);
+  __ addsd(xmm1, xmm0);
   __ sqrtsd(xmm1, xmm1);
+  __ divsd(xmm3, xmm1);
+  __ movsd(xmm1, xmm3);
   __ jmp(&allocate_return);
 
   // Test for 0.5.
@@ -6985,7 +6987,9 @@ void CodeGenerator::GenerateMathPow(ZoneList<Expression*>* args) {
   call_runtime.Branch(not_equal);
 
   // Calculates square root.
-  __ movsd(xmm1, xmm0);
+  // sqrtsd returns -0 when input is -0.  ECMA spec requires +0.
+  __ xorpd(xmm1, xmm1);
+  __ addsd(xmm1, xmm0);
   __ sqrtsd(xmm1, xmm1);
 
   JumpTarget done;
@@ -7235,19 +7239,13 @@ void CodeGenerator::VisitUnaryOperation(UnaryOperation* node) {
         return;
 
       } else if (slot != NULL && slot->type() == Slot::LOOKUP) {
-        // Call the runtime to look up the context holding the named
+        // Call the runtime to delete from the context holding the named
         // variable.  Sync the virtual frame eagerly so we can push the
         // arguments directly into place.
         frame_->SyncRange(0, frame_->element_count() - 1);
         frame_->EmitPush(rsi);
         frame_->EmitPush(variable->name());
-        Result context = frame_->CallRuntime(Runtime::kLookupContext, 2);
-        ASSERT(context.is_register());
-        frame_->EmitPush(context.reg());
-        context.Unuse();
-        frame_->EmitPush(variable->name());
-        Result answer = frame_->InvokeBuiltin(Builtins::DELETE,
-                                              CALL_FUNCTION, 2);
+        Result answer = frame_->CallRuntime(Runtime::kDeleteContextSlot, 2);
         frame_->Push(&answer);
         return;
       }

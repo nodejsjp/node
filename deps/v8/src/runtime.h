@@ -284,7 +284,7 @@ namespace internal {
   F(NewContext, 1, 1) \
   F(PushContext, 1, 1) \
   F(PushCatchContext, 1, 1) \
-  F(LookupContext, 2, 1) \
+  F(DeleteContextSlot, 2, 1) \
   F(LoadContextSlot, 2, 2) \
   F(LoadContextSlotNoReferenceError, 2, 2) \
   F(StoreContextSlot, 3, 1) \
@@ -309,6 +309,13 @@ namespace internal {
   F(LocalKeys, 1, 1) \
   /* Cache suport */ \
   F(GetFromCache, 2, 1) \
+  \
+  /* Message objects */ \
+  F(NewMessageObject, 2, 1) \
+  F(MessageGetType, 1, 1) \
+  F(MessageGetArguments, 1, 1) \
+  F(MessageGetStartPosition, 1, 1) \
+  F(MessageGetScript, 1, 1) \
   \
   /* Pseudo functions - handled as macros by parser */ \
   F(IS_VAR, 1, 1)
