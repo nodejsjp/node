@@ -1078,6 +1078,10 @@ enum encoding ParseEncoding(Handle<Value> encoding_v, enum encoding _default) {
     return ASCII;
   } else if (strcasecmp(*encoding, "base64") == 0) {
     return BASE64;
+  } else if (strcasecmp(*encoding, "ucs2") == 0) {
+    return UCS2;
+  } else if (strcasecmp(*encoding, "ucs-2") == 0) {
+    return UCS2;
   } else if (strcasecmp(*encoding, "binary") == 0) {
     return BINARY;
   } else if (strcasecmp(*encoding, "raw") == 0) {
@@ -1129,6 +1133,7 @@ ssize_t DecodeBytes(v8::Handle<v8::Value> val, enum encoding encoding) {
   Local<String> str = val->ToString();
 
   if (encoding == UTF8) return str->Utf8Length();
+  else if (encoding == UCS2) return str->Length() * 2;
 
   return str->Length();
 }
@@ -1324,17 +1329,37 @@ static Handle<Value> Cwd(const Arguments& args) {
 static Handle<Value> Umask(const Arguments& args){
   HandleScope scope;
   unsigned int old;
-  if(args.Length() < 1) {
+
+  if(args.Length() < 1 || args[0]->IsUndefined()) {
     old = umask(0);
     umask((mode_t)old);
-  }
-  else if(!args[0]->IsInt32()) {
+
+  } else if(!args[0]->IsInt32() && !args[0]->IsString()) {
     return ThrowException(Exception::TypeError(
-          String::New("argument must be an integer.")));
+          String::New("argument must be an integer or octal string.")));
+
+  } else {
+    int oct;
+    if(args[0]->IsInt32()) {
+      oct = args[0]->Uint32Value();
+    } else {
+      oct = 0;
+      String::Utf8Value str(args[0]);
+
+      // Parse the octal string.
+      for (int i = 0; i < str.length(); i++) {
+        char c = (*str)[i];
+        if (c > '7' || c < '0') {
+          return ThrowException(Exception::TypeError(
+                String::New("invalid octal string")));
+        }
+        oct *= 8;
+        oct += c - '0';
+      }
+    }
+    old = umask(static_cast<mode_t>(oct));
   }
-  else {
-    old = umask((mode_t)args[0]->Uint32Value());
-  }
+
   return scope.Close(Uint32::New(old));
 }
 
@@ -2032,7 +2057,9 @@ static void Load(int argc, char *argv[]) {
   Local<Object> global = v8::Context::GetCurrent()->Global();
   Local<Value> args[1] = { Local<Value>::New(process) };
 
+#ifdef HAVE_DTRACE
   InitDTrace(global);
+#endif
 
   f->Call(global, 1, args);
 

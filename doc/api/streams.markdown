@@ -259,6 +259,17 @@ Emitted when the underlying file descriptor has been closed.
 -->
 下層でファイル記述子がクローズされた時に生成されます。
 
+### Event: 'pipe'
+
+`function (src) { }`
+
+<!--
+
+Emitted when the stream is passed to a readable stream's pipe method.
+
+-->
+このストリームが読み込み可能ストリームの pipe メソッドに渡された時に生成されます。
+
 ### stream.writable
 
 <!--

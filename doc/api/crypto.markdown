@@ -283,26 +283,27 @@ This is the mirror of the signing object above.
 
 ### verifier.update(data)
 
+<<<<<<< HEAD
 <!--
 
-Updates the verifyer object with data.
+Updates the verifier object with data.
 This can be called many times with new data as it is streamed.
 
 -->
 検証オブジェクトをデータで更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
 
-### verifier.verify(public_key, signature, signature_format='binary')
+### verifier.verify(cert, signature, signature_format='binary')
 
 <!--
 
-Verifies the signed data by using the `public_key` which is a string containing
+Verifies the signed data by using the `cert` which is a string containing
 the PEM encoded public key, and `signature`, which is the previously calculates
 signature for the data, in the `signature_format` which can be `'binary'`, `'hex'` or `'base64'`.
 
 -->
-署名されたデータを `public_key` と `signature` で検証します。
-`public_key` は PEM でエンコードされた公開鍵を含む文字列です。
+署名されたデータを `cert` と `signature` で検証します。
+`cert` は PEM でエンコードされた公開鍵を含む文字列です。
 `signature` は先に計算したデータの署名で、
 その `signature_format` は `'binary'`、`'hex'`、または `'base64'` のいずれかです。
 

@@ -545,20 +545,118 @@ Example:
 This method must only be called once on a message and it must
 be called before `response.end()` is called.
 
+If you call `response.write()` or `response.end()` before calling this, the
+implicit/mutable headers will be calculated and call this function for you.
+
 -->
 このメソッドはメッセージごとに 1 回だけ呼び出されなくてはならず、
 `response.end()` の前に呼び出されなければなりません。
+
+もしこのメソッドが呼び出される前に `response.write()` または `response.end()` が呼ばれると、暗黙的で可変のヘッダが算出されてこの関数が呼び出されます。
+
+### response.statusCode
+
+<!--
+
+When using implicit headers (not calling `response.writeHead()` explicitly), this property
+controlls the status code that will be send to the client when the headers get
+flushed.
+
+-->
+(`response.writeHead()` が明示的に呼ばれないために) 暗黙的なヘッダが使われる場合、このプロパティはヘッダがフラッシュされる時にクライアントへ送信されるステータスコードを制御します。
+
+<!--
+
+Example:
+
+-->
+例:
+
+    response.statusCode = 404;
+
+### response.setHeader(name, value)
+
+<!--
+
+Sets a single header value for implicit headers.  If this header already exists
+in the to-be-sent headers, it's value will be replaced.  Use an array of strings
+here if you need to send multiple headers with the same name.
+
+-->
+暗黙的ヘッダのヘッダ値を設定します。
+送信されようとしているレスポンスヘッダにこのヘッダが既に含まれている場合、
+その値は置き換えられます。
+同じ名前で複数のヘッダを送信したい場合は文字列の配列を使ってください。
+
+<!--
+
+Example:
+
+-->
+例:
+
+    response.setHeader("Content-Type", "text/html");
+
+or
+
+    response.setHeader("Set-Cookie", ["type=ninja", "language=javascript"]);
+
+
+### response.getHeader(name)
+
+<!--
+
+Reads out a header that's already been queued but not sent to the client.  Note
+that the name is case insensitive.  This can only be called before headers get
+implicitly flushed.
+
+-->
+すでにキューに入れられているが未送信のヘッダを読み上げます．
+名前は大文字小文字を区別することに注意してください。
+これはヘッダが暗黙的にフラッシュされる前だけ呼び出すことができます。
+
+<!--
+
+Example:
+
+-->
+例:
+
+    var contentType = response.getHeader('content-type');
+
+### response.removeHeader(name)
+
+<!--
+
+Removes a header that's queued for implicit sending.
+
+-->
+暗黙的に送信するためキューに入れられたヘッダを削除します。
+
+<!--
+
+Example:
+
+-->
+例:
+
+    response.removeHeader("Content-Encoding");
+
 
 ### response.write(chunk, encoding='utf8')
 
 <!--
 
-This method must be called after `writeHead` was
-called. It sends a chunk of the response body. This method may
+If this method is called and `response.writeHead()` has not been called, it will
+switch to implicit header mode and flush the implicit headers.
+
+This sends a chunk of the response body. This method may
 be called multiple times to provide successive parts of the body.
 
 -->
-このメソッドは `writeHead` の後に呼び出されなければなりません。
+このメソッドが呼び出され、`response.writeHead()` が呼び出されなければ、
+暗黙的ヘッダモードに切り替わり、暗黙的ヘッダはフラッシュされます。
+
 これはレスポンスボディのチャンクを送信します。
 このメソッドはボディの連続した部分を提供するために複数回呼び出されるかもしれません。
 
@@ -901,11 +999,16 @@ A queue of requests waiting to be sent to sockets.
 <!--
 
 This object is created internally and returned from `http.request()`.  It
-represents an _in-progress_ request whose header has already been sent.
+represents an _in-progress_ request whose header has already been queued.  The 
+header is still mutable using the `setHeader(name, value)`, `getHeader(name)`,
+`removeHeader(name)` API.  The actual header will be sent along with the first
+data chunk or when closing the connection.
 
 -->
 このオブジェクトは HTTP サーバ内部で作成され、`http.request()` から返されます。
-それはヘッダが送信された _進行中_ のリクエストを表現します。
+それはヘッダがキューに入れられた _進行中_ のリクエストを表現します。
+ヘッダは `setHeader(name, value)`, `getHeader(name)`, `removeHeader(name)` API によってまだ可変のままです。
+実際にヘッダが送信されるのは、最初のデータチャンクが送信される時またはコネクションがクローズされる時です。
 
 <!--
 
@@ -1040,10 +1143,10 @@ followed by `request.end()`.
 
 <!--
 
-Aborts a request.  (New since v0.3.80.)
+Aborts a request.  (New since v0.3.8.)
 
 -->
-リクエストをアボートします (v0.3.80 からの新機能)
+リクエストをアボートします (v0.3.8 からの新機能)
 
 ## http.ClientResponse
 

@@ -53,27 +53,21 @@ process's stdin fd to act either as a raw device or default.
 これは現在のプロセスの標準入力ファイル記述子をローデバイスまたはデフォルトに振る舞うよう設定します。
 
 
-### tty.getColumns()
+### tty.setWindowSize(fd, row, col)
 
 <!--
 
-Returns the number of columns associated with the current process's TTY.
+`ioctl`s the window size settings to the file descriptor.
 
 -->
-現在のプロセスに関連づけられた TTY のカラム数を返します。
+ファイル記述子に関するウィンドウサイズの設定を `ioctl` します。
+
+### tty.getWindowSize(fd)
 
 <!--
 
-Note that each time this number is changed the process receives a `SIGWINCH`
-signal. So you can keep a cache of it like this:
+Returns `[row, col]` for the TTY associated with the file descriptor.
 
 -->
-この数はプロセスが `SIGWINCH` を受信する度に変化することに注意してください。
-次のようにキャッシュを保持することができます。
-
-    var columns = tty.getColumns();
-    process.on('SIGWINCH', function() {
-      columns = tty.getColumns();
-    });
-
+ファイル記述子に関連づけられた TTY の `[row, col]` を返します。
 

@@ -639,18 +639,21 @@ The synchronous version of `fs.writeFile`.
 <!--
 
 Watch for changes on `filename`. The callback `listener` will be called each
-time the file changes.
+time the file is accessed.
 
 -->
-`filename` の変更を監視します。コールバックの `listener` はファイルが変更される度に呼び出されます。
+`filename` の変更を監視します。コールバックの `listener` はファイルがアクセスされる度に呼び出されます。
 
 <!--
 
 The second argument is optional. The `options` if provided should be an object
 containing two members a boolean, `persistent`, and `interval`, a polling
-value in milliseconds. The default is `{persistent: true, interval: 0}`.
+value in milliseconds. The default is `{ persistent: true, interval: 0 }`.
 
 -->
+第 2 引数はオプションです．
+`options` が与えられる場合、それは `persistent` とポーリング間隔をミリ秒で表す `interval` の二つの boolean メンバを含むオブジェクトです。
+デフォルトは `{ persistent: true, interval: 0}` です。
 
 <!--
 
@@ -669,8 +672,13 @@ stat object:
 
 These stat objects are instances of `fs.Stat`.
 
+If you want to be notified when the file was modified, not just accessed
+you need to compare `curr.mtime` and `prev.mtime.
 -->
+
 これらの状態オブジェクトは `fs.Stat` のインスタンスです。
+
+もしファイルがアクセスされただけでなく、変更された時の通知が必要であれば、`curr.mtime` と `prev.mtime` を比較する必要があります。
 
 ### fs.unwatchFile(filename)
 

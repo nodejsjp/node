@@ -216,6 +216,7 @@ assert.equal(d.length, 3);
 assert.equal(d[0], 23);
 assert.equal(d[1], 42);
 assert.equal(d[2], 255);
+assert.deepEqual(d, new Buffer(d));
 
 var e = new Buffer('über');
 console.error('uber: \'%s\'', e.toString());
@@ -224,6 +225,23 @@ assert.deepEqual(e, new Buffer([195, 188, 98, 101, 114]));
 var f = new Buffer('über', 'ascii');
 console.error('f.length: %d     (should be 4)', f.length);
 assert.deepEqual(f, new Buffer([252, 98, 101, 114]));
+
+var f = new Buffer('über', 'ucs2');
+console.error('f.length: %d     (should be 8)', f.length);
+assert.deepEqual(f, new Buffer([252, 0, 98, 0, 101, 0, 114, 0]));
+
+var f = new Buffer('привет', 'ucs2');
+console.error('f.length: %d     (should be 12)', f.length);
+assert.deepEqual(f, new Buffer([63, 4, 64, 4, 56, 4, 50, 4, 53, 4, 66, 4]));
+assert.equal(f.toString('ucs2'), 'привет');
+
+
+var arrayIsh = {0: 0, 1: 1, 2: 2, 3: 3, length: 4};
+var g = new Buffer(arrayIsh);
+assert.deepEqual(g, new Buffer([0, 1, 2, 3]));
+var strArrayIsh = {0: '0', 1: '1', 2: '2', 3: '3', length: 4};
+g = new Buffer(strArrayIsh);
+assert.deepEqual(g, new Buffer([0, 1, 2, 3]));
 
 
 //
@@ -386,9 +404,9 @@ assert.equal('bcde', b.slice(1).toString());
 // byte length
 assert.equal(14, Buffer.byteLength('Il était tué'));
 assert.equal(14, Buffer.byteLength('Il était tué', 'utf8'));
+assert.equal(24, Buffer.byteLength('Il était tué', 'ucs2'));
 assert.equal(12, Buffer.byteLength('Il était tué', 'ascii'));
 assert.equal(12, Buffer.byteLength('Il était tué', 'binary'));
-
 
 // slice(0,0).length === 0
 assert.equal(0, Buffer('hello').slice(0, 0).length);
