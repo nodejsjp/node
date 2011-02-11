@@ -283,7 +283,6 @@ This is the mirror of the signing object above.
 
 ### verifier.update(data)
 
-<<<<<<< HEAD
 <!--
 
 Updates the verifier object with data.
