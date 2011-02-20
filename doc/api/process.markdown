@@ -398,7 +398,8 @@ A compiled-in property that exposes `NODE_VERSION`.
 
 ### process.installPrefix
 
-<--
+<!--
+
 A compiled-in property that exposes `NODE_PREFIX`.
 
 -->

@@ -412,19 +412,20 @@ Synchronous close(2).
 -->
 同期の close(2)。
 
-### fs.open(path, flags, mode=0666, [callback])
+### fs.open(path, flags, [mode], [callback])
 
 <!--
 
 Asynchronous file open. See open(2). Flags can be 'r', 'r+', 'w', 'w+', 'a',
-or 'a+'. The callback gets two arguments `(err, fd)`.
+or 'a+'. `mode` defaults to 0666. The callback gets two arguments `(err, fd)`.
 
 -->
 非同期のファイルオープン。open(2) を参照してください。
 フラグは 'r'、'r+'、'w'、'w+'、'a'、あるいは 'a+' です。
+`mode` のデフォルトは 0666 です。
 コールバックは 2 つの引数を受け取る `(err, fd)`です。
 
-### fs.openSync(path, flags, mode=0666)
+### fs.openSync(path, flags, [mode])
 
 <!--
 

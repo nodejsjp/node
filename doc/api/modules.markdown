@@ -435,7 +435,7 @@ then it does *not* add the full resolved path to where `./lib`
 is on the filesystem.  Instead, it literally adds `'./lib'`,
 meaning that if you do `require('y.js')` in `/a/b/x.js`, then it'll look
 in `/a/b/lib/y.js`.  If you then did `require('y.js')` in
-`/l/m/n/o/p.js`, then it'd look in `/l/m/n/o/p/lib/y.js`.
+`/l/m/n/o/p.js`, then it'd look in `/l/m/n/o/lib/y.js`.
 
 -->
 これは、ファイルシステム上の `./lib` のある場所への絶対パスを追加する *わけではありません* 。
