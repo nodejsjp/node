@@ -745,8 +745,10 @@ Returns a new ReadStream object (See `Readable Stream`).
 
     { flags: 'r',
       encoding: null,
+      fd: null,
       mode: 0666,
-      bufferSize: 4096 }
+      bufferSize: 64 * 1024
+    }
 
 <!--
 

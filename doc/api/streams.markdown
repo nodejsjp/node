@@ -94,7 +94,7 @@ UNIX ストリームだけがこの機能をサポートしています;
 <!--
 
 A boolean that is `true` by default, but turns `false` after an `'error'`
-occured, the stream came to an `'end'`, or `destroy()` was called.
+occurred, the stream came to an `'end'`, or `destroy()` was called.
 
 -->
 デフォルトでは `true` ですが、`'error'` が発生した後、

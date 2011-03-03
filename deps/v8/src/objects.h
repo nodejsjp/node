@@ -1361,11 +1361,13 @@ class JSObject: public HeapObject {
 
   MUST_USE_RESULT MaybeObject* SetProperty(String* key,
                                            Object* value,
-                                           PropertyAttributes attributes);
+                                           PropertyAttributes attributes,
+                                           StrictModeFlag strict);
   MUST_USE_RESULT MaybeObject* SetProperty(LookupResult* result,
                                            String* key,
                                            Object* value,
-                                           PropertyAttributes attributes);
+                                           PropertyAttributes attributes,
+                                           StrictModeFlag strict);
   MUST_USE_RESULT MaybeObject* SetPropertyWithFailedAccessCheck(
       LookupResult* result,
       String* name,
@@ -1380,11 +1382,13 @@ class JSObject: public HeapObject {
   MUST_USE_RESULT MaybeObject* SetPropertyWithInterceptor(
       String* name,
       Object* value,
-      PropertyAttributes attributes);
+      PropertyAttributes attributes,
+      StrictModeFlag strict);
   MUST_USE_RESULT MaybeObject* SetPropertyPostInterceptor(
       String* name,
       Object* value,
-      PropertyAttributes attributes);
+      PropertyAttributes attributes,
+      StrictModeFlag strict);
   MUST_USE_RESULT MaybeObject* SetLocalPropertyIgnoreAttributes(
       String* key,
       Object* value,
@@ -1548,6 +1552,11 @@ class JSObject: public HeapObject {
   // The undefined object if index is out of bounds.
   MaybeObject* GetElementWithReceiver(Object* receiver, uint32_t index);
   MaybeObject* GetElementWithInterceptor(Object* receiver, uint32_t index);
+
+  // Get external element value at index if there is one and undefined
+  // otherwise. Can return a failure if allocation of a heap number
+  // failed.
+  MaybeObject* GetExternalElement(uint32_t index);
 
   MUST_USE_RESULT MaybeObject* SetFastElementsCapacityAndLength(int capacity,
                                                                 int length);

@@ -11,17 +11,22 @@ this module with `require("net");`
 それはサーバとクライアントの両方 (ストリームと呼ばれます) を作成するための方法を含みます。
 このモジュールは`require("net");`によって取り込むことができます。
 
-### net.createServer(connectionListener)
+### net.createServer([options], [connectionListener])
 
 <!--
 
 Creates a new TCP server. The `connectionListener` argument is
 automatically set as a listener for the `'connection'` event.
+`options` is an object with the following defaults:
 
 -->
 新しい TCP サーバを作成します。
 `connectionListener` 引数は `'connection'`
 イベントに対するリスナーとして自動的に加えられます。
+`options` は以下のデフォルト値を持つオブジェクトです:
+
+    { allowHalfOpen: false
+    }
 
 ### net.createConnection(arguments...)
 
@@ -361,7 +366,7 @@ the exception.
 
 <!--
 
-The `callback` paramenter will be added as an listener for the 'connect'
+The `callback` parameter will be added as an listener for the 'connect'
 event.
 
 -->

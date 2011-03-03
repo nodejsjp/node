@@ -55,7 +55,7 @@ class SafepointGenerator : public PostCallGenerator {
     // Ensure that we have enough space in the reloc info to patch
     // this with calls when doing deoptimization.
     if (ensure_reloc_space_) {
-      codegen_->masm()->RecordComment(RelocInfo::kFillerCommentString, true);
+      codegen_->EnsureRelocSpaceForDeoptimization();
     }
     codegen_->RecordSafepoint(pointers_, deoptimization_index_);
   }
@@ -78,6 +78,7 @@ bool LCodeGen::GenerateCode() {
   return GeneratePrologue() &&
       GenerateBody() &&
       GenerateDeferredCode() &&
+      GenerateRelocPadding() &&
       GenerateSafepointTable();
 }
 
@@ -122,6 +123,16 @@ void LCodeGen::Comment(const char* format, ...) {
 }
 
 
+bool LCodeGen::GenerateRelocPadding() {
+  int reloc_size = masm()->relocation_writer_size();
+  while (reloc_size < deoptimization_reloc_size.min_size) {
+    __ RecordComment(RelocInfo::kFillerCommentString, true);
+    reloc_size += RelocInfo::kMinRelocCommentSize;
+  }
+  return !is_aborted();
+}
+
+
 bool LCodeGen::GeneratePrologue() {
   ASSERT(is_generating());
 
@@ -161,6 +172,45 @@ bool LCodeGen::GeneratePrologue() {
       }
 #endif
     }
+  }
+
+  // Possibly allocate a local context.
+  int heap_slots = scope()->num_heap_slots() - Context::MIN_CONTEXT_SLOTS;
+  if (heap_slots > 0) {
+    Comment(";;; Allocate local context");
+    // Argument to NewContext is the function, which is still in edi.
+    __ push(edi);
+    if (heap_slots <= FastNewContextStub::kMaximumSlots) {
+      FastNewContextStub stub(heap_slots);
+      __ CallStub(&stub);
+    } else {
+      __ CallRuntime(Runtime::kNewContext, 1);
+    }
+    RecordSafepoint(Safepoint::kNoDeoptimizationIndex);
+    // Context is returned in both eax and esi.  It replaces the context
+    // passed to us.  It's saved in the stack and kept live in esi.
+    __ mov(Operand(ebp, StandardFrameConstants::kContextOffset), esi);
+
+    // Copy parameters into context if necessary.
+    int num_parameters = scope()->num_parameters();
+    for (int i = 0; i < num_parameters; i++) {
+      Slot* slot = scope()->parameter(i)->AsSlot();
+      if (slot != NULL && slot->type() == Slot::CONTEXT) {
+        int parameter_offset = StandardFrameConstants::kCallerSPOffset +
+            (num_parameters - 1 - i) * kPointerSize;
+        // Load parameter from stack.
+        __ mov(eax, Operand(ebp, parameter_offset));
+        // Store it in the context.
+        int context_offset = Context::SlotOffset(slot->index());
+        __ mov(Operand(esi, context_offset), eax);
+        // Update the write barrier. This clobbers all involved
+        // registers, so we have to use a third register to avoid
+        // clobbering esi.
+        __ mov(ecx, esi);
+        __ RecordWrite(ecx, context_offset, eax, ebx);
+      }
+    }
+    Comment(";;; End allocate local context");
   }
 
   // Trace the call.
@@ -335,6 +385,22 @@ void LCodeGen::WriteTranslation(LEnvironment* environment,
 }
 
 
+void LCodeGen::EnsureRelocSpaceForDeoptimization() {
+  // Since we patch the reloc info with RUNTIME_ENTRY calls every patch
+  // site will take up 2 bytes + any pc-jumps.
+  // We are conservative and always reserver 6 bytes in case where a
+  // simple pc-jump is not enough.
+  uint32_t pc_delta =
+      masm()->pc_offset() - deoptimization_reloc_size.last_pc_offset;
+  if (is_uintn(pc_delta, 6)) {
+    deoptimization_reloc_size.min_size += 2;
+  } else {
+    deoptimization_reloc_size.min_size += 6;
+  }
+  deoptimization_reloc_size.last_pc_offset = masm()->pc_offset();
+}
+
+
 void LCodeGen::AddToTranslation(Translation* translation,
                                 LOperand* op,
                                 bool is_tagged) {
@@ -382,10 +448,13 @@ void LCodeGen::CallCode(Handle<Code> code,
   ASSERT(instr != NULL);
   LPointerMap* pointers = instr->pointer_map();
   RecordPosition(pointers->position());
+
   if (!adjusted) {
     __ mov(esi, Operand(ebp, StandardFrameConstants::kContextOffset));
   }
   __ call(code, mode);
+
+  EnsureRelocSpaceForDeoptimization();
   RegisterLazyDeoptimization(instr);
 
   // Signal that we don't inline smi code before these stubs in the
@@ -519,7 +588,8 @@ void LCodeGen::PopulateDeoptimizationData(Handle<Code> code) {
   Handle<DeoptimizationInputData> data =
       Factory::NewDeoptimizationInputData(length, TENURED);
 
-  data->SetTranslationByteArray(*translations_.CreateByteArray());
+  Handle<ByteArray> translations = translations_.CreateByteArray();
+  data->SetTranslationByteArray(*translations);
   data->SetInlinedFunctionCount(Smi::FromInt(inlined_function_count_));
 
   Handle<FixedArray> literals =
@@ -592,6 +662,12 @@ void LCodeGen::RecordSafepoint(
 void LCodeGen::RecordSafepoint(LPointerMap* pointers,
                                int deoptimization_index) {
   RecordSafepoint(pointers, Safepoint::kSimple, 0, deoptimization_index);
+}
+
+
+void LCodeGen::RecordSafepoint(int deoptimization_index) {
+  LPointerMap empty_pointers(RelocInfo::kNoPosition);
+  RecordSafepoint(&empty_pointers, deoptimization_index);
 }
 
 
@@ -1836,16 +1912,10 @@ void LCodeGen::DoDeferredLInstanceOfKnownGlobal(LInstanceOfKnownGlobal* instr,
   Label before_push_delta;
   __ bind(&before_push_delta);
   __ mov(temp, Immediate(delta));
-  __ mov(Operand(esp, EspIndexForPushAll(temp) * kPointerSize), temp);
-  __ mov(esi, Operand(ebp, StandardFrameConstants::kContextOffset));
-  __ call(stub.GetCode(), RelocInfo::CODE_TARGET);
-  ASSERT_EQ(kAdditionalDelta,
-            masm_->SizeOfCodeGeneratedSince(&before_push_delta));
-  RecordSafepointWithRegisters(
-      instr->pointer_map(), 0, Safepoint::kNoDeoptimizationIndex);
+  __ StoreToSafepointRegisterSlot(temp, temp);
+  CallCode(stub.GetCode(), RelocInfo::CODE_TARGET, instr, false);
   // Put the result value into the eax slot and restore all registers.
-  __ mov(Operand(esp, EspIndexForPushAll(eax) * kPointerSize), eax);
-
+  __ StoreToSafepointRegisterSlot(eax, eax);
   __ PopSafepointRegisters();
 }
 
@@ -2100,13 +2170,13 @@ void LCodeGen::DoLoadKeyedFastElement(LLoadKeyedFastElement* instr) {
 
 
 void LCodeGen::DoLoadPixelArrayElement(LLoadPixelArrayElement* instr) {
-  Register external_elements = ToRegister(instr->external_pointer());
+  Register external_pointer = ToRegister(instr->external_pointer());
   Register key = ToRegister(instr->key());
   Register result = ToRegister(instr->result());
-  ASSERT(result.is(external_elements));
+  ASSERT(result.is(external_pointer));
 
   // Load the result.
-  __ movzx_b(result, Operand(external_elements, key, times_1, 0));
+  __ movzx_b(result, Operand(external_pointer, key, times_1, 0));
 }
 
 
@@ -2301,11 +2371,8 @@ void LCodeGen::CallKnownFunction(Handle<JSFunction> function,
   if (*function == *graph()->info()->closure()) {
     __ CallSelf();
   } else {
-    // This is an indirect call and will not be recorded in the reloc info.
-    // Add a comment to the reloc info in case we need to patch this during
-    // deoptimization.
-    __ RecordComment(RelocInfo::kFillerCommentString, true);
     __ call(FieldOperand(edi, JSFunction::kCodeEntryOffset));
+    EnsureRelocSpaceForDeoptimization();
   }
 
   // Setup deoptimization.
@@ -2360,7 +2427,7 @@ void LCodeGen::DoDeferredMathAbsTaggedHeapNumber(LUnaryMathOperation* instr) {
   if (!tmp.is(eax)) __ mov(tmp, eax);
 
   // Restore input_reg after call to runtime.
-  __ mov(input_reg, Operand(esp, EspIndexForPushAll(input_reg) * kPointerSize));
+  __ LoadFromSafepointRegisterSlot(input_reg, input_reg);
 
   __ bind(&allocated);
   __ mov(tmp2, FieldOperand(input_reg, HeapNumber::kExponentOffset));
@@ -2368,7 +2435,7 @@ void LCodeGen::DoDeferredMathAbsTaggedHeapNumber(LUnaryMathOperation* instr) {
   __ mov(FieldOperand(tmp, HeapNumber::kExponentOffset), tmp2);
   __ mov(tmp2, FieldOperand(input_reg, HeapNumber::kMantissaOffset));
   __ mov(FieldOperand(tmp, HeapNumber::kMantissaOffset), tmp2);
-  __ mov(Operand(esp, EspIndexForPushAll(input_reg) * kPointerSize), tmp);
+  __ StoreToSafepointRegisterSlot(input_reg, tmp);
 
   __ bind(&done);
   __ PopSafepointRegisters();
@@ -2493,11 +2560,6 @@ void LCodeGen::DoMathPowHalf(LUnaryMathOperation* instr) {
   XMMRegister xmm_scratch = xmm0;
   XMMRegister input_reg = ToDoubleRegister(instr->InputAt(0));
   ASSERT(ToDoubleRegister(instr->result()).is(input_reg));
-  ExternalReference negative_infinity =
-      ExternalReference::address_of_negative_infinity();
-  __ movdbl(xmm_scratch, Operand::StaticVariable(negative_infinity));
-  __ ucomisd(xmm_scratch, input_reg);
-  DeoptimizeIf(equal, instr->environment());
   __ xorpd(xmm_scratch, xmm_scratch);
   __ addsd(input_reg, xmm_scratch);  // Convert -0 to +0.
   __ sqrtsd(input_reg, input_reg);
@@ -2720,7 +2782,9 @@ void LCodeGen::DoStoreNamedGeneric(LStoreNamedGeneric* instr) {
   ASSERT(ToRegister(instr->value()).is(eax));
 
   __ mov(ecx, instr->name());
-  Handle<Code> ic(Builtins::builtin(Builtins::StoreIC_Initialize));
+  Handle<Code> ic(Builtins::builtin(
+      info_->is_strict() ? Builtins::StoreIC_Initialize_Strict
+                         : Builtins::StoreIC_Initialize));
   CallCode(ic, RelocInfo::CODE_TARGET, instr);
 }
 
@@ -2728,6 +2792,25 @@ void LCodeGen::DoStoreNamedGeneric(LStoreNamedGeneric* instr) {
 void LCodeGen::DoBoundsCheck(LBoundsCheck* instr) {
   __ cmp(ToRegister(instr->index()), ToOperand(instr->length()));
   DeoptimizeIf(above_equal, instr->environment());
+}
+
+
+void LCodeGen::DoStorePixelArrayElement(LStorePixelArrayElement* instr) {
+  Register external_pointer = ToRegister(instr->external_pointer());
+  Register key = ToRegister(instr->key());
+  Register value = ToRegister(instr->value());
+  ASSERT(ToRegister(instr->TempAt(0)).is(eax));
+
+  __ mov(eax, value);
+  {  // Clamp the value to [0..255].
+    NearLabel done;
+    __ test(eax, Immediate(0xFFFFFF00));
+    __ j(zero, &done);
+    __ setcc(negative, eax);  // 1 if negative, 0 if positive.
+    __ dec_b(eax);  // 0 if negative, 255 if positive.
+    __ bind(&done);
+  }
+  __ mov_b(Operand(external_pointer, key, times_1, 0), eax);
 }
 
 
@@ -2769,7 +2852,9 @@ void LCodeGen::DoStoreKeyedGeneric(LStoreKeyedGeneric* instr) {
   ASSERT(ToRegister(instr->key()).is(ecx));
   ASSERT(ToRegister(instr->value()).is(eax));
 
-  Handle<Code> ic(Builtins::builtin(Builtins::KeyedStoreIC_Initialize));
+  Handle<Code> ic(Builtins::builtin(
+      info_->is_strict() ? Builtins::KeyedStoreIC_Initialize_Strict
+                         : Builtins::KeyedStoreIC_Initialize));
   CallCode(ic, RelocInfo::CODE_TARGET, instr);
 }
 
@@ -2840,19 +2925,20 @@ void LCodeGen::DoStringCharCodeAt(LStringCharCodeAt* instr) {
   __ test(result, Immediate(kStringRepresentationMask));
   __ j(not_zero, deferred->entry());
 
-  // Check for 1-byte or 2-byte string.
+  // Check for ASCII or two-byte string.
   __ bind(&flat_string);
   STATIC_ASSERT(kAsciiStringTag != 0);
   __ test(result, Immediate(kStringEncodingMask));
   __ j(not_zero, &ascii_string);
 
-  // 2-byte string.
-  // Load the 2-byte character code into the result register.
+  // Two-byte string.
+  // Load the two-byte character code into the result register.
   STATIC_ASSERT(kSmiTag == 0 && kSmiTagSize == 1);
   if (instr->index()->IsConstantOperand()) {
     __ movzx_w(result,
                FieldOperand(string,
-                            SeqTwoByteString::kHeaderSize + 2 * const_index));
+                            SeqTwoByteString::kHeaderSize +
+                            (kUC16Size * const_index)));
   } else {
     __ movzx_w(result, FieldOperand(string,
                                     index,
@@ -2908,7 +2994,7 @@ void LCodeGen::DoDeferredStringCharCodeAt(LStringCharCodeAt* instr) {
     __ AbortIfNotSmi(eax);
   }
   __ SmiUntag(eax);
-  __ mov(Operand(esp, EspIndexForPushAll(result) * kPointerSize), eax);
+  __ StoreToSafepointRegisterSlot(result, eax);
   __ PopSafepointRegisters();
 }
 
@@ -2976,7 +3062,7 @@ void LCodeGen::DoDeferredNumberTagI(LNumberTagI* instr) {
   // TODO(3095996): Put a valid pointer value in the stack slot where the result
   // register is stored, as this register is in the pointer map, but contains an
   // integer value.
-  __ mov(Operand(esp, EspIndexForPushAll(reg) * kPointerSize), Immediate(0));
+  __ StoreToSafepointRegisterSlot(reg, Immediate(0));
 
   __ mov(esi, Operand(ebp, StandardFrameConstants::kContextOffset));
   __ CallRuntimeSaveDoubles(Runtime::kAllocateHeapNumber);
@@ -2988,7 +3074,7 @@ void LCodeGen::DoDeferredNumberTagI(LNumberTagI* instr) {
   // number.
   __ bind(&done);
   __ movdbl(FieldOperand(reg, HeapNumber::kValueOffset), xmm0);
-  __ mov(Operand(esp, EspIndexForPushAll(reg) * kPointerSize), reg);
+  __ StoreToSafepointRegisterSlot(reg, reg);
   __ PopSafepointRegisters();
 }
 
@@ -3030,7 +3116,7 @@ void LCodeGen::DoDeferredNumberTagD(LNumberTagD* instr) {
   __ CallRuntimeSaveDoubles(Runtime::kAllocateHeapNumber);
   RecordSafepointWithRegisters(
       instr->pointer_map(), 0, Safepoint::kNoDeoptimizationIndex);
-  __ mov(Operand(esp, EspIndexForPushAll(reg) * kPointerSize), eax);
+  __ StoreToSafepointRegisterSlot(reg, eax);
   __ PopSafepointRegisters();
 }
 

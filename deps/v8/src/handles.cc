@@ -242,17 +242,21 @@ Handle<Object> SetPrototype(Handle<JSFunction> function,
 Handle<Object> SetProperty(Handle<JSObject> object,
                            Handle<String> key,
                            Handle<Object> value,
-                           PropertyAttributes attributes) {
-  CALL_HEAP_FUNCTION(object->SetProperty(*key, *value, attributes), Object);
+                           PropertyAttributes attributes,
+                           StrictModeFlag strict) {
+  CALL_HEAP_FUNCTION(object->SetProperty(*key, *value, attributes, strict),
+                     Object);
 }
 
 
 Handle<Object> SetProperty(Handle<Object> object,
                            Handle<Object> key,
                            Handle<Object> value,
-                           PropertyAttributes attributes) {
+                           PropertyAttributes attributes,
+                           StrictModeFlag strict) {
   CALL_HEAP_FUNCTION(
-      Runtime::SetObjectProperty(object, key, value, attributes), Object);
+      Runtime::SetObjectProperty(object, key, value, attributes, strict),
+      Object);
 }
 
 
@@ -304,10 +308,12 @@ void SetLocalPropertyNoThrow(Handle<JSObject> object,
 Handle<Object> SetPropertyWithInterceptor(Handle<JSObject> object,
                                           Handle<String> key,
                                           Handle<Object> value,
-                                          PropertyAttributes attributes) {
+                                          PropertyAttributes attributes,
+                                          StrictModeFlag strict) {
   CALL_HEAP_FUNCTION(object->SetPropertyWithInterceptor(*key,
                                                         *value,
-                                                        attributes),
+                                                        attributes,
+                                                        strict),
                      Object);
 }
 
@@ -834,49 +840,41 @@ bool CompileLazyShared(Handle<SharedFunctionInfo> shared,
 }
 
 
-bool CompileLazy(Handle<JSFunction> function,
-                 ClearExceptionFlag flag) {
+static bool CompileLazyFunction(Handle<JSFunction> function,
+                                ClearExceptionFlag flag,
+                                InLoopFlag in_loop_flag) {
   bool result = true;
   if (function->shared()->is_compiled()) {
     function->ReplaceCode(function->shared()->code());
     function->shared()->set_code_age(0);
   } else {
     CompilationInfo info(function);
+    if (in_loop_flag == IN_LOOP) info.MarkAsInLoop();
     result = CompileLazyHelper(&info, flag);
     ASSERT(!result || function->is_compiled());
   }
-  if (result && function->is_compiled()) {
-    PROFILE(FunctionCreateEvent(*function));
-  }
   return result;
+}
+
+
+bool CompileLazy(Handle<JSFunction> function,
+                 ClearExceptionFlag flag) {
+  return CompileLazyFunction(function, flag, NOT_IN_LOOP);
 }
 
 
 bool CompileLazyInLoop(Handle<JSFunction> function,
                        ClearExceptionFlag flag) {
-  bool result = true;
-  if (function->shared()->is_compiled()) {
-    function->ReplaceCode(function->shared()->code());
-    function->shared()->set_code_age(0);
-  } else {
-    CompilationInfo info(function);
-    info.MarkAsInLoop();
-    result = CompileLazyHelper(&info, flag);
-    ASSERT(!result || function->is_compiled());
-  }
-  if (result && function->is_compiled()) {
-    PROFILE(FunctionCreateEvent(*function));
-  }
-  return result;
+  return CompileLazyFunction(function, flag, IN_LOOP);
 }
 
 
-bool CompileOptimized(Handle<JSFunction> function, int osr_ast_id) {
+bool CompileOptimized(Handle<JSFunction> function,
+                      int osr_ast_id,
+                      ClearExceptionFlag flag) {
   CompilationInfo info(function);
   info.SetOptimizing(osr_ast_id);
-  bool result = CompileLazyHelper(&info, KEEP_EXCEPTION);
-  if (result) PROFILE(FunctionCreateEvent(*function));
-  return result;
+  return CompileLazyHelper(&info, flag);
 }
 
 

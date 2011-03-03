@@ -149,7 +149,7 @@ Running `node-waf configure build` will create a file
 provided for the ease of users.
 
 -->
-`node-waf` は [WAF](http://code.google.com/p/waf) にある Python ベースのビルドシステムです。
+`node-waf` 単に [WAF](http://code.google.com/p/waf) は Python ベースのビルドシステムです。
 `node-waf` は、ユーザの負担を減らすために提供されています。
 
 <!--
@@ -164,7 +164,7 @@ All Node addons must export a function called `init` with this signature:
 <!--
 
 For the moment, that is all the documentation on addons. Please see
-<http://github.com/ry/node_postgres> for a real example.
+<http://github.com/joyent/node_postgres> for a real example.
 
 -->
 現時点では、アドオンのドキュメントはこれで全てです。

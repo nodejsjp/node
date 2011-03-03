@@ -219,3 +219,13 @@ with either true or false. Example:
     path.exists('/etc/passwd', function (exists) {
       util.debug(exists ? "it's there" : "no passwd!");
     });
+
+
+### path.existsSync(p)
+
+<!--
+
+Synchronous version of `path.exists`.
+
+-->
+同期版の `path.exists` です。
