@@ -28,6 +28,19 @@ automatically set as a listener for the `'connection'` event.
     { allowHalfOpen: false
     }
 
+<!--
+
+If `allowHalfOpen` is `true`, then the socket won't automatically send FIN
+packet when the other end of the socket sends a FIN packet. The socket becomes
+non-readable, but still writable. You should call the end() method explicitly.
+See `'end'` event for more information.
+
+-->
+`allowHalfOpen` が `true` だと、反対側のソケットが FIN パケットを送信してきても自動的に FIN を送信しなくなります。
+ソケットは読み込み可能ではなくなりますが、書き込み可能のままです。
+明示的に `end()` を呼び出す必要があります。
+`'end'` イベントにより多くの情報があります。
+
 ### net.createConnection(arguments...)
 
 <!--
@@ -156,7 +169,7 @@ another server is already running on the requested port. One way of handling thi
 would be to wait a second and the try again. This can be done with
 
 -->
-一部のユーザが陥る問題の一つは、`EADDRINUSE` エラーです．
+一部のユーザが陥る問題の一つは、`EADDRINUSE` エラーです。
 これは、他のサーバが要求されたポートを使っているという意味です。
 これに対照する方法の一つは、1秒待機してリトライすることです。
 これは次のようになります
@@ -322,6 +335,40 @@ Node によって作成されてサーバの `'connection'` イベントを通�
 
 -->
 `net.Socket` のインスタンスは以下のイベントを持つ EventEmitter です:
+
+#### new net.Socket([options])
+
+<!--
+
+Construct a new socket object.
+
+-->
+新しいソケットオブジェクトを構築します。
+
+<!--
+
+`options` is an object with the following defaults:
+
+-->
+`options` は以下のデフォルト値を持つオブジェクトです。
+
+    { fd: null
+      type: null
+      allowHalfOpen: false
+    }
+
+<!--
+
+
+`fd` allows you to specify the existing file descriptor of socket. `type`
+specified underlying protocol. It can be `'tcp4'`, `'tcp6'`, or `'unix'`.
+About `allowHalfOpen`, refer to `createServer()` and `'end'` event.
+
+-->
+`fd` に既存のソケットのファイル記述子を指定することができます。
+`type` にはプロトコルを指定することができます。
+指定できるのは `'tcp4'`、`'tcp6'` または `'unix'` のいずれかです。
+`allowHalfOpen` については `createServer()` および `'end'` イベントを参照してください。
 
 #### socket.connect(port, [host], [callback])
 #### socket.connect(path, [callback])

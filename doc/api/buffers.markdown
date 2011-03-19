@@ -45,7 +45,10 @@ method.  Here are the different string encodings;
 * `'ascii'` - for 7 bit ASCII data only.  This encoding method is very fast, and will
 strip the high bit if set.
 
-* `'utf8'` - Unicode characters.  Many web pages and other document formats use UTF-8.
+* `'utf8'` - Multi byte encoded Unicode characters.  Many web pages and other document formats use UTF-8.
+
+* `'ucs2'` - 2-bytes, little endian encoded Unicode characters. It can encode
+only BMP(Basic Multilingual Plane, U+0000 - U+FFFF).
 
 * `'base64'` - Base64 string encoding.
 
@@ -57,8 +60,10 @@ will be removed in future versions of Node.
 -->
 * `'ascii'` - 7bit の ASCII データ専用です。
   このエンコーディング方式はとても高速で、もし上位ビットがセットされていれば取り除かれます。
-* `'utf8'` - Unicode文字。
+* `'utf8'` - 可変長のバイト単位でエンコードされたUnicode文字。
   多くのWebページやその他のドキュメントは UTF-8 を使っています。
+* `'ucs2'` - 固定長の2バイト（リトルエンディアン）でエンコードされたUnicode文字。
+  BMP (基本多言語面、U+0000～U+FFFF) のみエンコードすることができます。
 * `'base64'` - Base64 文字列エンコーディング.
 * `'binary'` - 生のバイナリデータを各文字の最初の 8bit として使用するエンコーディング方式。
 このエンコーディング方式はもはや価値がなく、`Buffer` オブジェクトでは可能な限り使用すべきではありません。

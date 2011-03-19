@@ -1,4 +1,23 @@
-// Copyright 2009 Ryan Dahl <ry@tinyclouds.org>
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include <node.h>
 
@@ -48,6 +67,7 @@
 #include <node_stdio.h>
 #include <node_javascript.h>
 #include <node_version.h>
+#include <node_string.h>
 #ifdef HAVE_OPENSSL
 # include <node_crypto.h>
 #endif
@@ -1269,7 +1289,7 @@ static void ReportException(TryCatch &try_catch, bool show_line) {
 }
 
 // Executes a str within the current v8 context.
-Local<Value> ExecuteString(Local<String> source, Local<Value> filename) {
+Local<Value> ExecuteString(Handle<String> source, Handle<Value> filename) {
   HandleScope scope;
   TryCatch try_catch;
 
@@ -1463,9 +1483,10 @@ static void CheckStatus(EV_P_ ev_timer *watcher, int revents) {
   assert(revents == EV_TIMEOUT);
 
   // check memory
-  size_t rss, vsize;
-  if (!ev_is_active(&gc_idle) && Platform::GetMemory(&rss, &vsize) == 0) {
-    if (rss > 1024*1024*128) {
+  if (!ev_is_active(&gc_idle)) {
+    HeapStatistics stats;
+    V8::GetHeapStatistics(&stats);
+    if (stats.total_heap_size() > 1024 * 1024 * 128) {
       // larger than 128 megs, just start the idle watcher
       ev_idle_start(EV_A_ &gc_idle);
       return;
@@ -2036,8 +2057,8 @@ static void Load(int argc, char *argv[]) {
 
   TryCatch try_catch;
 
-  Local<Value> f_value = ExecuteString(String::New(MainSource()),
-                                       String::New("node.js"));
+  Local<Value> f_value = ExecuteString(MainSource(),
+                                       IMMUTABLE_STRING("node.js"));
   if (try_catch.HasCaught())  {
     ReportException(try_catch, true);
     exit(10);
@@ -2276,11 +2297,7 @@ int Start(int argc, char *argv[]) {
 #endif // __MINGW32__
 
   // Initialize the default ev loop.
-#if defined(__sun)
-  // TODO(Ryan) I'm experiencing abnormally high load using Solaris's
-  // EVBACKEND_PORT. Temporarally forcing poll().
-  ev_default_loop(EVBACKEND_POLL);
-#elif defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
+#if defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
   ev_default_loop(EVBACKEND_KQUEUE);
 #else
   ev_default_loop(EVFLAG_AUTO);

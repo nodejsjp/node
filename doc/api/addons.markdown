@@ -164,8 +164,8 @@ All Node addons must export a function called `init` with this signature:
 <!--
 
 For the moment, that is all the documentation on addons. Please see
-<http://github.com/joyent/node_postgres> for a real example.
+<https://github.com/ry/node_postgres> for a real example.
 
 -->
 現時点では、アドオンのドキュメントはこれで全てです。
-実際の例は、<http://github.com/ry/node_postgres> を参照してください。
+実際の例は、<https://github.com/ry/node_postgres> を参照してください。
