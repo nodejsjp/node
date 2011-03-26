@@ -163,7 +163,7 @@ Example of running `ls -lh /usr`, capturing `stdout`, `stderr`, and the exit cod
 -->
 `ls -lh /usr` を実行して `stdout`、`stderr`、および終了コードを取得する例:
 
-    var util   = require('util'),
+    var util  = require('util'),
         spawn = require('child_process').spawn,
         ls    = spawn('ls', ['-lh', '/usr']);
 
@@ -187,7 +187,7 @@ Example: A very elaborate way to run 'ps ax | grep ssh'
 -->
 とても手の込んだ方法で実行する 'ps ax | grep ssh' の例:
 
-    var util   = require('util'),
+    var util  = require('util'),
         spawn = require('child_process').spawn,
         ps    = spawn('ps', ['ax']),
         grep  = spawn('grep', ['ssh']);
@@ -232,8 +232,9 @@ exec の失敗をチェックする例:
     var spawn = require('child_process').spawn,
         child = spawn('bad_command');
 
+    child.stderr.setEncoding('utf8');
     child.stderr.on('data', function (data) {
-      if (/^execvp\(\)/.test(data.asciiSlice(0,data.length))) {
+      if (/^execvp\(\)/.test(data)) {
         console.log('Failed to start child process.');
       }
     });
@@ -256,8 +257,8 @@ output, and return it all in a callback.
 -->
 コマンドを子プロセスとして実行し、その出力を蓄えて、その全てをコールバックに渡す高水準の方法です。
 
-    var util   = require('util'),
-        exec  = require('child_process').exec,
+    var util = require('util'),
+        exec = require('child_process').exec,
         child;
 
     child = exec('cat *.js bad_file | wc -l',

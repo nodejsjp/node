@@ -470,6 +470,16 @@ specifies how many _bytes_ were written.
 コールバックは 2 つの引数が与えられる `(err, written)` で、
 `written` は書き込まれた*バイト数*を示します。
 
+<!--
+
+Note that it is unsafe to use `fs.write` multiple times on the same file
+without waiting for the callback. For this scenario,
+`fs.createWriteStream` is strongly recommended.
+
+-->
+同じファイルに対してコールバックされるのを待つことなく `fs.write()` を何度も呼び出すことは、安全ではないことに注意してください。
+このシナリオでは、 `fs.createWriteStream()` を強く推奨します。
+
 ### fs.writeSync(fd, buffer, offset, length, position)
 
 <!--
@@ -609,10 +619,13 @@ returns a buffer.
 
 <!--
 
-Asynchronously writes data to a file. `data` can be a string or a buffer.
+Asynchronously writes data to a file, replacing the file if it already exists.
+`data` can be a string or a buffer.
 
 -->
-非同期にデータをファイルに書き込みます。`data` は文字列またはバッファです。
+非同期にデータをファイルに書き込みます。
+ファイルが既に存在する場合は置き換えられます。
+`data` は文字列またはバッファです。
 
 <!--
 

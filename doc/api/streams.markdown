@@ -146,7 +146,7 @@ Closes the underlying file descriptor. Stream will not emit any more events.
 After the write queue is drained, close the file descriptor.
 
 -->
-書き込みキューがからになった後、ファイル記述子をクローズします。
+書き込みキューが空になった後、ファイル記述子をクローズします。
 
 ### stream.pipe(destination, [options])
 
@@ -360,3 +360,15 @@ Closes the underlying file descriptor. Stream will not emit any more events.
 
 -->
 下層のファイル記述子をクローズします。ストリームはそれ以上イベントを生成しなくなります。
+
+### stream.destroySoon()
+
+<!--
+After the write queue is drained, close the file descriptor. `destroySoon()`
+can still destroy straight away, as long as there is no data left in the queue
+for writes.
+-->
+
+出力キューが空になった後、ファイル記述子をクローズします。
+出力キューにデータが存在しない場合、`destroySoon()` はすぐに破棄します。
+
