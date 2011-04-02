@@ -505,13 +505,13 @@ passed as the second parameter to the `'request'` event. It is a `Writable Strea
 <!--
 
 Sends a HTTP/1.1 100 Continue message to the client, indicating that
-the request body should be sent. See the the `checkContinue` event on
+the request body should be sent. See the [checkContinue](#event_checkContinue_) event on
 `Server`.
 
 -->
 HTTP/1.1 の 100 Continue メッセージをクライアントに送信し、
 リクエストボディを送信してもよいことを示します。
-`Server`の`checkContinue`イベントを参照してください。
+`Server`の [checkContinue](#event_checkContinue_) イベントを参照してください。
 
 ### response.writeHead(statusCode, [reasonPhrase], [headers])
 
@@ -945,10 +945,10 @@ connections closed.
 
 <!--
 
-See the description of the `upgrade` event for `http.Server` for further details.
+See the description of the [upgrade event](http.html#event_upgrade_) for `http.Server` for further details.
 
 -->
-より詳しくは `http.Server` の `upgrade` イベントの説明を参照してください。
+より詳しくは `http.Server` の [upgrade イベント](http.html#event_upgrade_) イベントの説明を参照してください。
 
 ### Event: 'continue'
 
@@ -999,7 +999,7 @@ A queue of requests waiting to be sent to sockets.
 <!--
 
 This object is created internally and returned from `http.request()`.  It
-represents an _in-progress_ request whose header has already been queued.  The 
+represents an _in-progress_ request whose header has already been queued.  The
 header is still mutable using the `setHeader(name, value)`, `getHeader(name)`,
 `removeHeader(name)` API.  The actual header will be sent along with the first
 data chunk or when closing the connection.

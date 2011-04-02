@@ -157,7 +157,7 @@ Synchronous chmod(2).
 <!--
 
 Asynchronous stat(2). The callback gets two arguments `(err, stats)` where
-`stats` is a `fs.Stats` object. It looks like this:
+`stats` is a [`fs.Stats`](#fs.Stats) object. It looks like this:
 
 -->
 非同期の stat(2)。コールバックは 2 つの引数を受け取る `(err, stats)`で、
@@ -179,10 +179,10 @@ Asynchronous stat(2). The callback gets two arguments `(err, stats)` where
 
 <!--
 
-See the `fs.Stats` section below for more information.
+See the [fs.Stats](#fs.Stats) section below for more information.
 
 -->
-より詳しくは後述の `fs.Stats` の節を参照してください。
+より詳しくは後述の [fs.Stats](#fs.Stats) の節を参照してください。
 
 ### fs.lstat(path, [callback])
 
@@ -465,10 +465,12 @@ pwrite(2) を参照してください。
 
 The callback will be given two arguments `(err, written)` where `written`
 specifies how many _bytes_ were written.
+The callback will be given three arguments `(err, written, buffer)` where `written`
+specifies how many _bytes_ were written into `buffer`.
 
 -->
-コールバックは 2 つの引数が与えられる `(err, written)` で、
-`written` は書き込まれた*バイト数*を示します。
+コールバックは 3 つの引数が与えられる `(err, written, buffer)` で、
+`written` は `buffer` から書き込まれた*バイト数*を示します。
 
 <!--
 
@@ -541,10 +543,10 @@ If `position` is `null`, data will be read from the current file position.
 
 <!--
 
-The callback is given the two arguments, `(err, bytesRead)`.
+The callback is given the three arguments, `(err, bytesRead, buffer)`.
 
 -->
-コールバックは2つの引数が与えられる `(err, bytesRead)` です。
+コールバックは3つの引数が与えられる `(err, bytesRead, buffer)` です。
 
 ### fs.readSync(fd, buffer, offset, length, position)
 

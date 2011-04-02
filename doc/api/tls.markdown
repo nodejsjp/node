@@ -125,6 +125,28 @@ TLS/SSL ハンドシェークの後で `callback` が呼び出されます。
 `s.authorized` を確認するかはユーザ次第です。
 `s.authorized === false`の場合、`s.authorizationError` からエラーを見つけることができます。
 
+### STARTTLS
+
+<!--
+
+In the v0.4 branch no function exists for starting a TLS session on an
+already existing TCP connection.  This is possible it just requires a bit of
+work. The technique is to use `tls.createSecurePair()` which returns two
+streams: an encrypted stream and a plaintext stream. The encrypted stream is then
+piped to the socket, the plaintext stream is what the user interacts with thereafter.
+
+[Here is some code that does it.](http://gist.github.com/848444)
+
+-->
+v0.4 ブランチでは、既に存在する TCP コネクション上で TLS セッションを開始する機能はありません。
+それには少しの作業が必要となります。
+そのテクニックは `tls.createSecurePair()` が返す二つのストリーム:
+暗号化されたストリームと平文のストリームを使います。
+暗号化されたストリームは既存のソケットにつながれ、
+平文のストリームはその後ユーザとのインタラクションで使われます。
+
+[ここにそのコードがあります。](http://gist.github.com/848444)
+
 ### tls.Server
 
 <!--

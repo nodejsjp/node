@@ -31,19 +31,20 @@ Node のモジュール内での `var something` はそのモジュールでロ�
 
 <!--
 
-The process object. See the 'process object' section.
+The process object. See the [process object](process.html#process) section.
 
 -->
-プロセスオブジェクトです。'process object' の節を参照してください。
+プロセスオブジェクトです。[process object](process.html#process) の節を参照してください。
 
 ### require()
 
 <!--
 
-To require modules. See the 'Modules' section.
+To require modules. See the [Modules](modules.html#modules) section.
+>>>>>>> v0.4
 
 -->
-require モジュールを指します。'Modules' の節を参照してください。
+require モジュールを指します。[モジュール](modules.html#modules) の節を参照してください。
 
 ### require.resolve()
 
@@ -130,3 +131,14 @@ for more information.
 現在のモジュールへの参照です。
 特に `module.exports` は `exports` オブジェクトと同じです。
 より詳しくは `src/node.js` を参照してください。
+
+### setTimeout(cb, ms)
+### clearTimeout(t)
+### setInterval(cb, ms)
+### clearInterval(t)
+
+<!--
+
+The timer functions are global variables. See the [timers](timers.html) section.
+-->
+タイマー関数はグローバル変数です。[タイマー](timers.html) を参照してください。

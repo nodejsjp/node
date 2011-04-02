@@ -468,12 +468,12 @@ received.
 <!--
 
 This function has been removed in v0.3. It used to upgrade the connection to
-SSL/TLS. See the TLS for the new API.
+SSL/TLS. See the [TLS section](tls.html#tLS_) for the new API.
 
 -->
 この関数は v0.3 で削除されました。
 これはコネクションを SSL/TLS にアップグレードするために使われていました。
-新しい API である TLS を参照してください。
+新しい API である [TLS の章](tls.html#tLS_) を参照してください。
 
 #### socket.write(data, [encoding], [callback])
 
@@ -675,13 +675,13 @@ See `connect()`.
 
 Emitted when data is received.  The argument `data` will be a `Buffer` or
 `String`.  Encoding of data is set by `socket.setEncoding()`.
-(See the section on `Readable Socket` for more information.)
+(See the [Readable Stream](streams.html#readable_Stream) section for more information.)
 
 -->
 データを受信した場合に生成されます。
 `data` 引数は `Buffer` または `String` です。
 データのエンコーディングは `socket.setEncoding()` で設定されます。
-(より詳しい情報は `Readable Stream` を参照してください)。
+(より詳しい情報は [Readable Stream](streams.html#readable_Stream) を参照してください)。
 
 #### Event: 'end'
 
