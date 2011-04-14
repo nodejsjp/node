@@ -80,6 +80,29 @@ On recent releases, `openssl list-message-digest-algorithms` will display the av
 最近のリリースでは、`openssl list-message-digest-algorithms`
 で利用可能なダイジェストアルゴリズムが表示されます。
 
+<!--
+
+Example: this program that takes the sha1 sum of a file
+
+-->
+例: このプログラムはファイルのsha1ハッシュ値を求めます。
+
+    var filename = process.argv[2];
+    var crypto = require('crypto');
+    var fs = require('fs');
+
+    var shasum = crypto.createHash('sha1');
+
+    var s = fs.ReadStream(filename);
+    s.on('data', function(d) {
+      shasum.update(d);
+    });
+
+    s.on('end', function() {
+      var d = shasum.digest('hex');
+      console.log(d + '  ' + filename);
+    });
+
 ### hash.update(data)
 
 <!--

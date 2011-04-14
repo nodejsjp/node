@@ -2,10 +2,12 @@
 
 <!--
 
-These object are available in the global scope and can be accessed from anywhere.
+These object are available in all modules. Some of these objects aren't
+actually in the global scope but in the module scope - this will be noted.
 
 -->
-これらのオブジェクトはグローバルスコープで有効であり、どこからでもアクセスすることができます。
+これらのオブジェクトは全てのモジュールで有効です。
+これらのオブジェクトのいくつかは実際はグローバルスコープではなくモジュールスコープです - 注意してください。
 
 ### global
 
@@ -41,10 +43,11 @@ The process object. See the [process object](process.html#process) section.
 <!--
 
 To require modules. See the [Modules](modules.html#modules) section.
->>>>>>> v0.4
+`require` isn't actually a global but rather local to each module.
 
 -->
 require モジュールを指します。[モジュール](modules.html#modules) の節を参照してください。
+`require` は実際はグローバルではなく、各モジュール毎のローカルです。
 
 ### require.resolve()
 
@@ -99,6 +102,13 @@ Example: running `node example.js` from `/Users/mjr`
     console.log(__filename);
     // /Users/mjr/example.js
 
+<!--
+
+`__filename` isn't actually a global but rather local to each module.
+
+-->
+`__filename` は実際はグローバルではなく、各モジュール毎のローカルです。
+
 ### __dirname
 
 <!--
@@ -118,6 +128,13 @@ Example: running `node example.js` from `/Users/mjr`
     console.log(__dirname);
     // /Users/mjr
 
+<!--
+
+`__dirname` isn't actually a global but rather local to each module.
+
+-->
+`__dirname` は実際はグローバルではなく、各モジュール毎のローカルです。
+
 
 ### module
 
@@ -126,11 +143,13 @@ Example: running `node example.js` from `/Users/mjr`
 A reference to the current module. In particular
 `module.exports` is the same as the `exports` object. See `src/node.js`
 for more information.
+`module` isn't actually a global but rather local to each module.
 
 -->
 現在のモジュールへの参照です。
 特に `module.exports` は `exports` オブジェクトと同じです。
 より詳しくは `src/node.js` を参照してください。
+`module` は実際はグローバルではなく、各モジュール毎のローカルです。
 
 ### setTimeout(cb, ms)
 ### clearTimeout(t)

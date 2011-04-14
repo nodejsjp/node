@@ -769,13 +769,12 @@ Returns a new ReadStream object (See `Readable Stream`).
 
 `options` can include `start` and `end` values to read a range of bytes from
 the file instead of the entire file.  Both `start` and `end` are inclusive and
-start at 0.  When used, both the limits must be specified always.
+start at 0.
 
 -->
 ファイル全体を読み込む代わりに一部の範囲を読み込むため、
 `options` に `start` および `end` を含めることができます。
 `start` と `end` はどちらも包含的で0から始まります。
-使う際にはいつでも、両方を同時に指定しなければなりません。
 
 <!--
 

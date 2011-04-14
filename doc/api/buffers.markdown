@@ -103,14 +103,14 @@ Allocates a new buffer containing the given `str`.
 
 Writes `string` to the buffer at `offset` using the given encoding. Returns
 number of octets written.  If `buffer` did not contain enough space to fit
-the entire string, it will write a partial amount of the string. In the case
-of `'utf8'` encoding, the method will not write partial characters.
+the entire string, it will write a partial amount of the string.
+The method will not write partial characters.
 
 -->
 与えられたエンコーディングを使用して、`string` をバッファの `offset` から書き込みます。
 書き込まれたオクテット数を返します。
 もし `buffer` が文字列全体を挿入するのに十分なスペースを含んでいなければ、文字列の一部だけを書き込みます。
-`'utf8'` エンコーディングの場合、このメソッドは文字の一部だけを書き込むことはありません。
+このメソッドは文字の一部だけを書き込むことはありません。
 
 <!--
 
@@ -123,6 +123,16 @@ Example: write a utf8 string into a buffer, then print it
     len = buf.write('\u00bd + \u00bc = \u00be', 0);
     console.log(len + " bytes: " + buf.toString('utf8', 0, len));
 
+<!--
+
+The number of characters written (which may be different than the number of
+bytes written) is set in `Buffer._charsWritten` and will be overwritten the
+next time `buf.write()` is called.
+
+-->
+書き込まれた文字数 (書き込まれたバイト数とは異なる場合があります) は、
+次に `buf.write()` が呼び出されて上書きされるまで
+`Buffer._charsWritten` に設定されています。
 
 ### buffer.toString(encoding, start=0, end=buffer.length)
 

@@ -32,13 +32,6 @@ It is possible to extend node with other modules.  See `'Modules'`
 
 <!--
 
-Node uses the CommonJS module system.
-
--->
-Node は CommonJS のモジュールシステムを使います。
-
-<!--
-
 Node has a simple module loading system.  In Node, files and modules are in
 one-to-one correspondence.  As an example, `foo.js` loads the module
 `circle.js` in the same directory.
@@ -278,6 +271,66 @@ exactly the same object returned, if it would resolve to the same file.
 -->
 モジュールは初めて読み込まれたときにキャッシュされます。
 すなわち（他のキャッシュと同様に） `require('foo')` を呼ぶたびに、もし引数の意味するものが同一のファイルであったなら全く同一のオブジェクトが返されます。
+
+### module.exports
+
+<!--
+
+The `exports` object is created by the Module system. Sometimes this is not
+acceptable, many want their module to be an instance of some class. To do this
+assign the desired export object to `module.exports`. For example suppose we
+were making a module called `a.js`
+
+-->
+`exports` オブジェクトはモジュールシステムによって作成されます。
+時々これは受け入れられず、多くのモジュールは何らかのクラスのインスタンスであることを望みます。
+それには公開したいオブジェクトを `module.exports` に割り当てます。
+例えば `a.js` と呼ばれるモジュールを作るとしたら
+
+
+    var EventEmitter = require('events').EventEmitter;
+
+    module.exports = new EventEmitter();
+
+    // Do some work, and after some time emit
+    // the 'ready' event from the module itself.
+    setTimeout(function() {
+      module.exports.emit('ready');
+    }, 1000);
+
+<!--
+
+Then in another file we could do
+
+-->
+そして別のファイルで
+
+    var a = require('./a');
+    a.on('ready', function() {
+      console.log('module a is ready');
+    });
+
+
+<!--
+
+Note that assignment to `module.exports` must be done immediately. It cannot be
+done in any callbacks.  This does not work:
+
+-->
+`module.exports` への代入はすぐに行わなければなりません。
+コールバックの中ではできません。以下は動きません。
+
+x.js:
+
+    setTimeout(function() {
+      module.exports = { a: "hello" };
+    }, 0);
+
+y.js
+
+    var x = require('./x');
+    console.log(x.a);
+
 
 ### All Together...
 

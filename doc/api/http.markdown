@@ -69,6 +69,16 @@ This is an `EventEmitter` with the following events:
 
 <!--
 
+Emitted each time there is request. Note that there may be multiple requests
+per connection (in the case of keep-alive connections).
+
+-->
+リクエストの度に生成されます。
+コネクションごとに複数のリクエストがあるかもしれないことに注意してください
+(Keep Alive なコネクションの場合)。
+
+<!--
+
  `request` is an instance of `http.ServerRequest` and `response` is
  an instance of `http.ServerResponse`
 
@@ -102,19 +112,6 @@ This is an `EventEmitter` with the following events:
 
 -->
 サーバがクローズした時に生成されます。
-
-### Event: 'request'
-
-`function (request, response) {}`
-
-<!--
-
-Emitted each time there is request. Note that there may be multiple requests
-per connection (in the case of keep-alive connections).
-
--->
-リクエストの度に生成されます。コネクションごとに複数のリクエストがあることに注意してください
-(Keep Alive なコネクションの場合)。
 
 ### Event: 'checkContinue'
 
@@ -305,7 +302,7 @@ Emitted when a piece of the message body is received.
 Example: A chunk of the body is given as the single
 argument. The transfer-encoding has been decoded.  The
 body chunk is a string.  The body encoding is set with
-`request.setBodyEncoding()`.
+`request.setEncoding()`.
 
 -->
 例: 一つの引数としてボディのチャンクが与えられます。
