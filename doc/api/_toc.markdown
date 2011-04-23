@@ -4,6 +4,7 @@
 
 * [Synopsis](synopsis.html)
 * [Globals](globals.html)
+* [STDIO](stdio.html)
 * [Timers](timers.html)
 * [Modules](modules.html)
 * [C/C++ Addons](addons.html)
@@ -39,6 +40,7 @@
 -->
 * [概要](synopsis.html)
 * [グローバル](globals.html)
+* [標準入出力](stdio.html)
 * [タイマー](timers.html)
 * [モジュール](modules.html)
 * [C/C++ アドオン](addons.html)

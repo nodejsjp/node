@@ -38,6 +38,16 @@ The process object. See the [process object](process.html#process) section.
 -->
 プロセスオブジェクトです。[process object](process.html#process) の節を参照してください。
 
+### console
+
+<!--
+
+Used to print to stdout and stderr. See the [stdio](stdio.html) section.
+
+-->
+標準出力および標準エラー出力へのプリントに使われます。
+[標準入出力](stdio.html) を参照してください。
+
 ### require()
 
 <!--

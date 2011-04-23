@@ -551,6 +551,19 @@ implicit/mutable headers will be calculated and call this function for you.
 
 もしこのメソッドが呼び出される前に `response.write()` または `response.end()` が呼ばれると、暗黙的で可変のヘッダが算出されてこの関数が呼び出されます。
 
+<!--
+
+Note: that Content-Length is given in bytes not characters. The above example
+works because the string `'hello world'` contains only single byte characters.
+If the body contains higher coded characters then `Buffer.byteLength()`
+should be used to determine the number of bytes in a given encoding.
+
+-->
+注意: `Content-Length` は文字数ではなくバイト数で与えられます。
+上の例が動作するのは `'hello world'` という文字列が単一バイト文字だけを含むためです。
+もしボディがより上位にコード化された文字を含む場合は、
+指定したエンコーディングによるバイト数を得るために `Buffer.byteLength()` を使うべきです。
+
 ### response.statusCode
 
 <!--
