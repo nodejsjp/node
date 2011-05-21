@@ -63,7 +63,7 @@ Example of using `vm.runInThisContext` and `eval` to run the same code:
 <!--
 
 In case of syntax error in `code`, `vm.runInThisContext` emits the syntax error to stderr
-and throws.an exception.
+and throws an exception.
 
 -->
 `code` が文法エラーとなるケースでは、`vm.runInThisContext` は標準エラーに文法エラーを出力し、
@@ -120,12 +120,12 @@ requires a separate process.
 
 <!--
 
-In case of syntax error in `code`, `vm.runInThisContext` emits the syntax error to stderr
+In case of syntax error in `code`, `vm.runInNewContext` emits the syntax error to stderr
 and throws an exception.
 
 -->
 `code` が文法エラーとなるケースでは、
-`vm.runInThisContext` は標準エラーに文法エラーを出力し、例外をスローします。
+`vm.runInNewContext` は標準エラーに文法エラーを出力し、例外をスローします。
 
 
 ### vm.createScript(code, [filename])

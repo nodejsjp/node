@@ -67,13 +67,15 @@ necessarily the value initially passed to `lookup`).
 Resolves a domain (e.g. `'google.com'`) into an array of the record types
 specified by rrtype. Valid rrtypes are `A` (IPV4 addresses), `AAAA` (IPV6
 addresses), `MX` (mail exchange records), `TXT` (text records), `SRV` (SRV
-records), and `PTR` (used for reverse IP lookups).
+records), `PTR` (used for reverse IP lookups), `NS` (name server records)
+and `CNAME` (canonical name records).
 
 -->
 ドメイン (例 `'google.com'`) を解決して `rrtype` で指定されたレコードタイプの配列にします。
 妥当な `rrtype` は `A` (IPV4アドレス)、`AAAA` (IPV6アドレス)、
 `MX` (mail exchangeレコード), `TXT` (テキストレコード)、`SRV` (SRVレコード)、
-`PTR` (IP を逆引きでルックアップするために使われる) です。
+`PTR` (IP を逆引きでルックアップするために使われる)、`NS`
+(ネームサーバレコード)、そして CNAME (別名レコード) です。
 
 <!--
 
@@ -149,7 +151,7 @@ The same as `dns.resolve()`, but only for text queries (`TXT` records).
 
 -->
 `dns.resolve()` と同じですが、テキスト (`TXT` レコード) だけを問い合わせます。
-`addresses` は利用可能な `domain` のテキストレコードの配列です。
+`addresses` は `domain` で利用可能なテキストレコードの配列です。
 (例、`['v=spf1 ip4:0.0.0.0 ~all']`)
 
 ### dns.resolveSrv(domain, callback)
@@ -163,7 +165,7 @@ of SRV records are priority, weight, port, and name (e.g.,
 
 -->
 `dns.resolve()` と同じですが、サービスレコード (`SRV` レコード) だけを問い合わせます。
-`addresses` は利用可能な `domain` の SRV レコードの配列です。
+`addresses` は `domain` で利用可能な SRV レコードの配列です。
 SRV レコードのプロパティは priority、weight、port、そして name です
 (例 `[{'priority': 10, {'weight': 5, 'port': 21223, 'name': 'service.example.com'}, ...]`)。
 
@@ -182,6 +184,34 @@ The callback has arguments `(err, domains)`.
 
 -->
 コールバックは引数 `(err, domains)` を持ちます。
+
+### dns.resolveNs(domain, callback)
+
+<!--
+
+The same as `dns.resolve()`, but only for name server records (`NS` records).
+`addresses` is an array of the name server records available for `domain`
+(e.g., `['ns1.example.com', 'ns2.example.com']`).
+
+-->
+`dns.resolve()` と同じですが、ネームサーバレコード (`NS` レコード) 
+だけを問い合わせます。
+`address` は `domain` で利用可能なネームサーバレコードの配列です
+(例 `['ns1.example.com', 'ns2.example.com']`)。
+
+### dns.resolveCname(domain, callback)
+
+<!--
+
+The same as `dns.resolve()`, but only for canonical name records (`CNAME`
+records). `addresses` is an array of the canonical name records available for
+`domain` (e.g., `['bar.example.com']`).
+
+-->
+`dns.resolve()` と同じですが、別名レコード (`CNAME` レコード) 
+だけを問い合わせます。
+`address` は `domain` で利用可能な別名レコードの配列です
+`domain` (e.g., `['bar.example.com']`)。
 
 <!--
 

@@ -10,7 +10,28 @@ HTTPS は TLS/SSL 上の HTTP プロトコルです。
 Node ではこれらは別のモジュールとして実装されています。
 
 ## https.Server
-## https.createServer
+
+<!--
+
+This class is a subclass of `tls.Server` and emits events same as
+`http.Server`. See `http.Server` for more information.
+
+-->
+このクラスは `tls.Server` のサブクラスで、`http.Server` と同様のイベントを生成します。
+より詳しくは `http.Server` を参照してください。
+
+## https.createServer(options, [requestListener])
+
+<!--
+
+Returns a new HTTPS web server object. The `options` is similer to
+`tls.createServer()`. The `requestListener` is a function which is
+automatically added to the `'request'` event.
+
+-->
+新しい HTTPS Web サーバオブジェクトを返します。
+`option` は `tls.createServer()` と同じです。
+`requestListener` は関数で、 `'request'` イベントに自動的に追加されます。
 
 <!--
 
