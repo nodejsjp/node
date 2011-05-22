@@ -21,51 +21,33 @@
 
 var common = require('../common');
 var assert = require('assert');
-var tls = require('tls');
+var https = require('https');
 var fs = require('fs');
 
+var closeError;
 
 var options = {
-  key: fs.readFileSync(common.fixturesDir + '/keys/agent2-key.pem'),
-  cert: fs.readFileSync(common.fixturesDir + '/keys/agent2-cert.pem')
+  key: fs.readFileSync(common.fixturesDir + '/keys/agent1-key.pem'),
+  cert: fs.readFileSync(common.fixturesDir + '/keys/agent1-cert.pem')
 };
 
-var connections = 0;
-var message = "hello world\n";
+var server = https.Server(options, function(req, res) {
+  req.connection.setTimeout(100);
+  res.writeHead(200);
+  res.write('Hi');
 
-
-var server = tls.Server(options, function(socket) {
-  socket.end(message);
-  connections++;
-});
-
-
-server.listen(common.PORT, function() {
-  var client = tls.connect(common.PORT);
-
-  var buffer = '';
-
-  client.setEncoding('utf8');
-
-  client.on('data', function(d) {
-    assert.ok(typeof d === 'string');
-    buffer += d;
-  });
-
-
-  client.on('close', function() {
-    // readyState is deprecated but we want to make
-    // sure this isn't triggering an assert in lib/net.js
-    // See issue #1069.
-    assert.equal('closed', client.readyState);
-
-    assert.equal(buffer, message);
-    console.log(message);
+  req.on('close', function(err) {
+    closeError = err;
     server.close();
   });
 });
 
+server.listen(common.PORT, function() {
+  https.get({port: common.PORT, path: '/'}, function(res) {
+
+  })
+});
 
 process.on('exit', function() {
-  assert.equal(1, connections);
+  assert.equal(closeError.code, 'timeout');
 });

@@ -222,11 +222,27 @@ Start a server listening for connections on the given file descriptor.
 <!--
 
 This file descriptor must have already had the `bind(2)` and `listen(2)` system
-calls invoked on it.
+calls invoked on it.  Additionally, it must be set non-blocking; try
+`fcntl(fd, F_SETFL, O_NONBLOCK)`.
 
 -->
 このファイル記述子は既に `bind(2)` および
 `listen(2)` システムコールが呼び出されていなければなりません。
+加えて、ノンブロッキングに設定されていなければなりません。
+`fcntl(fd, F_SETFL, O_NONBLOCK)` を試してください。
+
+#### server.pause(msecs)
+
+<!--
+
+Stop accepting connections for the given number of milliseconds (default is
+one second).  This could be useful for throttling new connections against
+DoS attacks or other oversubscription.
+
+-->
+接続の待ち受けをミリ秒で与えられた時間だけ中断します (デフォルトは 1 秒です)。
+これは、新しい接続を抑えることで DoS 攻撃やその他の加入超過に対抗するために
+役立ちます。
 
 #### server.close()
 
@@ -245,12 +261,15 @@ event.
 
 <!--
 
-Returns the bound address of the server as seen by the operating system.
-Useful to find which port was assigned when giving getting an OS-assigned address
+Returns the bound address and port of the server as reported by the operating system.
+Useful to find which port was assigned when giving getting an OS-assigned address.
+Returns an object with two properties, e.g. `{"address":"127.0.0.1", "port":2121}`
 
 -->
-オペレーティングシステムによってサーバにバインドされたアドレスを返します。
+オペレーティングシステムから報告された、サーバにバインドされたアドレスとポートを返します。
 OSによって割り当てられたアドレスが渡された時に、どのポートに割り当てられたものかを調べるのに便利です。
+返されるオブジェクトは二つのプロパティを持ちます。
+例えば `{"address":"127.0.0.1", "port":2121}`
 
 <!--
 
@@ -634,6 +653,18 @@ initialDelay will leave the value unchanged from the default
 `initialDelay` (ミリ秒) が設定されると、
 最後にデータパケットを受信してから最初の keepalive probe までの遅延が設定されます。
 初期遅延に 0 が設定されると、デフォルト設定から値を変更されないようにします。
+
+#### socket.address()
+
+<!--
+
+Returns the bound address and port of the socket as reported by the operating system.
+Returns an object with two properties, e.g. `{"address":"192.168.57.1", "port":62053}`
+
+-->
+オペレーティングシステムから報告された、ソケットにバインドされたアドレスとポートを返します。
+返されるオブジェクトは二つのプロパティを持ちます。
+例えば `{"address":"192.168.57.1", "port":62053}`
 
 #### socket.remoteAddress
 

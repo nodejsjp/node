@@ -99,7 +99,7 @@ Emitted when the processes receives a signal. See sigaction(2) for a list of
 standard POSIX signal names such as SIGINT, SIGUSR1, etc.
 
 -->
-プロセスがシグナルを受信た場合に生成されます。
+プロセスがシグナルを受信した場合に生成されます。
 SIGINT、SIGUSR1、その他の POSIX 標準シグナル名の一覧について は sigaction(2) を参照してください。
 
 <!--

@@ -195,7 +195,7 @@ If a client connection emits an 'error' event - it will forwarded here.
 -->
 クライアントコネクションが 'error' イベントを発した場合 － ここに転送されます。
 
-### http.createServer(requestListener)
+### http.createServer([requestListener])
 
 <!--
 
@@ -316,13 +316,68 @@ body chunk is a string.  The body encoding is set with
 
 <!--
 
-Emitted exactly once for each message. No arguments.  After
-emitted no other events will be emitted on the request.
+Emitted exactly once for each request. After that, no more `'data'` events
+will be emitted on the request.
 
 -->
-メッセージごとに厳密に一回生成されます。引数はありません。
-このイベントが生成された後、このリクエストで生成されるイベントはありません。
+リクエストごとに厳密に一回生成されます。
+その後、このリクエストで `'data'` イベントが生成されることはありません。
 
+### Event: 'close'
+
+`function (err) { }`
+
+<!--
+
+Indicates that the underlaying connection was terminated before
+`response.end()` was called or able to flush.
+
+-->
+`response.end()` が呼び出されたり、フラッシュされる前に下層の接続が
+切断されたことを示します。
+
+<!--
+
+The `err` parameter is always present and indicates the reason for the timeout:
+
+-->
+`err` パラメータは常に与えられ、クローズの理由を示します。
+
+<!--
+
+`err.code === 'timeout'` indicates that the underlaying connection timed out.
+This may happen because all incoming connections have a default timeout of 2
+minutes.
+
+-->
+`err.code === 'timeout'` は下層のコネクションがタイムアウトしたことを示します。
+これは、全ての着信側の接続はデフォルト 2 分でタイムアウトするために発生します。
+
+<!--
+
+`err.code === 'aborted'` means that the client has closed the underlaying
+connection prematurely.
+
+-->
+`err.code === 'aborted'` はクライアントが仮想の接続をいち早く切断したことを
+意味します。
+
+<!--
+
+Just like `'end'`, this event occurs only once per request, and no more `'data'`
+events will fire afterwards.
+
+-->
+`'end'` と同様、このイベントはリクエスト上で一度だけ発生し、その後ではもう
+`'data'` イベントが発生することはありません。
+
+<!--
+
+Note: `'close'` can fire after `'end'`, but not vice versa.
+
+-->
+注意: `'close'` は `'end'` の後で発生することがあります。
+その逆もあります。
 
 ### request.method
 
@@ -837,6 +892,10 @@ Example:
       });
     });
 
+    req.on('error', function(e) {
+      console.log('problem with request: ' + e.message);
+    });
+
     // write data to request body
     req.write('data\n');
     req.write('data\n');
@@ -941,13 +1000,13 @@ agent. The `http.getAgent()` function allows you to access the agents.
 
 ### Event: 'upgrade'
 
-`function (request, socket, head)`
+`function (response, socket, head)`
 
 <!--
 
-Emitted each time a server responds to a request with an upgrade. If this event
-isn't being listened for, clients receiving an upgrade header will have their
-connections closed.
+Emitted each time a server responds to a request with an upgrade. If this
+event isn't being listened for, clients receiving an upgrade header will have
+their connections closed.
 
 -->
 サーバがアップグレード要求に応答する度に生成されます。
@@ -955,10 +1014,55 @@ connections closed.
 
 <!--
 
-See the description of the [upgrade event](http.html#event_upgrade_) for `http.Server` for further details.
-
+A client server pair that show you how to listen for the `upgrade` event using `http.getAgent`:
 -->
-より詳しくは `http.Server` の [upgrade イベント](http.html#event_upgrade_) イベントの説明を参照してください。
+`http.getAget` を使ってどのように `upgrade` イベントを監視するかを示す、
+クライアントとサーバのペア:
+
+    var http = require('http');
+    var net = require('net');
+
+    // Create an HTTP server
+    var srv = http.createServer(function (req, res) {
+      res.writeHead(200, {'Content-Type': 'text/plain'});
+      res.end('okay');
+    });
+    srv.on('upgrade', function(req, socket, upgradeHead) {
+      socket.write('HTTP/1.1 101 Web Socket Protocol Handshake\r\n' +
+                   'Upgrade: WebSocket\r\n' +
+                   'Connection: Upgrade\r\n' +
+                   '\r\n\r\n');
+
+      socket.ondata = function(data, start, end) {
+        socket.write(data.toString('utf8', start, end), 'utf8'); // echo back
+      };
+    });
+
+    // now that server is running
+    srv.listen(1337, '127.0.0.1', function() {
+
+      // make a request
+      var agent = http.getAgent('127.0.0.1', 1337);
+
+      var options = {
+        agent: agent,
+        port: 1337,
+        host: '127.0.0.1',
+        headers: {
+          'Connection': 'Upgrade',
+          'Upgrade': 'websocket'
+        }
+      };
+
+      var req = http.request(options);
+      req.end();
+
+      agent.on('upgrade', function(res, socket, upgradeHead) {
+        console.log('got upgraded!');
+        socket.end();
+        process.exit(0);
+      });
+    });
 
 ### Event: 'continue'
 
