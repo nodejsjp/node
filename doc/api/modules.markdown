@@ -272,6 +272,45 @@ exactly the same object returned, if it would resolve to the same file.
 モジュールは初めて読み込まれたときにキャッシュされます。
 すなわち（他のキャッシュと同様に） `require('foo')` を呼ぶたびに、もし引数の意味するものが同一のファイルであったなら全く同一のオブジェクトが返されます。
 
+<!--
+
+Multiple calls to `require('foo')` may not cause the module code to be
+executed multiple times.  This is an important feature.  With it,
+"partially done" objects can be returned, thus allowing transitive
+dependencies to be loaded even when they would cause cycles.
+
+-->
+`require('foo')` が複数回呼び出されても、モジュールが複数回実行されることにはなりません。
+これは重要な特徴です。
+そのため、「部分的に完了した」オブジェクトを返すことで、
+推移的な依存関係が循環していてもロードすることができます。
+
+<!--
+
+If you want to have a module execute code multiple times, then export a
+function, and call that function.
+
+-->
+もしモジュールを複数回実行したければ、関数を公開して、
+その関数を呼び出してください。
+
+#### Module Caching Caveats
+
+<!--
+
+Modules are cached based on their resolved filename.  Since modules may
+resolve to a different filename based on the location of the calling
+module (loading from `node_modules` folders), it is not a *guarantee*
+that `require('foo')` will always return the exact same object, if it
+would resolve to different files.
+
+-->
+モジュールは解決されたファイル名に基づいてキャッシュされます。
+異なる場所にあるモジュールから呼び出されたモジュールは、
+(`node_module` フォルダからロードされるため) 異なったファイル名で
+解決されることがあるため、 `require('foo')` が常に同じオブジェクトを返す
+*保証*はなく、異なるファイルとして解決されます。
+
 ### module.exports
 
 <!--
@@ -326,7 +365,7 @@ x.js:
       module.exports = { a: "hello" };
     }, 0);
 
-y.js
+y.js:
 
     var x = require('./x');
     console.log(x.a);
@@ -350,11 +389,11 @@ in pseudocode of what require.resolve does:
 -->
 上で述べたことをまとめると、 require.resolve は以下の擬似コードで記述されるようなハイレベルなアルゴリズムに則っています:
 
-    require(X)
+    require(X) from module at path Y
     1. If X is a core module,
        a. return the core module
        b. STOP
-    2. If X begins with `./` or `/`,
+    2. If X begins with './' or '/' or '../'
        a. LOAD_AS_FILE(Y + X)
        b. LOAD_AS_DIRECTORY(Y + X)
     3. LOAD_NODE_MODULES(X, dirname(Y))
@@ -387,6 +426,7 @@ in pseudocode of what require.resolve does:
        a. if PARTS[I] = "node_modules" CONTINUE
        c. DIR = path join(PARTS[0 .. I] + "node_modules")
        b. DIRS = DIRS + DIR
+       c. let I = I - 1
     6. return DIRS
 
 ### Loading from the `require.paths` Folders
@@ -447,17 +487,14 @@ Global modules are lower priority than bundled dependencies.
 
 <!--
 
-For compatibility reasons, `require.paths` is still given first priority
-in the module lookup process.  However, it may disappear in a future
-release.
+`require.paths` may disappear in a future release.
 
 While it seemed like a good idea at the time, and enabled a lot of
 useful experimentation, in practice a mutable `require.paths` list is
 often a troublesome source of confusion and headaches.
 
 -->
-後方互換性を保つために `require.paths` は今のところモジュールを探す過程において最も優先されます。
-しかし、将来のバージョンでは `require.paths` は無くなる予定です。
+将来のバージョンでは `require.paths` は無くなる予定です。
 
 実装当時はよいアイデアだと思われ実験的に使う分にはとても有用でしたが、実際に使いだしてみると変更可能な `require.paths` のリストというものはやっかいな混乱と頭痛の種になることがしばしばあったのです。
 
@@ -525,15 +562,47 @@ all modules.
 As a result, if one node program comes to rely on this behavior, it may
 permanently and subtly alter the behavior of all other node programs in
 the same process.  As the application stack grows, we tend to assemble
-functionality, and it is a problem with those parts interact in ways
-that are difficult to predict.
+functionality, and those parts interact in ways that are difficult to
+predict.
 
 -->
 （残念なことに）たった一つの `require.paths` 配列が全てのモジュールによって使われるという設計になっています。
 
 その結果、もしある Node プログラムが上記の挙動を行っていたら、同じプロセス上にいる他の全ての Node プログラムの動作も永遠にそして微妙に変化させてしまいます。
-アプリケーションが成長するにつれ、私たちは機能をまとめていきます。
-そしてその中に上記のような他へ影響を及ぼす箇所があると、それはとても予測するのが難しい問題となってしまいます。
+アプリケーションが成長するにつれ、私たちは機能をまとめていきますが、
+それらがどのように影響するかを予測するのが難しくなります。
+
+### Accessing the main module
+
+<!--
+
+When a file is run directly from Node, `require.main` is set to its
+`module`. That means that you can determine whether a file has been run
+directly by testing
+
+-->
+ファイルがNodeによって直接実行される場合、その `module` が
+`require.main` に設定されます。
+これは、ファイルが直接実行されたかを決定できることを意味します。
+
+    require.main === module
+
+<!--
+
+For a file `foo.js`, this will be `true` if run via `node foo.js`, but
+`false` if run by `require('./foo')`.
+
+Because `module` provides a `filename` property (normally equivalent to
+`__filename`), the entry point of the current application can be obtained
+by checking `require.main.filename`.
+
+-->
+`foo.js` ファイルの場合、`node foo.js` と実行された場合にこれは `true` 
+になりますが、`require('./foo')` で実行された場合は `false` になります。
+
+`module` は `filename` プロパティ (通常 `__filename` と同じです) 
+を提供するため、現在のアプリケーションのエントリポイントは
+`require.main.filename` をチェックすることで得ることができます。
 
 ## Addenda: Package Manager Tips
 
