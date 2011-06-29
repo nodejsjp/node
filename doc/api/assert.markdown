@@ -13,10 +13,11 @@ access it with `require('assert')`.
 
 <!--
 
-Tests if `actual` is equal to `expected` using the operator provided.
+Throws an exception that displays the values for `actual` and `expected` separated by the provided operator.
 
 -->
-`actual` が `expected` と等しいか、提供された演算子を使ってテストします。
+`actual` と `expected` を `operator` で区切ったメッセージを持つ例外を
+スローします。
 
 ### assert.ok(value, [message])
 

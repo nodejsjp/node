@@ -19,38 +19,17 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+var common = require('../common');
+var assert = require('assert');
+var spawn = require('child_process').spawn;
+var path = require('path');
+var fs = require('fs');
 
-#include "node_config.h"
+var options = {
+  cwd: common.fixturesDir
+};
+var child = spawn(process.execPath, ['-e', 'require("foo")'], options);
+child.on('exit', function(code) {
+  assert.equal(code, 0);
+});
 
-#ifndef NODE_VERSION_H
-#define NODE_VERSION_H
-
-#define NODE_MAJOR_VERSION 0
-#define NODE_MINOR_VERSION 4
-#define NODE_PATCH_VERSION 9
-#define NODE_VERSION_IS_RELEASE 1
-
-#ifndef NODE_STRINGIFY
-#define NODE_STRINGIFY(n) NODE_STRINGIFY_HELPER(n)
-#define NODE_STRINGIFY_HELPER(n) #n
-#endif
-
-#if NODE_VERSION_IS_RELEASE
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION)
-#else
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION) "-pre"
-#endif
-
-#define NODE_VERSION "v" NODE_VERSION_STRING
-
-
-#define NODE_VERSION_AT_LEAST(major, minor, patch) \
-  (( (major) < NODE_MAJOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) < NODE_MINOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) == NODE_MINOR_VERSION && (patch) <= NODE_PATCH_VERSION))
-
-#endif /* NODE_VERSION_H */

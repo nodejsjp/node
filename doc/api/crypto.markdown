@@ -211,11 +211,11 @@ Returns the enciphered contents, and can be called many times with new data as i
 
 <!--
 
-Returns any remaining enciphered contents, with `output_encoding` being one of: `'binary'`, `'ascii'` or `'utf8'`.
+Returns any remaining enciphered contents, with `output_encoding` being one of: `'binary'`, `'base64'` or `'hex'`.
 
 -->
 暗号化されたコンテンツの残りを返します。
-`output_encoding` は次のいずれかです: `'binary'`、`'ascii'` または `'utf8'`
+`output_encoding` は次のいずれかです: `'binary'`、`'base64'` または `'hex'`
 
 ### crypto.createDecipher(algorithm, key)
 
@@ -245,7 +245,7 @@ The `output_decoding` specifies in what format to return the deciphered plaintex
 <!--
 
 Returns any remaining plaintext which is deciphered,
-with `output_encoding' being one of: `'binary'`, `'ascii'` or `'utf8'`.
+with `output_encoding` being one of: `'binary'`, `'ascii'` or `'utf8'`.
 
 -->
 復号化されたプレーンテキストの残りを返します。
@@ -315,17 +315,20 @@ This can be called many times with new data as it is streamed.
 検証オブジェクトをデータで更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
 
-### verifier.verify(cert, signature, signature_format='binary')
+### verifier.verify(object, signature, signature_format='binary')
 
 <!--
 
-Verifies the signed data by using the `cert` which is a string containing
-the PEM encoded certificate, and `signature`, which is the previously calculates
-signature for the data, in the `signature_format` which can be `'binary'`, `'hex'` or `'base64'`.
+Verifies the signed data by using the `object` and `signature`. `object` is  a
+string containing a PEM encoded object, which can be one of RSA public key,
+DSA public key, or X.509 certificate. `signature` is the previously calculated
+signature for the data, in the `signature_format` which can be `'binary'`,
+`'hex'` or `'base64'`.
 
 -->
-署名されたデータを `cert` と `signature` で検証します。
-`cert` は PEM でエンコードされた証明書を含む文字列です。
+署名されたデータを `object` と `signature` で検証します。
+`object` は RSA 公開鍵、DSA 公開鍵、X.509証明書のいずれかを
+PEM でエンコードしたオブジェクトです。
 `signature` は先に計算したデータの署名で、
 その `signature_format` は `'binary'`、`'hex'`、または `'base64'` のいずれかです。
 

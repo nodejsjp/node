@@ -32,7 +32,7 @@ Output with timestamp on `stdout`.
 -->
 タイムスタンプとともに `stdout` へ出力します。
 
-    require('util').log('Timestmaped message.');
+    require('util').log('Timestamped message.');
 
 
 ### util.inspect(object, showHidden=false, depth=2)

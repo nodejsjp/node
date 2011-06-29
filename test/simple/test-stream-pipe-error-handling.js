@@ -19,38 +19,40 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+var common = require('../common');
+var assert = require('assert');
+var Stream = require('stream').Stream;
 
-#include "node_config.h"
+(function testErrorListenerCatches() {
+  var source = new Stream();
+  var dest = new Stream();
 
-#ifndef NODE_VERSION_H
-#define NODE_VERSION_H
+  source.pipe(dest);
 
-#define NODE_MAJOR_VERSION 0
-#define NODE_MINOR_VERSION 4
-#define NODE_PATCH_VERSION 9
-#define NODE_VERSION_IS_RELEASE 1
+  var gotErr = null;
+  source.on('error', function(err) {
+    gotErr = err;
+  });
 
-#ifndef NODE_STRINGIFY
-#define NODE_STRINGIFY(n) NODE_STRINGIFY_HELPER(n)
-#define NODE_STRINGIFY_HELPER(n) #n
-#endif
+  var err = new Error('This stream turned into bacon.');
+  source.emit('error', err);
+  assert.strictEqual(gotErr, err);
+})();
 
-#if NODE_VERSION_IS_RELEASE
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION)
-#else
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION) "-pre"
-#endif
+(function testErrorWithoutListenerThrows() {
+  var source = new Stream();
+  var dest = new Stream();
 
-#define NODE_VERSION "v" NODE_VERSION_STRING
+  source.pipe(dest);
 
+  var err = new Error('This stream turned into bacon.');
 
-#define NODE_VERSION_AT_LEAST(major, minor, patch) \
-  (( (major) < NODE_MAJOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) < NODE_MINOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) == NODE_MINOR_VERSION && (patch) <= NODE_PATCH_VERSION))
+  var gotErr = null;
+  try {
+    source.emit('error', err);
+  } catch (e) {
+    gotErr = e;
+  }
 
-#endif /* NODE_VERSION_H */
+  assert.strictEqual(gotErr, err);
+})();
