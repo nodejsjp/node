@@ -189,26 +189,29 @@ See the [fs.Stats](#fs.Stats) section below for more information.
 <!--
 
 Asynchronous lstat(2). The callback gets two arguments `(err, stats)` where
-`stats` is a `fs.Stats` object. lstat() is identical to stat(), except that if
-path is a symbolic link, then the link itself is stat-ed, not the file that it
+`stats` is a `fs.Stats` object. `lstat()` is identical to `stat()`, except that if
+`path` is a symbolic link, then the link itself is stat-ed, not the file that it
 refers to.
 
 -->
 非同期の lstat(2)。コールバックは 2 つの引数を受け取る `(err, stats)`で、
 `stats` は `fs.Stats` オブジェクトです。
-lstat() はパスがシンボリックリンクだった場合に、
-参照先のファイルではなくそのリンク自身が調べられる点を除いて stat() と同じす。
+`lstat()` はパスがシンボリックリンクだった場合に、
+参照先のファイルではなくそのリンク自身が調べられる点を除いて `stat()` と同じす。
 
 ### fs.fstat(fd, [callback])
 
 <!--
 
 Asynchronous fstat(2). The callback gets two arguments `(err, stats)` where
-`stats` is a `fs.Stats` object.
+`stats` is a `fs.Stats` object. `fstat()` is identical to `stat()`, except that
+the file to be stat-ed is specified by the file descriptor `fd`.
 
 -->
 非同期の fstat(2)。コールバックは 2 つの引数を受け取る `(err, stats)` で、
 `stats` は `fs.Stats` オブジェクトです。
+状態を取得するファイルをファイル記述子 `fd` で指定することを除いて、
+`fstat()` は `stat()` と同じです。
 
 ### fs.statSync(path)
 

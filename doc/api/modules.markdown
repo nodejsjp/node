@@ -152,8 +152,7 @@ parent directory of the current module, and adds `/node_modules`, and
 attempts to load the module from that location.
 
 If it is not found there, then it moves to the parent directory, and so
-on, until either the module is found, or the root of the tree is
-reached.
+on, until the root of the tree is reached.
 
 For example, if the file at `'/home/ry/projects/foo.js'` called
 `require('bar.js')`, then node would look in the following locations, in
@@ -178,40 +177,6 @@ clash.
 
 -->
 この仕組みによって、プログラムはクラッシュを避けるために依存関係を上書きすることができるのです。
-
-#### Optimizations to the `node_modules` Lookup Process
-
-<!--
-
-When there are many levels of nested dependencies, it is possible for
-these file trees to get fairly long.  The following optimizations are thus
-made to the process.
-
-First, `/node_modules` is never appended to a folder already ending in
-`/node_modules`.
-
-Second, if the file calling `require()` is already inside a `node_modules`
-hierarchy, then the top-most `node_modules` folder is treated as the
-root of the search tree.
-
-For example, if the file at
-`'/home/ry/projects/foo/node_modules/bar/node_modules/baz/quux.js'`
-called `require('asdf.js')`, then node would search the following
-locations:
-
--->
-ネストした依存関係には様々な深さがあるため、ファイルツリーがかなり長くなってしまうことがあります。
-それ故、次のような最適化が行われています。
-
-まず、 `/node_modules` はフォルダ名が `node_modules` で終わっている場合には追加されません。
-
-次に、 `require()` を呼び出しているファイルがすでに `node_modules` 配下のフォルダ内に存在していれば、一番上に存在している `node_modules` フォルダが検索ツリーのrootとして扱われます。
-
-例えば、 `'/home/ry/projects/foo/node_modules/bar/node_modules/baz/quux.js'` にあるファイルが `require('asdf.js')` を呼んでいた場合、 Node は次の順番で探しにいきます。
-
-* `/home/ry/projects/foo/node_modules/bar/node_modules/baz/node_modules/asdf.js`
-* `/home/ry/projects/foo/node_modules/bar/node_modules/asdf.js`
-* `/home/ry/projects/foo/node_modules/asdf.js`
 
 ### Folders as Modules
 
@@ -603,6 +568,41 @@ by checking `require.main.filename`.
 `module` は `filename` プロパティ (通常 `__filename` と同じです) 
 を提供するため、現在のアプリケーションのエントリポイントは
 `require.main.filename` をチェックすることで得ることができます。
+
+### Accessing the main module
+
+<!--
+
+When a file is run directly from Node, `require.main` is set to its
+`module`. That means that you can determine whether a file has been run
+directly by testing
+
+-->
+ファイルが Node によって直接実行される場合、そのファイルの `module` が
+`require.main` に設定されます。
+これは、ファイルが直接実行されているかテストできることを意味します。
+
+    require.main === module
+
+<!--
+
+For a file `foo.js`, this will be `true` if run via `node foo.js`, but
+`false` if run by `require('./foo')`.
+
+-->
+`foo.js` ファイルでは、`node foo.js` と実行された場合これは `true`
+となりますが、`require('./foo')` の場合は `false` となります。
+
+<!--
+
+Because `module` provides a `filename` property (normally equivalent to
+`__filename`), the entry point of the current application can be obtained
+by checking `require.main.filename`.
+
+-->
+`module` は `filename` プロパティ (通常 `__filename` と同じです)
+を提供するので、現在のアプリケーションのエントリポイントを
+`require.main.filename` で得ることが出来ます。
 
 ## Addenda: Package Manager Tips
 

@@ -70,6 +70,18 @@ but rather than loading the module, just return the resolved filename.
 `require()` の内部でモジュールの位置を検索するために使われます。
 モジュールのロードは行わず、ファイル名を解決して返すだけです。
 
+### require.cache
+
+<!--
+
+Modules are cached in this object when they are required. By deleting a key
+value from this object, the next `require` will reload the module.
+
+-->
+モジュールが要求されると、このオブジェクトの中にキャッシュされます。
+このオブジェクトからキーと値を削除すると、次にそのモジュールが
+`require` されたときにリロードされます。
+
 ### require.paths
 
 <!--
