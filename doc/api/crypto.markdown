@@ -338,3 +338,106 @@ Returns true or false depending on the validity of the signature for the data an
 
 -->
 署名されたデータと公開鍵による検証の結果によって true または false を返します。
+
+### crypto.createDiffieHellman(prime_length)
+
+<!--
+
+Creates a Diffie-Hellman key exchange object and generates a prime of the
+given bit length. The generator used is `2`.
+
+-->
+ディフィー・ヘルマン鍵共有オブジェクトを作成し、
+与えられた長さの素数を生成します。生成元は `2` です。
+
+### crypto.createDiffieHellman(prime, encoding='binary')
+
+<!--
+Creates a Diffie-Hellman key exchange object using the supplied prime. The
+generator used is `2`. Encoding can be `'binary'`, `'hex'`, or `'base64'`.
+-->
+与えられた素数からディフィー・ヘルマン鍵共有オブジェクトを作成します。
+生成元は `2` です。
+エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+
+### diffieHellman.generateKeys(encoding='binary')
+
+<!--
+Generates private and public Diffie-Hellman key values, and returns the
+public key in the specified encoding. This key should be transferred to the
+other party. Encoding can be `'binary'`, `'hex'`, or `'base64'`.
+-->
+ディフィー・ヘルマン法で秘密および公開鍵を作成し、
+指定の方法でエンコーディングされた公開鍵を返します。
+この鍵は相手側に渡されるものです。
+
+### diffieHellman.computeSecret(other_public_key, input_encoding='binary', output_encoding=input_encoding)
+
+<!--
+Computes the shared secret using `other_public_key` as the other party's
+public key and returns the computed shared secret. Supplied key is
+interpreted using specified `input_encoding`, and secret is encoded using
+specified `output_encoding`. Encodings can be `'binary'`, `'hex'`, or
+`'base64'`. If no output encoding is given, the input encoding is used as
+output encoding.
+-->
+`other_public_key` を相手側の公開鍵として共有の秘密鍵を計算して返します。
+与えられた公開鍵は指定の `input_encoding` を使って解釈され、
+秘密鍵は `output_encoding` で指定された方法でエンコードされます。
+エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+出力のエンコーディングが与えられなかった場合は、入力のエンコーディングが
+出力エンコーディングとして使われます。
+
+### diffieHellman.getPrime(encoding='binary')
+
+<!--
+Returns the Diffie-Hellman prime in the specified encoding, which can be
+`'binary'`, `'hex'`, or `'base64'`.
+-->
+ディフィー・ヘルマン法の素数を指定のエンコーディングで返します。
+エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+
+### diffieHellman.getGenerator(encoding='binary')
+
+<!--
+Returns the Diffie-Hellman prime in the specified encoding, which can be
+`'binary'`, `'hex'`, or `'base64'`.
+-->
+ディフィー・ヘルマン法の生成元を指定のエンコーディングで返します。
+エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+
+### diffieHellman.getPublicKey(encoding='binary')
+
+<!--
+Returns the Diffie-Hellman public key in the specified encoding, which can
+be `'binary'`, `'hex'`, or `'base64'`.
+-->
+ディフィー・ヘルマン法による公開鍵を指定のエンコーディングで返します。
+エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+
+### diffieHellman.getPrivateKey(encoding='binary')
+
+<!--
+Returns the Diffie-Hellman private key in the specified encoding, which can
+be `'binary'`, `'hex'`, or `'base64'`.
+-->
+ディフィー・ヘルマン法による秘密鍵を指定のエンコーディングで返します。
+エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+
+### diffieHellman.setPublicKey(public_key, encoding='binary')
+
+<!--
+Sets the Diffie-Hellman public key. Key encoding can be `'binary'`, `'hex'`,
+or `'base64'`.
+-->
+ディフィー・ヘルマン法による公開鍵を設定します。
+鍵のエンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+
+
+### diffieHellman.setPrivateKey(public_key, encoding='binary')
+
+<!--
+Sets the Diffie-Hellman private key. Key encoding can be `'binary'`, `'hex'`, or `'base64'`.
+-->
+ディフィー・ヘルマン法による秘密鍵を設定します。
+鍵のエンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。

@@ -133,6 +133,63 @@ Synchronous ftruncate(2).
 -->
 同期の ftruncate(2)。
 
+### fs.chown(path, mode, [callback])
+
+<!--
+
+Asycnronous chown(2). No arguments other than a possible exception are given
+to the completion callback.
+
+-->
+非同期の chown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.chownSync(path, mode)
+
+<!--
+
+Synchronous chown(2).
+
+-->
+同期の chown(2)。
+
+### fs.fchown(path, mode, [callback])
+
+<!--
+
+Asycnronous fchown(2). No arguments other than a possible exception are given
+to the completion callback.
+
+-->
+非同期の fchown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.fchownSync(path, mode)
+
+<!--
+
+Synchronous fchown(2).
+
+-->
+同期の fchown(2)。
+
+### fs.lchown(path, mode, [callback])
+
+<!--
+
+Asycnronous lchown(2). No arguments other than a possible exception are given
+to the completion callback.
+
+-->
+非同期の lchown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.lchownSync(path, mode)
+
+<!--
+
+Synchronous lchown(2).
+
+-->
+同期の lchown(2)。
+
 ### fs.chmod(path, mode, [callback])
 
 <!--
@@ -151,7 +208,44 @@ Synchronous chmod(2).
 
 -->
 同期の chmod(2)。
-  
+
+### fs.fchmod(fd, mode, [callback])
+
+<!--
+Asynchronous fchmod(2). No arguments other than a possible exception
+are given to the completion callback.
+
+-->
+非同期の fchmod(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.fchmodSync(path, mode)
+
+<!--
+
+Synchronous fchmod(2).
+
+-->
+同期の fchmod(2)。
+
+### fs.lchmod(fd, mode, [callback])
+
+<!--
+
+Asynchronous lchmod(2). No arguments other than a possible exception
+are given to the completion callback.
+
+-->
+非同期の lchmod(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.lchmodSync(path, mode)
+
+<!--
+
+Synchronous lchmod(2).
+
+-->
+同期の lchmod(2)。
+
 ### fs.stat(path, [callback])
 
 <!--
@@ -437,6 +531,47 @@ Synchronous open(2).
 -->
 同期の open(2)。
 
+### fs.utimes(path, atime, mtime, callback)
+### fs.utimesSync(path, atime, mtime)
+
+<!--
+
+Change file timestamps.
+
+-->
+ファイルのタイムスタンプを変更します。
+
+### fs.futimes(path, atime, mtime, callback)
+### fs.futimesSync(path, atime, mtime)
+
+<!--
+
+Change file timestamps with the difference that if filename refers to a
+symbolic link, then the link is not dereferenced.
+
+-->
+ファイルのタイムスタンプを変更します。
+パスがシンボリックリンクだった場合、参照先のファイルを辿らない点が異なります。
+
+### fs.fsync(fd, callback)
+
+<!--
+
+Asynchronous fsync(2). No arguments other than a possible exception are given
+to the completion callback.
+
+-->
+非同期の fsync(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.fsyncSync(fd)
+
+<!--
+
+Synchronous fsync(2).
+
+-->
+同期の fsync(2)。
+
 ### fs.write(fd, buffer, offset, length, position, [callback])
 
 <!--
@@ -625,12 +760,14 @@ returns a buffer.
 <!--
 
 Asynchronously writes data to a file, replacing the file if it already exists.
-`data` can be a string or a buffer.
+`data` can be a string or a buffer. The `encoding` argument is ignored if
+`data` is a buffer.
 
 -->
 非同期にデータをファイルに書き込みます。
 ファイルが既に存在する場合は置き換えられます。
 `data` は文字列またはバッファです。
+`data` がバッファの場合、`encoding` は無視されます。
 
 <!--
 
@@ -808,6 +945,17 @@ An example to read the last 10 bytes of a file which is 100 bytes long:
 
 -->
 `fd` は WriteStream に使われているファイル記述子です。
+
+### file.bytesWritten
+
+<!--
+
+The number of bytes written so far. Does not include data that is still queued
+for writing.
+
+-->
+これまでに書き込まれたバイト数。
+書き込みがキューイングされたままのデータは含まれません。
 
 ### fs.createWriteStream(path, [options])
 

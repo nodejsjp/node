@@ -50,6 +50,7 @@ class WrappedContext : ObjectWrap {
 
   Persistent<Context> GetV8Context();
   static Local<Object> NewInstance();
+  static bool InstanceOf(Handle<Value> value);
 
  protected:
 
@@ -110,6 +111,11 @@ void WrappedContext::Initialize(Handle<Object> target) {
 }
 
 
+bool WrappedContext::InstanceOf(Handle<Value> value) {
+  return !value.IsEmpty() && constructor_template->HasInstance(value);
+}
+
+
 Handle<Value> WrappedContext::New(const Arguments& args) {
   HandleScope scope;
 
@@ -150,7 +156,10 @@ void WrappedScript::Initialize(Handle<Object> target) {
   Local<FunctionTemplate> t = FunctionTemplate::New(WrappedScript::New);
   constructor_template = Persistent<FunctionTemplate>::New(t);
   constructor_template->InstanceTemplate()->SetInternalFieldCount(1);
-  constructor_template->SetClassName(String::NewSymbol("Script"));
+  // Note: We use 'NodeScript' instead of 'Script' so that we do not
+  // conflict with V8's Script class defined in v8/src/messages.js
+  // See GH-203 https://github.com/joyent/node/issues/203
+  constructor_template->SetClassName(String::NewSymbol("NodeScript"));
 
   NODE_SET_PROTOTYPE_METHOD(constructor_template,
                             "createContext",
@@ -184,7 +193,7 @@ void WrappedScript::Initialize(Handle<Object> target) {
                   "runInNewContext",
                   WrappedScript::CompileRunInNewContext);
 
-  target->Set(String::NewSymbol("Script"),
+  target->Set(String::NewSymbol("NodeScript"),
               constructor_template->GetFunction());
 }
 
@@ -279,7 +288,9 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
   }
 
   const int sandbox_index = input_flag == compileCode ? 1 : 0;
-  if (context_flag == userContext && args.Length() < (sandbox_index + 1)) {
+  if (context_flag == userContext
+    && !WrappedContext::InstanceOf(args[sandbox_index]))
+  {
     return ThrowException(Exception::TypeError(
           String::New("needs a 'context' argument.")));
   }

@@ -52,7 +52,10 @@ var gotUpgrade = false;
 
 srv.listen(common.PORT, '127.0.0.1', function() {
 
-  var agent = http.getAgent('127.0.0.1', common.PORT);
+  var agent = http.getAgent({
+    host: '127.0.0.1',
+    port: common.PORT
+  });
   assert.ok(agent);
 
   var options = {

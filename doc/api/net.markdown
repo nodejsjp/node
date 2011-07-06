@@ -59,26 +59,34 @@ The arguments for this method change the type of connection:
 -->
 このメソッドの引数はコネクションの種類によって変わります。
 
+* `net.createConnection(port, [host], [callback])`
+
 <!--
 
-* `net.createConnection(port, [host])`
-
-  Creates a TCP connection to `port` on `host`. If `host` is omitted, `localhost`
-  will be assumed.
-
-* `net.createConnection(path)`
-
-  Creates unix socket connection to `path`
+  Creates a TCP connection to `port` on `host`. If `host` is omitted,
+  `localhost` will be assumed.
 
 -->
-* `net.createConnection(port, [host])`
 
   `host` 上の `port` に対する TCP コネクションを作成します。
   `host` が省略されると `localhost` が仮定されます。
 
-* `net.createConnection(path)`
+* `net.createConnection(path, [callback])`
+
+<!--
+
+  Creates unix socket connection to `path`
+
+-->
 
   `path` に対する UNIX ドメインソケットを作成します。
+
+<!--
+
+The `callback` parameter will be added as an listener for the 'connect` event.
+
+-->
+`callback` 引数は `connect` イベントのリスナとして追加されます。
 
 ---
 
@@ -679,10 +687,24 @@ The string representation of the remote IP address. For example,
 
 <!--
 
+<!--
+
 This member is only present in server-side connections.
 
 -->
-このメンバはサーバサイドのコネクションでのみ与えられます。
+このメンバはサーバサイドのコネクションにのみ与えられます。
+
+#### socket.remotePort
+
+<!--
+
+The numeric representation of the remote port. For example,
+`80` or `21`.
+
+-->
+
+リモートポートの数値表現です。
+たとえば、`80` や `21`。
 
 
 #### Event: 'connect'

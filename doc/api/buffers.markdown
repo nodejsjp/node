@@ -57,6 +57,8 @@ the first 8 bits of each character. This encoding method is deprecated and
 should be avoided in favor of `Buffer` objects where possible. This encoding
 will be removed in future versions of Node.
 
+* `'hex'` - Encode each byte as two hexidecimal characters.
+
 -->
 * `'ascii'` - 7bit の ASCII データ専用です。
   このエンコーディング方式はとても高速で、もし上位ビットがセットされていれば取り除かれます。
@@ -68,7 +70,7 @@ will be removed in future versions of Node.
 * `'binary'` - 生のバイナリデータを各文字の最初の 8bit として使用するエンコーディング方式。
 このエンコーディング方式はもはや価値がなく、`Buffer` オブジェクトでは可能な限り使用すべきではありません。
 このエンコーディングは、Node の将来のバージョンで削除される予定です。
-
+* `'hex'` - 各バイトを 2 桁の16進数文字列でエンコードします。
 
 ### new Buffer(size)
 
@@ -308,3 +310,421 @@ from the original Buffer.
 
     // abc
     // !bc
+
+### buffer.readUInt8(offset, endian)
+
+<!--
+Reads an unsigned 8 bit integer from the buffer at the specified offset. Endian
+must be either 'big' or 'little' and specifies what endian ordering to read the
+bytes from the buffer in.
+-->
+バッファの指定された位置を符号無し 8bit 整数として読み込みます。
+エンディアンは `'big'` か `'little'` のどちらかでなくてはならず、
+バッファからバイト列を読み出すバイトオーダーを指定します。
+
+<!--
+Example:
+-->
+例:
+
+    var buf = new Buffer(4);
+
+    buf[0] = 0x3;
+    buf[1] = 0x4;
+    buf[2] = 0x23;
+    buf[3] = 0x42;
+
+    for (ii = 0; ii < buf.length; ii++) {
+      console.log(buf.readUInt8(ii, 'big');
+      console.log(buf.readUInt8(ii, 'little');
+    }
+
+    // 0x3
+    // 0x3
+    // 0x4
+    // 0x4
+    // 0x23
+    // 0x23
+    // 0x42
+    // 0x42
+
+### buffer.readUInt16(offset, endian)
+
+<!--
+Reads an unsigned 16 bit integer from the buffer at the specified offset. Endian
+must be either 'big' or 'little' and specifies what endian ordering to read the
+bytes from the buffer in.
+-->
+バッファの指定された位置を符号無し 16bit 整数として読み込みます。
+エンディアンは `'big'` か `'little'` のどちらかでなくてはならず、
+バッファからバイト列を読み出すバイトオーダーを指定します。
+
+<!--
+Example:
+-->
+例:
+
+    var buf = new Buffer(4);
+
+    buf[0] = 0x3;
+    buf[1] = 0x4;
+    buf[2] = 0x23;
+    buf[3] = 0x42;
+
+    console.log(buf.readUInt16(0, 'big');
+    console.log(buf.readUInt16(0, 'little');
+    console.log(buf.readUInt16(1, 'big');
+    console.log(buf.readUInt16(1, 'little');
+    console.log(buf.readUInt16(2, 'big');
+    console.log(buf.readUInt16(2, 'little');
+
+    // 0x0304
+    // 0x0403
+    // 0x0423
+    // 0x2304
+    // 0x2342
+    // 0x4223
+
+### buffer.readUInt32(offset, endian)
+
+<!--
+Reads an unsigned 32 bit integer from the buffer at the specified offset. Endian
+must be either 'big' or 'little' and specifies what endian ordering to read the
+bytes from the buffer in.
+-->
+バッファの指定された位置を符号無し 32bit 整数として読み込みます。
+エンディアンは `'big'` か `'little'` のどちらかでなくてはならず、
+バッファからバイト列を読み出すバイトオーダーを指定します。
+
+<!--
+Example:
+-->
+例:
+
+    var buf = new Buffer(4);
+
+    buf[0] = 0x3;
+    buf[1] = 0x4;
+    buf[2] = 0x23;
+    buf[3] = 0x42;
+
+    console.log(buf.readUInt32(0, 'big');
+    console.log(buf.readUInt32(0, 'little');
+
+    // 0x03042342
+    // 0x42230403
+
+### buffer.readInt8(offset, endian)
+
+<!--
+Reads a signed 8 bit integer from the buffer at the specified offset. Endian
+must be either 'big' or 'little' and specifies what endian ordering to read the
+bytes from the buffer in.
+
+Works as `buffer.readUInt8`, except buffer contents are treated as twos
+complement signed values.
+-->
+バッファの指定された位置を符号付き 8bit 整数として読み込みます。
+エンディアンは `'big'` か `'little'` のどちらかでなくてはならず、
+バッファからバイト列を読み出すバイトオーダーを指定します。
+
+バッファの内容を 2 の補数による符号付き値として扱うこと以外は
+`buffer.readUInt8` と同じように動作します。
+
+### buffer.readInt16(offset, endian)
+
+<!--
+Reads a signed 16 bit integer from the buffer at the specified offset. Endian
+must be either 'big' or 'little' and specifies what endian ordering to read the
+bytes from the buffer in.
+
+Works as `buffer.readUInt16`, except buffer contents are treated as twos
+complement signed values.
+-->
+バッファの指定された位置を符号付き 16bit 整数として読み込みます。
+エンディアンは `'big'` か `'little'` のどちらかでなくてはならず、
+バッファからバイト列を読み出すバイトオーダーを指定します。
+
+バッファの内容を 2 の補数による符号付き値として扱うこと以外は
+`buffer.readUInt16` と同じように動作します。
+
+
+### buffer.readInt32(offset, endian)
+
+<!--
+Reads a signed 32 bit integer from the buffer at the specified offset. Endian
+must be either 'big' or 'little' and specifies what endian ordering to read the
+bytes from the buffer in.
+
+Works as `buffer.readUInt32`, except buffer contents are treated as twos
+complement signed values.
+-->
+バッファの指定された位置を符号付き 32bit 整数として読み込みます。
+エンディアンは `'big'` か `'little'` のどちらかでなくてはならず、
+バッファからバイト列を読み出すバイトオーダーを指定します。
+
+バッファの内容を 2 の補数による符号付き値として扱うこと以外は
+`buffer.readUInt32` と同じように動作します。
+
+
+### buffer.readFloat(offset, endian)
+
+<!--
+Reads a 32 bit float from the buffer at the specified offset. Endian must be
+either 'big' or 'little' and specifies what endian ordering to read the bytes
+from the buffer in.
+-->
+バッファの指定された位置を 32bit 浮動小数点数として読み込みます。
+エンディアンは `'big'` か `'little'` のどちらかでなくてはならず、
+バッファからバイト列を読み出すバイトオーダーを指定します。
+
+<!--
+Example:
+-->
+例:
+
+    var buf = new Buffer(4);
+
+    buf[0] = 0x00;
+    buf[1] = 0x00;
+    buf[2] = 0x80;
+    buf[3] = 0x3f;
+
+    console.log(buf.readFloat(0, 'little');
+
+    // 0x01
+
+### buffer.readDouble(offset, endian)
+
+<!--
+Reads a 64 bit double from the buffer at the specified offset. Endian must be
+either 'big' or 'little' and specifies what endian ordering to read the bytes
+from the buffer in.
+-->
+バッファの指定された位置を 64bit 倍精度浮動小数点数として読み込みます。
+エンディアンは `'big'` か `'little'` のどちらかでなくてはならず、
+バッファからバイト列を読み出すバイトオーダーを指定します。
+
+<!--
+Example:
+-->
+例:
+
+    var buf = new Buffer(8);
+
+    buf[0] = 0x55;
+    buf[1] = 0x55;
+    buf[2] = 0x55;
+    buf[3] = 0x55;
+    buf[4] = 0x55;
+    buf[5] = 0x55;
+    buf[6] = 0xd5;
+    buf[7] = 0x3f;
+
+    console.log(buf.readDouble(0, 'little');
+
+    // 0.3333333333333333
+
+### buffer.writeUInt8(value, offset, endian)
+
+<!--
+Writes `value` to the buffer at the specified offset with specified endian
+format. Note, `value` must be a valid 8 bit unsigned integer.
+-->
+`value` を符号無し 8bit 整数としてバッファの指定された位置に、
+指定されたエンディアンで書き込みます。
+`value` は妥当な 8bit 符号無し整数でなければならないことに注意してください。
+
+<!--
+Example:
+-->
+例:
+
+    var buf = new Buffer(4);
+    buf.writeUInt8(0x3, 0, 'big');
+    buf.writeUInt8(0x4, 1, 'big');
+    buf.writeUInt8(0x23, 2, 'big');
+    buf.writeUInt8(0x42, 3, 'big');
+
+    console.log(buf);
+
+    buf.writeUInt8(0x3, 0, 'little');
+    buf.writeUInt8(0x4, 1, 'little');
+    buf.writeUInt8(0x23, 2, 'little');
+    buf.writeUInt8(0x42, 3, 'little');
+
+    console.log(buf);
+
+    // <Buffer 03 04 23 42>
+    // <Buffer 03 04 23 42>
+
+### buffer.writeUInt16(value, offset, endian)
+
+<!--
+Writes `value` to the buffer at the specified offset with specified endian
+format. Note, `value` must be a valid 16 bit unsigned integer.
+-->
+`value` を符号無し 16bit 整数としてバッファの指定された位置に、
+指定されたエンディアンで書き込みます。
+`value` は妥当な 16bit 符号無し整数でなければならないことに注意してください。
+
+<!--
+Example:
+-->
+例:
+
+    var buf = new Buffer(4);
+    buf.writeUInt16(0xdead, 0, 'big');
+    buf.writeUInt16(0xbeef, 2, 'big');
+
+    console.log(buf);
+
+    buf.writeUInt16(0xdead, 0, 'little');
+    buf.writeUInt16(0xbeef, 2, 'little');
+
+    console.log(buf);
+
+    // <Buffer de ad be ef>
+    // <Buffer ad de ef be>
+
+### buffer.writeUInt32(value, offset, endian)
+
+<!--
+Writes `value` to the buffer at the specified offset with specified endian
+format. Note, `value` must be a valid 32 bit unsigned integer.
+-->
+`value` を符号無し 32bit 整数としてバッファの指定された位置に、
+指定されたエンディアンで書き込みます。
+`value` は妥当な 32bit 符号無し整数でなければならないことに注意してください。
+
+<!--
+Example:
+-->
+例:
+
+    var buf = new Buffer(4);
+    buf.writeUInt32(0xfeedface, 0, 'big');
+
+    console.log(buf);
+
+    buf.writeUInt32(0xfeedface, 0, 'little');
+
+    console.log(buf);
+
+    // <Buffer fe ed fa ce>
+    // <Buffer ce fa ed fe>
+
+### buffer.writeInt8(value, offset, endian)
+
+<!--
+Writes `value` to the buffer at the specified offset with specified endian
+format. Note, `value` must be a valid 16 bit signed integer.
+
+Works as `buffer.writeUInt8`, except value is written out as a two's complement
+signed integer into `buffer`.
+-->
+`value` を符号付き 8bit 整数としてバッファの指定された位置に、
+指定されたエンディアンで書き込みます。
+`value` は妥当な 8bit 符号付き整数でなければならないことに注意してください。
+
+`value` を 2 の補数による符号付き値として書き込むこと以外は 
+`buffer.writeUInt8` と同じように動作します。
+
+### buffer.writeInt16(value, offset, endian)
+
+<!--
+Writes `value` to the buffer at the specified offset with specified endian
+format. Note, `value` must be a valid 16 bit unsigned integer.
+
+Works as `buffer.writeUInt16`, except value is written out as a two's complement
+signed integer into `buffer`.
+-->
+`value` を符号付き 16bit 整数としてバッファの指定された位置に、
+指定されたエンディアンで書き込みます。
+`value` は妥当な 16bit 符号付き整数でなければならないことに注意してください。
+
+`value` を 2 の補数による符号付き値として書き込むこと以外は 
+`buffer.writeUInt16` と同じように動作します。
+
+### buffer.writeInt32(value, offset, endian)
+
+<!--
+Writes `value` to the buffer at the specified offset with specified endian
+format. Note, `value` must be a valid 16 bit signed integer.
+
+Works as `buffer.writeUInt832, except value is written out as a two's complement
+signed integer into `buffer`.
+-->
+`value` を符号付き 32bit 整数としてバッファの指定された位置に、
+指定されたエンディアンで書き込みます。
+`value` は妥当な 32bit 符号付き整数でなければならないことに注意してください。
+
+`value` を 2 の補数による符号付き値として書き込むこと以外は 
+`buffer.writeUInt32` と同じように動作します。
+
+### buffer.writeFloat(value, offset, endian)
+
+<!--
+Writes `value` to the buffer at the specified offset with specified endian
+format. Note, `value` must be a valid 32 bit float.
+-->
+`value` を 32bit 浮動小数点数としてバッファの指定された位置に、
+指定されたエンディアンで書き込みます。
+`value` は妥当な 32bit 浮動小数点数でなければならないことに注意してください。
+
+<!--
+Example:
+-->
+
+    var buf = new Buffer(4);
+    buf.writeFloat(0xcafebabe, 0, 'big');
+
+    console.log(buf);
+
+    buf.writeFloat(0xcafebabe, 0, 'little');
+
+    console.log(buf);
+
+    // <Buffer 4f 4a fe bb>
+    // <Buffer bb fe 4a 4f>
+
+### buffer.writeDouble(value, offset, endian)
+
+<!--
+Writes `value` to the buffer at the specified offset with specified endian
+format. Note, `value` must be a valid 64 bit double.
+-->
+`value` を 64bit 倍精度浮動小数点数としてバッファの指定された位置に、
+指定されたエンディアンで書き込みます。
+`value` は妥当な 64bit 倍精度浮動小数点数でなければならないことに注意してください。
+
+<!--
+Example:
+-->
+例:
+
+    var buf = new Buffer(8);
+    buf.writeFloat(0xdeadbeefcafebabe, 0, 'big');
+
+    console.log(buf);
+
+    buf.writeFloat(0xdeadbeefcafebabe, 0, 'little');
+
+    console.log(buf);
+
+    // <Buffer 43 eb d5 b7 dd f9 5f d7>
+    // <Buffer d7 5f f9 dd b7 d5 eb 43>
+
+
+### buffer.fill(value, offset=0, length=-1)
+
+<!--
+Fills the buffer with the specified value. If the offset and length are not
+given it will fill the entire buffer.
+-->
+指定された値でバッファを埋めます。
+オフセットと長さが与えられなかった場合はバッファ全体を埋めます。
+
+    var b = new Buffer(50);
+    b.fill("h");
+

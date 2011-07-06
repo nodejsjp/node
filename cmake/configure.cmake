@@ -2,7 +2,8 @@
 # configure node for building
 #
 include(CheckFunctionExists)
-
+include(CheckLibraryExists)
+include(CheckSymbolExists)
 
 if(NOT "v${CMAKE_BUILD_TYPE}" MATCHES vDebug)
   set(CMAKE_BUILD_TYPE "Release")
@@ -74,6 +75,20 @@ else()
   add_definitions(-DHAVE_FDATASYNC=0)
 endif()
 
+# check first without rt and then with rt
+check_function_exists(clock_gettime HAVE_CLOCK_GETTIME)
+check_library_exists(rt clock_gettime "" HAVE_CLOCK_GETTIME_RT)
+
+if(HAVE_CLOCK_GETTIME OR HAVE_CLOCK_GETTIME_RT)
+  check_symbol_exists(CLOCK_MONOTONIC "time.h" HAVE_MONOTONIC_CLOCK)
+endif()
+
+if(HAVE_MONOTONIC_CLOCK)
+  add_definitions(-DHAVE_MONOTONIC_CLOCK=1)
+else()
+  add_definitions(-DHAVE_MONOTONIC_CLOCK=0)
+endif()
+
 if(DTRACE)
   if(NOT ${node_platform} MATCHES sunos)
     message(FATAL_ERROR "DTrace support only currently available on Solaris")
@@ -87,6 +102,7 @@ endif()
 
 add_definitions(
   -DPLATFORM="${node_platform}"
+  -DARCH="${node_arch}"
   -DX_STACKSIZE=65536
   -D_LARGEFILE_SOURCE
   -D_FILE_OFFSET_BITS=64

@@ -145,14 +145,14 @@ The third argument is used to specify additional options, which defaults to:
 
 `cwd` allows you to specify the working directory from which the process is spawned.
 Use `env` to specify environment variables that will be visible to the new process.
-With `customFds` it is possible to hook up the new process' [stdin, stout, stderr] to
+With `customFds` it is possible to hook up the new process' [stdin, stdout, stderr] to
 existing streams; `-1` means that a new stream should be created. `setsid`,
 if set true, will cause the subprocess to be run in a new session.
 
 -->
 `cwd` で起動されたプロセスのワーキングディレクトリを指定することができます。
 `env` は新しいプロセスに見える環境変数を指定するために使います。
-`customFds` は新しいプロセスの [stdin, stout, stderr] を既存のストリームに接続することを可能にします;
+`customFds` は新しいプロセスの [stdin, stdout, stderr] を既存のストリームに接続することを可能にします;
 `-1` は新しいストリームが作られなければならないことを意味します。
 `setsid` に true が設定されると、サブプロセスは新しいセッションで実行されます。
 
@@ -313,6 +313,85 @@ the child process is killed.
 子プロセスは `killSignal` で kill されます (デフォルト: `'SIGTERM'`)。
 `maxBuffer` は標準出力と標準エラーの最大のデータ量を指定します － この値を超えると子プロセスは kill されます。
 
+
+### child_process.fork(modulePath, arguments, options)
+
+<!--
+
+This is a special case of the `spawn()` functionality for spawning Node
+processes. In addition to having all the methods in a normal ChildProcess
+instance, the returned object has a communication channel built-in. The
+channel is written to with `child.send(message)` and messages are recieved
+by a `'message'` event on the child.
+
+-->
+これは `spawn()` の特別版で、Node プロセスを起動します。
+返されるオブジェクトは通常の ChildProcess の全てのメソッドに加えて、
+組み込みの通信チャネルを持ちます。
+チャネルは `child.send(message)` によって書き込まれ、
+メッセージを受信すると `child` 上で `'message'` イベントが生成されます。
+
+<!--
+
+For example:
+
+-->
+例:
+
+    var cp = require('child_process');
+
+    var n = cp.fork(__dirname + '/sub.js');
+
+    n.on('message', function(m) {
+      console.log('PARENT got message:', m);
+    });
+
+    n.send({ hello: 'world' });
+
+<!--
+
+And then the child script, `'sub.js'` would might look like this:
+
+-->
+そして子スクリプトの `'sub.js'` は次のようになります:
+
+    process.on('message', function(m) {
+      console.log('CHILD got message:', m);
+    });
+
+    process.send({ foo: 'bar' });
+
+<!--
+
+In the child the `process` object will have a `send()` method, and `process`
+will emit objects each time it receives a message on its channel.
+
+-->
+子供の `process` オブジェクトは `send()` メソッドを持ち、
+`process` はチャネルでメッセージを受信するたびにイベントを生成します。
+
+<!--
+
+By default the spawned Node process will have the stdin, stdout, stderr
+associated with the parent's. This can be overridden by using the
+`customFds` option.
+
+-->
+デフォルトでは，起動された Node プロセスは親プロセスに関連づけられた標準入力、
+標準出力、標準エラー出力を持ちます。
+これは `customFds` オプションによって上書きすることが出来ます。
+
+<!--
+
+These child Nodes are still whole new instances of V8. Assume at least 30ms
+startup and 10mb memory for each new Node. That is, you cannot create many
+thousands of them.
+
+-->
+これらの子 Node は、やはり V8 の新しいインスタンスです。
+新しい Node ごとに少なくとも 30 ミリ秒の起動時間と 
+10MB のメモリを前提としてください。
+つまり、数千の子プロセスを作ることは出来ません。
 
 ### child.kill(signal='SIGTERM')
 
