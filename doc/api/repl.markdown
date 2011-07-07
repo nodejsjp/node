@@ -145,9 +145,9 @@ The special variable `_` (underscore) contains the result of the last expression
 
 <!--
 
-The REPL provides access to any variables in the global scope. You can expose a variable
-to the REPL explicitly by assigning it to the `context` object associated with each
-`REPLServer`.  For example:
+The REPL provides access to any variables in the global scope. You can expose
+a variable to the REPL explicitly by assigning it to the `context` object
+associated with each `REPLServer`.  For example:
 
 -->
 REPL はグローバルスコープに存在する全ての変数にアクセス可能です。
@@ -181,7 +181,8 @@ There are a few special REPL commands:
 
   - `.break` - While inputting a multi-line expression, sometimes you get lost
     or just don't care about completing it. `.break` will start over.
-  - `.clear` - Resets the `context` object to an empty object and clears any multi-line expression.
+  - `.clear` - Resets the `context` object to an empty object and clears any
+    multi-line expression.
   - `.exit` - Close the I/O stream, which will cause the REPL to exit.
   - `.help` - Show this list of special commands.
 
@@ -190,3 +191,22 @@ There are a few special REPL commands:
   - `.clear` - `context` オブジェクトを空の状態にリセットし、複数行に入力している式をクリアします。
   - `.exit` - I/Oストリームを閉じ、REPLを終了させます。
   - `.help` - このコマンドの一覧を表示します。
+
+<!--
+
+The following key combinations in the REPL have these special effects:
+
+-->
+REPL では、以下のキーコンビネーションは特別な効果を持ちます
+
+<!--
+
+  - `<ctrl>C` - Similar to the `.break` keyword.  Terminates the current
+    command.  Press twice on a blank line to forcibly exit.
+  - `<ctrl>D` - Similar to the `.exit` keyword.
+
+-->
+  - `<ctrl>C` - `.break` キーワードと同様です。
+  現在のコマンドを終了します。
+  強制的に終了したkれば空の行で 2 回押してください。
+  - `<ctrl>D` - `.exit` キーワードと同様です。

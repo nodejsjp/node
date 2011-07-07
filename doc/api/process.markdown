@@ -474,6 +474,19 @@ Getter/setter to set what is displayed in 'ps'.
 'ps' でどのよう表示されるかを設定するための getter/setter です。
 
 
+### process.arch
+
+<!--
+
+What processor architecture you're running on: `'arm'`, `'ia32'`, or `'x64'`.
+
+-->
+実行しているプロセッサのアーキテクチャ: `'arm'`、`'ia32'`、または
+`'x64'`。
+
+    console.log('This processor architecture is ' + process.arch);
+
+
 ### process.platform
 
 <!--
@@ -556,3 +569,12 @@ given, otherwise returns the current mask.
     console.log('Changed umask from: ' + oldmask.toString(8) +
                 ' to ' + newmask.toString(8));
 
+
+### process.uptime()
+
+<!--
+
+Number of seconds Node has been running.
+
+-->
+Node が実行されてからの秒数です。

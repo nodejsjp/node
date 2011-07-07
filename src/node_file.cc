@@ -22,10 +22,13 @@
 #include <node.h>
 #include <node_file.h>
 #include <node_buffer.h>
-#include <node_stat_watcher.h>
+#ifdef __POSIX__
+# include <node_stat_watcher.h>
+#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -87,7 +90,7 @@ static int After(eio_req *req) {
 
   Persistent<Function> *callback = cb_unwrap(req->data);
 
-  ev_unref(EV_DEFAULT_UC);
+  uv_unref();
 
   // there is always at least one argument. "error"
   int argc = 1;
@@ -125,9 +128,16 @@ static int After(eio_req *req) {
       case EIO_LINK:
       case EIO_SYMLINK:
       case EIO_CHMOD:
+      case EIO_FCHMOD:
       case EIO_CHOWN:
+      case EIO_FCHOWN:
         // These, however, don't.
         argc = 1;
+        break;
+
+      case EIO_UTIME:
+      case EIO_FUTIME:
+        argc = 0;
         break;
 
       case EIO_OPEN:
@@ -205,7 +215,7 @@ static int After(eio_req *req) {
   eio_req *req = eio_##func(__VA_ARGS__, EIO_PRI_DEFAULT, After,  \
     cb_persist(callback));                                        \
   assert(req);                                                    \
-  ev_ref(EV_DEFAULT_UC);                                          \
+  uv_ref();                                          \
   return Undefined();
 
 static Handle<Value> Close(const Arguments& args) {
@@ -654,8 +664,8 @@ static Handle<Value> Open(const Arguments& args) {
     ASYNC_CALL(open, args[3], *path, flags, mode)
   } else {
     int fd = open(*path, flags, mode);
-    SetCloseOnExec(fd);
     if (fd < 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
+    SetCloseOnExec(fd);
     return scope.Close(Integer::New(fd));
   }
 }
@@ -786,7 +796,7 @@ static Handle<Value> Read(const Arguments& args) {
 }
 
 
-/* fs.chmod(fd, mode);
+/* fs.chmod(path, mode);
  * Wrapper for chmod(1) / EIO_CHMOD
  */
 static Handle<Value> Chmod(const Arguments& args) {
@@ -802,16 +812,40 @@ static Handle<Value> Chmod(const Arguments& args) {
     ASYNC_CALL(chmod, args[2], *path, mode);
   } else {
     int ret = chmod(*path, mode);
-    if (ret != 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
+    if (ret != 0) return ThrowException(ErrnoException(errno, "chmod", "", *path));
     return Undefined();
   }
 }
 
 
-/* fs.chown(fd, uid, gid);
+#ifdef __POSIX__
+/* fs.fchmod(fd, mode);
+ * Wrapper for fchmod(1) / EIO_FCHMOD
+ */
+static Handle<Value> FChmod(const Arguments& args) {
+  HandleScope scope;
+
+  if(args.Length() < 2 || !args[0]->IsInt32() || !args[1]->IsInt32()) {
+    return THROW_BAD_ARGS;
+  }
+  int fd = args[0]->Int32Value();
+  mode_t mode = static_cast<mode_t>(args[1]->Int32Value());
+
+  if(args[2]->IsFunction()) {
+    ASYNC_CALL(fchmod, args[2], fd, mode);
+  } else {
+    int ret = fchmod(fd, mode);
+    if (ret != 0) return ThrowException(ErrnoException(errno, "fchmod", "", 0));
+    return Undefined();
+  }
+}
+#endif // __POSIX__
+
+
+#ifdef __POSIX__
+/* fs.chown(path, uid, gid);
  * Wrapper for chown(1) / EIO_CHOWN
  */
-#ifdef __POSIX__
 static Handle<Value> Chown(const Arguments& args) {
   HandleScope scope;
 
@@ -831,11 +865,120 @@ static Handle<Value> Chown(const Arguments& args) {
     ASYNC_CALL(chown, args[3], *path, uid, gid);
   } else {
     int ret = chown(*path, uid, gid);
-    if (ret != 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
+    if (ret != 0) return ThrowException(ErrnoException(errno, "chown", "", *path));
     return Undefined();
   }
 }
 #endif // __POSIX__
+
+
+#ifdef __POSIX__
+/* fs.fchown(fd, uid, gid);
+ * Wrapper for fchown(1) / EIO_FCHOWN
+ */
+static Handle<Value> FChown(const Arguments& args) {
+  HandleScope scope;
+
+  if (args.Length() < 3 || !args[0]->IsInt32()) {
+    return THROW_BAD_ARGS;
+  }
+
+  if (!args[1]->IsInt32() || !args[2]->IsInt32()) {
+    return ThrowException(Exception::Error(String::New("User and Group IDs must be an integer.")));
+  }
+
+  int fd = args[0]->Int32Value();
+  uid_t uid = static_cast<uid_t>(args[1]->Int32Value());
+  gid_t gid = static_cast<gid_t>(args[2]->Int32Value());
+
+  if (args[3]->IsFunction()) {
+    ASYNC_CALL(fchown, args[3], fd, uid, gid);
+  } else {
+    int ret = fchown(fd, uid, gid);
+    if (ret != 0) return ThrowException(ErrnoException(errno, "fchown", "", 0));
+    return Undefined();
+  }
+}
+#endif // __POSIX__
+
+
+// Utimes() and Futimes() helper function, converts 123.456 timestamps to timevals
+static inline void ToTimevals(eio_tstamp atime,
+                              eio_tstamp mtime,
+                              timeval times[2]) {
+  times[0].tv_sec  = atime;
+  times[0].tv_usec = 10e5 * (atime - (long) atime);
+  times[1].tv_sec  = mtime;
+  times[1].tv_usec = 10e5 * (mtime - (long) mtime);
+}
+
+
+#ifdef __POSIX__
+static Handle<Value> UTimes(const Arguments& args) {
+  HandleScope scope;
+
+  if (args.Length() < 3
+      || !args[0]->IsString()
+      || !args[1]->IsNumber()
+      || !args[2]->IsNumber())
+  {
+    return THROW_BAD_ARGS;
+  }
+
+  const String::Utf8Value path(args[0]->ToString());
+  const eio_tstamp atime = static_cast<eio_tstamp>(args[1]->NumberValue());
+  const eio_tstamp mtime = static_cast<eio_tstamp>(args[2]->NumberValue());
+
+  if (args[3]->IsFunction()) {
+    ASYNC_CALL(utime, args[3], *path, atime, mtime);
+  } else {
+    timeval times[2];
+
+    ToTimevals(atime, mtime, times);
+    if (utimes(*path, times) == -1) {
+      return ThrowException(ErrnoException(errno, "utimes", "", *path));
+    }
+  }
+
+  return Undefined();
+}
+#endif // __POSIX__
+
+
+static Handle<Value> FUTimes(const Arguments& args) {
+  HandleScope scope;
+
+  if (args.Length() < 3
+      || !args[0]->IsInt32()
+      || !args[1]->IsNumber()
+      || !args[2]->IsNumber())
+  {
+    return THROW_BAD_ARGS;
+  }
+
+  const int fd = args[0]->Int32Value();
+  const eio_tstamp atime = static_cast<eio_tstamp>(args[1]->NumberValue());
+  const eio_tstamp mtime = static_cast<eio_tstamp>(args[2]->NumberValue());
+
+  if (args[3]->IsFunction()) {
+    ASYNC_CALL(futime, args[3], fd, atime, mtime);
+  } else {
+#ifndef futimes
+    // Some systems do not have futimes
+    return ThrowException(ErrnoException(ENOSYS, "futimes", "", 0));
+#else
+    timeval times[2];
+
+    ToTimevals(atime, mtime, times);
+    if (futimes(fd, times) == -1) {
+      return ThrowException(ErrnoException(errno, "futimes", "", 0));
+    }
+#endif  // futimes
+  }
+
+  return Undefined();
+}
+
 
 void File::Initialize(Handle<Object> target) {
   HandleScope scope;
@@ -866,8 +1009,16 @@ void File::Initialize(Handle<Object> target) {
 
   NODE_SET_METHOD(target, "chmod", Chmod);
 #ifdef __POSIX__
+  NODE_SET_METHOD(target, "fchmod", FChmod);
+  //NODE_SET_METHOD(target, "lchmod", LChmod);
+
   NODE_SET_METHOD(target, "chown", Chown);
+  NODE_SET_METHOD(target, "fchown", FChown);
+  //NODE_SET_METHOD(target, "lchown", LChown);
+
+  NODE_SET_METHOD(target, "utimes", UTimes);
 #endif // __POSIX__
+  NODE_SET_METHOD(target, "futimes", FUTimes);
 
   errno_symbol = NODE_PSYMBOL("errno");
   encoding_symbol = NODE_PSYMBOL("node:encoding");
@@ -881,8 +1032,11 @@ void InitFs(Handle<Object> target) {
   stats_constructor_template = Persistent<FunctionTemplate>::New(stat_templ);
   target->Set(String::NewSymbol("Stats"),
                stats_constructor_template->GetFunction());
-  StatWatcher::Initialize(target);
   File::Initialize(target);
+
+#ifdef __POSIX__
+  StatWatcher::Initialize(target);
+#endif
 
 #ifdef __MINGW32__
   // Open files in binary mode by default

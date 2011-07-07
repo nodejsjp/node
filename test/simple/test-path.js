@@ -30,6 +30,14 @@ var f = __filename;
 
 assert.equal(path.basename(f), 'test-path.js');
 assert.equal(path.basename(f, '.js'), 'test-path');
+
+// POSIX filenames may include control characters
+// c.f. http://www.dwheeler.com/essays/fixing-unix-linux-filenames.html
+if (!isWindows) {
+  var controlCharFilename = 'Icon' + String.fromCharCode(13);
+  assert.equal(path.basename('/a/b/' + controlCharFilename), controlCharFilename);
+}
+
 assert.equal(path.extname(f), '.js');
 assert.equal(path.dirname(f).substr(-11), isWindows ? 'test\\simple' : 'test/simple');
 assert.equal(path.dirname('/a/b/'), '/a');
@@ -168,3 +176,39 @@ resolveTests.forEach(function(test) {
   // assert.equal(actual, expected, message);
 });
 assert.equal(failures.length, 0, failures.join(''));
+
+// path.relative tests
+if (isWindows) {
+  // windows
+  var relativeTests =
+   // arguments                     result
+   [['c:/blah\\blah', 'd:/games',   'd:\\games'],
+    ['c:/aaaa/bbbb', 'c:/aaaa',     '..'],
+    ['c:/aaaa/bbbb', 'c:/cccc',     '..\\..\\cccc'],
+    ['c:/aaaa/bbbb', 'c:/aaaa/bbbb',''],
+    ['c:/aaaa/bbbb', 'c:/aaaa/cccc','..\\cccc'],
+    ['c:/aaaa/', 'c:/aaaa/cccc',    'cccc'],
+    ['c:/', 'c:\\aaaa\\bbbb',       'aaaa\\bbbb'],
+    ['c:/aaaa/bbbb', 'd:\\',        'd:\\']];
+} else {
+  // posix
+  var relativeTests =
+    // arguments                    result
+    [['/var/lib', '/var',           '..'],
+     ['/var/lib', '/bin',           '../../bin'],
+     ['/var/lib', '/var/lib',       ''],
+     ['/var/lib', '/var/apache',    '../apache'],
+     ['/var/', '/var/lib',          'lib'],
+     ['/', '/var/lib',              'var/lib']];
+}
+var failures = [];
+relativeTests.forEach(function(test) {
+  var actual = path.relative(test[0], test[1]);
+  var expected = test[2];
+  var message = 'path.relative(' + test.slice(0, 2).map(JSON.stringify).join(',') + ')' +
+                '\n  expect=' + JSON.stringify(expected) +
+                '\n  actual=' + JSON.stringify(actual);
+  if (actual !== expected) failures.push('\n' + message);
+});
+assert.equal(failures.length, 0, failures.join(''));
+

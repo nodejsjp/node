@@ -32,6 +32,16 @@
 #include <inttypes.h>
 #include <sys/types.h>
 #include <sys/loadavg.h>
+#include <sys/socket.h>
+#include <net/if.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+#ifdef SUNOS_HAVE_IFADDRS
+# include <ifaddrs.h>
+#endif
+
+
 
 #if (!defined(_LP64)) && (_FILE_OFFSET_BITS - 0 == 64)
 #define PROCFS_FILE_OFFSET_BITS_HACK 1
@@ -51,6 +61,7 @@ namespace node {
 
 using namespace v8;
 
+double Platform::prog_start_time = Platform::GetUptime();
 
 char** Platform::SetupArgs(int argc, char *argv[]) {
   return argv;
@@ -249,7 +260,7 @@ double Platform::GetTotalMemory() {
   return pagesize*pages;
 }
 
-double Platform::GetUptime() {
+double Platform::GetUptimeImpl() {
   kstat_ctl_t   *kc;
   kstat_t       *ksp;
   kstat_named_t *knp;
@@ -284,6 +295,76 @@ int Platform::GetLoadAvg(Local<Array> *loads) {
   (*loads)->Set(2, Number::New(loadavg[LOADAVG_15MIN]));
 
   return 0;
+}
+
+
+Handle<Value> Platform::GetInterfaceAddresses() {
+  HandleScope scope;
+
+#ifndef SUNOS_HAVE_IFADDRS
+  return ThrowException(Exception::Error(String::New(
+    "This version of sunos doesn't support getifaddrs")));
+#else
+  struct ::ifaddrs *addrs, *ent;
+  struct ::sockaddr_in *in4;
+  struct ::sockaddr_in6 *in6;
+  char ip[INET6_ADDRSTRLEN];
+  Local<Object> ret, o;
+  Local<String> name, ipaddr, family;
+  Local<Array> ifarr;
+
+  if (getifaddrs(&addrs) != 0) {
+    return ThrowException(ErrnoException(errno, "getifaddrs"));
+  }
+
+  ret = Object::New();
+
+  for (ent = addrs; ent != NULL; ent = ent->ifa_next) {
+    bzero(&ip, sizeof (ip));
+    if (!(ent->ifa_flags & IFF_UP && ent->ifa_flags & IFF_RUNNING)) {
+      continue;
+    }
+
+    if (ent->ifa_addr == NULL) {
+      continue;
+    }
+
+    name = String::New(ent->ifa_name);
+    if (ret->Has(name)) {
+      ifarr = Local<Array>::Cast(ret->Get(name));
+    } else {
+      ifarr = Array::New();
+      ret->Set(name, ifarr);
+    }
+
+    if (ent->ifa_addr->sa_family == AF_INET6) {
+      in6 = (struct sockaddr_in6 *)ent->ifa_addr;
+      inet_ntop(AF_INET6, &(in6->sin6_addr), ip, INET6_ADDRSTRLEN);
+      family = String::New("IPv6");
+    } else if (ent->ifa_addr->sa_family == AF_INET) {
+      in4 = (struct sockaddr_in *)ent->ifa_addr;
+      inet_ntop(AF_INET, &(in4->sin_addr), ip, INET6_ADDRSTRLEN);
+      family = String::New("IPv4");
+    } else {
+      (void) strlcpy(ip, "<unknown sa family>", INET6_ADDRSTRLEN);
+      family = String::New("<unknown>");
+    }
+
+    o = Object::New();
+    o->Set(String::New("address"), String::New(ip));
+    o->Set(String::New("family"), family);
+    o->Set(String::New("internal"), ent->ifa_flags & IFF_PRIVATE || ent->ifa_flags &
+	IFF_LOOPBACK ? True() : False());
+
+    ifarr->Set(ifarr->Length(), o);
+
+  }
+
+  freeifaddrs(addrs);
+
+  return scope.Close(ret);
+
+#endif  // SUNOS_HAVE_IFADDRS
 }
 
 

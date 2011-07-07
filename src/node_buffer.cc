@@ -107,6 +107,8 @@ static size_t ByteLength (Handle<String> string, enum encoding enc) {
     return base64_decoded_size(*v, v.length());
   } else if (enc == UCS2) {
     return string->Length() * 2;
+  } else if (enc == HEX) {
+    return string->Length() / 2;
   } else {
     return string->Length();
   }
@@ -371,6 +373,27 @@ Handle<Value> Buffer::Base64Slice(const Arguments &args) {
   Local<String> string = String::New(out, out_len);
   delete [] out;
   return scope.Close(string);
+}
+
+
+// buffer.fill(value, start, end);
+Handle<Value> Buffer::Fill(const Arguments &args) {
+  HandleScope scope;
+
+  if (!args[0]->IsInt32()) {
+    return ThrowException(Exception::Error(String::New(
+            "value is not a number")));
+  }
+  int value = (char)args[0]->Int32Value();
+
+  Buffer *parent = ObjectWrap::Unwrap<Buffer>(args.This());
+  SLICE_ARGS(args[1], args[2])
+
+  memset( (void*)(parent->data_ + start),
+          value,
+          end - start);
+
+  return Undefined();
 }
 
 
@@ -737,6 +760,7 @@ void Buffer::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(constructor_template, "binaryWrite", Buffer::BinaryWrite);
   NODE_SET_PROTOTYPE_METHOD(constructor_template, "base64Write", Buffer::Base64Write);
   NODE_SET_PROTOTYPE_METHOD(constructor_template, "ucs2Write", Buffer::Ucs2Write);
+  NODE_SET_PROTOTYPE_METHOD(constructor_template, "fill", Buffer::Fill);
   NODE_SET_PROTOTYPE_METHOD(constructor_template, "copy", Buffer::Copy);
 
   NODE_SET_METHOD(constructor_template->GetFunction(),

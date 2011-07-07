@@ -842,6 +842,7 @@ Options:
 
 - `host`: A domain name or IP address of the server to issue the request to.
 - `port`: Port of remote server.
+- `socketPath`: Unix Domain Socket (use one of host:port or socketPath)
 - `method`: A string specifying the HTTP request method. Possible values:
   `'GET'` (default), `'POST'`, `'PUT'`, and `'DELETE'`.
 - `path`: Request path. Should include query string and fragments if any.
@@ -851,6 +852,7 @@ Options:
 -->
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
 - `port`: リモートサーバのポート。
+- `socketPath`: Unix ドメインソケット (host:port または socketPath のどちらか)
 - `method`: HTTP リクエストのメソッドを指定する文字列。 可能な値:
   `'GET'` (デフォルト), `'POST'`, `'PUT'`, そして `'DELETE'`。
 - `path`: リクエストのパス。問い合わせ文字列やフラグメントがあるなら含めるべきです。
@@ -984,7 +986,7 @@ Example:
 
 
 ## http.Agent
-## http.getAgent(host, port)
+## http.getAgent(options)
 
 <!--
 
@@ -997,6 +999,24 @@ agent. The `http.getAgent()` function allows you to access the agents.
 `http.request()` は HTTP サーバへの複数のコネクションを管理する特別な `Agent` を使用します。
 通常 `Agent` インスタンスはユーザコードに出てきませんが、特定の状況ではエージェントの状態をチェックすることが役に立ちます。
 `http.getAgent()` 関数はエージェントへのアクセスを可能にします。
+
+<!--
+
+Options:
+
+-->
+オプション:
+
+<!--
+
+- `host`: A domain name or IP address of the server to issue the request to.
+- `port`: Port of remote server.
+- `socketPath`: Unix Domain Socket (use one of host:port or socketPath)
+
+-->
+- `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
+- `port`: リモートサーバのポート。
+- `soocketPath`: Unix ドメインソケット (host:port または socketPath のどちらか)
 
 ### Event: 'upgrade'
 
