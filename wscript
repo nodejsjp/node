@@ -180,27 +180,6 @@ def set_options(opt):
                 )
 
 
-  opt.add_option('--shared-libev'
-                , action='store_true'
-                , default=False
-                , help='Link to a shared libev DLL instead of static linking'
-                , dest='shared_libev'
-                )
-
-  opt.add_option( '--shared-libev-includes'
-                , action='store'
-                , default=False
-                , help='Directory containing libev header files'
-                , dest='shared_libev_includes'
-                )
-
-  opt.add_option( '--shared-libev-libpath'
-                , action='store'
-                , default=False
-                , help='A directory to search for the shared libev DLL'
-                , dest='shared_libev_libpath'
-                )
-
   opt.add_option( '--with-dtrace'
                 , action='store_true'
                 , default=False
@@ -250,7 +229,6 @@ def configure(conf):
 
   conf.env["USE_SHARED_V8"] = o.shared_v8 or o.shared_v8_includes or o.shared_v8_libpath or o.shared_v8_libname
   conf.env["USE_SHARED_CARES"] = o.shared_cares or o.shared_cares_includes or o.shared_cares_libpath
-  conf.env["USE_SHARED_LIBEV"] = o.shared_libev or o.shared_libev_includes or o.shared_libev_libpath
 
   conf.env["USE_GDBJIT"] = o.use_gdbjit
 
@@ -353,17 +331,43 @@ def configure(conf):
   elif 'DEST_CPU' in conf.env and conf.env['DEST_CPU']:
     conf.env['DEST_CPU'] = canonical_cpu_type(conf.env['DEST_CPU'])
 
-  conf.check(lib='rt', uselib_store='RT')
+  have_librt = conf.check(lib='rt', uselib_store='RT')
+
+  have_monotonic = False
+  if have_librt:
+    code =  """
+      #include <time.h>
+      int main(void) {
+        struct timespec now;
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        return 0;
+      }
+    """
+    have_monotonic = conf.check_cc(lib="rt", msg="Checking for CLOCK_MONOTONIC", fragment=code)
+
+  if have_monotonic:
+    conf.env.append_value('CPPFLAGS', '-DHAVE_MONOTONIC_CLOCK=1')
+  else:
+    conf.env.append_value('CPPFLAGS', '-DHAVE_MONOTONIC_CLOCK=0')
 
   if sys.platform.startswith("sunos"):
+    code =  """
+      #include <ifaddrs.h>
+      int main(void) {
+        struct ifaddrs hello;
+        return 0;
+      }
+    """
+
+    if conf.check_cc(msg="Checking for ifaddrs on solaris", fragment=code):
+      conf.env.append_value('CPPFLAGS',  '-DSUNOS_HAVE_IFADDRS')
+
     if not conf.check(lib='socket', uselib_store="SOCKET"):
       conf.fatal("Cannot find socket library")
     if not conf.check(lib='nsl', uselib_store="NSL"):
       conf.fatal("Cannot find nsl library")
     if not conf.check(lib='kstat', uselib_store="KSTAT"):
       conf.fatal("Cannot find kstat library")
-
-  conf.sub_config('deps/libeio')
 
   if conf.env['USE_SHARED_V8']:
     v8_includes = [];
@@ -386,41 +390,6 @@ def configure(conf):
                             includes=v8_includes,
                             libpath=v8_libpath):
         conf.fatal("Cannot find v8_g")
-
-  if sys.platform.startswith("win32"):
-    # On win32 CARES is always static, so we can call internal functions like ares_inet_pton et al. 
-    # CARES_STATICLIB must be defined or gcc will try to make DLL stub calls
-    conf.env.append_value('CPPFLAGS', '-DCARES_STATICLIB=1')
-    conf.sub_config('deps/c-ares')
-  elif conf.env['USE_SHARED_CARES']:
-    cares_includes = [];
-    if o.shared_cares_includes: cares_includes.append(o.shared_cares_includes);
-    cares_libpath = [];
-    if o.shared_cares_libpath: cares_libpath.append(o.shared_cares_libpath);
-    if not conf.check_cxx(lib='cares',
-                          header_name='ares.h',
-                          uselib_store='CARES',
-                          includes=cares_includes,
-                          libpath=cares_libpath):
-      conf.fatal("Cannot find c-ares")
-  else:
-    conf.sub_config('deps/c-ares')
-
-
-  if conf.env['USE_SHARED_LIBEV']:
-    libev_includes = [];
-    if o.shared_libev_includes: libev_includes.append(o.shared_libev_includes);
-    libev_libpath = [];
-    if o.shared_libev_libpath: libev_libpath.append(o.shared_libev_libpath);
-    if not conf.check_cxx(lib='ev', header_name='ev.h',
-                          uselib_store='EV',
-                          includes=libev_includes,
-                          libpath=libev_libpath):
-      conf.fatal("Cannot find libev")
-  else:
-    conf.sub_config('deps/libev')
-
-
 
   conf.define("HAVE_CONFIG_H", 1)
 
@@ -458,12 +427,9 @@ def configure(conf):
       conf.env.append_value('CXXFLAGS', flags)
       conf.env.append_value('LINKFLAGS', flags)
 
-  # Needed for getaddrinfo in libeio
-  conf.env.append_value("CPPFLAGS", "-DX_STACKSIZE=%d" % (1024*64))
   # LFS
   conf.env.append_value('CPPFLAGS',  '-D_LARGEFILE_SOURCE')
   conf.env.append_value('CPPFLAGS',  '-D_FILE_OFFSET_BITS=64')
-  conf.env.append_value('CPPFLAGS',  '-DEV_MULTIPLICITY=0')
 
   # Makes select on windows support more than 64 FDs
   if sys.platform.startswith("win32"):
@@ -484,6 +450,9 @@ def configure(conf):
     conf.env.append_value('CPPFLAGS', '-DHAVE_FDATASYNC=1')
   else:
     conf.env.append_value('CPPFLAGS', '-DHAVE_FDATASYNC=0')
+
+  # arch
+  conf.env.append_value('CPPFLAGS', '-DARCH="' + conf.env['DEST_CPU'] + '"')
 
   # platform
   conf.env.append_value('CPPFLAGS', '-DPLATFORM="' + conf.env['DEST_OS'] + '"')
@@ -604,7 +573,6 @@ def build_v8(bld):
   t = join(bld.srcnode.abspath(bld.env_of_name("default")), v8.target)
   bld.env_of_name('default').append_value("LINKFLAGS_V8", t)
 
-
   ### v8 debug
   if bld.env["USE_DEBUG"]:
     v8_debug = v8.clone("debug")
@@ -616,6 +584,50 @@ def build_v8(bld):
     bld.env_of_name('debug').append_value("LINKFLAGS_V8_G", t)
 
   bld.install_files('${PREFIX}/include/node/', 'deps/v8/include/*.h')
+
+def sh_escape(s):
+  return s.replace("\\", "\\\\").replace("(","\\(").replace(")","\\)").replace(" ","\\ ")
+
+def uv_cmd(bld, variant):
+  srcdeps = join(bld.path.abspath(), "deps")
+  srcdir = join(srcdeps, "uv")
+  blddir = bld.srcnode.abspath(bld.env_of_name(variant)) + '/deps/uv'
+  #
+  # FIXME This is awful! We're copying the entire source directory into the
+  # build directory before each compile. This could be much improved by
+  # modifying libuv's build to send object files to a separate directory.
+  #
+  cmd = 'cp -r ' + sh_escape(srcdir)  + '/* ' + sh_escape(blddir)
+  if not sys.platform.startswith('win32'):
+    cmd += ' && if [[ -z "$NODE_MAKE" ]]; then NODE_MAKE=make; fi; $NODE_MAKE -C ' + sh_escape(blddir)
+  else:
+    cmd += ' && make -C ' + sh_escape(blddir)
+  return cmd
+
+
+def build_uv(bld):
+  uv = bld.new_task_gen(
+    name = 'uv',
+    source = 'deps/uv/uv.h',
+    target = 'deps/uv/uv.a',
+    before = "cxx",
+    rule = uv_cmd(bld, 'default')
+  )
+
+  #bld.env["CPPPATH_UV"] = 'deps/uv/'
+
+  t = join(bld.srcnode.abspath(bld.env_of_name("default")), uv.target)
+  bld.env_of_name('default').append_value("LINKFLAGS_UV", t)
+
+  if bld.env["USE_DEBUG"]:
+    uv_debug = uv.clone("debug")
+    uv_debug.rule = uv_cmd(bld, 'debug')
+
+    t = join(bld.srcnode.abspath(bld.env_of_name("debug")), uv_debug.target)
+    bld.env_of_name('debug').append_value("LINKFLAGS_UV", t)
+
+  bld.install_files('${PREFIX}/include/node/', 'deps/uv/*.h')
+  bld.install_files('${PREFIX}/include/node/ev', 'deps/uv/ev/*.h')
 
 
 def build(bld):
@@ -636,11 +648,9 @@ def build(bld):
   print "Parallel Jobs: " + str(Options.options.jobs)
   print "Product type: " + product_type
 
-  bld.add_subdirs('deps/libeio')
+  build_uv(bld)
 
   if not bld.env['USE_SHARED_V8']: build_v8(bld)
-  if not bld.env['USE_SHARED_LIBEV']: bld.add_subdirs('deps/libev')
-  if not bld.env['USE_SHARED_CARES']: bld.add_subdirs('deps/c-ares')
 
 
   ### http_parser
@@ -798,8 +808,8 @@ def build(bld):
   node = bld.new_task_gen("cxx", product_type)
   node.name         = "node"
   node.target       = "node"
-  node.uselib = 'RT EV OPENSSL CARES EXECINFO DL KVM SOCKET NSL KSTAT UTIL OPROFILE'
-  node.add_objects = 'eio http_parser'
+  node.uselib = 'RT OPENSSL CARES EXECINFO DL KVM SOCKET NSL KSTAT UTIL OPROFILE'
+  node.add_objects = 'http_parser'
   if product_type_is_lib:
     node.install_path = '${LIBDIR}'
   else:
@@ -811,27 +821,30 @@ def build(bld):
     src/node_javascript.cc
     src/node_extensions.cc
     src/node_http_parser.cc
-    src/node_net.cc
-    src/node_io_watcher.cc
     src/node_constants.cc
-    src/node_cares.cc
     src/node_events.cc
     src/node_file.cc
-    src/node_signal_watcher.cc
-    src/node_stat_watcher.cc
-    src/node_timer.cc
     src/node_script.cc
     src/node_os.cc
     src/node_dtrace.cc
     src/node_string.cc
+    src/timer_wrap.cc
+    src/tcp_wrap.cc
+    src/cares_wrap.cc
   """
 
   if sys.platform.startswith("win32"):
     node.source += " src/node_stdio_win32.cc "
     node.source += " src/node_child_process_win32.cc "
   else:
+    node.source += " src/node_cares.cc "
+    node.source += " src/node_net.cc "
+    node.source += " src/node_signal_watcher.cc "
+    node.source += " src/node_stat_watcher.cc "
+    node.source += " src/node_io_watcher.cc "
     node.source += " src/node_stdio.cc "
     node.source += " src/node_child_process.cc "
+    node.source += " src/node_timer.cc "
 
   node.source += bld.env["PLATFORM_FILE"]
   if not product_type_is_lib:
@@ -841,19 +854,16 @@ def build(bld):
 
   node.includes = """
     src/
-    deps/libeio
     deps/http_parser
+    deps/uv
+    deps/uv/ev
+    deps/uv/eio
   """
 
   if not bld.env["USE_SHARED_V8"]: node.includes += ' deps/v8/include '
 
-  if not bld.env["USE_SHARED_LIBEV"]:
-    node.add_objects += ' ev '
-    node.includes += ' deps/libev '
-
   if not bld.env["USE_SHARED_CARES"]:
-    node.add_objects += ' cares '
-    node.includes += '  deps/c-ares deps/c-ares/' + bld.env['DEST_OS'] + '-' + bld.env['DEST_CPU']
+    node.includes += '  deps/uv/c-ares '
 
   if sys.platform.startswith('cygwin'):
     bld.env.append_value('LINKFLAGS', '-Wl,--export-all-symbols')
@@ -866,7 +876,7 @@ def build(bld):
         , 'CPPFLAGS'  : " ".join(program.env["CPPFLAGS"]).replace('"', '\\"')
         , 'LIBFLAGS'  : " ".join(program.env["LIBFLAGS"]).replace('"', '\\"')
         , 'PREFIX'    : safe_path(program.env["PREFIX"])
-        , 'VERSION'   : '0.4.9' # FIXME should not be hard-coded, see NODE_VERSION_STRING in src/node_version.
+        , 'VERSION'   : '0.5.0' # FIXME should not be hard-coded, see NODE_VERSION_STRING in src/node_version.
         }
     return x
 
@@ -881,14 +891,14 @@ def build(bld):
   if bld.env["USE_DEBUG"]:
     node_g = node.clone("debug")
     node_g.target = "node_g"
-    node_g.uselib += ' V8_G'
+    node_g.uselib += ' V8_G UV '
 
     node_conf_g = node_conf.clone("debug")
     node_conf_g.dict = subflags(node_g)
     node_conf_g.install_path = None
 
   # After creating the debug clone, append the V8 dep
-  node.uselib += ' V8'
+  node.uselib += ' V8 UV '
 
   bld.install_files('${PREFIX}/include/node/', """
     config.h
@@ -897,6 +907,10 @@ def build(bld):
     src/node_buffer.h
     src/node_events.h
     src/node_version.h
+  """)
+  bld.install_files('${PREFIX}/include/node/c-ares', """
+    deps/uv/c-ares/ares.h
+    deps/uv/c-ares/ares_version.h
   """)
 
   # Only install the man page if it exists.

@@ -21,10 +21,13 @@
 
 #include <node.h>
 
+#include <uv.h>
+
 #include <v8-debug.h>
 #include <node_dtrace.h>
 
 #include <locale.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <strings.h>
@@ -49,19 +52,19 @@
 
 #include <platform.h>
 #include <node_buffer.h>
-#include <node_io_watcher.h>
+#ifdef __POSIX__
+# include <node_io_watcher.h>
+#endif
 #include <node_net.h>
 #include <node_events.h>
 #include <node_cares.h>
 #include <node_file.h>
-#if 0
-// not in use
-# include <node_idle_watcher.h>
-#endif
 #include <node_http_parser.h>
-#include <node_signal_watcher.h>
-#include <node_stat_watcher.h>
-#include <node_timer.h>
+#ifdef __POSIX__
+# include <node_signal_watcher.h>
+# include <node_stat_watcher.h>
+# include <node_timer.h>
+#endif
 #include <node_child_process.h>
 #include <node_constants.h>
 #include <node_stdio.h>
@@ -110,15 +113,27 @@ static bool debug_wait_connect = false;
 static int debug_port=5858;
 static int max_stack_size = 0;
 
-static ev_check check_tick_watcher;
-static ev_prepare prepare_tick_watcher;
-static ev_idle tick_spinner;
+static uv_check_t check_tick_watcher;
+static uv_prepare_t prepare_tick_watcher;
+static uv_idle_t tick_spinner;
 static bool need_tick_cb;
 static Persistent<String> tick_callback_sym;
 
-static ev_async eio_want_poll_notifier;
-static ev_async eio_done_poll_notifier;
-static ev_idle  eio_poller;
+static uv_async_t eio_want_poll_notifier;
+static uv_async_t eio_done_poll_notifier;
+static uv_idle_t eio_poller;
+
+
+// XXX use_uv defaults to false on POSIX platforms and to true on Windows
+// platforms. This can be set with "--use-uv" command-line flag. We intend
+// to remove the legacy backend once the libuv backend is passing all of the
+// tests.
+#ifdef __POSIX__
+static bool use_uv = false;
+#else
+static bool use_uv = true;
+#endif
+
 
 // Buffer for getpwnam_r(), getgrpam_r() and other misc callers; keep this
 // scoped at file-level rather than method-level to avoid excess stack usage.
@@ -131,9 +146,9 @@ static char getbuf[PATH_MAX + 1];
 //
 // A rather convoluted algorithm has been devised to determine when Node is
 // idle. You'll have to figure it out for yourself.
-static ev_check gc_check;
-static ev_idle  gc_idle;
-static ev_timer gc_timer;
+static uv_check_t gc_check;
+static uv_idle_t gc_idle;
+static uv_timer_t gc_timer;
 bool need_gc;
 
 
@@ -141,42 +156,40 @@ bool need_gc;
 #define GC_WAIT_TIME 5.
 #define RPM_SAMPLES 100
 #define TICK_TIME(n) tick_times[(tick_time_head - (n)) % RPM_SAMPLES]
-static ev_tstamp tick_times[RPM_SAMPLES];
+static int64_t tick_times[RPM_SAMPLES];
 static int tick_time_head;
 
+static void CheckStatus(uv_timer_t* watcher, int status);
+
 static void StartGCTimer () {
-  if (!ev_is_active(&gc_timer)) {
-    ev_timer_start(EV_DEFAULT_UC_ &gc_timer);
-    ev_unref(EV_DEFAULT_UC);
+  if (!uv_is_active((uv_handle_t*) &gc_timer)) {
+    uv_timer_start(&node::gc_timer, node::CheckStatus, 5., 5.);
   }
 }
 
 static void StopGCTimer () {
-  if (ev_is_active(&gc_timer)) {
-    ev_ref(EV_DEFAULT_UC);
-    ev_timer_stop(EV_DEFAULT_UC_ &gc_timer);
+  if (uv_is_active((uv_handle_t*) &gc_timer)) {
+    uv_timer_stop(&gc_timer);
   }
 }
 
-static void Idle(EV_P_ ev_idle *watcher, int revents) {
-  assert(watcher == &gc_idle);
-  assert(revents == EV_IDLE);
+static void Idle(uv_idle_t* watcher, int status) {
+  assert((uv_idle_t*) watcher == &gc_idle);
 
   //fprintf(stderr, "idle\n");
 
   if (V8::IdleNotification()) {
-    ev_idle_stop(EV_A_ watcher);
+    uv_idle_stop(&gc_idle);
     StopGCTimer();
   }
 }
 
 
 // Called directly after every call to select() (or epoll, or whatever)
-static void Check(EV_P_ ev_check *watcher, int revents) {
+static void Check(uv_check_t* watcher, int status) {
   assert(watcher == &gc_check);
-  assert(revents == EV_CHECK);
 
-  tick_times[tick_time_head] = ev_now(EV_DEFAULT_UC);
+  tick_times[tick_time_head] = uv_now();
   tick_time_head = (tick_time_head + 1) % RPM_SAMPLES;
 
   StartGCTimer();
@@ -195,26 +208,7 @@ static void Check(EV_P_ ev_check *watcher, int revents) {
   // Otherwise start the gc!
 
   //fprintf(stderr, "start idle 2\n");
-  ev_idle_start(EV_A_ &gc_idle);
-}
-
-
-static Handle<Value> NeedTickCallback(const Arguments& args) {
-  HandleScope scope;
-  need_tick_cb = true;
-  // TODO: this tick_spinner shouldn't be necessary. An ev_prepare should be
-  // sufficent, the problem is only in the case of the very last "tick" -
-  // there is nothing left to do in the event loop and libev will exit. The
-  // ev_prepare callback isn't called before exiting. Thus we start this
-  // tick_spinner to keep the event loop alive long enough to handle it.
-  ev_idle_start(EV_DEFAULT_UC_ &tick_spinner);
-  return Undefined();
-}
-
-
-static void Spin(EV_P_ ev_idle *watcher, int revents) {
-  assert(watcher == &tick_spinner);
-  assert(revents == EV_IDLE);
+  uv_idle_start(&node::gc_idle, node::Idle);
 }
 
 
@@ -223,7 +217,10 @@ static void Tick(void) {
   if (!need_tick_cb) return;
 
   need_tick_cb = false;
-  ev_idle_stop(EV_DEFAULT_UC_ &tick_spinner);
+  if (uv_is_active((uv_handle_t*) &tick_spinner)) {
+    uv_idle_stop(&tick_spinner);
+    uv_unref();
+  }
 
   HandleScope scope;
 
@@ -247,56 +244,79 @@ static void Tick(void) {
 }
 
 
-static void PrepareTick(EV_P_ ev_prepare *watcher, int revents) {
-  assert(watcher == &prepare_tick_watcher);
-  assert(revents == EV_PREPARE);
+static void Spin(uv_idle_t* handle, int status) {
+  assert((uv_idle_t*) handle == &tick_spinner);
+  assert(status == 0);
   Tick();
 }
 
 
-static void CheckTick(EV_P_ ev_check *watcher, int revents) {
-  assert(watcher == &check_tick_watcher);
-  assert(revents == EV_CHECK);
+static Handle<Value> NeedTickCallback(const Arguments& args) {
+  HandleScope scope;
+  need_tick_cb = true;
+  // TODO: this tick_spinner shouldn't be necessary. An ev_prepare should be
+  // sufficent, the problem is only in the case of the very last "tick" -
+  // there is nothing left to do in the event loop and libev will exit. The
+  // ev_prepare callback isn't called before exiting. Thus we start this
+  // tick_spinner to keep the event loop alive long enough to handle it.
+  if (!uv_is_active((uv_handle_t*) &tick_spinner)) {
+    uv_idle_start(&tick_spinner, Spin);
+    uv_ref();
+  }
+  return Undefined();
+}
+
+
+static void PrepareTick(uv_prepare_t* handle, int status) {
+  assert(handle == &prepare_tick_watcher);
+  assert(status == 0);
   Tick();
 }
 
 
-static void DoPoll(EV_P_ ev_idle *watcher, int revents) {
+static void CheckTick(uv_check_t* handle, int status) {
+  assert(handle == &check_tick_watcher);
+  assert(status == 0);
+  Tick();
+}
+
+
+static void DoPoll(uv_idle_t* watcher, int status) {
   assert(watcher == &eio_poller);
-  assert(revents == EV_IDLE);
 
   //printf("eio_poller\n");
 
-  if (eio_poll() != -1) {
+  if (eio_poll() != -1 && uv_is_active((uv_handle_t*) &eio_poller)) {
     //printf("eio_poller stop\n");
-    ev_idle_stop(EV_DEFAULT_UC_ watcher);
+    uv_idle_stop(&eio_poller);
+    uv_unref();
   }
 }
 
 
 // Called from the main thread.
-static void WantPollNotifier(EV_P_ ev_async *watcher, int revents) {
+static void WantPollNotifier(uv_async_t* watcher, int status) {
   assert(watcher == &eio_want_poll_notifier);
-  assert(revents == EV_ASYNC);
 
   //printf("want poll notifier\n");
 
-  if (eio_poll() == -1) {
+  if (eio_poll() == -1 && !uv_is_active((uv_handle_t*) &eio_poller)) {
     //printf("eio_poller start\n");
-    ev_idle_start(EV_DEFAULT_UC_ &eio_poller);
+    uv_idle_start(&eio_poller, node::DoPoll);
+    uv_ref();
   }
 }
 
 
-static void DonePollNotifier(EV_P_ ev_async *watcher, int revents) {
+static void DonePollNotifier(uv_async_t* watcher, int revents) {
   assert(watcher == &eio_done_poll_notifier);
-  assert(revents == EV_ASYNC);
 
   //printf("done poll notifier\n");
 
-  if (eio_poll() != -1) {
+  if (eio_poll() != -1 && uv_is_active((uv_handle_t*) &eio_poller)) {
     //printf("eio_poller stop\n");
-    ev_idle_stop(EV_DEFAULT_UC_ &eio_poller);
+    uv_idle_stop(&eio_poller);
+    uv_unref();
   }
 }
 
@@ -305,14 +325,14 @@ static void DonePollNotifier(EV_P_ ev_async *watcher, int revents) {
 // request (that is, one of the node.fs.* functions) has completed.
 static void EIOWantPoll(void) {
   // Signal the main thread that eio_poll need to be processed.
-  ev_async_send(EV_DEFAULT_UC_ &eio_want_poll_notifier);
+  uv_async_send(&eio_want_poll_notifier);
 }
 
 
 static void EIODonePoll(void) {
   // Signal the main thread that we should stop calling eio_poll().
   // from the idle watcher.
-  ev_async_send(EV_DEFAULT_UC_ &eio_done_poll_notifier);
+  uv_async_send(&eio_done_poll_notifier);
 }
 
 
@@ -1082,6 +1102,42 @@ Handle<Value> FromConstructorTemplate(Persistent<FunctionTemplate>& t,
 }
 
 
+// MakeCallback may only be made directly off the event loop.
+// That is there can be no JavaScript stack frames underneath it.
+// (Is there any way to assert that?)
+//
+// Maybe make this a method of a node::Handle super class
+//
+void MakeCallback(Handle<Object> object,
+                  const char* method,
+                  int argc,
+                  Handle<Value> argv[]) {
+  HandleScope scope;
+
+  Local<Value> callback_v = object->Get(String::New(method)); 
+  assert(callback_v->IsFunction());
+  Local<Function> callback = Local<Function>::Cast(callback_v);
+
+  // TODO Hook for long stack traces to be made here.
+
+  TryCatch try_catch;
+
+  callback->Call(object, argc, argv);
+
+  if (try_catch.HasCaught()) {
+    FatalException(try_catch);
+  }
+}
+
+
+void SetErrno(uv_err_code code) {
+  uv_err_t err;
+  err.code = code;
+  Context::GetCurrent()->Global()->Set(String::NewSymbol("errno"),
+                                       String::NewSymbol(uv_err_name(err)));
+}
+
+
 enum encoding ParseEncoding(Handle<Value> encoding_v, enum encoding _default) {
   HandleScope scope;
 
@@ -1103,6 +1159,8 @@ enum encoding ParseEncoding(Handle<Value> encoding_v, enum encoding _default) {
     return UCS2;
   } else if (strcasecmp(*encoding, "binary") == 0) {
     return BINARY;
+  } else if (strcasecmp(*encoding, "hex") == 0) {
+    return HEX;
   } else if (strcasecmp(*encoding, "raw") == 0) {
     fprintf(stderr, "'raw' (array of integers) has been removed. "
                     "Use 'binary'.\n");
@@ -1153,6 +1211,7 @@ ssize_t DecodeBytes(v8::Handle<v8::Value> val, enum encoding encoding) {
 
   if (encoding == UTF8) return str->Utf8Length();
   else if (encoding == UCS2) return str->Length() * 2;
+  else if (encoding == HEX) return str->Length() / 2;
 
   return str->Length();
 }
@@ -1240,7 +1299,7 @@ void DisplayExceptionLine (TryCatch &try_catch) {
     //
     // When reporting errors on the first line of a script, this wrapper
     // function is leaked to the user. This HACK is to remove it. The length
-    // of the wrapper is 62. That wrapper is defined in src/node.js
+    // of the wrapper is 70. That wrapper is defined in src/node.js
     //
     // If that wrapper is ever changed, then this number also has to be
     // updated. Or - someone could clean this up so that the two peices
@@ -1248,7 +1307,7 @@ void DisplayExceptionLine (TryCatch &try_catch) {
     //
     // Even better would be to get support into V8 for wrappers that
     // shouldn't be reported to users.
-    int offset = linenum == 1 ? 62 : 0;
+    int offset = linenum == 1 ? 70 : 0;
 
     fprintf(stderr, "%s\n", sourceline_string + offset);
     // Print wavy underline (GetUnderline is deprecated).
@@ -1427,7 +1486,11 @@ static Handle<Value> SetGid(const Arguments& args) {
 
     if ((err = getgrnam_r(*grpnam, &grp, getbuf, ARRAY_SIZE(getbuf), &grpp)) ||
         grpp == NULL) {
-      return ThrowException(ErrnoException(errno, "getgrnam_r"));
+      if (errno == 0)
+        return ThrowException(Exception::Error(
+          String::New("setgid group id does not exist")));
+      else
+        return ThrowException(ErrnoException(errno, "getgrnam_r"));
     }
 
     gid = grpp->gr_gid;
@@ -1462,7 +1525,11 @@ static Handle<Value> SetUid(const Arguments& args) {
 
     if ((err = getpwnam_r(*pwnam, &pwd, getbuf, ARRAY_SIZE(getbuf), &pwdp)) ||
         pwdp == NULL) {
-      return ThrowException(ErrnoException(errno, "getpwnam_r"));
+      if (errno == 0)
+        return ThrowException(Exception::Error(
+          String::New("setuid user id does not exist")));
+      else
+        return ThrowException(ErrnoException(errno, "getpwnam_r"));
     }
 
     uid = pwdp->pw_uid;
@@ -1488,31 +1555,42 @@ v8::Handle<v8::Value> Exit(const v8::Arguments& args) {
 }
 
 
-static void CheckStatus(EV_P_ ev_timer *watcher, int revents) {
+static void CheckStatus(uv_timer_t* watcher, int status) {
   assert(watcher == &gc_timer);
-  assert(revents == EV_TIMEOUT);
 
   // check memory
-  if (!ev_is_active(&gc_idle)) {
+  if (!uv_is_active((uv_handle_t*) &gc_idle)) {
     HeapStatistics stats;
     V8::GetHeapStatistics(&stats);
     if (stats.total_heap_size() > 1024 * 1024 * 128) {
       // larger than 128 megs, just start the idle watcher
-      ev_idle_start(EV_A_ &gc_idle);
+      uv_idle_start(&node::gc_idle, node::Idle);
       return;
     }
   }
 
-  double d = ev_now(EV_DEFAULT_UC) - TICK_TIME(3);
+  double d = uv_now() - TICK_TIME(3);
 
   //printfb("timer d = %f\n", d);
 
   if (d  >= GC_WAIT_TIME - 1.) {
     //fprintf(stderr, "start idle\n");
-    ev_idle_start(EV_A_ &gc_idle);
+    uv_idle_start(&node::gc_idle, node::Idle);
   }
 }
 
+static Handle<Value> Uptime(const Arguments& args) {
+  HandleScope scope;
+  assert(args.Length() == 0);
+
+  double uptime =  Platform::GetUptime(true);
+
+  if (uptime < 0) {
+    return Undefined();
+  }
+
+  return scope.Close(Number::New(uptime));
+}
 
 v8::Handle<v8::Value> MemoryUsage(const v8::Arguments& args) {
   HandleScope scope;
@@ -1752,12 +1830,11 @@ void FatalException(TryCatch &try_catch) {
 }
 
 
-static ev_async debug_watcher;
+static uv_async_t debug_watcher;
 
-static void DebugMessageCallback(EV_P_ ev_async *watcher, int revents) {
+static void DebugMessageCallback(uv_async_t* watcher, int status) {
   HandleScope scope;
   assert(watcher == &debug_watcher);
-  assert(revents == EV_ASYNC);
   Debug::ProcessDebugMessages();
 }
 
@@ -1767,7 +1844,7 @@ static void DebugMessageDispatch(void) {
 
   // Send a signal to our main thread saying that it should enter V8 to
   // handle the message.
-  ev_async_send(EV_DEFAULT_UC_ &debug_watcher);
+  uv_async_send(&debug_watcher);
 }
 
 static void DebugBreakMessageHandler(const Debug::Message& message) {
@@ -1805,16 +1882,20 @@ static Handle<Value> Binding(const Arguments& args) {
     DefineConstants(exports);
     binding_cache->Set(module, exports);
 
+#ifdef __POSIX__
   } else if (!strcmp(*module_v, "io_watcher")) {
     exports = Object::New();
     IOWatcher::Initialize(exports);
     binding_cache->Set(module, exports);
+#endif
 
   } else if (!strcmp(*module_v, "timer")) {
+#ifdef __POSIX__
     exports = Object::New();
     Timer::Initialize(exports);
     binding_cache->Set(module, exports);
 
+#endif
   } else if (!strcmp(*module_v, "natives")) {
     exports = Object::New();
     DefineJavaScript(exports);
@@ -1929,7 +2010,7 @@ static Handle<Array> EnvEnumerator(const AccessorInfo& info) {
 }
 
 
-static void Load(int argc, char *argv[]) {
+Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   HandleScope scope;
 
   int i, j;
@@ -1957,8 +2038,8 @@ static void Load(int argc, char *argv[]) {
   versions->Set(String::NewSymbol("node"), String::New(NODE_VERSION+1));
   versions->Set(String::NewSymbol("v8"), String::New(V8::GetVersion()));
   versions->Set(String::NewSymbol("ares"), String::New(ARES_VERSION_STR));
-  snprintf(buf, 20, "%d.%d", ev_version_major(), ev_version_minor());
-  versions->Set(String::NewSymbol("ev"), String::New(buf));
+  snprintf(buf, 20, "%d.%d", UV_VERSION_MAJOR, UV_VERSION_MINOR);
+  versions->Set(String::NewSymbol("uv"), String::New(buf));
 #ifdef HAVE_OPENSSL
   // Stupid code to slice out the version string.
   int c, l = strlen(OPENSSL_VERSION_TEXT);
@@ -1977,6 +2058,9 @@ static void Load(int argc, char *argv[]) {
 #endif
 
 
+
+  // process.arch
+  process->Set(String::NewSymbol("arch"), String::New(ARCH));
 
   // process.platform
   process->Set(String::NewSymbol("platform"), String::New(PLATFORM));
@@ -2016,6 +2100,7 @@ static void Load(int argc, char *argv[]) {
   process->Set(String::NewSymbol("ENV"), ENV);
 
   process->Set(String::NewSymbol("pid"), Integer::New(getpid()));
+  process->Set(String::NewSymbol("useUV"), use_uv ? True() : False());
 
   // -e, --eval
   if (eval_string) {
@@ -2051,6 +2136,7 @@ static void Load(int argc, char *argv[]) {
   NODE_SET_METHOD(process, "_kill", Kill);
 #endif // __POSIX__
 
+  NODE_SET_METHOD(process, "uptime", Uptime);
   NODE_SET_METHOD(process, "memoryUsage", MemoryUsage);
 
   NODE_SET_METHOD(process, "binding", Binding);
@@ -2059,11 +2145,30 @@ static void Load(int argc, char *argv[]) {
   process->Set(String::NewSymbol("EventEmitter"),
                EventEmitter::constructor_template->GetFunction());
 
+  return process;
+}
+
+
+static void AtExit() {
+  node::Stdio::Flush();
+  node::Stdio::DisableRawMode(STDIN_FILENO);
+}
+
+
+static void SignalExit(int signal) {
+  Stdio::DisableRawMode(STDIN_FILENO);
+  _exit(1);
+}
+
+
+void Load(Handle<Object> process) {
   // Compile, execute the src/node.js file. (Which was included as static C
   // string in node_natives.h. 'natve_node' is the string containing that
   // source code.)
 
   // The node.js file returns a function 'f'
+
+  atexit(AtExit);
 
   TryCatch try_catch;
 
@@ -2138,6 +2243,7 @@ static void PrintHelp() {
          "  --v8-options         print v8 command line options\n"
          "  --vars               print various compiled-in variables\n"
          "  --max-stack-size=val set max v8 stack size (bytes)\n"
+         "  --use-uv             use the libuv backend\n"
          "\n"
          "Enviromental variables:\n"
          "NODE_PATH              ':'-separated list of directories\n"
@@ -2151,14 +2257,17 @@ static void PrintHelp() {
 }
 
 // Parse node command line arguments.
-static void ParseArgs(int *argc, char **argv) {
+static void ParseArgs(int argc, char **argv) {
   int i;
 
   // TODO use parse opts
-  for (i = 1; i < *argc; i++) {
+  for (i = 1; i < argc; i++) {
     const char *arg = argv[i];
     if (strstr(arg, "--debug") == arg) {
       ParseDebugOpt(arg);
+      argv[i] = const_cast<char*>("");
+    } else if (!strcmp(arg, "--use-uv")) {
+      use_uv = true;
       argv[i] = const_cast<char*>("");
     } else if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
       printf("%s\n", NODE_VERSION);
@@ -2176,7 +2285,7 @@ static void ParseArgs(int *argc, char **argv) {
       PrintHelp();
       exit(0);
     } else if (strcmp(arg, "--eval") == 0 || strcmp(arg, "-e") == 0) {
-      if (*argc <= i + 1) {
+      if (argc <= i + 1) {
         fprintf(stderr, "Error: --eval requires an argument\n");
         exit(1);
       }
@@ -2190,18 +2299,6 @@ static void ParseArgs(int *argc, char **argv) {
   }
 
   option_end_index = i;
-}
-
-
-static void AtExit() {
-  node::Stdio::Flush();
-  node::Stdio::DisableRawMode(STDIN_FILENO);
-}
-
-
-static void SignalExit(int signal) {
-  Stdio::DisableRawMode(STDIN_FILENO);
-  _exit(1);
 }
 
 
@@ -2257,12 +2354,12 @@ static int RegisterSignalHandler(int signal, void (*handler)(int)) {
 #endif // __POSIX__
 
 
-int Start(int argc, char *argv[]) {
+char** Init(int argc, char *argv[]) {
   // Hack aroung with the argv pointer. Used for process.title = "blah".
   argv = node::Platform::SetupArgs(argc, argv);
 
   // Parse a few arguments which are specific to Node.
-  node::ParseArgs(&argc, argv);
+  node::ParseArgs(argc, argv);
   // Parse the rest of the args (up to the 'option_end_index' (where '--' was
   // in the command line))
   int v8argc = node::option_end_index;
@@ -2306,42 +2403,37 @@ int Start(int argc, char *argv[]) {
   wsa_init();
 #endif // __MINGW32__
 
-  // Initialize the default ev loop.
-#if defined(__MAC_OS_X_VERSION_MIN_REQUIRED) && __MAC_OS_X_VERSION_MIN_REQUIRED >= 1060
-  ev_default_loop(EVBACKEND_KQUEUE);
-#else
-  ev_default_loop(EVFLAG_AUTO);
-#endif
+  uv_prepare_init(&node::prepare_tick_watcher);
+  uv_prepare_start(&node::prepare_tick_watcher, PrepareTick);
+  uv_unref();
 
-  ev_prepare_init(&node::prepare_tick_watcher, node::PrepareTick);
-  ev_prepare_start(EV_DEFAULT_UC_ &node::prepare_tick_watcher);
-  ev_unref(EV_DEFAULT_UC);
+  uv_check_init(&node::check_tick_watcher);
+  uv_check_start(&node::check_tick_watcher, node::CheckTick);
+  uv_unref();
 
-  ev_check_init(&node::check_tick_watcher, node::CheckTick);
-  ev_check_start(EV_DEFAULT_UC_ &node::check_tick_watcher);
-  ev_unref(EV_DEFAULT_UC);
+  uv_idle_init(&node::tick_spinner);
+  uv_unref();
 
-  ev_idle_init(&node::tick_spinner, node::Spin);
+  uv_check_init(&node::gc_check);
+  uv_check_start(&node::gc_check, node::Check);
+  uv_unref();
 
-  ev_check_init(&node::gc_check, node::Check);
-  ev_check_start(EV_DEFAULT_UC_ &node::gc_check);
-  ev_unref(EV_DEFAULT_UC);
+  uv_idle_init(&node::gc_idle);
+  uv_unref();
 
-  ev_idle_init(&node::gc_idle, node::Idle);
-  ev_timer_init(&node::gc_timer, node::CheckStatus, 5., 5.);
+  uv_timer_init(&node::gc_timer);
+  uv_unref();
 
+  // Setup the EIO thread pool. It requires 3, yes 3, watchers.
+  {
+    uv_idle_init(&node::eio_poller);
+    uv_idle_start(&eio_poller, node::DoPoll);
 
-  // Setup the EIO thread pool
-  { // It requires 3, yes 3, watchers.
-    ev_idle_init(&node::eio_poller, node::DoPoll);
+    uv_async_init(&node::eio_want_poll_notifier, node::WantPollNotifier);
+    uv_unref();
 
-    ev_async_init(&node::eio_want_poll_notifier, node::WantPollNotifier);
-    ev_async_start(EV_DEFAULT_UC_ &node::eio_want_poll_notifier);
-    ev_unref(EV_DEFAULT_UC);
-
-    ev_async_init(&node::eio_done_poll_notifier, node::DonePollNotifier);
-    ev_async_start(EV_DEFAULT_UC_ &node::eio_done_poll_notifier);
-    ev_unref(EV_DEFAULT_UC);
+    uv_async_init(&node::eio_done_poll_notifier, node::DonePollNotifier);
+    uv_unref();
 
     eio_init(node::EIOWantPoll, node::EIODonePoll);
     // Don't handle more than 10 reqs on each eio_poll(). This is to avoid
@@ -2349,26 +2441,19 @@ int Start(int argc, char *argv[]) {
     eio_set_max_poll_reqs(10);
   }
 
-  V8::Initialize();
-  HandleScope handle_scope;
-
   V8::SetFatalErrorHandler(node::OnFatalError);
 
 
-  // Initialize the async watcher for receiving messages from the debug
-  // thread and marshal it into the main thread. DebugMessageCallback()
-  // is called from the main thread to execute a random bit of javascript
-  // - which will give V8 control so it can handle whatever new message
-  // had been received on the debug thread.
-  ev_async_init(&node::debug_watcher, node::DebugMessageCallback);
-  ev_set_priority(&node::debug_watcher, EV_MAXPRI);
   // Set the callback DebugMessageDispatch which is called from the debug
   // thread.
   Debug::SetDebugMessageDispatchHandler(node::DebugMessageDispatch);
-  // Start the async watcher.
-  ev_async_start(EV_DEFAULT_UC_ &node::debug_watcher);
+  // Initialize the async watcher. DebugMessageCallback() is called from the
+  // main thread to execute a random bit of javascript - which will give V8
+  // control so it can handle whatever new message had been received on the
+  // debug thread.
+  uv_async_init(&node::debug_watcher, node::DebugMessageCallback);
   // unref it so that we exit the event loop despite it being active.
-  ev_unref(EV_DEFAULT_UC);
+  uv_unref();
 
 
   // If the --debug flag was specified then initialize the debug thread.
@@ -2381,28 +2466,11 @@ int Start(int argc, char *argv[]) {
 #endif // __POSIX__
   }
 
-  // Create the one and only Context.
-  Persistent<v8::Context> context = v8::Context::New();
-  v8::Context::Scope context_scope(context);
-
-  atexit(node::AtExit);
-
-  // Create all the objects, load modules, do everything.
-  // so your next reading stop should be node::Load()!
-  node::Load(argc, argv);
-
-  // TODO Probably don't need to start this each time.
-  // Avoids failing on test/simple/test-eio-race3.js though
-  ev_idle_start(EV_DEFAULT_UC_ &eio_poller);
-
-  // All our arguments are loaded. We've evaluated all of the scripts. We
-  // might even have created TCP servers. Now we enter the main eventloop. If
-  // there are no watchers on the loop (except for the ones that were
-  // ev_unref'd) then this function exits. As long as there are active
-  // watchers, it blocks.
-  ev_loop(EV_DEFAULT_UC_ 0);
+  return argv;
+}
 
 
+void EmitExit(v8::Handle<v8::Object> process) {
   // process.emit('exit')
   Local<Value> emit_v = process->Get(String::New("emit"));
   assert(emit_v->IsFunction());
@@ -2413,7 +2481,36 @@ int Start(int argc, char *argv[]) {
   if (try_catch.HasCaught()) {
     FatalException(try_catch);
   }
+}
 
+
+int Start(int argc, char *argv[]) {
+  uv_init();
+
+  // This needs to run *before* V8::Initialize()
+  argv = Init(argc, argv);
+
+  v8::V8::Initialize();
+  v8::HandleScope handle_scope;
+
+  // Create the one and only Context.
+  Persistent<v8::Context> context = v8::Context::New();
+  v8::Context::Scope context_scope(context);
+
+  Handle<Object> process = SetupProcessObject(argc, argv);
+
+  // Create all the objects, load modules, do everything.
+  // so your next reading stop should be node::Load()!
+  Load(process);
+
+  // All our arguments are loaded. We've evaluated all of the scripts. We
+  // might even have created TCP servers. Now we enter the main eventloop. If
+  // there are no watchers on the loop (except for the ones that were
+  // uv_unref'd) then this function exits. As long as there are active
+  // watchers, it blocks.
+  uv_run();
+
+  EmitExit(process);
 
 #ifndef NDEBUG
   // Clean up.

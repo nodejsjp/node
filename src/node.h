@@ -22,7 +22,16 @@
 #ifndef SRC_NODE_H_
 #define SRC_NODE_H_
 
-#include <ev.h>
+// A dependency include (libeio\xthread.h) defines _WIN32_WINNT to another value
+// This should be defined in make system.
+// See issue https://github.com/joyent/node/issues/1236
+#ifdef __MINGW32__
+#ifndef _WIN32_WINNT
+# define _WIN32_WINNT   0x0501
+#endif
+#endif
+
+#include <uv.h>
 #include <eio.h>
 #include <v8.h>
 #include <sys/types.h> /* struct stat */
@@ -37,9 +46,14 @@
 
 namespace node {
 
-int Start (int argc, char *argv[]);
+int Start(int argc, char *argv[]);
 
-#define NODE_PSYMBOL(s) Persistent<String>::New(String::NewSymbol(s))
+char** Init(int argc, char *argv[]);
+v8::Handle<v8::Object> SetupProcessObject(int argc, char *argv[]);
+void Load(v8::Handle<v8::Object> process);
+void EmitExit(v8::Handle<v8::Object> process);
+
+#define NODE_PSYMBOL(s) v8::Persistent<v8::String>::New(v8::String::NewSymbol(s))
 
 /* Converts a unixtime to V8 Date */
 #define NODE_UNIXTIME_V8(t) v8::Date::New(1000*static_cast<double>(t))
@@ -64,7 +78,7 @@ do {                                                                      \
                                   __callback##_TEM);                      \
 } while (0)
 
-enum encoding {ASCII, UTF8, BASE64, UCS2, BINARY};
+enum encoding {ASCII, UTF8, BASE64, UCS2, BINARY, HEX};
 enum encoding ParseEncoding(v8::Handle<v8::Value> encoding_v,
                             enum encoding _default = BINARY);
 void FatalException(v8::TryCatch &try_catch);
@@ -167,6 +181,11 @@ node_module_struct* get_builtin_module(const char *name);
 #define NODE_MODULE_DECL(modname) \
   extern node::node_module_struct modname ## _module;
 
+void SetErrno(uv_err_code code);
+void MakeCallback(v8::Handle<v8::Object> object,
+                  const char* method,
+                  int argc,
+                  v8::Handle<v8::Value> argv[]);
 
 }  // namespace node
 #endif  // SRC_NODE_H_

@@ -25,19 +25,19 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
 
 <!--
 
-* `href`: The full URL that was originally parsed.
+* `href`: The full URL that was originally parsed. Both the protocol and host are lowercased.
 
   Example: `'http://user:pass@host.com:8080/p/a/t/h?query=string#hash'`
-* `protocol`: The request protocol.
+* `protocol`: The request protocol, lowercased.
 
   Example: `'http:'`
-* `host`: The full host portion of the URL, including port and authentication information.
+* `host`: The full lowercased host portion of the URL, including port and authentication information.
 
   Example: `'user:pass@host.com:8080'`
 * `auth`: The authentication information portion of a URL.
 
   Example: `'user:pass'`
-* `hostname`: Just the hostname portion of the host.
+* `hostname`: Just the lowercased hostname portion of the host.
 
   Example: `'host.com'`
 * `port`: The port number portion of the host.
@@ -57,19 +57,19 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
   Example: `'#hash'`
 
 -->
-* `href`: 解析する前の完全な URL。 
+* `href`: 解析する前の完全な URL。protocol と host はどちらも小文字化されます。
   
   例: `'http://user:pass@host.com:8080/p/a/t/h?query=string#hash'`
-* `protocol`: リクエストのプロトコル。
+* `protocol`: リクエストのプロトコル。小文字化されます。
   
   例: `'http:'`
-* `host`: URL の完全なホスト情報。認証情報を含みます。 
+* `host`: URL の完全で小文字化されたホスト情報。認証情報を含みます。 
   
   例: `'user:pass@host.com:8080'`
 * `auth`: URL の認証情報。
   
   例: `'user:pass'`
-* `hostname`: ホスト情報の中のホスト名。
+* `hostname`: ホスト情報の中の小文字化されたホスト名。
 
   例: `'host.com'`
 * `port`: ホスト情報の中のポート番号。

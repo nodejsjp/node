@@ -46,9 +46,11 @@ Example:
 <!--
 
 Join all arguments together and normalize the resulting path.
+Non-string arguments are ignored.
 
 -->
 全ての引数を一つに結合し、結果として得られるパスを正規化します。
+文字列でない引数は無視されます。
 
 <!--
 
@@ -57,9 +59,13 @@ Example:
 -->
 例:
 
-    node> require('path').join(
-    ...   '/foo', 'bar', 'baz/asdf', 'quux', '..')
+    path.join('/foo', 'bar', 'baz/asdf', 'quux', '..')
+    // returns
     '/foo/bar/baz/asdf'
+
+    path.join('foo', {}, 'bar')
+    // returns
+    'foo/bar'
 
 ### path.resolve([from ...], to)
 
@@ -76,11 +82,12 @@ If `to` isn't already absolute `from` arguments are prepended in right to left
 order, until an absolute path is found. If after using all `from` paths still
 no absolute path is found, the current working directory is used as well. The
 resulting path is normalized, and trailing slashes are removed unless the path 
-gets resolved to the root directory.
+gets resolved to the root directory. Non-string arguments are ignored.
 -->
 もし `to` が既に絶対パスでなければ、絶対パスが見つかるまで `from` 引数を右から左の順で先頭に加えます。
 全ての `from` を加えた後、パスがまだ絶対パスでなければ、カレントワーキングディレクトリが同様に使われます。
 結果のパスは正規化され、解決されたパスがルートディレクトリでない限り末尾のスラッシュは削除されます。
+文字列でない引数は無視されます。
 
 <!--
 
