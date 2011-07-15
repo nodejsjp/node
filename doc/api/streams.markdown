@@ -170,6 +170,13 @@ streams are kept in sync by pausing and resuming as necessary.
 
 <!--
 
+This function returns the `destination` stream.
+
+-->
+この関数は `destination` ストリームを返します。
+
+<!--
+
 Emulating the Unix `cat` command:
 
 -->

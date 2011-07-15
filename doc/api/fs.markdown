@@ -513,12 +513,52 @@ Synchronous close(2).
 
 <!--
 
-Asynchronous file open. See open(2). Flags can be 'r', 'r+', 'w', 'w+', 'a',
-or 'a+'. `mode` defaults to 0666. The callback gets two arguments `(err, fd)`.
+Asynchronous file open. See open(2). `flags` can be:
+
+* `'r'` - Open file for reading.
+An exception occurs if the file does not exist.
+
+* `'r+'` - Open file for reading and writing. 
+An exception occurs if the file does not exist.
+
+* `'w'` - Open file for writing.
+The file is created (if it does not exist) or truncated (if it exists).
+
+* `'w+'` - Open file for reading and writing.
+The file is created (if it does not exist) or truncated (if it exists).
+
+* `'a'` - Open file for appending.
+The file is created if it does not exist.
+
+* `'a+'` - Open file for reading and appending.
+The file is created if it does not exist.
+
+`mode` defaults to `0666`. The callback gets two arguments `(err, fd)`.
 
 -->
 非同期のファイルオープン。open(2) を参照してください。
-フラグは 'r'、'r+'、'w'、'w+'、'a'、あるいは 'a+' です。
+フラグは以下になります:
+
+* `'r'` - 読み込み専用でオープンします。
+ファイルが存在しない場合は例外が発生します。
+
+* `'r+'` - 読み書き両用でオープンします。
+ファイルが存在しない場合は例外が発生します。
+
+* `'w'` - 書き込み専用でオープンします。
+ファイルは作成される (存在しない場合) または長さ 0 に切り詰められます
+(存在する場合)。
+
+* `'r+'` - 読み書き両用でオープンします。
+ファイルは作成される (存在しない場合) または長さ 0 に切り詰められます
+(存在する場合)。
+
+* `'a'` - 追記用でオープンします。
+ファイルが存在しない場合は作成されます。
+
+* `'a+'` - 読み込みおよび追記用でオープンします。
+ファイルが存在しない場合は作成されます。
+
 `mode` のデフォルトは 0666 です。
 コールバックは 2 つの引数を受け取る `(err, fd)`です。
 
@@ -881,6 +921,17 @@ Objects returned from `fs.stat()` and `fs.lstat()` are of this type.
 
 -->
 `ReadStream` は `Readable Stream` です。
+
+### Event: 'open'
+
+`function (fd) { }`
+
+<!--
+
+ `fd` is the file descriptor used by the ReadStream.
+
+-->
+`fd` は ReadStream に使われているファイル記述子です。
 
 ### fs.createReadStream(path, [options])
 

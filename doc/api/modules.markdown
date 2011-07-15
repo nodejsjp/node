@@ -336,6 +336,30 @@ y.js:
     console.log(x.a);
 
 
+### module.require
+
+<!--
+
+The `module.require` method provides a way to load a module as if
+`require()` was called from the original module.
+
+-->
+`module.require` メソッドは、元のモジュールが `require()`
+を呼び出したかのようにモジュールをロードするために提供されています。
+
+<!--
+
+Note that in order to do this, you must get a reference to the `module`
+object.  Since `require()` returns the `exports`, and the `module` is
+typically *only* available within a specific module's code, it must be
+explicitly exported in order to be used.
+
+-->
+それには `module` オブジェクトの参照が必要なことに注意してください。
+`require()` が `exports` を返した後、一般的に `module` 
+はそのモジュールのコードで *のみ* 利用可能です。
+それが使われるようにするには、明示的にエクスポートする必要があります。
+
 ### All Together...
 
 <!--

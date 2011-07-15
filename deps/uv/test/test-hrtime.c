@@ -19,7 +19,7 @@
  * IN THE SOFTWARE.
  */
 
-#include "../uv.h"
+#include "uv.h"
 #include "task.h"
 
 
@@ -46,7 +46,7 @@ TEST_IMPL(hrtime) {
 
   diff = b - a;
 
-  printf("diff = %llu\n", diff);
+  printf("diff = %llu\n", (unsigned long long int)diff);
 
   ASSERT(diff >= NANOSEC / MICROSEC);
   ASSERT(diff > MICROSEC);
