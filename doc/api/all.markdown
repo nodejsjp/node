@@ -1,6 +1,7 @@
 
 @include synopsis
 @include globals
+@include stdio
 @include timers
 @include modules
 @include addons
@@ -12,21 +13,25 @@
 @include buffers
 @include streams
 @include crypto
-@include securepair
+@include tls
 @include string_decoder
 @include fs
 @include path
 @include net
-@include dns
 @include dgram
+@include dns
 @include http
+@include https
 @include url
 @include querystring
 @include readline
 @include repl
-@include script
+@include vm
 @include child_processes
 @include assert
+@include tty
+@include os
+@include debugger
 
 # Appendixes
 @include appendix_1

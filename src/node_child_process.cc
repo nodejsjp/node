@@ -1,4 +1,24 @@
-// Copyright 2009 Ryan Dahl <ry@tinyclouds.org>
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #include <node_child_process.h>
 #include <node.h>
 
@@ -9,9 +29,14 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
+#include <pwd.h> /* getpwnam() */
+#include <grp.h> /* getgrnam() */
 #if defined(__FreeBSD__ ) || defined(__OpenBSD__)
 #include <sys/wait.h>
 #endif
+
+#include <sys/socket.h> /* socketpair */
+#include <sys/un.h>
 
 # ifdef __APPLE__
 # include <crt_externs.h>
@@ -19,6 +44,8 @@
 # else
 extern char **environ;
 # endif
+
+#include <limits.h> /* PATH_MAX */
 
 namespace node {
 
@@ -94,7 +121,11 @@ Handle<Value> ChildProcess::Spawn(const Arguments& args) {
       !args[0]->IsString() ||
       !args[1]->IsArray() ||
       !args[2]->IsString() ||
-      !args[3]->IsArray()) {
+      !args[3]->IsArray() ||
+      !args[4]->IsArray() ||
+      !args[5]->IsBoolean() ||
+      !(args[6]->IsInt32() || args[6]->IsString()) ||
+      !(args[7]->IsInt32() || args[7]->IsString())) {
     return ThrowException(Exception::Error(String::New("Bad argument.")));
   }
 
@@ -125,7 +156,7 @@ Handle<Value> ChildProcess::Spawn(const Arguments& args) {
   // Copy fourth argument, args[3], into a c-string array called env.
   Local<Array> env_handle = Local<Array>::Cast(args[3]);
   int envc = env_handle->Length();
-  char **env = new char*[envc+1]; // heap allocated to detect errors
+  char **env = new char*[envc + 1]; // heap allocated to detect errors
   env[envc] = NULL;
   for (int i = 0; i < envc; i++) {
     String::Utf8Value pair(env_handle->Get(Integer::New(i))->ToString());
@@ -144,12 +175,62 @@ Handle<Value> ChildProcess::Spawn(const Arguments& args) {
     }
   }
 
+  int do_setsid = false;
+  if (args[5]->IsBoolean()) {
+    do_setsid = args[5]->BooleanValue();
+  }
+
+
   int fds[3];
 
-  int r = child->Spawn(argv[0], argv, cwd, env, fds, custom_fds);
+  char *custom_uname = NULL;
+  int custom_uid = -1;
+  if (args[6]->IsNumber()) {
+    custom_uid = args[6]->Int32Value();
+  } else if (args[6]->IsString()) {
+    String::Utf8Value pwnam(args[6]->ToString());
+    custom_uname = (char *)calloc(sizeof(char), pwnam.length() + 1);
+    strncpy(custom_uname, *pwnam, pwnam.length() + 1);
+  } else {
+    return ThrowException(Exception::Error(
+      String::New("setuid argument must be a number or a string")));
+  }
+
+  char *custom_gname = NULL;
+  int custom_gid = -1;
+  if (args[7]->IsNumber()) {
+    custom_gid = args[7]->Int32Value();
+  } else if (args[7]->IsString()) {
+    String::Utf8Value grnam(args[7]->ToString());
+    custom_gname = (char *)calloc(sizeof(char), grnam.length() + 1);
+    strncpy(custom_gname, *grnam, grnam.length() + 1);
+  } else {
+    return ThrowException(Exception::Error(
+      String::New("setgid argument must be a number or a string")));
+  }
+
+  int channel_fd = -1;
+
+  int r = child->Spawn(argv[0],
+                       argv,
+                       cwd,
+                       env,
+                       fds,
+                       custom_fds,
+                       do_setsid,
+                       custom_uid,
+                       custom_uname,
+                       custom_gid,
+                       custom_gname,
+                       &channel_fd);
+
+  if (custom_uname != NULL) free(custom_uname);
+  if (custom_gname != NULL) free(custom_gname);
 
   for (i = 0; i < argv_length; i++) free(argv[i]);
   delete [] argv;
+
+  free(cwd);
 
   for (i = 0; i < envc; i++) free(env[i]);
   delete [] env;
@@ -158,7 +239,8 @@ Handle<Value> ChildProcess::Spawn(const Arguments& args) {
     return ThrowException(Exception::Error(String::New("Error spawning")));
   }
 
-  Local<Array> a = Array::New(3);
+
+  Local<Array> a = Array::New(channel_fd >= 0 ? 4 : 3);
 
   assert(fds[0] >= 0);
   a->Set(0, Integer::New(fds[0])); // stdin
@@ -166,6 +248,10 @@ Handle<Value> ChildProcess::Spawn(const Arguments& args) {
   a->Set(1, Integer::New(fds[1])); // stdout
   assert(fds[2] >= 0);
   a->Set(2, Integer::New(fds[2])); // stderr
+
+  if (channel_fd >= 0) {
+    a->Set(3, Integer::New(channel_fd));
+  }
 
   return scope.Close(a);
 }
@@ -177,7 +263,8 @@ Handle<Value> ChildProcess::Kill(const Arguments& args) {
   assert(child);
 
   if (child->pid_ < 1) {
-    return ThrowException(Exception::Error(String::New("No such process")));
+    // nothing to do
+    return False();
   }
 
   int sig = SIGTERM;
@@ -186,15 +273,15 @@ Handle<Value> ChildProcess::Kill(const Arguments& args) {
     if (args[0]->IsNumber()) {
       sig = args[0]->Int32Value();
     } else {
-      return ThrowException(Exception::Error(String::New("Bad argument.")));
+      return ThrowException(Exception::TypeError(String::New("Bad argument.")));
     }
   }
 
   if (child->Kill(sig) != 0) {
-    return ThrowException(Exception::Error(String::New(strerror(errno))));
+    return ThrowException(ErrnoException(errno, "Kill"));
   }
 
-  return Undefined();
+  return True();
 }
 
 
@@ -213,12 +300,20 @@ void ChildProcess::Stop() {
 // Note that args[0] must be the same as the "file" param.  This is an
 // execvp() requirement.
 //
+// TODO: The arguments are rediculously long. Needs to be put into a struct.
+//
 int ChildProcess::Spawn(const char *file,
                         char *const args[],
                         const char *cwd,
                         char **env,
                         int stdio_fds[3],
-                        int custom_fds[3]) {
+                        int custom_fds[3],
+                        bool do_setsid,
+                        int custom_uid,
+                        char *custom_uname,
+                        int custom_gid,
+                        char *custom_gname,
+                        int* channel) {
   HandleScope scope;
   assert(pid_ == -1);
   assert(!ev_is_active(&child_watcher_));
@@ -226,9 +321,9 @@ int ChildProcess::Spawn(const char *file,
   int stdin_pipe[2], stdout_pipe[2], stderr_pipe[2];
 
   /* An implementation of popen(), basically */
-  if (custom_fds[0] == -1 && pipe(stdin_pipe) < 0 ||
-      custom_fds[1] == -1 && pipe(stdout_pipe) < 0 ||
-      custom_fds[2] == -1 && pipe(stderr_pipe) < 0) {
+  if ((custom_fds[0] == -1 && pipe(stdin_pipe) < 0) ||
+      (custom_fds[1] == -1 && pipe(stdout_pipe) < 0) ||
+      (custom_fds[2] == -1 && pipe(stderr_pipe) < 0)) {
     perror("pipe()");
     return -1;
   }
@@ -249,16 +344,47 @@ int ChildProcess::Spawn(const char *file,
     SetCloseOnExec(stderr_pipe[1]);
   }
 
+
+  // The channel will be used by js-land "fork()" for a little JSON channel.
+  // The pointer is used to pass one end of the socket pair back to the
+  // parent.
+  // channel_fds[0] is for the parent
+  // channel_fds[1] is for the child
+  int channel_fds[2] = { -1, -1 };
+
+#define NODE_CHANNEL_FD "NODE_CHANNEL_FD"
+
+  for (int i = 0; env[i]; i++) {
+    if (!strncmp(env[i], NODE_CHANNEL_FD, sizeof NODE_CHANNEL_FD - 1)) {
+      if (socketpair(AF_UNIX, SOCK_STREAM, 0, channel_fds)) {
+        perror("socketpair()");
+        return -1;
+      }
+
+      assert(channel_fds[0] >= 0 && channel_fds[1] >= 0);
+
+      SetNonBlocking(channel_fds[0]);
+      SetNonBlocking(channel_fds[1]);
+      // Write over the FILLMEIN :D
+      sprintf(env[i], NODE_CHANNEL_FD "=%d", channel_fds[1]);
+    }
+  }
+
   // Save environ in the case that we get it clobbered
   // by the child process.
   char **save_our_env = environ;
 
-  switch (pid_ = vfork()) {
+  switch (pid_ = fork()) {
     case -1:  // Error.
       Stop();
       return -4;
 
     case 0:  // Child.
+      if (do_setsid && setsid() < 0) {
+        perror("setsid");
+        _exit(127);
+      }
+
       if (custom_fds[0] == -1) {
         close(stdin_pipe[1]);  // close write end
         dup2(stdin_pipe[0],  STDIN_FILENO);
@@ -286,6 +412,65 @@ int ChildProcess::Spawn(const char *file,
       if (strlen(cwd) && chdir(cwd)) {
         perror("chdir()");
         _exit(127);
+      }
+
+
+      static char buf[PATH_MAX + 1];
+
+      int gid = -1;
+      if (custom_gid != -1) {
+        gid = custom_gid;
+      } else if (custom_gname != NULL) {
+        struct group grp, *grpp = NULL;
+        int err = getgrnam_r(custom_gname,
+                             &grp,
+                             buf,
+                             PATH_MAX + 1,
+                             &grpp);
+
+        if (err || grpp == NULL) {
+          perror("getgrnam_r()");
+          _exit(127);
+        }
+
+        gid = grpp->gr_gid;
+      }
+
+
+      int uid = -1;
+      if (custom_uid != -1) {
+        uid = custom_uid;
+      } else if (custom_uname != NULL) {
+        struct passwd pwd, *pwdp = NULL;
+        int err = getpwnam_r(custom_uname,
+                             &pwd,
+                             buf,
+                             PATH_MAX + 1,
+                             &pwdp);
+
+        if (err || pwdp == NULL) {
+          perror("getpwnam_r()");
+          _exit(127);
+        }
+
+        uid = pwdp->pw_uid;
+      }
+
+
+      if (gid != -1 && setgid(gid)) {
+        perror("setgid()");
+        _exit(127);
+      }
+
+      if (uid != -1 && setuid(uid)) {
+        perror("setuid()");
+        _exit(127);
+      }
+
+      // Close the parent's end of the channel.
+      if (channel_fds[0] >= 0) {
+        close(channel_fds[0]);
+        channel_fds[0] = -1;
       }
 
       environ = env;
@@ -327,6 +512,17 @@ int ChildProcess::Spawn(const char *file,
     SetNonBlocking(stderr_pipe[0]);
   } else {
     stdio_fds[2] = custom_fds[2];
+  }
+
+  // Close the child's end of the channel.
+  if (channel_fds[1] >= 0) {
+    close(channel_fds[1]);
+    channel_fds[1] = -1;
+    assert(channel_fds[0] >= 0);
+    assert(channel);
+    *channel = channel_fds[0];
+  } else {
+    *channel = -1;
   }
 
   return 0;

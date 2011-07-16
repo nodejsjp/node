@@ -84,15 +84,14 @@ assertEquals(result[4], 'D');
 assertEquals(result[5], 'E');
 assertEquals(result[6], 'F');
 
-// Some tests from the Mozilla tests, where our behavior differs from
+// Some tests from the Mozilla tests, where our behavior used to differ from
 // SpiderMonkey.
 // From ecma_3/RegExp/regress-334158.js
 assertTrue(/\ca/.test( "\x01" ));
 assertFalse(/\ca/.test( "\\ca" ));
-// Passes in KJS, fails in IrregularExpressions.
-// See http://code.google.com/p/v8/issues/detail?id=152
-//assertTrue(/\c[a/]/.test( "\x1ba/]" ));
-
+assertFalse(/\ca/.test( "ca" ));
+assertTrue(/\c[a/]/.test( "\\ca" ));
+assertTrue(/\c[a/]/.test( "\\c/" ));
 
 // Test \c in character class
 re = /^[\cM]$/;
@@ -104,11 +103,29 @@ assertFalse(re.test("\x03"));  // I.e., read as \cc
 
 re = /^[\c]]$/;
 assertTrue(re.test("c]"));
-assertFalse(re.test("\\]"));
+assertTrue(re.test("\\]"));
 assertFalse(re.test("\x1d"));  // ']' & 0x1f
-assertFalse(re.test("\\]"));
 assertFalse(re.test("\x03]"));  // I.e., read as \cc
 
+re = /^[\c1]$/;  // Digit control characters are masked in character classes.
+assertTrue(re.test("\x11"));
+assertFalse(re.test("\\"));
+assertFalse(re.test("c"));
+assertFalse(re.test("1"));
+
+re = /^[\c_]$/;  // Underscore control character is masked in character classes.
+assertTrue(re.test("\x1f"));
+assertFalse(re.test("\\"));
+assertFalse(re.test("c"));
+assertFalse(re.test("_"));
+
+re = /^[\c$]$/;  // Other characters are interpreted literally.
+assertFalse(re.test("\x04"));
+assertTrue(re.test("\\"));
+assertTrue(re.test("c"));
+assertTrue(re.test("$"));
+
+assertTrue(/^[Z-\c-e]*$/.test("Z[\\cde"));
 
 // Test that we handle \s and \S correctly inside some bizarre
 // character classes.
@@ -201,6 +218,17 @@ assertFalse(re.test('\t'));
 assertFalse(re.test('\n'));
 assertFalse(re.test('a'));
 assertFalse(re.test('Z'));
+
+// First - is treated as range operator, second as literal minus.
+// This follows the specification in parsing, but doesn't throw on
+// the \s at the beginning of the range.
+re = /[\s-0-9]/;
+assertTrue(re.test(' '));
+assertTrue(re.test('\xA0'));
+assertTrue(re.test('-'));
+assertTrue(re.test('0'));
+assertTrue(re.test('9'));
+assertFalse(re.test('1'));
 
 // Test beginning and end of line assertions with or without the
 // multiline flag.
@@ -305,9 +333,9 @@ assertFalse(/f(o)$\1/.test('foo'), "backref detects at_end");
 
 // Check decimal escapes doesn't overflow.
 // (Note: \214 is interpreted as octal).
-assertEquals(/\2147483648/.exec("\x8c7483648"),
-             ["\x8c7483648"],
-             "Overflow decimal escape");
+assertArrayEquals(["\x8c7483648"],
+                  /\2147483648/.exec("\x8c7483648"),
+                  "Overflow decimal escape");
 
 
 // Check numbers in quantifiers doesn't overflow and doesn't throw on
@@ -407,8 +435,8 @@ assertEquals(0, re.lastIndex);
 re.lastIndex = 42;
 re.someOtherProperty = 42;
 re.someDeletableProperty = 42;
-re[37] = 37;  
-re[42] = 42;  
+re[37] = 37;
+re[42] = 42;
 
 re.compile("ra+", "i");
 assertEquals("ra+", re.source);
@@ -438,7 +466,7 @@ assertEquals(37, re.someOtherProperty);
 assertEquals(37, re[42]);
 
 // Test boundary-checks.
-function assertRegExpTest(re, input, test) { 
+function assertRegExpTest(re, input, test) {
   assertEquals(test, re.test(input), "test:" + re + ":" + input);
 }
 
@@ -497,7 +525,7 @@ for (var i = 0; i < 100; i++) {
   assertEquals(1, res.index);
   assertEquals("axyzb", res.input);
   assertEquals(undefined, res.foobar);
-  
+
   res.foobar = "Arglebargle";
   res[3] = "Glopglyf";
   assertEquals("Arglebargle", res.foobar);
@@ -506,18 +534,18 @@ for (var i = 0; i < 100; i++) {
 // Test that we perform the spec required conversions in the correct order.
 var log;
 var string = "the string";
-var fakeLastIndex = { 
-      valueOf: function() { 
+var fakeLastIndex = {
+      valueOf: function() {
         log.push("li");
         return 0;
-      } 
+      }
     };
-var fakeString = { 
+var fakeString = {
       toString: function() {
         log.push("ts");
         return string;
-      }, 
-      length: 0 
+      },
+      length: 0
     };
 
 var re = /str/;
@@ -647,3 +675,18 @@ assertEquals(4, re.exec("zimzamzumba").index);
 assertEquals(["bc"], re.exec("zimzomzumbc"));
 assertFalse(re.test("c"));
 assertFalse(re.test(""));
+
+// Valid syntax in ES5.
+re = RegExp("(?:x)*");
+re = RegExp("(x)*");
+
+// Syntax extension relative to ES5, for matching JSC (and ES3).
+// Shouldn't throw.
+re = RegExp("(?=x)*");
+re = RegExp("(?!x)*");
+
+// Should throw. Shouldn't hit asserts in debug mode.
+assertThrows("RegExp('(*)')");
+assertThrows("RegExp('(?:*)')");
+assertThrows("RegExp('(?=*)')");
+assertThrows("RegExp('(?!*)')");

@@ -1,4 +1,4 @@
-# Copyright 2008 the V8 project authors. All rights reserved.
+# Copyright 2011 the V8 project authors. All rights reserved.
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
 # met:
@@ -29,9 +29,7 @@ prefix cctest
 
 test-api/Bug*: FAIL
 
-# BUG(281): This test fails on some Linuxes.
-test-debug/DebuggerAgent: PASS, (PASS || FAIL) if $system == linux
-
+##############################################################################
 # BUG(382): Weird test. Can't guarantee that it never times out.
 test-api/ApplyInterruption: PASS || TIMEOUT
 
@@ -40,6 +38,7 @@ test-api/ApplyInterruption: PASS || TIMEOUT
 test-serialize/TestThatAlwaysFails: FAIL
 test-serialize/DependentTestThatAlwaysFails: FAIL
 
+##############################################################################
 [ $arch == arm ]
 
 # We cannot assume that we can throw OutOfMemory exceptions in all situations.
@@ -51,23 +50,26 @@ test-api/OutOfMemoryNested: SKIP
 # BUG(355): Test crashes on ARM.
 test-log/ProfLazyMode: SKIP
 
+# BUG(945): Socket connect fails on ARM
+test-debug/DebuggerAgent: SKIP
+test-debug/DebuggerAgentProtocolOverflowHeader: SKIP
+test-sockets/Socket: SKIP
+
+# BUG(1075): Unresolved crashes.
+test-serialize/Deserialize: SKIP
+test-serialize/DeserializeFromSecondSerializationAndRunScript2: SKIP
+test-serialize/DeserializeAndRunScript2: SKIP
+test-serialize/DeserializeFromSecondSerialization: SKIP
+
+##############################################################################
+[ $arch == arm && $crankshaft ]
+
+# Tests that time out with crankshaft.
+test-debug/ThreadedDebugging: SKIP
+test-debug/DebugBreakLoop: SKIP
+
+
+##############################################################################
 [ $arch == mips ]
-test-accessors: SKIP
-test-alloc: SKIP
-test-api: SKIP
-test-compiler: SKIP
-test-cpu-profiler: SKIP
-test-debug: SKIP
-test-decls: SKIP
-test-func-name-inference: SKIP
-test-heap: SKIP
-test-heap-profiler: SKIP
-test-log: SKIP
-test-log-utils: SKIP
-test-mark-compact: SKIP
-test-regexp: SKIP
+test-deoptimization: SKIP
 test-serialize: SKIP
-test-sockets: SKIP
-test-strings: SKIP
-test-threads: SKIP
-test-thread-termination: SKIP

@@ -1,4 +1,526 @@
-2010.11.16, Version 0.3.1 (unstable)
+2011.07.14, Version 0.5.1 (unstable)
+
+* #1233 Fix os.totalmem on FreeBSD amd64 (Artem Zaytsev)
+
+* #1149 IDNA and Punycode support in url.parse
+  (Jeremy Selier, Ben Noordhuis, isaacs)
+
+* Export $CC and $CXX to uv and V8's build systems
+
+* Include pthread-win32 static libraries in build (Igor Zinkovsky)
+
+* #1199, #1094 Fix fs can't handle large file on 64bit platform (koichik)
+
+* #1281 Make require a public member of module (isaacs)
+
+* #1303 Stream.pipe returns the destination (Elijah Insua)
+
+* #1229 Addons should not -DEV_MULTIPLICITY=0 (Brian White)
+
+* libuv backend improvements
+
+* Upgrade V8 to 3.4.10
+
+
+2011.07.05, Version 0.5.0 (unstable), ae7ed8482ea7e53c59acbdf3cf0e0a0ae9d792cd
+
+* New non-default libuv backend to support IOCP on Windows.
+  Use --use-uv to enable.
+
+* deprecate http.cat
+
+* docs improved.
+
+* add child_process.fork
+
+* add fs.utimes() and fs.futimes() support (Ben Noordhuis)
+
+* add process.uptime() (Tom Huges)
+
+* add path.relative (Tony Huang)
+
+* add os.getNetworkInterfaces()
+
+* add remoteAddress and remotePort for client TCP connections
+  (Brian White)
+
+* add secureOptions flag, setting ciphers,
+  SSL_OP_CRYPTOPRO_TLSEXT_BUG to TLS (Theo Schlossnagle)
+
+* add process.arch (Nathan Rajlich)
+
+* add reading/writing of floats and doubles from/to buffers (Brian White)
+
+* Allow script to be read from stdin
+
+* #477 add Buffer::fill method to do memset (Konstantin Käfer)
+
+* #573 Diffie-Hellman support to crypto module (Håvard Stranden)
+
+* #695 add 'hex' encoding to buffer (isaacs)
+
+* #851 Update how REPLServer uses contexts (Ben Weaver)
+
+* #853 add fs.lchow, fs.lchmod, fs.fchmod, fs.fchown (isaacs)
+
+* #889 Allow to remove all EventEmitter listeners at once
+  (Felix Geisendörfer)
+
+* #926 OpenSSL NPN support (Fedor Indutny)
+
+* #955 Change ^C handling in REPL (isaacs)
+
+* #979 add support for Unix Domain Sockets to HTTP (Mark Cavage)
+
+* #1173 #1170 add AMD, asynchronous module definition (isaacs)
+
+* DTrace probes: support X-Forwarded-For (Dave Pacheco)
+
+
+2011.06.29, Version 0.4.9 (stable)
+
+* Improve documentation
+
+* #1095 error handling bug in stream.pipe() (Felix Geisendörfer)
+
+* #1097 Fix a few leaks in node_crypto.cc (Ben Noordhuis)
+
+* #562 #1078 Parse file:// urls properly (Ryan Petrello)
+
+* #880 Option to disable SSLv2 (Jérémy Lal)
+
+* #1087 Disabling SSL compression disabled with early OpenSSLs.
+
+* #1144 debugger: don't allow users to input non-valid commands
+  (Siddharth Mahendraker)
+
+* Perf improvement for util.inherits
+
+* #1166 Support for signature verification with RSA/DSA public keys
+  (Mark Cavage)
+
+* #1177 Remove node_modules lookup optimization to better support
+  nested project structures (Mathias Buus)
+
+* #1203 Add missing scope.Close to fs.sendfileSync
+
+* #1187 Support multiple 'link' headers
+
+* #1196 Fix -e/--eval can't load module from node_modules (Koichi Kobayashi)
+
+* Upgrade V8 to 3.1.8.25, upgrade http-parser.
+
+
+2011.05.20, Version 0.4.8 (stable), 7dd22c26e4365698dc3efddf138c4d399cb912c8
+
+* #974 Properly report traceless errors (isaacs)
+
+* #983 Better JSON.parse error detection in REPL (isaacs)
+
+* #836 Agent socket errors bubble up to req only if req exists
+
+* #1041 Fix event listener leak check timing (koichik)
+
+*	#1038 Fix dns.resolve() with 'PTR' throws Error: Unknown type "PTR"
+  (koichik)
+
+* #1073 Share SSL context between server connections (Fedor Indutny)
+
+* Disable compression with OpenSSL. Improves memory perf.
+
+* Implement os.totalmem() and os.freemem() for SunOS (Alexandre Marangone)
+
+* Fix a special characters in URL regression (isaacs)
+
+* Fix idle timeouts in HTTPS (Felix Geisendörfer)
+
+* SlowBuffer.write() with 'ucs2' throws ReferenceError. (koichik)
+
+* http.ServerRequest 'close' sometimes gets an error argument
+  (Felix Geisendörfer)
+
+* Doc improvements
+
+* cleartextstream.destroy() should close(2) the socket. Previously was being
+	mapped to a shutdown(2) syscall.
+
+* No longer compile out asserts and debug statements in normal build.
+
+* Debugger improvements.
+
+* Upgrade V8 to 3.1.8.16.
+
+
+2011.04.22, Version 0.4.7 (stable)
+
+* Don't emit error on ECONNRESET from read() #670
+
+* Fix: Multiple pipes to the same stream were broken #929
+  (Felix Geisendörfer)
+
+* URL parsing/formatting corrections #954 (isaacs)
+
+* make it possible to do repl.start('', stream) (Wade Simmons)
+
+* Add os.loadavg for SunOS (Robert Mustacchi)
+
+* Fix timeouts with floating point numbers #897 (Jorge Chamorro Bieling)
+
+* Improve docs.
+
+
+2011.04.13, Version 0.4.6 (stable)
+
+* Don't error on ENOTCONN from shutdown() #670
+
+* Auto completion of built-in debugger suggests prefix match rather than
+	partial match. (koichik)
+
+* circular reference in vm modules. #822 (Jakub Lekstan)
+
+* http response.readable should be false after 'end' #867 (Abe Fettig)
+
+* Implemenet os.cpus() and os.uptime() on Solaris (Scott McWhirter)
+
+* fs.ReadStream: Allow omission of end option for range reads #801
+	(Felix Geisendörfer)
+
+* Buffer.write() with UCS-2 should not be write partial char
+	#916 (koichik)
+
+* Pass secureProtocol through on tls.Server creation (Theo Schlossnagle)
+
+* TLS use RC4-SHA by default
+
+* Don't strangely drop out of event loop on HTTPS client uploads #892
+
+* Doc improvements
+
+* Upgrade v8 to 3.1.8.10
+
+
+2011.04.01, Version 0.4.5 (stable)
+
+* Fix listener leak in stream.pipe() (Mikeal Rogers)
+
+* Retain buffers in fs.read/write() GH-814 (Jorge Chamorro Bieling)
+
+* TLS performance improvements
+
+* SlowBuffer.prototype.slice bug GH-843
+
+* process.stderr.write should return true
+
+* Immediate pause/resume race condition GH-535 (isaacs)
+
+* Set default host header properly GH-721 (isaacs)
+
+* Upgrade V8 to 3.1.8.8
+
+
+2011.03.26, Version 0.4.4 (stable), 25122b986a90ba0982697b7abcb0158c302a1019
+
+* CryptoStream.end shouldn't throw if not writable GH-820
+
+* Drop out if connection destroyed before connect() GH-819
+
+* expose https.Agent
+
+* Correctly setsid in tty.open GH-815
+
+* Bug fix for failed buffer construction
+
+* Added support for removing .once listeners (GH-806)
+
+* Upgrade V8 to 3.1.8.5
+
+
+2011.03.18, Version 0.4.3 (stable), c095ce1a1b41ca015758a713283bf1f0bd41e4c4
+
+* Don't decrease server connection counter again if destroy() is called more
+	than once GH-431 (Andreas Reich, Anders Conbere)
+
+* Documentation improvements (koichik)
+
+* Fix bug with setMaxListeners GH-682
+
+* Start up memory footprint improvement. (Tom Hughes)
+
+* Solaris improvements.
+
+* Buffer::Length(Buffer*) should not invoke itself recursively GH-759 (Ben
+  Noordhuis)
+
+* TLS: Advertise support for client certs GH-774 (Theo Schlossnagle)
+
+* HTTP Agent bugs: GH-787, GH-784, GH-803.
+
+* Don't call GetMemoryUsage every 5 seconds.
+
+* Upgrade V8 to 3.1.8.3
+
+
+2011.03.02, Version 0.4.2 (stable), 39280e1b5731f3fcd8cc42ad41b86cdfdcb6d58b
+
+* Improve docs.
+
+* Fix process.on edge case with signal event (Alexis Sellier)
+
+* Pragma HTTP header comma separation
+
+* In addition to 'aborted' emit 'close' from incoming requests
+  (Felix Geisendörfer)
+
+* Fix memleak in vm.runInNewContext
+
+* Do not cache modules that throw exceptions (Felix Geisendörfer)
+
+* Build system changes for libnode (Aria Stewart)
+
+* Read up the prototype of the 'env' object. (Nathan Rajlich)
+
+* Add 'close' and 'aborted' events to Agent responses
+
+* http: fix missing 'drain' events (Russell Haering)
+
+* Fix process.stdout.end() throws ENOTSOCK error. (Koichi Kobayashi)
+
+* REPL bug fixes (isaacs)
+
+* node_modules folders should be highest priority (isaacs)
+
+* URL parse more safely (isaacs)
+
+* Expose errno with a string for dns/cares (Felix Geisendörfer)
+
+* Fix tty.setWindowSize
+
+* spawn: setuid after chdir (isaacs)
+
+* SIGUSR1 should break the VM without delay
+
+* Upgrade V8 to 3.1.8.
+
+
+2011.02.19, Version 0.4.1 (stable), e8aef84191bc2c1ba2bcaa54f30aabde7f03769b
+
+* Fixed field merging with progressive fields on writeHead()
+  (TJ Holowaychuk)
+
+* Make the repl respect node_modules folders (isaacs)
+
+* Fix for DNS fail in HTTP request (Richard Rodger)
+
+* Default to port 80 for http.request and http.get.
+
+* Improve V8 support for Cygwin (Bert Belder)
+
+* Fix fs.open param parsing. (Felix Geisendörfer)
+
+* Fixed null signal.
+
+* Fix various HTTP and HTTPS bugs
+
+* cmake improvements (Tom Hughes)
+
+* Fix: TLS sockets should not be writable after 'end'
+
+* Fix os.cpus() on cygwin (Brian White)
+
+* MinGW: OpenSSL support (Bert Belder)
+
+* Upgrade V8 to 3.1.5, libev to 4.4.
+
+
+2011.02.10, Version 0.4.0 (stable)
+
+* require() improvements (isaacs)
+  - understand package.json (isaacs)
+  - look for 'node_modules' dir
+
+* cmake fixes (Daniel Gröber)
+
+* http: fix buffer writes to outgoing messages (Russell Haering)
+
+* Expose UCS-2 Encoding (Konstantin Käfer)
+
+* Support strings for octal modes (isaacs)
+
+* Support array-ish args to Buffer ctor (isaacs)
+
+* cygwin and mingw improvements (Bert Belder)
+
+* TLS improvements
+
+* Fewer syscalls during require (Bert Belder, isaacs)
+
+* More DTrace probes (Bryan Cantrill,  Robert Mustacchi)
+
+* 'pipe' event on pipe() (Mikeal Rogers)
+
+* CRL support in TLS (Theo Schlossnagle)
+
+* HTTP header manipulation methods (Tim Caswell, Charlie Robbins)
+
+* Upgrade V8 to 3.1.2
+
+
+2011.02.04, Version 0.3.8 (unstable)
+
+* Add req.abort() for client side requests.
+
+* Add exception.code for easy testing:
+  Example: if (err.code == 'EADDRINUSE');
+
+* Add process.stderr.
+
+* require.main is the main module. (Isaac Schlueter)
+
+* dgram: setMulticastTTL, setMulticastLoopback and addMembership.
+  (Joe Walnes)
+
+* Fix throttling in TLS connections
+
+* Add socket.bufferSize
+
+* MinGW improvements (Bert Belder)
+
+* Upgrade V8 to 3.1.1
+
+2011.01.27, Version 0.3.7 (unstable)
+
+* Expose agent in http and https client. (Mikeal Rogers)
+
+* Fix bug in http request's end method. (Ali Farhadi)
+
+* MinGW: better net support (Bert Belder)
+
+* fs.open should set FD_CLOEXEC
+
+* DTrace probes (Bryan Cantrill)
+
+* REPL fixes and improvements (isaacs, Bert Belder)
+
+* Fix many bugs with legacy http.Client interface
+
+* Deprecate process.assert. Use require('assert').ok
+
+* Add callback parameter to socket.setTimeout(). (Ali Farhadi)
+
+* Fixing bug in http request default encoding (Ali Farhadi)
+
+* require: A module ID with a trailing slash must be a dir.
+  (isaacs)
+
+* Add ext_key_usage to getPeerCertificate (Greg Hughes)
+
+* Error when child_process.exec hits maxBuffer.
+
+* Fix option parsing in tls.connect()
+
+* Upgrade to V8 3.0.10
+
+
+2011.01.21, Version 0.3.6 (unstable), bb3e71466e5240626d9d21cf791fe43e87d90011
+
+* REPL and other improvements on MinGW (Bert Belder)
+
+* listen/bind errors should close net.Server
+
+* New HTTP and HTTPS client APIs
+
+* Upgrade V8 to 3.0.9
+
+
+2011.01.16, Version 0.3.5 (unstable), b622bc6305e3c675e0edfcdbaa387d849ad0bba0
+
+* Built-in debugger improvements.
+
+* Add setsid, setuid, setgid options to child_process.spawn
+  (Isaac Schlueter)
+
+* tty module improvements.
+
+* Upgrade libev to 4.3, libeio to latest, c-ares to 1.7.4
+
+* Allow third party hooks before main module load.
+  (See 496be457b6a2bc5b01ec13644b9c9783976159b2)
+
+* Don't stat() on cached modules. (Felix Geisendörfer)
+
+
+2011.01.08, Version 0.3.4 (unstable)
+
+* Primordal mingw build (Bert Belder)
+
+* HTTPS server
+
+* Built in debugger 'node debug script.js' 
+
+* realpath files during module load (Mihai Călin Bazon)
+
+* Rename net.Stream to net.Socket (existing name will continue to be
+  supported)
+
+* Fix process.platform
+
+
+2011.01.02, Version 0.3.3 (unstable), 57544ba1c54c7d0da890317deeb73076350c5647
+
+* TLS improvements.
+
+* url.parse(url, true) defaults query field to {} (Jeremy Martin)
+
+* Upgrade V8 to 3.0.4
+
+* Handle ECONNABORT properly (Theo Schlossnagle)
+
+* Fix memory leaks (Tom Hughes)
+
+* Add os.cpus(), os.freemem(), os.totalmem(), os.loadavg() and other
+  functions for OSX, Linux, and Cygwin. (Brian White)
+
+* Fix REPL syntax error bug (GH-543), improve how REPL commands are
+  evaulated.
+
+* Use process.stdin instead of process.openStdin().
+
+* Disable TLS tests when node doesn't have OpenSSL.
+
+
+2010.12.16, Version 0.3.2 (unstable), 4bb914bde9f3c2d6de00853353b6b8fc9c66143a
+
+* Rip out the old (broken) TLS implementation introduce new tested
+  implementation and API. See docs. HTTPS not supported in this release.
+
+* Introduce 'os' and 'tty' modules.
+
+* Callback parameters for socket.write() and socket.connect().
+
+* Support CNAME lookups in DNS module. (Ben Noordhuis)
+
+* cmake support (Tom Hughes)
+
+* 'make lint'
+
+* oprofile support (./configure --oprofile)
+
+* Lots of bug fixes, including:
+  - Memory leak in ChildProcess:Spawn(). (Tom Hughes)
+  - buffer.slice(0, 0)
+  - Global variable leaks
+  - clearTimeouts calling multiple times (Michael W)
+  - utils.inspect's detection of circular structures (Tim Cooijmans)
+  - Apple's threaded write()s bug (Jorge Chamorro Bieling)
+  - Make sure raw mode is disabled when exiting a terminal-based REPL.
+    (Brian White)
+
+* Deprecate process.compile, process.ENV
+
+* Upgrade V8 to 3.0.3, upgrade http-parser.
+
+
+2010.11.16, Version 0.3.1 (unstable), ce9a54aa1fbf709dd30316af8a2f14d83150e947
 
 * TLS improvments (Paul Querna)
   - Centralize error handling in SecureStream
