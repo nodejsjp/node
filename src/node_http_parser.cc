@@ -1,3 +1,24 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #include <node_http_parser.h>
 
 #include <v8.h>
@@ -56,6 +77,10 @@ static Persistent<String> report_sym;
 static Persistent<String> mkactivity_sym;
 static Persistent<String> checkout_sym;
 static Persistent<String> merge_sym;
+static Persistent<String> msearch_sym;
+static Persistent<String> notify_sym;
+static Persistent<String> subscribe_sym;
+static Persistent<String> unsubscribe_sym;
 static Persistent<String> unknown_method_sym;
 
 static Persistent<String> method_sym;
@@ -138,6 +163,10 @@ method_to_str(unsigned short m) {
     case HTTP_MKACTIVITY: return mkactivity_sym;
     case HTTP_CHECKOUT:   return checkout_sym;
     case HTTP_MERGE:      return merge_sym;
+    case HTTP_MSEARCH:    return msearch_sym;
+    case HTTP_NOTIFY:     return notify_sym;
+    case HTTP_SUBSCRIBE:  return subscribe_sym;
+    case HTTP_UNSUBSCRIBE:return unsubscribe_sym;
     default:              return unknown_method_sym;
   }
 }
@@ -221,7 +250,6 @@ class Parser : public ObjectWrap {
     }
 
     parser->Wrap(args.This());
-    assert(!current_buffer);
 
     return args.This();
   }
@@ -301,9 +329,16 @@ class Parser : public ObjectWrap {
     assert(!current_buffer);
     parser->got_exception_ = false;
 
-    http_parser_execute(&(parser->parser_), &settings, NULL, 0);
+    int rv = http_parser_execute(&(parser->parser_), &settings, NULL, 0);
 
     if (parser->got_exception_) return Local<Value>();
+
+    if (rv != 0) {
+      Local<Value> e = Exception::Error(String::NewSymbol("Parse Error"));
+      Local<Object> obj = e->ToObject();
+      obj->Set(String::NewSymbol("bytesParsed"), Integer::New(0));
+      return scope.Close(e);
+    }
 
     return Undefined();
   }
@@ -381,6 +416,10 @@ void InitHttpParser(Handle<Object> target) {
   mkactivity_sym = NODE_PSYMBOL("MKACTIVITY");
   checkout_sym = NODE_PSYMBOL("CHECKOUT");
   merge_sym = NODE_PSYMBOL("MERGE");
+  msearch_sym = NODE_PSYMBOL("M-SEARCH");
+  notify_sym = NODE_PSYMBOL("NOTIFY");
+  subscribe_sym = NODE_PSYMBOL("SUBSCRIBE");
+  unsubscribe_sym = NODE_PSYMBOL("UNSUBSCRIBE");;
   unknown_method_sym = NODE_PSYMBOL("UNKNOWN_METHOD");
 
   method_sym = NODE_PSYMBOL("method");

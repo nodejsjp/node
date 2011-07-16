@@ -1,8 +1,37 @@
-// Copyright 2009 Ryan Dahl <ry@tinyclouds.org>
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #ifndef SRC_NODE_H_
 #define SRC_NODE_H_
 
-#include <ev.h>
+// A dependency include (libeio\xthread.h) defines _WIN32_WINNT to another value
+// This should be defined in make system.
+// See issue https://github.com/joyent/node/issues/1236
+#ifdef __MINGW32__
+#ifndef _WIN32_WINNT
+# define _WIN32_WINNT   0x0501
+#endif
+#endif
+
+#include <uv.h>
 #include <eio.h>
 #include <v8.h>
 #include <sys/types.h> /* struct stat */
@@ -17,13 +46,18 @@
 
 namespace node {
 
-int Start (int argc, char *argv[]);
+int Start(int argc, char *argv[]);
 
-#define NODE_PSYMBOL(s) Persistent<String>::New(String::NewSymbol(s))
+char** Init(int argc, char *argv[]);
+v8::Handle<v8::Object> SetupProcessObject(int argc, char *argv[]);
+void Load(v8::Handle<v8::Object> process);
+void EmitExit(v8::Handle<v8::Object> process);
+
+#define NODE_PSYMBOL(s) v8::Persistent<v8::String>::New(v8::String::NewSymbol(s))
 
 /* Converts a unixtime to V8 Date */
 #define NODE_UNIXTIME_V8(t) v8::Date::New(1000*static_cast<double>(t))
-#define NODE_V8_UNIXTIME(v) (static_cast<double>((v)->IntegerValue())/1000.0);
+#define NODE_V8_UNIXTIME(v) (static_cast<double>((v)->NumberValue())/1000.0);
 
 #define NODE_DEFINE_CONSTANT(target, constant)                            \
   (target)->Set(v8::String::NewSymbol(#constant),                         \
@@ -38,16 +72,17 @@ int Start (int argc, char *argv[]);
 do {                                                                      \
   v8::Local<v8::Signature> __callback##_SIG = v8::Signature::New(templ);  \
   v8::Local<v8::FunctionTemplate> __callback##_TEM =                      \
-    FunctionTemplate::New(callback, v8::Handle<v8::Value>(),              \
+    v8::FunctionTemplate::New(callback, v8::Handle<v8::Value>(),          \
                           __callback##_SIG);                              \
   templ->PrototypeTemplate()->Set(v8::String::NewSymbol(name),            \
                                   __callback##_TEM);                      \
 } while (0)
 
-enum encoding {ASCII, UTF8, BASE64, BINARY};
+enum encoding {ASCII, UTF8, BASE64, UCS2, BINARY, HEX};
 enum encoding ParseEncoding(v8::Handle<v8::Value> encoding_v,
                             enum encoding _default = BINARY);
 void FatalException(v8::TryCatch &try_catch);
+void DisplayExceptionLine(v8::TryCatch &try_catch); // hack
 
 v8::Local<v8::Value> Encode(const void *buf, size_t len,
                             enum encoding encoding = BINARY);
@@ -62,7 +97,19 @@ ssize_t DecodeWrite(char *buf,
                     v8::Handle<v8::Value>,
                     enum encoding encoding = BINARY);
 
-v8::Local<v8::Object> BuildStatsObject(struct stat * s);
+// Use different stat structs & calls on windows and posix;
+// on windows, _stati64 is utf-8 and big file aware.
+#if __POSIX__
+# define NODE_STAT        stat
+# define NODE_FSTAT       fstat
+# define NODE_STAT_STRUCT struct stat
+#else // __MINGW32__
+# define NODE_STAT        _stati64
+# define NODE_FSTAT       _fstati64
+# define NODE_STAT_STRUCT struct _stati64
+#endif
+
+v8::Local<v8::Object> BuildStatsObject(NODE_STAT_STRUCT *s);
 
 
 /**
@@ -134,6 +181,11 @@ node_module_struct* get_builtin_module(const char *name);
 #define NODE_MODULE_DECL(modname) \
   extern node::node_module_struct modname ## _module;
 
+void SetErrno(uv_err_code code);
+void MakeCallback(v8::Handle<v8::Object> object,
+                  const char* method,
+                  int argc,
+                  v8::Handle<v8::Value> argv[]);
 
 }  // namespace node
 #endif  // SRC_NODE_H_

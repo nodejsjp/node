@@ -1,11 +1,34 @@
-// Copyright 2009 Ryan Dahl <ry@tinyclouds.org>
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #include <node.h>
 #include <node_file.h>
 #include <node_buffer.h>
-#include <node_stat_watcher.h>
+#ifdef __POSIX__
+# include <node_stat_watcher.h>
+#endif
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <dirent.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -15,34 +38,65 @@
 #include <errno.h>
 #include <limits.h>
 
+#ifdef __MINGW32__
+# include <platform_win32.h>
+#endif
+
 /* used for readlink, AIX doesn't provide it */
 #ifndef PATH_MAX
 #define PATH_MAX 4096
 #endif
 
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(*(a)))
+/* HACK to use pread/pwrite from eio because MINGW32 doesn't have it */
+/* TODO fixme */
+#ifdef __MINGW32__
+# define pread  eio__pread
+# define pwrite eio__pwrite
+#endif
 
 namespace node {
 
 using namespace v8;
 
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof(*(a)))
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 #define THROW_BAD_ARGS \
   ThrowException(Exception::TypeError(String::New("Bad argument")))
+
 static Persistent<String> encoding_symbol;
 static Persistent<String> errno_symbol;
 static Persistent<String> buf_symbol;
 
 // Buffer for readlink()  and other misc callers; keep this scoped at
 // file-level rather than method-level to avoid excess stack usage.
-static char getbuf[PATH_MAX + 1];
+// Not used on windows atm
+#ifdef __POSIX__
+  static char getbuf[PATH_MAX + 1];
+#endif
+
+
+static inline bool SetCloseOnExec(int fd) {
+#ifdef __POSIX__
+  return (fcntl(fd, F_SETFD, FD_CLOEXEC) != -1);
+#else // __MINGW32__
+  return SetHandleInformation(reinterpret_cast<HANDLE>(_get_osfhandle(fd)),
+                              HANDLE_FLAG_INHERIT, 0) != 0;
+#endif
+}
+
+#ifdef _LARGEFILE_SOURCE
+static inline int IsInt64(double x) {
+  return x == static_cast<double>(static_cast<int64_t>(x));
+}
+#endif
+
 
 static int After(eio_req *req) {
   HandleScope scope;
 
   Persistent<Function> *callback = cb_unwrap(req->data);
 
-  ev_unref(EV_DEFAULT_UC);
+  uv_unref();
 
   // there is always at least one argument. "error"
   int argc = 1;
@@ -80,12 +134,21 @@ static int After(eio_req *req) {
       case EIO_LINK:
       case EIO_SYMLINK:
       case EIO_CHMOD:
+      case EIO_FCHMOD:
       case EIO_CHOWN:
+      case EIO_FCHOWN:
         // These, however, don't.
         argc = 1;
         break;
 
+      case EIO_UTIME:
+      case EIO_FUTIME:
+        argc = 0;
+        break;
+
       case EIO_OPEN:
+        SetCloseOnExec(req->result);
+        /* pass thru */
       case EIO_SENDFILE:
         argv[1] = Integer::New(req->result);
         break;
@@ -98,7 +161,7 @@ static int After(eio_req *req) {
       case EIO_LSTAT:
       case EIO_FSTAT:
         {
-          struct stat *s = reinterpret_cast<struct stat*>(req->ptr2);
+          NODE_STAT_STRUCT *s = reinterpret_cast<NODE_STAT_STRUCT*>(req->ptr2);
           argv[1] = BuildStatsObject(s);
         }
         break;
@@ -158,7 +221,7 @@ static int After(eio_req *req) {
   eio_req *req = eio_##func(__VA_ARGS__, EIO_PRI_DEFAULT, After,  \
     cb_persist(callback));                                        \
   assert(req);                                                    \
-  ev_ref(EV_DEFAULT_UC);                                          \
+  uv_ref();                                          \
   return Undefined();
 
 static Handle<Value> Close(const Arguments& args) {
@@ -196,7 +259,7 @@ static Persistent<String> atime_symbol;
 static Persistent<String> mtime_symbol;
 static Persistent<String> ctime_symbol;
 
-Local<Object> BuildStatsObject(struct stat * s) {
+Local<Object> BuildStatsObject(NODE_STAT_STRUCT *s) {
   HandleScope scope;
 
   if (dev_symbol.IsEmpty()) {
@@ -242,11 +305,13 @@ Local<Object> BuildStatsObject(struct stat * s) {
   /* total size, in bytes */
   stats->Set(size_symbol, Number::New(s->st_size));
 
+#ifdef __POSIX__
   /* blocksize for filesystem I/O */
   stats->Set(blksize_symbol, Integer::New(s->st_blksize));
 
   /* number of blocks allocated */
   stats->Set(blocks_symbol, Integer::New(s->st_blocks));
+#endif
 
   /* time of last access */
   stats->Set(atime_symbol, NODE_UNIXTIME_V8(s->st_atime));
@@ -272,13 +337,14 @@ static Handle<Value> Stat(const Arguments& args) {
   if (args[1]->IsFunction()) {
     ASYNC_CALL(stat, args[1], *path)
   } else {
-    struct stat s;
-    int ret = stat(*path, &s);
+    NODE_STAT_STRUCT s;
+    int ret = NODE_STAT(*path, &s);
     if (ret != 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
     return scope.Close(BuildStatsObject(&s));
   }
 }
 
+#ifdef __POSIX__
 static Handle<Value> LStat(const Arguments& args) {
   HandleScope scope;
 
@@ -291,12 +357,13 @@ static Handle<Value> LStat(const Arguments& args) {
   if (args[1]->IsFunction()) {
     ASYNC_CALL(lstat, args[1], *path)
   } else {
-    struct stat s;
+    NODE_STAT_STRUCT s;
     int ret = lstat(*path, &s);
     if (ret != 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
     return scope.Close(BuildStatsObject(&s));
   }
 }
+#endif // __POSIX__
 
 static Handle<Value> FStat(const Arguments& args) {
   HandleScope scope;
@@ -310,13 +377,14 @@ static Handle<Value> FStat(const Arguments& args) {
   if (args[1]->IsFunction()) {
     ASYNC_CALL(fstat, args[1], fd)
   } else {
-    struct stat s;
-    int ret = fstat(fd, &s);
+    NODE_STAT_STRUCT s;
+    int ret = NODE_FSTAT(fd, &s);
     if (ret != 0) return ThrowException(ErrnoException(errno));
     return scope.Close(BuildStatsObject(&s));
   }
 }
 
+#ifdef __POSIX__
 static Handle<Value> Symlink(const Arguments& args) {
   HandleScope scope;
 
@@ -335,7 +403,9 @@ static Handle<Value> Symlink(const Arguments& args) {
     return Undefined();
   }
 }
+#endif // __POSIX__
 
+#ifdef __POSIX__
 static Handle<Value> Link(const Arguments& args) {
   HandleScope scope;
 
@@ -354,7 +424,9 @@ static Handle<Value> Link(const Arguments& args) {
     return Undefined();
   }
 }
+#endif // __POSIX__
 
+#ifdef __POSIX__
 static Handle<Value> ReadLink(const Arguments& args) {
   HandleScope scope;
 
@@ -373,6 +445,7 @@ static Handle<Value> ReadLink(const Arguments& args) {
     return scope.Close(String::New(getbuf, bz));
   }
 }
+#endif // __POSIX__
 
 static Handle<Value> Rename(const Arguments& args) {
   HandleScope scope;
@@ -393,6 +466,20 @@ static Handle<Value> Rename(const Arguments& args) {
   }
 }
 
+#ifndef _LARGEFILE_SOURCE
+#define ASSERT_TRUNCATE_LENGTH(a) \
+  if (!(a)->IsUndefined() && !(a)->IsNull() && !(a)->IsUInt32()) { \
+    return ThrowException(Exception::TypeError(String::New("Not an integer"))); \
+  }
+#define GET_TRUNCATE_LENGTH(a) ((a)->UInt32Value())
+#else
+#define ASSERT_TRUNCATE_LENGTH(a) \
+  if (!(a)->IsUndefined() && !(a)->IsNull() && !IsInt64((a)->NumberValue())) { \
+    return ThrowException(Exception::TypeError(String::New("Not an integer"))); \
+  }
+#define GET_TRUNCATE_LENGTH(a) ((a)->IntegerValue())
+#endif
+
 static Handle<Value> Truncate(const Arguments& args) {
   HandleScope scope;
 
@@ -401,7 +488,9 @@ static Handle<Value> Truncate(const Arguments& args) {
   }
 
   int fd = args[0]->Int32Value();
-  off_t len = args[1]->Uint32Value();
+
+  ASSERT_TRUNCATE_LENGTH(args[1]);
+  off_t len = GET_TRUNCATE_LENGTH(args[1]);
 
   if (args[2]->IsFunction()) {
     ASYNC_CALL(ftruncate, args[2], fd, len)
@@ -426,6 +515,8 @@ static Handle<Value> Fdatasync(const Arguments& args) {
   } else {
 #if HAVE_FDATASYNC
     int ret = fdatasync(fd);
+#elif defined(__MINGW32__)
+    int ret = FlushFileBuffers((HANDLE)_get_osfhandle(fd)) ? 0 : -1;
 #else
     int ret = fsync(fd);
 #endif
@@ -446,7 +537,11 @@ static Handle<Value> Fsync(const Arguments& args) {
   if (args[1]->IsFunction()) {
     ASYNC_CALL(fsync, args[1], fd)
   } else {
+#ifdef __MINGW32__
+    int ret = FlushFileBuffers((HANDLE)_get_osfhandle(fd)) ? 0 : -1;
+#else
     int ret = fsync(fd);
+#endif
     if (ret != 0) return ThrowException(ErrnoException(errno));
     return Undefined();
   }
@@ -501,7 +596,11 @@ static Handle<Value> MKDir(const Arguments& args) {
   if (args[2]->IsFunction()) {
     ASYNC_CALL(mkdir, args[2], *path, mode)
   } else {
+#ifdef __MINGW32__
+    int ret = mkdir(*path);
+#else
     int ret = mkdir(*path, mode);
+#endif
     if (ret != 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
     return Undefined();
   }
@@ -529,7 +628,7 @@ static Handle<Value> SendFile(const Arguments& args) {
     ssize_t sent = eio_sendfile_sync (out_fd, in_fd, in_offset, length);
     // XXX is this the right errno to use?
     if (sent < 0) return ThrowException(ErrnoException(errno));
-    return Integer::New(sent);
+    return scope.Close(Integer::New(sent));
   }
 }
 
@@ -588,11 +687,24 @@ static Handle<Value> Open(const Arguments& args) {
   } else {
     int fd = open(*path, flags, mode);
     if (fd < 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
+    SetCloseOnExec(fd);
     return scope.Close(Integer::New(fd));
   }
 }
 
-#define GET_OFFSET(a) (a)->IsInt32() ? (a)->IntegerValue() : -1;
+#ifndef _LARGEFILE_SOURCE
+#define ASSERT_OFFSET(a) \
+  if (!(a)->IsUndefined() && !(a)->IsNull() && !(a)->IsInt32()) { \
+    return ThrowException(Exception::TypeError(String::New("Not an integer"))); \
+  }
+#define GET_OFFSET(a) ((a)->IsNumber() ? (a)->Int32Value() : -1)
+#else
+#define ASSERT_OFFSET(a) \
+  if (!(a)->IsUndefined() && !(a)->IsNull() && !IsInt64((a)->NumberValue())) { \
+    return ThrowException(Exception::TypeError(String::New("Not an integer"))); \
+  }
+#define GET_OFFSET(a) ((a)->IsNumber() ? (a)->IntegerValue() : -1)
+#endif
 
 // bytesWritten = write(fd, data, position, enc, callback)
 // Wrapper for write(2).
@@ -633,15 +745,13 @@ static Handle<Value> Write(const Arguments& args) {
           String::New("Length is extends beyond buffer")));
   }
 
+  ASSERT_OFFSET(args[4]);
   off_t pos = GET_OFFSET(args[4]);
 
   char * buf = (char*)buffer_data + off;
   Local<Value> cb = args[5];
 
   if (cb->IsFunction()) {
-    // Grab a reference to buffer so it isn't GCed
-    Local<Object> cb_obj = cb->ToObject();
-    cb_obj->Set(buf_symbol, buffer_obj);
 
     ASYNC_CALL(write, cb, fd, buf, len, pos)
   } else {
@@ -707,10 +817,6 @@ static Handle<Value> Read(const Arguments& args) {
   cb = args[5];
 
   if (cb->IsFunction()) {
-    // Grab a reference to buffer so it isn't GCed
-    // TODO: need test coverage
-    Local<Object> cb_obj = cb->ToObject();
-    cb_obj->Set(buf_symbol, buffer_obj);
 
     ASYNC_CALL(read, cb, fd, buf, len, pos);
   } else {
@@ -725,7 +831,7 @@ static Handle<Value> Read(const Arguments& args) {
 }
 
 
-/* fs.chmod(fd, mode);
+/* fs.chmod(path, mode);
  * Wrapper for chmod(1) / EIO_CHMOD
  */
 static Handle<Value> Chmod(const Arguments& args) {
@@ -741,13 +847,38 @@ static Handle<Value> Chmod(const Arguments& args) {
     ASYNC_CALL(chmod, args[2], *path, mode);
   } else {
     int ret = chmod(*path, mode);
-    if (ret != 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
+    if (ret != 0) return ThrowException(ErrnoException(errno, "chmod", "", *path));
     return Undefined();
   }
 }
 
 
-/* fs.chown(fd, uid, gid);
+#ifdef __POSIX__
+/* fs.fchmod(fd, mode);
+ * Wrapper for fchmod(1) / EIO_FCHMOD
+ */
+static Handle<Value> FChmod(const Arguments& args) {
+  HandleScope scope;
+
+  if(args.Length() < 2 || !args[0]->IsInt32() || !args[1]->IsInt32()) {
+    return THROW_BAD_ARGS;
+  }
+  int fd = args[0]->Int32Value();
+  mode_t mode = static_cast<mode_t>(args[1]->Int32Value());
+
+  if(args[2]->IsFunction()) {
+    ASYNC_CALL(fchmod, args[2], fd, mode);
+  } else {
+    int ret = fchmod(fd, mode);
+    if (ret != 0) return ThrowException(ErrnoException(errno, "fchmod", "", 0));
+    return Undefined();
+  }
+}
+#endif // __POSIX__
+
+
+#ifdef __POSIX__
+/* fs.chown(path, uid, gid);
  * Wrapper for chown(1) / EIO_CHOWN
  */
 static Handle<Value> Chown(const Arguments& args) {
@@ -769,10 +900,120 @@ static Handle<Value> Chown(const Arguments& args) {
     ASYNC_CALL(chown, args[3], *path, uid, gid);
   } else {
     int ret = chown(*path, uid, gid);
-    if (ret != 0) return ThrowException(ErrnoException(errno, NULL, "", *path));
+    if (ret != 0) return ThrowException(ErrnoException(errno, "chown", "", *path));
     return Undefined();
   }
 }
+#endif // __POSIX__
+
+
+#ifdef __POSIX__
+/* fs.fchown(fd, uid, gid);
+ * Wrapper for fchown(1) / EIO_FCHOWN
+ */
+static Handle<Value> FChown(const Arguments& args) {
+  HandleScope scope;
+
+  if (args.Length() < 3 || !args[0]->IsInt32()) {
+    return THROW_BAD_ARGS;
+  }
+
+  if (!args[1]->IsInt32() || !args[2]->IsInt32()) {
+    return ThrowException(Exception::Error(String::New("User and Group IDs must be an integer.")));
+  }
+
+  int fd = args[0]->Int32Value();
+  uid_t uid = static_cast<uid_t>(args[1]->Int32Value());
+  gid_t gid = static_cast<gid_t>(args[2]->Int32Value());
+
+  if (args[3]->IsFunction()) {
+    ASYNC_CALL(fchown, args[3], fd, uid, gid);
+  } else {
+    int ret = fchown(fd, uid, gid);
+    if (ret != 0) return ThrowException(ErrnoException(errno, "fchown", "", 0));
+    return Undefined();
+  }
+}
+#endif // __POSIX__
+
+
+// Utimes() and Futimes() helper function, converts 123.456 timestamps to timevals
+static inline void ToTimevals(eio_tstamp atime,
+                              eio_tstamp mtime,
+                              timeval times[2]) {
+  times[0].tv_sec  = atime;
+  times[0].tv_usec = 10e5 * (atime - (long) atime);
+  times[1].tv_sec  = mtime;
+  times[1].tv_usec = 10e5 * (mtime - (long) mtime);
+}
+
+
+#ifdef __POSIX__
+static Handle<Value> UTimes(const Arguments& args) {
+  HandleScope scope;
+
+  if (args.Length() < 3
+      || !args[0]->IsString()
+      || !args[1]->IsNumber()
+      || !args[2]->IsNumber())
+  {
+    return THROW_BAD_ARGS;
+  }
+
+  const String::Utf8Value path(args[0]->ToString());
+  const eio_tstamp atime = static_cast<eio_tstamp>(args[1]->NumberValue());
+  const eio_tstamp mtime = static_cast<eio_tstamp>(args[2]->NumberValue());
+
+  if (args[3]->IsFunction()) {
+    ASYNC_CALL(utime, args[3], *path, atime, mtime);
+  } else {
+    timeval times[2];
+
+    ToTimevals(atime, mtime, times);
+    if (utimes(*path, times) == -1) {
+      return ThrowException(ErrnoException(errno, "utimes", "", *path));
+    }
+  }
+
+  return Undefined();
+}
+#endif // __POSIX__
+
+
+static Handle<Value> FUTimes(const Arguments& args) {
+  HandleScope scope;
+
+  if (args.Length() < 3
+      || !args[0]->IsInt32()
+      || !args[1]->IsNumber()
+      || !args[2]->IsNumber())
+  {
+    return THROW_BAD_ARGS;
+  }
+
+  const int fd = args[0]->Int32Value();
+  const eio_tstamp atime = static_cast<eio_tstamp>(args[1]->NumberValue());
+  const eio_tstamp mtime = static_cast<eio_tstamp>(args[2]->NumberValue());
+
+  if (args[3]->IsFunction()) {
+    ASYNC_CALL(futime, args[3], fd, atime, mtime);
+  } else {
+#ifndef futimes
+    // Some systems do not have futimes
+    return ThrowException(ErrnoException(ENOSYS, "futimes", "", 0));
+#else
+    timeval times[2];
+
+    ToTimevals(atime, mtime, times);
+    if (futimes(fd, times) == -1) {
+      return ThrowException(ErrnoException(errno, "futimes", "", 0));
+    }
+#endif  // futimes
+  }
+
+  return Undefined();
+}
+
 
 void File::Initialize(Handle<Object> target) {
   HandleScope scope;
@@ -789,16 +1030,30 @@ void File::Initialize(Handle<Object> target) {
   NODE_SET_METHOD(target, "sendfile", SendFile);
   NODE_SET_METHOD(target, "readdir", ReadDir);
   NODE_SET_METHOD(target, "stat", Stat);
+#ifdef __POSIX__
   NODE_SET_METHOD(target, "lstat", LStat);
+#endif // __POSIX__
   NODE_SET_METHOD(target, "fstat", FStat);
+#ifdef __POSIX__
   NODE_SET_METHOD(target, "link", Link);
   NODE_SET_METHOD(target, "symlink", Symlink);
   NODE_SET_METHOD(target, "readlink", ReadLink);
+#endif // __POSIX__
   NODE_SET_METHOD(target, "unlink", Unlink);
   NODE_SET_METHOD(target, "write", Write);
 
   NODE_SET_METHOD(target, "chmod", Chmod);
+#ifdef __POSIX__
+  NODE_SET_METHOD(target, "fchmod", FChmod);
+  //NODE_SET_METHOD(target, "lchmod", LChmod);
+
   NODE_SET_METHOD(target, "chown", Chown);
+  NODE_SET_METHOD(target, "fchown", FChown);
+  //NODE_SET_METHOD(target, "lchown", LChown);
+
+  NODE_SET_METHOD(target, "utimes", UTimes);
+#endif // __POSIX__
+  NODE_SET_METHOD(target, "futimes", FUTimes);
 
   errno_symbol = NODE_PSYMBOL("errno");
   encoding_symbol = NODE_PSYMBOL("node:encoding");
@@ -812,8 +1067,16 @@ void InitFs(Handle<Object> target) {
   stats_constructor_template = Persistent<FunctionTemplate>::New(stat_templ);
   target->Set(String::NewSymbol("Stats"),
                stats_constructor_template->GetFunction());
-  StatWatcher::Initialize(target);
   File::Initialize(target);
+
+#ifdef __POSIX__
+  StatWatcher::Initialize(target);
+#endif
+
+#ifdef __MINGW32__
+  // Open files in binary mode by default
+  _fmode = _O_BINARY;
+#endif
 }
 
 }  // end namespace node

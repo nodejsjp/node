@@ -26,6 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Flags: --max-new-space-size=256
+"use strict";
 
 // Check for GC bug constructing exceptions.
 var v = [1, 2, 3, 4]
@@ -49,7 +50,7 @@ function foo() {
       return j;  // Make sure that future optimizations don't eliminate j.
     } catch(e) {
       ok = true;
-      assertTrue(re.test(e));
+      assertTrue(re.test(e), 'e: ' + e);
     }
     assertTrue(ok);
   }

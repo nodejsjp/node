@@ -1,4 +1,4 @@
-/* Copyright 2009,2010 Ryan Dahl <ry@tinyclouds.org>
+/* Copyright Joyent, Inc. and other Node contributors. All rights reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -498,7 +498,7 @@ const struct message requests[] =
 #define CONNECT_REQUEST 17
 , {.name = "connect request"
   ,.type= HTTP_REQUEST
-  ,.raw= "CONNECT home0.netscape.com:443 HTTP/1.0\r\n"
+  ,.raw= "CONNECT 0-home0.netscape.com:443 HTTP/1.0\r\n"
          "User-agent: Mozilla/1.1N\r\n"
          "Proxy-authorization: basic aGVsbG86d29ybGQ=\r\n"
          "\r\n"
@@ -510,7 +510,7 @@ const struct message requests[] =
   ,.query_string= ""
   ,.fragment= ""
   ,.request_path= ""
-  ,.request_url= "home0.netscape.com:443"
+  ,.request_url= "0-home0.netscape.com:443"
   ,.num_headers= 2
   ,.upgrade=1
   ,.headers= { { "User-agent", "Mozilla/1.1N" }
@@ -555,6 +555,164 @@ const struct message requests[] =
   ,.num_headers= 0
   ,.headers= {}
   ,.body= ""
+  }
+
+#define MSEARCH_REQ 20
+, {.name= "m-search request"
+  ,.type= HTTP_REQUEST
+  ,.raw= "M-SEARCH * HTTP/1.1\r\n"
+         "HOST: 239.255.255.250:1900\r\n"
+         "MAN: \"ssdp:discover\"\r\n"
+         "ST: \"ssdp:all\"\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_MSEARCH
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "*"
+  ,.request_url= "*"
+  ,.num_headers= 3
+  ,.headers= { { "HOST", "239.255.255.250:1900" }
+             , { "MAN", "\"ssdp:discover\"" }
+             , { "ST", "\"ssdp:all\"" }
+             }
+  ,.body= ""
+  }
+
+#define QUERY_TERMINATED_HOST 21
+, {.name= "host terminated by a query string"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET http://hypnotoad.org?hail=all HTTP/1.1\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= "hail=all"
+  ,.fragment= ""
+  ,.request_path= ""
+  ,.request_url= "http://hypnotoad.org?hail=all"
+  ,.num_headers= 0
+  ,.headers= { }
+  ,.body= ""
+  }
+
+#define QUERY_TERMINATED_HOSTPORT 22
+, {.name= "host:port terminated by a query string"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET http://hypnotoad.org:1234?hail=all HTTP/1.1\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= "hail=all"
+  ,.fragment= ""
+  ,.request_path= ""
+  ,.request_url= "http://hypnotoad.org:1234?hail=all"
+  ,.num_headers= 0
+  ,.headers= { }
+  ,.body= ""
+  }
+
+#define SPACE_TERMINATED_HOSTPORT 23
+, {.name= "host:port terminated by a space"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET http://hypnotoad.org:1234 HTTP/1.1\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= ""
+  ,.request_url= "http://hypnotoad.org:1234"
+  ,.num_headers= 0
+  ,.headers= { }
+  ,.body= ""
+  }
+
+#if !HTTP_PARSER_STRICT
+#define UTF8_PATH_REQ 24
+, {.name= "utf-8 path request"
+  ,.type= HTTP_REQUEST
+  ,.raw= "GET /δ¶/δt/pope?q=1#narf HTTP/1.1\r\n"
+         "Host: github.com\r\n"
+         "\r\n"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_GET
+  ,.query_string= "q=1"
+  ,.fragment= "narf"
+  ,.request_path= "/δ¶/δt/pope"
+  ,.request_url= "/δ¶/δt/pope?q=1#narf"
+  ,.num_headers= 1
+  ,.headers= { {"Host", "github.com" }
+             }
+  ,.body= ""
+  }
+
+#define HOSTNAME_UNDERSCORE 25
+, {.name = "hostname underscore"
+  ,.type= HTTP_REQUEST
+  ,.raw= "CONNECT home_0.netscape.com:443 HTTP/1.0\r\n"
+         "User-agent: Mozilla/1.1N\r\n"
+         "Proxy-authorization: basic aGVsbG86d29ybGQ=\r\n"
+         "\r\n"
+  ,.should_keep_alive= FALSE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 0
+  ,.method= HTTP_CONNECT
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= ""
+  ,.request_url= "home_0.netscape.com:443"
+  ,.num_headers= 2
+  ,.upgrade=1
+  ,.headers= { { "User-agent", "Mozilla/1.1N" }
+             , { "Proxy-authorization", "basic aGVsbG86d29ybGQ=" }
+             }
+  ,.body= ""
+  }
+#endif  /* !HTTP_PARSER_STRICT */
+
+#define PATCH_REQ 26
+, {.name = "PATCH request"
+  ,.type= HTTP_REQUEST
+  ,.raw= "PATCH /file.txt HTTP/1.1\r\n"
+         "Host: www.example.com\r\n"
+         "Content-Type: application/example\r\n"
+         "If-Match: \"e0023aa4e\"\r\n"
+         "Content-Length: 10\r\n"
+         "\r\n"
+         "cccccccccc"
+  ,.should_keep_alive= TRUE
+  ,.message_complete_on_eof= FALSE
+  ,.http_major= 1
+  ,.http_minor= 1
+  ,.method= HTTP_PATCH
+  ,.query_string= ""
+  ,.fragment= ""
+  ,.request_path= "/file.txt"
+  ,.request_url= "/file.txt"
+  ,.num_headers= 4
+  ,.upgrade=0
+  ,.headers= { { "Host", "www.example.com" }
+             , { "Content-Type", "application/example" }
+             , { "If-Match", "\"e0023aa4e\"" }
+             , { "Content-Length", "10" }
+             }
+  ,.body= "cccccccccc"
   }
 
 , {.name= NULL } /* sentinel */
@@ -1710,13 +1868,21 @@ main (void)
 
   /// REQUESTS
 
-
   test_simple("hello world", 0);
   test_simple("GET / HTP/1.1\r\n\r\n", 0);
+
 
   test_simple("ASDF / HTTP/1.1\r\n\r\n", 0);
   test_simple("PROPPATCHA / HTTP/1.1\r\n\r\n", 0);
   test_simple("GETA / HTTP/1.1\r\n\r\n", 0);
+
+  // Well-formed but incomplete
+  test_simple("GET / HTTP/1.1\r\n"
+              "Content-Type: text/plain\r\n"
+              "Content-Length: 6\r\n"
+              "\r\n"
+              "fooba",
+              0);
 
   static const char *all_methods[] = {
     "DELETE",
