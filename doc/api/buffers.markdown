@@ -44,6 +44,9 @@ method.  Here are the different string encodings;
 
 * `'ascii'` - for 7 bit ASCII data only.  This encoding method is very fast, and will
 strip the high bit if set.
+Note that this encoding converts a null character (`'\0'` or `'\u0000'`) into
+`0x20` (character code of a space). If you want to convert a null character
+into `0x00`, you should use `'utf8'`.
 
 * `'utf8'` - Multi byte encoded Unicode characters.  Many web pages and other document formats use UTF-8.
 
@@ -60,6 +63,9 @@ will be removed in future versions of Node.
 -->
 * `'ascii'` - 7bit の ASCII データ専用です。
   このエンコーディング方式はとても高速で、もし上位ビットがセットされていれば取り除かれます。
+このエンコーディングは、null 文字 (`'\0'` または `'\u0000'`) を `0x20`
+(スペースの文字コード) に変換することに注意してください。
+null 文字を 0x00 に変換したい場合は `'utf8'` を使用してください。
 * `'utf8'` - 可変長のバイト単位でエンコードされたUnicode文字。
   多くのWebページやその他のドキュメントは UTF-8 を使っています。
 * `'ucs2'` - 固定長の2バイト（リトルエンディアン）でエンコードされたUnicode文字。
