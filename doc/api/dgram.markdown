@@ -330,13 +330,13 @@ packets will also be received on the local interface.
 
 Tells the kernel to join a multicast group with `IP_ADD_MEMBERSHIP` socket option.
 
-If `multicastAddress` is not specified, the OS will try to add membership to all valid
+If `multicastInterface` is not specified, the OS will try to add membership to all valid
 interfaces.
 
 -->
 `IP_ADD_MEMBERSHIP` ソケットオプションを設定し、マルチキャストグループに参加することをカーネルに伝えます。
 
-`multicastAddress` が指定されなかった場合は、全ての妥当なインタフェースをメンバーシップに加えようとします。
+`multicastInterface` が指定されなかった場合は、全ての妥当なインタフェースをメンバーシップに加えようとします。
 
 ### dgram.dropMembership(multicastAddress, [multicastInterface])
 
@@ -347,11 +347,11 @@ Opposite of `addMembership` - tells the kernel to leave a multicast group with
 when the socket is closed or process terminates, so most apps will never need to call
 this.
 
-If `multicastAddress` is not specified, the OS will try to drop membership to all valid
+If `multicastInterface` is not specified, the OS will try to drop membership to all valid
 interfaces.
 
 -->
 `addMembership` の反対です - `IP_DROP_MEMBERSHIP` ソケットオプションによって、マルチキャストグループから抜けることをカーネルに伝えます。
 これはソケットのクローズ時やプロセスの終了時にカーネルによって自動的に呼び出されるため、ほとんどのアプリケーションはこれを呼び出す必要がありません。
 
-`multicastAddress` が指定されなかった場合は、全ての妥当なインタフェースをメンバーシップから削除しようとします。
+`multicastInterface` が指定されなかった場合は、全ての妥当なインタフェースをメンバーシップから削除しようとします。

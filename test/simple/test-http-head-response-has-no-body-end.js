@@ -19,38 +19,37 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+var common = require('../common');
+var assert = require('assert');
 
-#include "node_config.h"
+var http = require('http');
 
-#ifndef NODE_VERSION_H
-#define NODE_VERSION_H
+// This test is to make sure that when the HTTP server
+// responds to a HEAD request with data to res.end,
+// it does not send any body.
 
-#define NODE_MAJOR_VERSION 0
-#define NODE_MINOR_VERSION 4
-#define NODE_PATCH_VERSION 10
-#define NODE_VERSION_IS_RELEASE 1
+var server = http.createServer(function(req, res) {
+  res.writeHead(200);
+  res.end('FAIL'); // broken: sends FAIL from hot path.
+});
+server.listen(common.PORT);
 
-#ifndef NODE_STRINGIFY
-#define NODE_STRINGIFY(n) NODE_STRINGIFY_HELPER(n)
-#define NODE_STRINGIFY_HELPER(n) #n
-#endif
+var responseComplete = false;
 
-#if NODE_VERSION_IS_RELEASE
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION)
-#else
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION) "-pre"
-#endif
+server.addListener('listening', function() {
+  var req = http.createClient(common.PORT).request('HEAD', '/');
+  common.error('req');
+  req.end();
+  req.addListener('response', function(res) {
+    common.error('response');
+    res.addListener('end', function() {
+      common.error('response end');
+      server.close();
+      responseComplete = true;
+    });
+  });
+});
 
-#define NODE_VERSION "v" NODE_VERSION_STRING
-
-
-#define NODE_VERSION_AT_LEAST(major, minor, patch) \
-  (( (major) < NODE_MAJOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) < NODE_MINOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) == NODE_MINOR_VERSION && (patch) <= NODE_PATCH_VERSION))
-
-#endif /* NODE_VERSION_H */
+process.addListener('exit', function() {
+  assert.ok(responseComplete);
+});
