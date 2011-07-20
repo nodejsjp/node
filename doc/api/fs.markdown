@@ -91,9 +91,15 @@ In busy processes, the programmer is _strongly encouraged_ to use the
 asynchronous versions of these calls. The synchronous versions will block
 the entire process until they complete--halting all connections.
 
+Relative path to filename can be used, remember however that this path will be relative
+to `process.cwd()`.
+
 -->
 忙しいプロセスでは、プログラマはこれらの非同期バージョンを使うことが*強く推奨*されます。
 同期バージョンはそれが完了するまでプロセス全体をブロックします － 全ての接続を停止します。
+
+ファイル名には相対パスを使うことが出来ます。しかし、このパスは
+`process.cwd()` からの相対パスであることを思い出してください。
 
 ### fs.rename(path1, path2, [callback])
 
@@ -133,6 +139,63 @@ Synchronous ftruncate(2).
 -->
 同期の ftruncate(2)。
 
+### fs.chown(path, mode, [callback])
+
+<!--
+
+Asycnronous chown(2). No arguments other than a possible exception are given
+to the completion callback.
+
+-->
+非同期の chown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.chownSync(path, mode)
+
+<!--
+
+Synchronous chown(2).
+
+-->
+同期の chown(2)。
+
+### fs.fchown(path, mode, [callback])
+
+<!--
+
+Asycnronous fchown(2). No arguments other than a possible exception are given
+to the completion callback.
+
+-->
+非同期の fchown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.fchownSync(path, mode)
+
+<!--
+
+Synchronous fchown(2).
+
+-->
+同期の fchown(2)。
+
+### fs.lchown(path, mode, [callback])
+
+<!--
+
+Asycnronous lchown(2). No arguments other than a possible exception are given
+to the completion callback.
+
+-->
+非同期の lchown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.lchownSync(path, mode)
+
+<!--
+
+Synchronous lchown(2).
+
+-->
+同期の lchown(2)。
+
 ### fs.chmod(path, mode, [callback])
 
 <!--
@@ -152,6 +215,44 @@ Synchronous chmod(2).
 -->
 同期の chmod(2)。
   
+### fs.fchmod(fd, mode, [callback])
+
+<!--
+
+Asynchronous fchmod(2). No arguments other than a possible exception
+are given to the completion callback.
+
+-->
+非同期の fchmod(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.fchmodSync(path, mode)
+
+<!--
+
+Synchronous fchmod(2).
+
+-->
+同期の fchmod(2)。
+
+### fs.lchmod(fd, mode, [callback])
+
+<!--
+
+Asynchronous lchmod(2). No arguments other than a possible exception
+are given to the completion callback.
+
+-->
+非同期の lchmod(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+### fs.lchmodSync(path, mode)
+
+<!--
+
+Synchronous lchmod(2).
+
+-->
+同期の lchmod(2)。
+
 ### fs.stat(path, [callback])
 
 <!--
@@ -419,12 +520,52 @@ Synchronous close(2).
 
 <!--
 
-Asynchronous file open. See open(2). Flags can be 'r', 'r+', 'w', 'w+', 'a',
-or 'a+'. `mode` defaults to 0666. The callback gets two arguments `(err, fd)`.
+Asynchronous file open. See open(2). `flags` can be:
+
+* `'r'` - Open file for reading.
+An exception occurs if the file does not exist.
+
+* `'r+'` - Open file for reading and writing. 
+An exception occurs if the file does not exist.
+
+* `'w'` - Open file for writing.
+The file is created (if it does not exist) or truncated (if it exists).
+
+* `'w+'` - Open file for reading and writing.
+The file is created (if it does not exist) or truncated (if it exists).
+
+* `'a'` - Open file for appending.
+The file is created if it does not exist.
+
+* `'a+'` - Open file for reading and appending.
+The file is created if it does not exist.
+
+`mode` defaults to `0666`. The callback gets two arguments `(err, fd)`.
 
 -->
 非同期のファイルオープン。open(2) を参照してください。
-フラグは 'r'、'r+'、'w'、'w+'、'a'、あるいは 'a+' です。
+フラグは以下になります:
+
+* `'r'` - 読み込み専用でオープンします。
+ファイルが存在しない場合は例外が発生します。
+
+* `'r+'` - 読み書き両用でオープンします。
+ファイルが存在しない場合は例外が発生します。
+
+* `'w'` - 書き込み専用でオープンします。
+ファイルは作成される (存在しない場合) または長さ 0 に切り詰められます
+(存在する場合)。
+
+* `'r+'` - 読み書き両用でオープンします。
+ファイルは作成される (存在しない場合) または長さ 0 に切り詰められます
+(存在する場合)。
+
+* `'a'` - 追記用でオープンします。
+ファイルが存在しない場合は作成されます。
+
+* `'a+'` - 読み込みおよび追記用でオープンします。
+ファイルが存在しない場合は作成されます。
+
 `mode` のデフォルトは 0666 です。
 コールバックは 2 つの引数を受け取る `(err, fd)`です。
 
@@ -744,6 +885,17 @@ Objects returned from `fs.stat()` and `fs.lstat()` are of this type.
 
 -->
 `ReadStream` は `Readable Stream` です。
+
+### Event: 'open'
+
+`function (fd) { }`
+
+<!--
+
+ `fd` is the file descriptor used by the ReadStream.
+
+-->
+`fd` は ReadStream に使われているファイル記述子です。
 
 ### fs.createReadStream(path, [options])
 

@@ -173,6 +173,23 @@ for more information.
 より詳しくは `src/node.js` を参照してください。
 `module` は実際はグローバルではなく、各モジュール毎のローカルです。
 
+### exports
+
+<!--
+
+An object which is shared between all instances of the current module and
+made accessible through `require()`.
+`exports` is the same as the `module.exports` object. See `src/node.js`
+for more information.
+`exports` isn't actually a global but rather local to each module.
+
+-->
+現在のモジュールの全てのインスタンス間で共有されるオブジェクトで、
+`require` を通じてアクセス可能になります。
+`exports` は `module.exports` と同じオブジェクトです。
+より詳しくは `src/node.js` を参照してください。
+`exports` は実際はグローバルではなく、各モジュール毎のローカルです。
+
 ### setTimeout(cb, ms)
 ### clearTimeout(t)
 ### setInterval(cb, ms)

@@ -569,41 +569,6 @@ by checking `require.main.filename`.
 を提供するため、現在のアプリケーションのエントリポイントは
 `require.main.filename` をチェックすることで得ることができます。
 
-### Accessing the main module
-
-<!--
-
-When a file is run directly from Node, `require.main` is set to its
-`module`. That means that you can determine whether a file has been run
-directly by testing
-
--->
-ファイルが Node によって直接実行される場合、そのファイルの `module` が
-`require.main` に設定されます。
-これは、ファイルが直接実行されているかテストできることを意味します。
-
-    require.main === module
-
-<!--
-
-For a file `foo.js`, this will be `true` if run via `node foo.js`, but
-`false` if run by `require('./foo')`.
-
--->
-`foo.js` ファイルでは、`node foo.js` と実行された場合これは `true`
-となりますが、`require('./foo')` の場合は `false` となります。
-
-<!--
-
-Because `module` provides a `filename` property (normally equivalent to
-`__filename`), the entry point of the current application can be obtained
-by checking `require.main.filename`.
-
--->
-`module` は `filename` プロパティ (通常 `__filename` と同じです)
-を提供するので、現在のアプリケーションのエントリポイントを
-`require.main.filename` で得ることが出来ます。
-
 ## Addenda: Package Manager Tips
 
 <!--

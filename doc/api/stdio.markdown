@@ -61,7 +61,7 @@ Finish timer, record output. Example
 タイマを終了し、結果を出力します。例
 
     console.time('100-elements');
-    while (var i = 0; i < 100; i++) {
+    for (var i = 0; i < 100; i++) {
       ;
     }
     console.timeEnd('100-elements');

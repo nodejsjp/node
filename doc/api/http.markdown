@@ -88,17 +88,17 @@ per connection (in the case of keep-alive connections).
 
 ### Event: 'connection'
 
-`function (stream) { }`
+`function (socket) { }`
 
 <!--
 
- When a new TCP stream is established. `stream` is an object of type
- `net.Stream`. Usually users will not want to access this event. The
+ When a new TCP stream is established. `socket` is an object of type
+ `net.Socket`. Usually users will not want to access this event. The
  `stream` can also be accessed at `request.connection`.
 
 -->
 新しい TCP ストリームが確立した時。
-`stream` は `net.Stream` 型のオブジェクトです。
+`socket` は `net.Socket` 型のオブジェクトです。
 通常の利用者がこのイベントにアクセスしたくなることはないでしょう。
 `stream` は `request.connection` からアクセスすることもできます。
 
@@ -115,7 +115,7 @@ per connection (in the case of keep-alive connections).
 
 ### Event: 'checkContinue'
 
-`function (request, response) {}`
+`function (request, response) { }`
 
 <!--
 
@@ -150,7 +150,7 @@ not be emitted.
 
 ### Event: 'upgrade'
 
-`function (request, socket, head)`
+`function (request, socket, head) { }`
 
 <!--
 
@@ -186,7 +186,7 @@ sent to the server on that socket.
 
 ### Event: 'clientError'
 
-`function (exception) {}`
+`function (exception) { }`
 
 <!--
 
@@ -521,10 +521,10 @@ Resumes a paused request.
 
 <!--
 
-The `net.Stream` object associated with the connection.
+The `net.Socket` object associated with the connection.
 
 -->
-コネクションに関連づけられた `net.Stream` オブジェクトです。
+コネクションに関連づけられた `net.Socket` オブジェクトです。
 
 
 <!--
@@ -847,6 +847,10 @@ Options:
 - `path`: Request path. Should include query string and fragments if any.
    E.G. `'/index.html?page=12'`
 - `headers`: An object containing request headers.
+- `agent`: Controls `Agent` behavior. Possible values:
+ - `undefined` (default): use default `Agent` for this host and port.
+ - `Agent` object: explicitly use the passed in `Agent`.
+ - `false`: explicitly generate a new `Agent` for this host and port. `Agent` will not be re-used.
 
 -->
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
@@ -856,6 +860,12 @@ Options:
 - `path`: リクエストのパス。問い合わせ文字列やフラグメントがあるなら含めるべきです。
    例. `'/index.html?page=12'`
 - `headers`: リクエストヘッダを含むオブジェクト。
+- `agent`: `Agent` の振る舞いを制御します。可能な値は:
+ - `undefined` (デフォルト): ホストとポートからデフォルトの `Agent` 
+を使用します。
+ - `Agent`: オブジェクト: 明示的に渡された `Agent` を使用します。
+ - `false`: このホストとポートの新しい `Agent` を新たに作成します。
+ `Agent` は再利用されません。
 
 <!--
 
@@ -1000,7 +1010,7 @@ agent. The `http.getAgent()` function allows you to access the agents.
 
 ### Event: 'upgrade'
 
-`function (response, socket, head)`
+`function (response, socket, head) { }`
 
 <!--
 
@@ -1063,21 +1073,6 @@ A client server pair that show you how to listen for the `upgrade` event using `
         process.exit(0);
       });
     });
-
-### Event: 'continue'
-
-`function ()`
-
-<!--
-
-Emitted when the server sends a '100 Continue' HTTP response, usually because
-the request contained 'Expect: 100-continue'. This is an instruction that
-the client should send the request body.
-
--->
-通常、リクエストが 'Expect: 100-continue' を含んでいたことにより、
-サーバが '100 Continue' HTTP レスポンスを送信することで生成されます。
-これはクライアントがリクエストボディを送信すべき事を示します。
 
 ### agent.maxSockets
 
@@ -1184,6 +1179,21 @@ This is an `EventEmitter` with the following events:
 -->
 これは以下のイベントを持つ `EventEmitter` です。
 
+### Event: 'continue'
+
+`function () { }`
+
+<!--
+
+Emitted when the server sends a '100 Continue' HTTP response, usually because
+the request contained 'Expect: 100-continue'. This is an instruction that
+the client should send the request body.
+
+-->
+通常、リクエストが 'Expect: 100-continue' を含んでいたことにより、
+サーバが '100 Continue' HTTP レスポンスを送信することで生成されます。
+これはクライアントがリクエストボディを送信すべき事を示します。
+
 ### Event 'response'
 
 `function (response) { }`
@@ -1282,7 +1292,7 @@ The response implements the `Readable Stream` interface.
 
 ### Event: 'data'
 
-`function (chunk) {}`
+`function (chunk) { }`
 
 <!--
 
@@ -1294,7 +1304,7 @@ Emitted when a piece of the message body is received.
 
 ### Event: 'end'
 
-`function () {}`
+`function () { }`
 
 <!--
 
@@ -1304,6 +1314,22 @@ emitted no other events will be emitted on the response.
 -->
 メッセージごとに厳密に一回だけ生成されます。
 このイベントが生成された後、このレスポンスはどんなイベントも生成しません。
+
+### Event: 'close'
+
+`function (err) { }`
+
+<!--
+
+Indicates that the underlaying connection was terminated before
+`end` event was emitted.
+See [http.ServerRequest](#http.ServerRequest)'s `'close'` event for more
+information.
+
+-->
+`'end'` イベントが生成される前に下層の接続が切断されたことを示します。
+[http.ServerRequest](#http.ServerRequest) の `'close'`
+イベントにより多くの情報があります。
 
 ### response.statusCode
 
