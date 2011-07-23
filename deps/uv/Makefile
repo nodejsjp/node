@@ -24,51 +24,52 @@ ifdef MSVC
 uname_S := MINGW
 endif
 
-CPPFLAGS += -Ic-ares/
+CPPFLAGS += -Iinclude
+
 CARES_OBJS =
-CARES_OBJS += c-ares/ares__close_sockets.o
-CARES_OBJS += c-ares/ares__get_hostent.o
-CARES_OBJS += c-ares/ares__read_line.o
-CARES_OBJS += c-ares/ares__timeval.o
-CARES_OBJS += c-ares/ares_cancel.o
-CARES_OBJS += c-ares/ares_data.o
-CARES_OBJS += c-ares/ares_destroy.o
-CARES_OBJS += c-ares/ares_expand_name.o
-CARES_OBJS += c-ares/ares_expand_string.o
-CARES_OBJS += c-ares/ares_fds.o
-CARES_OBJS += c-ares/ares_free_hostent.o
-CARES_OBJS += c-ares/ares_free_string.o
-CARES_OBJS += c-ares/ares_gethostbyaddr.o
-CARES_OBJS += c-ares/ares_gethostbyname.o
-CARES_OBJS += c-ares/ares_getnameinfo.o
-CARES_OBJS += c-ares/ares_getopt.o
-CARES_OBJS += c-ares/ares_getsock.o
-CARES_OBJS += c-ares/ares_init.o
-CARES_OBJS += c-ares/ares_library_init.o
-CARES_OBJS += c-ares/ares_llist.o
-CARES_OBJS += c-ares/ares_mkquery.o
-CARES_OBJS += c-ares/ares_nowarn.o
-CARES_OBJS += c-ares/ares_options.o
-CARES_OBJS += c-ares/ares_parse_a_reply.o
-CARES_OBJS += c-ares/ares_parse_aaaa_reply.o
-CARES_OBJS += c-ares/ares_parse_mx_reply.o
-CARES_OBJS += c-ares/ares_parse_ns_reply.o
-CARES_OBJS += c-ares/ares_parse_ptr_reply.o
-CARES_OBJS += c-ares/ares_parse_srv_reply.o
-CARES_OBJS += c-ares/ares_parse_txt_reply.o
-CARES_OBJS += c-ares/ares_process.o
-CARES_OBJS += c-ares/ares_query.o
-CARES_OBJS += c-ares/ares_search.o
-CARES_OBJS += c-ares/ares_send.o
-CARES_OBJS += c-ares/ares_strcasecmp.o
-CARES_OBJS += c-ares/ares_strdup.o
-CARES_OBJS += c-ares/ares_strerror.o
-CARES_OBJS += c-ares/ares_timeout.o
-CARES_OBJS += c-ares/ares_version.o
-CARES_OBJS += c-ares/ares_writev.o
-CARES_OBJS += c-ares/bitncmp.o
-CARES_OBJS += c-ares/inet_net_pton.o
-CARES_OBJS += c-ares/inet_ntop.o
+CARES_OBJS += src/ares/ares__close_sockets.o
+CARES_OBJS += src/ares/ares__get_hostent.o
+CARES_OBJS += src/ares/ares__read_line.o
+CARES_OBJS += src/ares/ares__timeval.o
+CARES_OBJS += src/ares/ares_cancel.o
+CARES_OBJS += src/ares/ares_data.o
+CARES_OBJS += src/ares/ares_destroy.o
+CARES_OBJS += src/ares/ares_expand_name.o
+CARES_OBJS += src/ares/ares_expand_string.o
+CARES_OBJS += src/ares/ares_fds.o
+CARES_OBJS += src/ares/ares_free_hostent.o
+CARES_OBJS += src/ares/ares_free_string.o
+CARES_OBJS += src/ares/ares_gethostbyaddr.o
+CARES_OBJS += src/ares/ares_gethostbyname.o
+CARES_OBJS += src/ares/ares_getnameinfo.o
+CARES_OBJS += src/ares/ares_getopt.o
+CARES_OBJS += src/ares/ares_getsock.o
+CARES_OBJS += src/ares/ares_init.o
+CARES_OBJS += src/ares/ares_library_init.o
+CARES_OBJS += src/ares/ares_llist.o
+CARES_OBJS += src/ares/ares_mkquery.o
+CARES_OBJS += src/ares/ares_nowarn.o
+CARES_OBJS += src/ares/ares_options.o
+CARES_OBJS += src/ares/ares_parse_a_reply.o
+CARES_OBJS += src/ares/ares_parse_aaaa_reply.o
+CARES_OBJS += src/ares/ares_parse_mx_reply.o
+CARES_OBJS += src/ares/ares_parse_ns_reply.o
+CARES_OBJS += src/ares/ares_parse_ptr_reply.o
+CARES_OBJS += src/ares/ares_parse_srv_reply.o
+CARES_OBJS += src/ares/ares_parse_txt_reply.o
+CARES_OBJS += src/ares/ares_process.o
+CARES_OBJS += src/ares/ares_query.o
+CARES_OBJS += src/ares/ares_search.o
+CARES_OBJS += src/ares/ares_send.o
+CARES_OBJS += src/ares/ares_strcasecmp.o
+CARES_OBJS += src/ares/ares_strdup.o
+CARES_OBJS += src/ares/ares_strerror.o
+CARES_OBJS += src/ares/ares_timeout.o
+CARES_OBJS += src/ares/ares_version.o
+CARES_OBJS += src/ares/ares_writev.o
+CARES_OBJS += src/ares/bitncmp.o
+CARES_OBJS += src/ares/inet_net_pton.o
+CARES_OBJS += src/ares/inet_ntop.o
 
 ifneq (,$(findstring MINGW,$(uname_S)))
 include config-mingw.mk
@@ -96,17 +97,23 @@ test/echo.o: test/echo.c test/echo.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c test/echo.c -o test/echo.o
 
 
-.PHONY: clean clean-platform distclean distclean-platform test benchmark
+.PHONY: clean clean-platform distclean distclean-platform test bench
 
 
 test: test/run-tests$(E)
 	test/run-tests
 
+#test-%:	test/run-tests$(E)
+#	test/run-tests $(@:test-%=%)
+
 bench: test/run-benchmarks$(E)
 	test/run-benchmarks
 
+#bench-%:	test/run-benchmarks$(E)
+#	test/run-benchmarks $(@:bench-%=%)
+
 clean: clean-platform
-	$(RM) -f *.o *.a test/run-tests$(E) test/run-benchmarks$(E)
+	$(RM) -f src/*.o *.a test/run-tests$(E) test/run-benchmarks$(E)
 
 distclean: distclean-platform
-	$(RM) -f *.o *.a test/run-tests$(E) test/run-benchmarks$(E)
+	$(RM) -f src/*.o *.a test/run-tests$(E) test/run-benchmarks$(E)

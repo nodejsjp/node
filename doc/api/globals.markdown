@@ -48,6 +48,16 @@ Used to print to stdout and stderr. See the [stdio](stdio.html) section.
 標準出力および標準エラー出力へのプリントに使われます。
 [標準入出力](stdio.html) を参照してください。
 
+### Buffer
+
+<!--
+
+Used to handle binary data. See the [buffers](buffers.html) section.
+
+-->
+バイナリデータを扱うために使われます。
+[buffers](buffers.html) を参照してください。
+
 ### require()
 
 <!--
@@ -172,6 +182,25 @@ for more information.
 特に `module.exports` は `exports` オブジェクトと同じです。
 より詳しくは `src/node.js` を参照してください。
 `module` は実際はグローバルではなく、各モジュール毎のローカルです。
+
+### exports
+
+<!--
+
+An object which is shared between all instances of the current module and
+made accessible through `require()`.
+`exports` is the same as the `module.exports` object. See `src/node.js`
+for more information.
+`exports` isn't actually a global but rather local to each module.
+
+-->
+
+現在のモジュールの全てのインスタンス間で共有されるオブジェクトで、
+`require` を通じてアクセス可能になります。
+`exports` は `module.exports` と同じオブジェクトです。
+より詳しくは `src/node.js` を参照してください。
+`exports` は実際はグローバルではなく、各モジュール毎のローカルです。
+
 
 ### setTimeout(cb, ms)
 ### clearTimeout(t)
