@@ -42,22 +42,6 @@ typedef struct uv_buf_t {
   char* base;
 } uv_buf_t;
 
-/*
- * Private uv_pipe_instance state.
- */
-typedef enum {
-  UV_PIPEINSTANCE_CONNECTED = 0,
-  UV_PIPEINSTANCE_DISCONNECTED,
-  UV_PIPEINSTANCE_ACTIVE
-} uv_pipeinstance_state;
-
-/* Used to store active pipe instances inside a linked list. */
-typedef struct uv_pipe_instance_s {
-  HANDLE handle;
-  uv_pipeinstance_state state;
-  struct uv_pipe_instance_s* next;
-} uv_pipe_instance_t;
-
 #define UV_REQ_PRIVATE_FIELDS             \
   union {                                 \
     /* Used by I/O operations */          \
@@ -66,13 +50,28 @@ typedef struct uv_pipe_instance_s {
       size_t queued_bytes;                \
     };                                    \
   };                                      \
-  int flags;                              \
   uv_err_t error;                         \
   struct uv_req_s* next_req;
 
+#define UV_WRITE_PRIVATE_FIELDS           \
+  /* empty */
+
+#define UV_CONNECT_PRIVATE_FIELDS         \
+  /* empty */
+
+#define UV_SHUTDOWN_PRIVATE_FIELDS        \
+  /* empty */
+
+#define UV_PRIVATE_REQ_TYPES              \
+  typedef struct uv_pipe_accept_s {       \
+    UV_REQ_FIELDS                         \
+    HANDLE pipeHandle;                    \
+    struct uv_pipe_accept_s* next_pending; \
+  } uv_pipe_accept_t;
+
 #define uv_stream_connection_fields       \
   unsigned int write_reqs_pending;        \
-  uv_req_t* shutdown_req;
+  uv_shutdown_t* shutdown_req;
 
 #define uv_stream_server_fields           \
   uv_connection_cb connection_cb;
@@ -81,7 +80,7 @@ typedef struct uv_pipe_instance_s {
   unsigned int reqs_pending;              \
   uv_alloc_cb alloc_cb;                   \
   uv_read_cb read_cb;                     \
-  struct uv_req_s read_req;               \
+  uv_req_t read_req;                      \
   union {                                 \
     struct { uv_stream_connection_fields };  \
     struct { uv_stream_server_fields     };  \
@@ -94,19 +93,17 @@ typedef struct uv_pipe_instance_s {
   };                                      \
   SOCKET accept_socket;                   \
   char accept_buffer[sizeof(struct sockaddr_storage) * 2 + 32]; \
-  struct uv_req_s accept_req;
+  struct uv_req_s accept_req;             \
 
 #define uv_pipe_server_fields             \
-    char* name;                           \
-    uv_pipe_instance_t* connections;      \
-    struct uv_req_s accept_reqs[4];
+    uv_pipe_accept_t accept_reqs[4];      \
+    uv_pipe_accept_t* pending_accepts;
 
 #define uv_pipe_connection_fields         \
-    uv_pipe_t* server;                    \
-    uv_pipe_instance_t* connection;       \
-    uv_pipe_instance_t clientConnection;
+  HANDLE handle;
 
 #define UV_PIPE_PRIVATE_FIELDS            \
+  wchar_t* name;                          \
   union {                                 \
     struct { uv_pipe_server_fields };     \
     struct { uv_pipe_connection_fields }; \
@@ -120,6 +117,7 @@ typedef struct uv_pipe_instance_s {
 
 #define UV_ASYNC_PRIVATE_FIELDS           \
   struct uv_req_s async_req;              \
+  uv_async_cb async_cb;                   \
   /* char to avoid alignment issues */    \
   char volatile async_sent;
 

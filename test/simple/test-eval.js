@@ -19,26 +19,27 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#ifndef SRC_EVENTS_H_
-#define SRC_EVENTS_H_
+require('../common');
+var assert = require('assert');
+var exec = require('child_process').exec;
 
-#include <node_object_wrap.h>
-#include <v8.h>
+var success_count = 0;
+var error_count = 0;
 
-namespace node {
+var cmd = [process.execPath, '-e', '"process.argv"', 'foo', 'bar'].join(' ');
+var expected = "[ '" + process.execPath + "',\n  'foo',\n  'bar' ]\n";
+var child = exec(cmd, function(err, stdout, stderr) {
+  if (err) {
+    console.log(err.toString());
+    ++error_count;
+    return;
+  }
+  assert.equal(stdout, expected);
+  ++success_count;
+});
 
-class EventEmitter : public ObjectWrap {
- public:
-  static void Initialize(v8::Local<v8::FunctionTemplate> ctemplate);
-  static v8::Persistent<v8::FunctionTemplate> constructor_template;
+process.addListener('exit', function() {
+  assert.equal(1, success_count);
+  assert.equal(0, error_count);
+});
 
-  bool Emit(v8::Handle<v8::String> event,
-            int argc,
-            v8::Handle<v8::Value> argv[]);
-
- protected:
-  EventEmitter() : ObjectWrap () { }
-};
-
-}  // namespace node
-#endif  // SRC_EVENTS_H_

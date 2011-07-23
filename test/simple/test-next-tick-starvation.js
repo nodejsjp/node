@@ -19,11 +19,34 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-var path = require('path');
+var common = require('../common');
+var assert = require('assert');
 
-require.paths.unshift(path.join(__dirname, '../p2'));
 
-exports.foo = require('foo');
+var ran = false;
+var stop = false;
+var start = +new Date();
 
-exports.expect = require(path.join(__dirname, '../p2/bar'));
-exports.actual = exports.foo.bar;
+function spin() {
+  var now = +new Date();
+  if (now - start > 100) {
+    throw new Error('The timer is starving');
+  }
+
+  if (!stop) {
+    ran = true;
+    process.nextTick(spin);
+  }
+}
+
+function onTimeout() {
+  stop = true;
+}
+
+spin();
+setTimeout(onTimeout, 50);
+
+process.on('exit', function() {
+  assert.ok(ran);
+  assert.ok(stop);
+});

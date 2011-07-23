@@ -20,4 +20,11 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-exports.INBAR = __filename;
+/*
+ * This test verifies that having a single nextTick statement and nothing else
+ * does not hang the event loop. If this test times out it has failed.
+ */
+
+process.nextTick(function() {
+  // Nothing
+});

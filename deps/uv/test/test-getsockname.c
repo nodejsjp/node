@@ -29,7 +29,7 @@ static int getsocknamecount = 0;
 
 
 static uv_tcp_t tcp;
-static uv_req_t connect_req;
+static uv_connect_t connect_req;
 static uv_tcp_t tcpServer;
 
 
@@ -47,22 +47,23 @@ static void on_close(uv_handle_t* peer) {
 }
 
 
-static void after_shutdown(uv_req_t* req, int status) {
-  uv_close(req->handle, on_close);
+static void after_shutdown(uv_shutdown_t* req, int status) {
+  uv_close((uv_handle_t*) req->handle, on_close);
   free(req);
 }
 
 
 static void after_read(uv_stream_t* handle, ssize_t nread, uv_buf_t buf) {
-  uv_req_t* req;
+  uv_shutdown_t* req;
+  int r;
 
   if (buf.base) {
     free(buf.base);
   }
 
-  req = (uv_req_t*) malloc(sizeof *req);
-  uv_req_init(req, (uv_handle_t*)handle, (void *(*)(void *))after_shutdown);
-  uv_shutdown(req);
+  req = (uv_shutdown_t*) malloc(sizeof *req);
+  r = uv_shutdown(req, handle, after_shutdown);
+  ASSERT(r == 0);
 }
 
 
@@ -102,16 +103,18 @@ static void on_connection(uv_handle_t* server, int status) {
 }
 
 
-static void on_connect(void* req) {
+static void on_connect(uv_connect_t* req, int status) {
   struct sockaddr sockname;
   int namelen = sizeof(sockname);
-  int status;
+  int r;
 
-  status = uv_getsockname(&tcp, &sockname, &namelen);
-  if (status != 0) {
+  ASSERT(status == 0);
+
+  r = uv_getsockname(&tcp, &sockname, &namelen);
+  if (r != 0) {
     fprintf(stderr, "uv_getsockname error (connector) %d\n", uv_last_error().code);
   }
-  ASSERT(status == 0);
+  ASSERT(r == 0);
 
   getsocknamecount++;
 
@@ -123,6 +126,7 @@ static int tcp_listener(int port) {
   struct sockaddr_in addr = uv_ip4_addr("0.0.0.0", port);
   struct sockaddr sockname;
   int namelen = sizeof(sockname);
+  char ip[20];
   int r;
 
   r = uv_tcp_init(&tcpServer);
@@ -148,6 +152,14 @@ static int tcp_listener(int port) {
     fprintf(stderr, "uv_getsockname error (listening) %d\n", uv_last_error().code);
   }
   ASSERT(r == 0);
+
+  r = uv_ip4_name((struct sockaddr_in*)&sockname, ip, 20);
+  ASSERT(r == 0);
+  ASSERT(ip[0] == '0');
+  ASSERT(ip[1] == '.');
+  ASSERT(ip[2] == '0');
+  printf("sockname = %s\n", ip);
+
   getsocknamecount++;
 
   return 0;
@@ -162,9 +174,7 @@ static void tcp_connector() {
   tcp.data = &connect_req;
   ASSERT(!r);
 
-  uv_req_init(&connect_req, (uv_handle_t*)(&tcp), (void *(*)(void *))on_connect);
-
-  r = uv_tcp_connect(&connect_req, server_addr);
+  r = uv_tcp_connect(&connect_req, &tcp, server_addr, on_connect);
   ASSERT(!r);
 }
 

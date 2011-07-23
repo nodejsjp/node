@@ -25,6 +25,13 @@
 #include <stdlib.h>
 
 
+#ifdef _WIN32
+# define BAD_PIPENAME "bad-pipe"
+#else
+# define BAD_PIPENAME "/path/to/unix/socket/that/really/should/not/be/there"
+#endif
+
+
 static int close_cb_called = 0;
 
 
@@ -34,26 +41,27 @@ static void close_cb(uv_handle_t* handle) {
 }
 
 
-TEST_IMPL(bind_error_addrinuse) {
-  struct sockaddr_in addr = uv_ip4_addr("0.0.0.0", TEST_PORT);
-  uv_tcp_t server1, server2;
+TEST_IMPL(pipe_bind_error_addrinuse) {
+  uv_pipe_t server1, server2;
   int r;
 
   uv_init();
 
-  r = uv_tcp_init(&server1);
+  r = uv_pipe_init(&server1);
   ASSERT(r == 0);
-  r = uv_tcp_bind(&server1, addr);
-  ASSERT(r == 0);
-
-  r = uv_tcp_init(&server2);
-  ASSERT(r == 0);
-  r = uv_tcp_bind(&server2, addr);
+  r = uv_pipe_bind(&server1, TEST_PIPENAME);
   ASSERT(r == 0);
 
-  r = uv_tcp_listen(&server1, 128, NULL);
+  r = uv_pipe_init(&server2);
   ASSERT(r == 0);
-  r = uv_tcp_listen(&server2, 128, NULL);
+  r = uv_pipe_bind(&server2, TEST_PIPENAME);
+  ASSERT(r == -1);
+
+  ASSERT(uv_last_error().code == UV_EADDRINUSE);
+
+  r = uv_pipe_listen(&server1, NULL);
+  ASSERT(r == 0);
+  r = uv_pipe_listen(&server2, NULL);
   ASSERT(r == -1);
 
   ASSERT(uv_last_error().code == UV_EADDRINUSE);
@@ -69,44 +77,18 @@ TEST_IMPL(bind_error_addrinuse) {
 }
 
 
-TEST_IMPL(bind_error_addrnotavail_1) {
-  struct sockaddr_in addr = uv_ip4_addr("127.255.255.255", TEST_PORT);
-  uv_tcp_t server;
+TEST_IMPL(pipe_bind_error_addrnotavail) {
+  uv_pipe_t server;
   int r;
 
   uv_init();
 
-  r = uv_tcp_init(&server);
+  r = uv_pipe_init(&server);
   ASSERT(r == 0);
-  r = uv_tcp_bind(&server, addr);
+  r = uv_pipe_bind(&server, BAD_PIPENAME);
 
-  /* It seems that Linux is broken here - bind succeeds. */
-  if (r == -1) {
-    ASSERT(uv_last_error().code == UV_EADDRNOTAVAIL);
-  }
-
-  uv_close((uv_handle_t*)&server, close_cb);
-
-  uv_run();
-
-  ASSERT(close_cb_called == 1);
-
-  return 0;
-}
-
-
-TEST_IMPL(bind_error_addrnotavail_2) {
-  struct sockaddr_in addr = uv_ip4_addr("4.4.4.4", TEST_PORT);
-  uv_tcp_t server;
-  int r;
-
-  uv_init();
-
-  r = uv_tcp_init(&server);
-  ASSERT(r == 0);
-  r = uv_tcp_bind(&server, addr);
   ASSERT(r == -1);
-  ASSERT(uv_last_error().code == UV_EADDRNOTAVAIL);
+  ASSERT(uv_last_error().code == UV_EACCESS);
 
   uv_close((uv_handle_t*)&server, close_cb);
 
@@ -118,47 +100,17 @@ TEST_IMPL(bind_error_addrnotavail_2) {
 }
 
 
-TEST_IMPL(bind_error_fault) {
-  char garbage[] = "blah blah blah blah blah blah blah blah blah blah blah blah";
-  struct sockaddr_in* garbage_addr;
-  uv_tcp_t server;
-  int r;
-
-  garbage_addr = (struct sockaddr_in*) &garbage;
-
-  uv_init();
-
-  r = uv_tcp_init(&server);
-  ASSERT(r == 0);
-  r = uv_tcp_bind(&server, *garbage_addr);
-  ASSERT(r == -1);
-
-  ASSERT(uv_last_error().code == UV_EFAULT);
-
-  uv_close((uv_handle_t*)&server, close_cb);
-
-  uv_run();
-
-  ASSERT(close_cb_called == 1);
-
-  return 0;
-}
-
-/* Notes: On Linux uv_bind(server, NULL) will segfault the program.  */
-
-TEST_IMPL(bind_error_inval) {
-  struct sockaddr_in addr1 = uv_ip4_addr("0.0.0.0", TEST_PORT);
-  struct sockaddr_in addr2 = uv_ip4_addr("0.0.0.0", TEST_PORT_2);
-  uv_tcp_t server;
+TEST_IMPL(pipe_bind_error_inval) {
+  uv_pipe_t server;
   int r;
 
   uv_init();
 
-  r = uv_tcp_init(&server);
+  r = uv_pipe_init(&server);
   ASSERT(r == 0);
-  r = uv_tcp_bind(&server, addr1);
+  r = uv_pipe_bind(&server, TEST_PIPENAME);
   ASSERT(r == 0);
-  r = uv_tcp_bind(&server, addr2);
+  r = uv_pipe_bind(&server, TEST_PIPENAME_2);
   ASSERT(r == -1);
 
   ASSERT(uv_last_error().code == UV_EINVAL);
@@ -173,18 +125,24 @@ TEST_IMPL(bind_error_inval) {
 }
 
 
-TEST_IMPL(bind_localhost_ok) {
-  struct sockaddr_in addr = uv_ip4_addr("127.0.0.1", TEST_PORT);
-
-  uv_tcp_t server;
+TEST_IMPL(pipe_listen_without_bind) {
+  uv_pipe_t server;
   int r;
 
   uv_init();
 
-  r = uv_tcp_init(&server);
+  r = uv_pipe_init(&server);
   ASSERT(r == 0);
-  r = uv_tcp_bind(&server, addr);
-  ASSERT(r == 0);
+  r = uv_pipe_listen(&server, NULL);
+  ASSERT(r == -1);
+
+  ASSERT(uv_last_error().code == UV_ENOTCONN);
+
+  uv_close((uv_handle_t*)&server, close_cb);
+
+  uv_run();
+
+  ASSERT(close_cb_called == 1);
 
   return 0;
 }

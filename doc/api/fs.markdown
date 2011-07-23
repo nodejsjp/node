@@ -91,9 +91,15 @@ In busy processes, the programmer is _strongly encouraged_ to use the
 asynchronous versions of these calls. The synchronous versions will block
 the entire process until they complete--halting all connections.
 
+Relative path to filename can be used, remember however that this path will be relative
+to `process.cwd()`.
+
 -->
 忙しいプロセスでは、プログラマはこれらの非同期バージョンを使うことが*強く推奨*されます。
 同期バージョンはそれが完了するまでプロセス全体をブロックします － 全ての接続を停止します。
+
+ファイル名には相対パスを使うことが出来ます。しかし、このパスは
+`process.cwd()` からの相対パスであることを思い出してください。
 
 ### fs.rename(path1, path2, [callback])
 

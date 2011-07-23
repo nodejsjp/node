@@ -19,5 +19,48 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-require.paths.unshift(__dirname);
-exports.bar = require('bar'); // surprise! this is not /p2/bar, this is /p1/bar
+var common = require('../common');
+var assert = require('assert');
+var http = require('http');
+
+// Simple test of Node's HTTP ServerResponse.statusCode
+// ServerResponse.prototype.statusCode
+
+var testsComplete = 0;
+var tests = [200, 202, 300, 404, 500];
+var testIdx = 0;
+
+var s = http.createServer(function(req, res) {
+  var t = tests[testIdx];
+  res.writeHead(t, {'Content-Type': 'text/plain'});
+  console.log('--\nserver: statusCode after writeHead: '+res.statusCode);
+  assert.equal(res.statusCode, t);
+  res.end('hello world\n');
+});
+
+s.listen(common.PORT, nextTest);
+
+
+function nextTest () {
+  if (testIdx + 1 === tests.length) {
+    return s.close();
+  }
+  var test = tests[testIdx];
+
+  http.get({ port: common.PORT }, function(response) {
+    console.log('client: expected status: ' + test);
+    console.log('client: statusCode: ' + response.statusCode);
+    assert.equal(response.statusCode, test);
+    response.on('end', function() {
+      testsComplete++;
+      testIdx += 1;
+      nextTest();
+    });
+  });
+}
+
+
+process.on('exit', function() {
+  assert.equal(4, testsComplete);
+});
+

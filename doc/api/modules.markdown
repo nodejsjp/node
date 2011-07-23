@@ -418,148 +418,44 @@ in pseudocode of what require.resolve does:
        c. let I = I - 1
     6. return DIRS
 
-### Loading from the `require.paths` Folders
+### Loading from the global folders
 
 <!--
 
-In node, `require.paths` is an array of strings that represent paths to
-be searched for modules when they are not prefixed with `'/'`, `'./'`, or
-`'../'`.  For example, if require.paths were set to:
+If the `NODE_PATH` environment variable is set to a colon-delimited list
+of absolute paths, then node will search those paths for modules if they
+are not found elsewhere.  (Note: On Windows, `NODE_PATH` is delimited by
+semicolons instead of colons.)
+
+Additionally, node will search in the following locations:
 
 -->
-`require.paths` は、指定されたモジュール名が `'/'` や `'./'` や `'../'` から始まっていないときにモジュールを探しにいくパスを文字列として保持している配列です。
-例えば、require.pathsが次のように設定されているとします: 
+`NODE_PATH` 環境変数に絶対パスをコロンで区切ったリストを設定すると、
+node は他で見つからなかったモジュールをそれらのパスから探します。
+(注意: Windows では、`NODE_PATH` はコロンではなくセミコロンで区切られます)
 
-    [ '/home/micheil/.node_modules',
-      '/usr/local/lib/node_modules' ]
+加えると、node は以下の場所から検索します。
+
+* 1: `$HOME/.node_modules`
+* 2: `$HOME/.node_libraries`
+* 3: `$PREFIX/lib/node`
 
 <!--
 
-Then calling `require('bar/baz.js')` would search the following
-locations:
+Where `$HOME` is the user's home directory, and `PREFIX` is node's
+configured `installPrefix`.
+
+These are mostly for historic reasons.  You are highly encouraged to
+place your dependencies localy in `node_modules` folders.  They will be
+loaded faster, and more reliably.
 
 -->
-そして、 `require('baz/baz.js')` を呼ぶと次の場所を探しにいきます:
+`$HOME` はユーザのホームディレクトリ、`$PREFIX` は node を
+configure した時の `installPrefix` です。
 
-* 1: `'/home/micheil/.node_modules/bar/baz.js'`
-* 2: `'/usr/local/lib/node_modules/bar/baz.js'`
-
-<!--
-
-The `require.paths` array can be mutated at run time to alter this
-behavior.
-
-It is set initially from the `NODE_PATH` environment variable, which is
-a colon-delimited list of absolute paths.  In the previous example,
-the `NODE_PATH` environment variable might have been set to:
-
--->
-これらの動作を修正することができるよう、 `require.paths` 配列は実行時に変更することができます。
-
-`require.paths` は `NODE_PATH` という環境変数の値によって初期化されます。
-`NODE_PATH` にはコロンで区切った複数のパスを記述することができます。
-上の例では、 `NODE_PATH` には次のような値がセットされていたものと考えられます:
-
-    /home/micheil/.node_modules:/usr/local/lib/node_modules
-
-<!--
-
-Loading from the `require.paths` locations is only performed if the
-module could not be found using the `node_modules` algorithm above.
-Global modules are lower priority than bundled dependencies.
-
--->
-`require.paths` からロードされるのは、モジュールが前述の `node_modules` アルゴリズムで見つけられなかった場合だけです。
-グローバルモジュールはバンドルされた依存性よりも低プライオリティです。
-
-#### **Note:** Please Avoid Modifying `require.paths`
-
-<!--
-
-`require.paths` may disappear in a future release.
-
-While it seemed like a good idea at the time, and enabled a lot of
-useful experimentation, in practice a mutable `require.paths` list is
-often a troublesome source of confusion and headaches.
-
--->
-将来のバージョンでは `require.paths` は無くなる予定です。
-
-実装当時はよいアイデアだと思われ実験的に使う分にはとても有用でしたが、実際に使いだしてみると変更可能な `require.paths` のリストというものはやっかいな混乱と頭痛の種になることがしばしばあったのです。
-
-##### Setting `require.paths` to some other value does nothing.
-
-<!--
-
-This does not do what one might expect:
-
--->
-次のコードは、希望通りには動きません:
-
-    require.paths = [ '/usr/lib/node' ];
-
-<!--
-
-All that does is lose the reference to the *actual* node module lookup
-paths, and create a new reference to some other thing that isn't used
-for anything.
-
--->
-これは、 *実際の* Node モジュールへの参照パスを消滅させ、使われることのないパスに対する新たな参照を作り出しています。
-
-##### Putting relative paths in `require.paths` is... weird.
-
-<!--
-
-If you do this:
-
--->
-次のようにするとします:
-
-    require.paths.push('./lib');
-
-<!--
-
-then it does *not* add the full resolved path to where `./lib`
-is on the filesystem.  Instead, it literally adds `'./lib'`,
-meaning that if you do `require('y.js')` in `/a/b/x.js`, then it'll look
-in `/a/b/lib/y.js`.  If you then did `require('y.js')` in
-`/l/m/n/o/p.js`, then it'd look in `/l/m/n/o/lib/y.js`.
-
--->
-これは、ファイルシステム上の `./lib` のある場所への絶対パスを追加する *わけではありません* 。
-代わりに、文字通り `'./lib'` を追加します。
-すなわち、もし `/a/b/x.js` ファイル内で `require('y.js')` した場合、 `/a/b/lib/y.js` を探しにいきます。
-同様に `/l/m/n/o/p.js` ファイル内で `require('y.js')` した場合は、 `/l/m/n/o/lib/y.js` を探しにいきます。
-
-<!--
-
-In practice, people have used this as an ad hoc way to bundle
-dependencies, but this technique is brittle.
-
--->
-実際に、これらはアドホックな依存性をバンドルするために用いられています。
-しかしこれらのテクニックはとても不安定です。
-
-##### Zero Isolation
-
-<!--
-
-There is (by regrettable design), only one `require.paths` array used by
-all modules.
-
-As a result, if one node program comes to rely on this behavior, it may
-permanently and subtly alter the behavior of all other node programs in
-the same process.  As the application stack grows, we tend to assemble
-functionality, and those parts interact in ways that are difficult to
-predict.
-
--->
-（残念なことに）たった一つの `require.paths` 配列が全てのモジュールによって使われるという設計になっています。
-
-その結果、もしある Node プログラムが上記の挙動を行っていたら、同じプロセス上にいる他の全ての Node プログラムの動作も永遠にそして微妙に変化させてしまいます。
-アプリケーションが成長するにつれ、私たちは機能をまとめていきますが、
-それらがどのように影響するかを予測するのが難しくなります。
+これらは主に歴史的な理由によるものです。
+あなたが依存するものはローカルの `node_modules` フォルダに置くことが
+強く推奨されます。それは素早くロードされ、確実です。
 
 ### Accessing the main module
 
@@ -651,41 +547,6 @@ The example module above could be structured like so:
   **実際には同期的です**。`define()` を使用してもこの事実は変わりません。
   Node はコールバックをすぐに実行します。
   それに応じてプログラムを設計してください。
-
-### Accessing the main module
-
-<!--
-
-When a file is run directly from Node, `require.main` is set to its
-`module`. That means that you can determine whether a file has been run
-directly by testing
-
--->
-ファイルが Node によって直接実行される場合、そのファイルの `module` が
-`require.main` に設定されます。
-これは、ファイルが直接実行されているかテストできることを意味します。
-
-    require.main === module
-
-<!--
-
-For a file `foo.js`, this will be `true` if run via `node foo.js`, but
-`false` if run by `require('./foo')`.
-
--->
-`foo.js` ファイルでは、`node foo.js` と実行された場合これは `true`
-となりますが、`require('./foo')` の場合は `false` となります。
-
-<!--
-
-Because `module` provides a `filename` property (normally equivalent to
-`__filename`), the entry point of the current application can be obtained
-by checking `require.main.filename`.
-
--->
-`module` は `filename` プロパティ (通常 `__filename` と同じです)
-を提供するので、現在のアプリケーションのエントリポイントを
-`require.main.filename` で得ることが出来ます。
 
 ## Addenda: Package Manager Tips
 

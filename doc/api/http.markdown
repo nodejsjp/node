@@ -88,19 +88,19 @@ per connection (in the case of keep-alive connections).
 
 ### Event: 'connection'
 
-`function (stream) { }`
+`function (socket) { }`
 
 <!--
 
- When a new TCP stream is established. `stream` is an object of type
- `net.Stream`. Usually users will not want to access this event. The
+ When a new TCP stream is established. `socket` is an object of type
+ `net.Socket`. Usually users will not want to access this event. The
  `stream` can also be accessed at `request.connection`.
 
 -->
 新しい TCP ストリームが確立した時。
-`stream` は `net.Stream` 型のオブジェクトです。
+`socket` は `net.Socket` 型のオブジェクトです。
 通常の利用者がこのイベントにアクセスしたくなることはないでしょう。
-`stream` は `request.connection` からアクセスすることもできます。
+`socket` は `request.connection` からアクセスすることもできます。
 
 ### Event: 'close'
 
@@ -521,10 +521,10 @@ Resumes a paused request.
 
 <!--
 
-The `net.Stream` object associated with the connection.
+The `net.Socket` object associated with the connection.
 
 -->
-コネクションに関連づけられた `net.Stream` オブジェクトです。
+コネクションに関連づけられた `net.Socket` オブジェクトです。
 
 
 <!--

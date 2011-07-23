@@ -19,5 +19,34 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-require.paths.unshift(__dirname);
-exports.bar = require('bar');
+var common = require('../common');
+var assert = require('assert');
+var path = require('path');
+var fs = require('fs');
+
+
+var filename = path.join(common.fixturesDir, 'watch.txt');
+fs.writeFileSync(filename, "hello");
+
+assert.throws(
+  function() {
+    fs.watchFile(filename);
+  },
+  function(e) {
+    return e.message === 'watchFile requires a listener function';
+  }
+);
+
+assert.doesNotThrow(
+  function() {
+    fs.watchFile(filename, function(curr, prev) {
+      fs.unwatchFile(filename);
+      fs.unlinkSync(filename);
+    });
+  }
+);
+
+setTimeout(function() {
+  fs.writeFileSync(filename, "world");
+}, 1000);
+

@@ -21,7 +21,7 @@
 CC = $(PREFIX)gcc
 AR = $(PREFIX)ar
 E=
-CSTDFLAG=--std=c89 -pedantic
+CSTDFLAG=--std=c89 -pedantic -Wall -Wextra -Wno-unused-parameter
 CFLAGS=-g
 CPPFLAGS += -Isrc/ev
 LINKFLAGS=-lm
@@ -65,6 +65,8 @@ endif
 ifneq (,$(findstring CYGWIN,$(uname_S)))
 EV_CONFIG=config_cygwin.h
 EIO_CONFIG=config_cygwin.h
+# We drop the --std=c89, it hides CLOCK_MONOTONIC on cygwin
+CSTDFLAG = -D_GNU_SOURCE
 CPPFLAGS += -Isrc/ares/config_cygwin
 LINKFLAGS+=
 UV_OS_FILE=uv-cygwin.c
