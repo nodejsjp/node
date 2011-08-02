@@ -706,6 +706,24 @@ The numeric representation of the remote port. For example,
 リモートポートの数値表現です。
 たとえば、`80` や `21`。
 
+#### socket.bytesRead
+
+<!--
+
+The amount of received bytes.
+
+-->
+受信したバイトの合計です。
+
+#### socket.bytesWritten
+
+<!--
+
+The amount of bytes sent.
+
+-->
+送信したバイトの合計です。
+
 
 #### Event: 'connect'
 
