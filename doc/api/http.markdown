@@ -94,7 +94,7 @@ per connection (in the case of keep-alive connections).
 
  When a new TCP stream is established. `socket` is an object of type
  `net.Socket`. Usually users will not want to access this event. The
- `stream` can also be accessed at `request.connection`.
+ `socket` can also be accessed at `request.connection`.
 
 -->
 新しい TCP ストリームが確立した時。
@@ -612,12 +612,15 @@ Note: that Content-Length is given in bytes not characters. The above example
 works because the string `'hello world'` contains only single byte characters.
 If the body contains higher coded characters then `Buffer.byteLength()`
 should be used to determine the number of bytes in a given encoding.
+And Node does not check whether Content-Length and the length of the body
+which has been transmitted are equal or not.
 
 -->
 注意: `Content-Length` は文字数ではなくバイト数で与えられます。
 上の例が動作するのは `'hello world'` という文字列が単一バイト文字だけを含むためです。
 もしボディがより上位にコード化された文字を含む場合は、
 指定したエンコーディングによるバイト数を得るために `Buffer.byteLength()` を使うべきです。
+Node は、Content-Length と実際に送信されたレスポンスボディの長さが等しいかどうかチェックしません。
 
 ### response.statusCode
 
@@ -638,6 +641,15 @@ Example:
 例:
 
     response.statusCode = 404;
+
+<!--
+
+After response header was sent to the client, this property indicates the
+status code which was sent out.
+
+-->
+レスポンスヘッダがクライアントに送信された後、
+このプロパティは送信されたステータスコードを示します。
 
 ### response.setHeader(name, value)
 
@@ -848,10 +860,10 @@ Options:
 - `path`: Request path. Should include query string and fragments if any.
    E.G. `'/index.html?page=12'`
 - `headers`: An object containing request headers.
-- `agent`: Controls `Agent` behavior. Possible values:
+- `agent`: Controls `Agent` behavior. When an Agent is used request will default to Connection:keep-alive. Possible values:
  - `undefined` (default): use default `Agent` for this host and port.
  - `Agent` object: explicitly use the passed in `Agent`.
- - `false`: explicitly generate a new `Agent` for this host and port. `Agent` will not be re-used.
+ - `false`: opts out of connection pooling with an Agent, defaults request to Connection:close.
 
 -->
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
@@ -862,12 +874,14 @@ Options:
 - `path`: リクエストのパス。問い合わせ文字列やフラグメントがあるなら含めるべきです。
    例. `'/index.html?page=12'`
 - `headers`: リクエストヘッダを含むオブジェクト。
-- `agent`: `Agent` の振る舞いを制御します。可能な値は:
+- `agent`: `Agent` の振る舞いを制御します。
+ リクエストが Connection:keep-alive の場合、デフォルトでエージェントが使用されます。
+ 可能な値は:
  - `undefined` (デフォルト): ホストとポートからデフォルトの `Agent` 
 を使用します。
  - `Agent`: オブジェクト: 明示的に渡された `Agent` を使用します。
- - `false`: このホストとポートの新しい `Agent` を新たに作成します。
- `Agent` は再利用されません。
+ - `false`: Agent によるコネクションプーリングを使用しません。
+ Connection:close の場合のデフォルトです。
 
 <!--
 
@@ -996,110 +1010,18 @@ Example:
 
 
 ## http.Agent
-## http.getAgent(options)
+
+## http.globalAgent
 
 <!--
-
-`http.request()` uses a special `Agent` for managing multiple connections to
-an HTTP server. Normally `Agent` instances should not be exposed to user
-code, however in certain situations it's useful to check the status of the
-agent. The `http.getAgent()` function allows you to access the agents.
-
+Global instance of Agent which is used as the default for all http client requests.
 -->
-`http.request()` は HTTP サーバへの複数のコネクションを管理する特別な `Agent` を使用します。
-通常 `Agent` インスタンスはユーザコードに出てきませんが、特定の状況ではエージェントの状態をチェックすることが役に立ちます。
-`http.getAgent()` 関数はエージェントへのアクセスを可能にします。
-
-<!--
-
-Options:
-
--->
-オプション:
-
-<!--
-
-- `host`: A domain name or IP address of the server to issue the request to.
-- `port`: Port of remote server.
-- `socketPath`: Unix Domain Socket (use one of host:port or socketPath)
-
--->
-- `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
-- `port`: リモートサーバのポート。
-- `soocketPath`: Unix ドメインソケット (host:port または socketPath のどちらか)
-
-### Event: 'upgrade'
-
-`function (response, socket, head) { }`
-
-<!--
-
-Emitted each time a server responds to a request with an upgrade. If this
-event isn't being listened for, clients receiving an upgrade header will have
-their connections closed.
-
--->
-サーバがアップグレード要求に応答する度に生成されます。
-このイベントが監視されていない場合、クライアントがアップグレードヘッダを受信するとそのコネクションはクローズされます。
-
-<!--
-
-A client server pair that show you how to listen for the `upgrade` event using `http.getAgent`:
--->
-`http.getAget` を使ってどのように `upgrade` イベントを監視するかを示す、
-クライアントとサーバのペア:
-
-    var http = require('http');
-    var net = require('net');
-
-    // Create an HTTP server
-    var srv = http.createServer(function (req, res) {
-      res.writeHead(200, {'Content-Type': 'text/plain'});
-      res.end('okay');
-    });
-    srv.on('upgrade', function(req, socket, upgradeHead) {
-      socket.write('HTTP/1.1 101 Web Socket Protocol Handshake\r\n' +
-                   'Upgrade: WebSocket\r\n' +
-                   'Connection: Upgrade\r\n' +
-                   '\r\n\r\n');
-
-      socket.ondata = function(data, start, end) {
-        socket.write(data.toString('utf8', start, end), 'utf8'); // echo back
-      };
-    });
-
-    // now that server is running
-    srv.listen(1337, '127.0.0.1', function() {
-
-      // make a request
-      var agent = http.getAgent('127.0.0.1', 1337);
-
-      var options = {
-        agent: agent,
-        port: 1337,
-        host: '127.0.0.1',
-        headers: {
-          'Connection': 'Upgrade',
-          'Upgrade': 'websocket'
-        }
-      };
-
-      var req = http.request(options);
-      req.end();
-
-      agent.on('upgrade', function(res, socket, upgradeHead) {
-        console.log('got upgraded!');
-        socket.end();
-        process.exit(0);
-      });
-    });
+全ての HTTP クライアントリクエストで使用される、デフォルトの Agent のインスタンスです。
 
 ### agent.maxSockets
 
 <!--
-
-By default set to 5. Determines how many concurrent sockets the agent can have open.
-
+By default set to 5. Determines how many concurrent sockets the agent can have open per host.
 -->
 デフォルトでは 5 に設定されます。
 エージェントがいくつのソケットを並行にオープンするかを決定します。
@@ -1107,21 +1029,19 @@ By default set to 5. Determines how many concurrent sockets the agent can have o
 ### agent.sockets
 
 <!--
-
-An array of sockets currently in use by the Agent. Do not modify.
-
+An object which contains arrays of sockets currently in use by the Agent. Do not modify.
 -->
 エージェントが現在使っているソケットの配列です。
 変更しないでください。
 
-### agent.queue
+### agent.requests
 
 <!--
-
-A queue of requests waiting to be sent to sockets.
-
+An object which contains queues of requests that have not yet been assigned to sockets. Do not modify.
 -->
-ソケットへの送信を待機しているリクエストのキューです。
+まだソケットが割り当てられていないリクエストのキューを含むオブジェクトです。
+変更しないでください。
+
 
 ## http.ClientRequest
 
@@ -1188,9 +1108,12 @@ event, the entire body will be caught.
 <!--
 
 This is a `Writable Stream`.
+Note: Node does not check whether Content-Length and the length of the body
+which has been transmitted are equal or not.
 
 -->
 これは `Writable Stream` です。
+注意: Node は Content-Length と実際に送信されたリクエストボディの長さが等しいかどうかチェックしません。
 
 <!--
 
@@ -1198,21 +1121,6 @@ This is an `EventEmitter` with the following events:
 
 -->
 これは以下のイベントを持つ `EventEmitter` です。
-
-### Event: 'continue'
-
-`function () { }`
-
-<!--
-
-Emitted when the server sends a '100 Continue' HTTP response, usually because
-the request contained 'Expect: 100-continue'. This is an instruction that
-the client should send the request body.
-
--->
-通常、リクエストが 'Expect: 100-continue' を含んでいたことにより、
-サーバが '100 Continue' HTTP レスポンスを送信することで生成されます。
-これはクライアントがリクエストボディを送信すべき事を示します。
 
 ### Event 'response'
 
@@ -1228,6 +1136,114 @@ Emitted when a response is received to this request. This event is emitted only 
 このイベントは一回だけ生成されます。
 `response` 引数は `http.ClientResponse` のインスタンスです。
 
+<!--
+
+Options:
+
+-->
+オプション:
+
+<!--
+
+- `host`: A domain name or IP address of the server to issue the request to.
+- `port`: Port of remote server.
+- `socketPath`: Unix Domain Socket (use one of host:port or socketPath)
+
+-->
+- `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
+- `port`: リモートサーバのポート。
+- `soocketPath`: Unix ドメインソケット (host:port または socketPath のどちらか)
+
+### Event: 'socket'
+
+`function (socket) { }`
+
+<!--
+
+Emitted after a socket is assigned to this request.
+
+-->
+このリクエストにソケットが割り当てられた後に生成されます。
+
+### Event: 'upgrade'
+
+`function (response, socket, head) { }`
+
+<!--
+
+Emitted each time a server responds to a request with an upgrade. If this
+event isn't being listened for, clients receiving an upgrade header will have
+their connections closed.
+
+-->
+サーバがアップグレード要求に応答する度に生成されます。
+このイベントが監視されていない場合、クライアントがアップグレードヘッダを受信するとそのコネクションはクローズされます。
+
+<!--
+
+A client server pair that show you how to listen for the `upgrade` event using `http.getAgent`:
+
+-->
+`http.getAget` を使ってどのように `upgrade` イベントを監視するかを示す、
+クライアントとサーバのペア:
+
+    var http = require('http');
+    var net = require('net');
+
+    // Create an HTTP server
+    var srv = http.createServer(function (req, res) {
+      res.writeHead(200, {'Content-Type': 'text/plain'});
+      res.end('okay');
+    });
+    srv.on('upgrade', function(req, socket, upgradeHead) {
+      socket.write('HTTP/1.1 101 Web Socket Protocol Handshake\r\n' +
+                   'Upgrade: WebSocket\r\n' +
+                   'Connection: Upgrade\r\n' +
+                   '\r\n\r\n');
+
+      socket.ondata = function(data, start, end) {
+        socket.write(data.toString('utf8', start, end), 'utf8'); // echo back
+      };
+    });
+
+    // now that server is running
+    srv.listen(1337, '127.0.0.1', function() {
+
+      // make a request
+      var options = {
+        port: 1337,
+        host: '127.0.0.1',
+        headers: {
+          'Connection': 'Upgrade',
+          'Upgrade': 'websocket'
+        }
+      };
+
+      var req = http.request(options);
+      req.end();
+
+      req.on('upgrade', function(res, socket, upgradeHead) {
+        console.log('got upgraded!');
+        socket.end();
+        process.exit(0);
+      });
+    });
+
+
+### Event: 'continue'
+
+`function ()`
+
+<!--
+
+Emitted when the server sends a '100 Continue' HTTP response, usually because
+the request contained 'Expect: 100-continue'. This is an instruction that
+the client should send the request body.
+
+-->
+通常、リクエストが 'Expect: 100-continue' を含んでいたことにより、
+サーバが '100 Continue' HTTP レスポンスを送信することで生成されます。
+これはクライアントがリクエストボディを送信すべき事を示します。
 
 ### request.write(chunk, encoding='utf8')
 

@@ -41,6 +41,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <limits.h> /* PATH_MAX */
+#include <sys/uio.h> /* writev */
+
+#ifdef __sun
+# include <sys/types.h>
+# include <sys/wait.h>
+#endif
 
 #if defined(__APPLE__)
 #include <mach-o/dyld.h> /* _NSGetExecutablePath */
@@ -50,6 +56,13 @@
 #include <sys/sysctl.h>
 #endif
 
+
+# ifdef __APPLE__
+# include <crt_externs.h>
+# define environ (*_NSGetEnviron())
+# else
+extern char **environ;
+# endif
 
 static uv_err_t last_err;
 
@@ -65,13 +78,15 @@ struct uv_ares_data_s {
 
 static struct uv_ares_data_s ares_data;
 
-
 void uv__req_init(uv_req_t*);
 void uv__next(EV_P_ ev_idle* watcher, int revents);
-static int uv__stream_open(uv_stream_t*, int fd);
+static int uv__stream_open(uv_stream_t*, int fd, int flags);
 static void uv__finish_close(uv_handle_t* handle);
 static uv_err_t uv_err_new(uv_handle_t* handle, int sys_error);
 
+static int uv_tcp_listen(uv_tcp_t* tcp, int backlog, uv_connection_cb cb);
+static int uv_pipe_listen(uv_pipe_t* handle, int backlog, uv_connection_cb cb);
+static int uv_pipe_cleanup(uv_pipe_t* handle);
 static uv_write_t* uv__write(uv_stream_t* stream);
 static void uv__read(uv_stream_t* stream);
 static void uv__stream_connect(uv_stream_t*);
@@ -99,7 +114,9 @@ enum {
   UV_CLOSED   = 0x00000002, /* close(2) finished. */
   UV_READING  = 0x00000004, /* uv_read_start() called. */
   UV_SHUTTING = 0x00000008, /* uv_shutdown() called but not complete. */
-  UV_SHUT     = 0x00000010  /* Write side closed. */
+  UV_SHUT     = 0x00000010, /* Write side closed. */
+  UV_READABLE = 0x00000020, /* The stream is readable */
+  UV_WRITABLE = 0x00000040  /* The stream is writable */
 };
 
 
@@ -192,6 +209,7 @@ void uv_close(uv_handle_t* handle, uv_close_cb close_cb) {
   uv_pipe_t* pipe;
   uv_async_t* async;
   uv_timer_t* timer;
+  uv_process_t* process;
 
   handle->close_cb = close_cb;
 
@@ -230,18 +248,14 @@ void uv_close(uv_handle_t* handle, uv_close_cb close_cb) {
 
     case UV_NAMED_PIPE:
       pipe = (uv_pipe_t*)handle;
-      if (pipe->pipe_fname) {
-        /*
-         * Unlink the file system entity before closing the file descriptor.
-         * Doing it the other way around introduces a race where our process
-         * unlinks a socket with the same name that's just been created by
-         * another thread or process.
-         */
-        unlink(pipe->pipe_fname);
-        free((void*)pipe->pipe_fname);
-      }
-      uv_read_stop((uv_stream_t*)pipe);
+      uv_pipe_cleanup(pipe);
+      uv_read_stop((uv_stream_t*)handle);
       ev_io_stop(EV_DEFAULT_ &pipe->write_watcher);
+      break;
+
+    case UV_PROCESS:
+      process = (uv_process_t*)handle;
+      ev_child_stop(EV_DEFAULT_UC_ &process->child_watcher);
       break;
 
     default:
@@ -314,7 +328,8 @@ int uv_tcp_init(uv_tcp_t* tcp) {
 }
 
 
-int uv__bind(uv_tcp_t* tcp, int domain, struct sockaddr* addr, int addrsize) {
+static int uv__bind(uv_tcp_t* tcp, int domain, struct sockaddr* addr,
+    int addrsize) {
   int saved_errno;
   int status;
   int fd;
@@ -328,7 +343,7 @@ int uv__bind(uv_tcp_t* tcp, int domain, struct sockaddr* addr, int addrsize) {
       goto out;
     }
 
-    if (uv__stream_open((uv_stream_t*)tcp, fd)) {
+    if (uv__stream_open((uv_stream_t*)tcp, fd, UV_READABLE | UV_WRITABLE)) {
       status = -2;
       uv__close(fd);
       goto out;
@@ -360,7 +375,8 @@ int uv_tcp_bind(uv_tcp_t* tcp, struct sockaddr_in addr) {
     return -1;
   }
 
-  return uv__bind(tcp, AF_INET, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));
+  return uv__bind(tcp, AF_INET, (struct sockaddr*)&addr,
+      sizeof(struct sockaddr_in));
 }
 
 
@@ -370,15 +386,18 @@ int uv_tcp_bind6(uv_tcp_t* tcp, struct sockaddr_in6 addr) {
     return -1;
   }
 
-  return uv__bind(tcp, AF_INET6, (struct sockaddr*)&addr, sizeof(struct sockaddr_in6));
+  return uv__bind(tcp, AF_INET6, (struct sockaddr*)&addr,
+      sizeof(struct sockaddr_in6));
 }
 
 
-static int uv__stream_open(uv_stream_t* stream, int fd) {
+static int uv__stream_open(uv_stream_t* stream, int fd, int flags) {
   socklen_t yes;
 
   assert(fd >= 0);
   stream->fd = fd;
+
+  uv_flag_set((uv_handle_t*)stream, flags);
 
   /* Reuse the port address if applicable. */
   yes = 1;
@@ -429,12 +448,12 @@ void uv__server_io(EV_P_ ev_io* watcher, int revents) {
         return;
       } else {
         uv_err_new((uv_handle_t*)stream, errno);
-        stream->connection_cb((uv_handle_t*)stream, -1);
+        stream->connection_cb((uv_stream_t*)stream, -1);
       }
 
     } else {
       stream->accepted_fd = fd;
-      stream->connection_cb((uv_handle_t*)stream, 0);
+      stream->connection_cb((uv_stream_t*)stream, 0);
       if (stream->accepted_fd >= 0) {
         /* The user hasn't yet accepted called uv_accept() */
         ev_io_stop(EV_DEFAULT_ &stream->read_watcher);
@@ -445,7 +464,7 @@ void uv__server_io(EV_P_ ev_io* watcher, int revents) {
 }
 
 
-int uv_accept(uv_handle_t* server, uv_stream_t* client) {
+int uv_accept(uv_stream_t* server, uv_stream_t* client) {
   uv_stream_t* streamServer;
   uv_stream_t* streamClient;
   int saved_errno;
@@ -458,11 +477,12 @@ int uv_accept(uv_handle_t* server, uv_stream_t* client) {
   streamClient = (uv_stream_t*)client;
 
   if (streamServer->accepted_fd < 0) {
-    uv_err_new(server, EAGAIN);
+    uv_err_new((uv_handle_t*)server, EAGAIN);
     goto out;
   }
 
-  if (uv__stream_open(streamClient, streamServer->accepted_fd)) {
+  if (uv__stream_open(streamClient, streamServer->accepted_fd,
+        UV_READABLE | UV_WRITABLE)) {
     /* TODO handle error */
     streamServer->accepted_fd = -1;
     uv__close(streamServer->accepted_fd);
@@ -479,7 +499,20 @@ out:
 }
 
 
-int uv_tcp_listen(uv_tcp_t* tcp, int backlog, uv_connection_cb cb) {
+int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb) {
+  switch (stream->type) {
+    case UV_TCP:
+      return uv_tcp_listen((uv_tcp_t*)stream, backlog, cb);
+    case UV_NAMED_PIPE:
+      return uv_pipe_listen((uv_pipe_t*)stream, backlog, cb);
+    default:
+      assert(0);
+      return -1;
+  }
+}
+
+
+static int uv_tcp_listen(uv_tcp_t* tcp, int backlog, uv_connection_cb cb) {
   int r;
   int fd;
 
@@ -494,7 +527,7 @@ int uv_tcp_listen(uv_tcp_t* tcp, int backlog, uv_connection_cb cb) {
       return -1;
     }
 
-    if (uv__stream_open((uv_stream_t*)tcp, fd)) {
+    if (uv__stream_open((uv_stream_t*)tcp, fd, UV_READABLE)) {
       uv__close(fd);
       return -1;
     }
@@ -564,6 +597,10 @@ void uv__finish_close(uv_handle_t* handle) {
       }
       break;
     }
+
+    case UV_PROCESS:
+      assert(!ev_is_active(&((uv_process_t*)handle)->child_watcher));
+      break;
 
     default:
       assert(0);
@@ -838,29 +875,30 @@ static void uv__read(uv_stream_t* stream) {
 }
 
 
-int uv_shutdown(uv_shutdown_t* req, uv_stream_t* handle, uv_shutdown_cb cb) {
-  uv_tcp_t* tcp = (uv_tcp_t*)handle;
-  assert((handle->type == UV_TCP || handle->type == UV_NAMED_PIPE)
-      && "uv_shutdown (unix) only supports uv_tcp_t right now");
-  assert(tcp->fd >= 0);
+int uv_shutdown(uv_shutdown_t* req, uv_stream_t* stream, uv_shutdown_cb cb) {
+  assert((stream->type == UV_TCP || stream->type == UV_NAMED_PIPE) &&
+         "uv_shutdown (unix) only supports uv_handle_t right now");
+  assert(stream->fd >= 0);
 
-  /* Initialize request */
-  uv__req_init((uv_req_t*)req);
-  req->handle = handle;
-  req->cb = cb;
-
-  if (uv_flag_is_set((uv_handle_t*)tcp, UV_SHUT) ||
-      uv_flag_is_set((uv_handle_t*)tcp, UV_CLOSED) ||
-      uv_flag_is_set((uv_handle_t*)tcp, UV_CLOSING)) {
+  if (!uv_flag_is_set((uv_handle_t*)stream, UV_WRITABLE) ||
+      uv_flag_is_set((uv_handle_t*)stream, UV_SHUT) ||
+      uv_flag_is_set((uv_handle_t*)stream, UV_CLOSED) ||
+      uv_flag_is_set((uv_handle_t*)stream, UV_CLOSING)) {
+    uv_err_new((uv_handle_t*)stream, EINVAL);
     return -1;
   }
 
-  tcp->shutdown_req = req;
+  /* Initialize request */
+  uv__req_init((uv_req_t*)req);
+  req->handle = stream;
+  req->cb = cb;
+
+  stream->shutdown_req = req;
   req->type = UV_SHUTDOWN;
 
-  uv_flag_set((uv_handle_t*)tcp, UV_SHUTTING);
+  uv_flag_set((uv_handle_t*)stream, UV_SHUTTING);
 
-  ev_io_start(EV_DEFAULT_UC_ &tcp->write_watcher);
+  ev_io_start(EV_DEFAULT_UC_ &stream->write_watcher);
 
   return 0;
 }
@@ -969,7 +1007,7 @@ static int uv__connect(uv_connect_t* req,
       return -1;
     }
 
-    if (uv__stream_open(stream, sockfd)) {
+    if (uv__stream_open(stream, sockfd, UV_READABLE | UV_WRITABLE)) {
       uv__close(sockfd);
       return -2;
     }
@@ -1544,7 +1582,7 @@ int64_t uv_timer_get_repeat(uv_timer_t* timer) {
 
 
 /*
- * This is called once per second by ares_data.timer. It is used to 
+ * This is called once per second by ares_data.timer. It is used to
  * constantly callback into c-ares for possibly processing timeouts.
  */
 static void uv__ares_timeout(EV_P_ struct ev_timer* watcher, int revents) {
@@ -1777,6 +1815,7 @@ int uv_pipe_init(uv_pipe_t* handle) {
   ev_init(&handle->read_watcher, uv__stream_io);
   handle->write_watcher.data = handle;
   handle->read_watcher.data = handle;
+  handle->accepted_fd = -1;
   handle->fd = -1;
 
   ngx_queue_init(&handle->write_completed_queue);
@@ -1790,6 +1829,7 @@ int uv_pipe_bind(uv_pipe_t* handle, const char* name) {
   struct sockaddr_un sun;
   const char* pipe_fname;
   int saved_errno;
+  int locked;
   int sockfd;
   int status;
   int bound;
@@ -1825,17 +1865,13 @@ int uv_pipe_bind(uv_pipe_t* handle, const char* name) {
   sun.sun_family = AF_UNIX;
 
   if (bind(sockfd, (struct sockaddr*)&sun, sizeof sun) == -1) {
-#ifdef DONT_RACE_ME_BRO
-    /*
-     * Try to bind the socket. Note that we explicitly don't act
-     * on EADDRINUSE. Unlinking and trying to bind again opens
-     * a window for races with other threads and processes.
-     */
-    uv_err_new((uv_handle_t*)handle, (errno == ENOENT) ? EACCES : errno);
-    goto out;
-#else
-    /*
-     * Try to re-purpose the socket. This is a potential race window.
+    /* On EADDRINUSE:
+     *
+     * We hold the file lock so there is no other process listening
+     * on the socket. Ergo, it's stale - remove it.
+     *
+     * This assumes that the other process uses locking too
+     * but that's a good enough assumption for now.
      */
     if (errno != EADDRINUSE
         || unlink(pipe_fname) == -1
@@ -1844,7 +1880,6 @@ int uv_pipe_bind(uv_pipe_t* handle, const char* name) {
       uv_err_new((uv_handle_t*)handle, (errno == ENOENT) ? EACCES : errno);
       goto out;
     }
-#endif
   }
   bound = 1;
 
@@ -1862,6 +1897,7 @@ out:
       unlink(pipe_fname);
     }
     uv__close(sockfd);
+
     free((void*)pipe_fname);
   }
 
@@ -1870,7 +1906,7 @@ out:
 }
 
 
-int uv_pipe_listen(uv_pipe_t* handle, uv_connection_cb cb) {
+static int uv_pipe_listen(uv_pipe_t* handle, int backlog, uv_connection_cb cb) {
   int saved_errno;
   int status;
 
@@ -1878,12 +1914,12 @@ int uv_pipe_listen(uv_pipe_t* handle, uv_connection_cb cb) {
   status = -1;
 
   if (handle->fd == -1) {
-    uv_err_new_artificial((uv_handle_t*)handle, UV_ENOTCONN);
+    uv_err_new_artificial((uv_handle_t*)handle, UV_EINVAL);
     goto out;
   }
   assert(handle->fd >= 0);
 
-  if ((status = listen(handle->fd, SOMAXCONN)) == -1) {
+  if ((status = listen(handle->fd, backlog)) == -1) {
     uv_err_new((uv_handle_t*)handle, errno);
   } else {
     handle->connection_cb = cb;
@@ -1892,6 +1928,32 @@ int uv_pipe_listen(uv_pipe_t* handle, uv_connection_cb cb) {
   }
 
 out:
+  errno = saved_errno;
+  return status;
+}
+
+
+static int uv_pipe_cleanup(uv_pipe_t* handle) {
+  int saved_errno;
+  int status;
+
+  saved_errno = errno;
+  status = -1;
+
+  if (handle->pipe_fname) {
+    /*
+     * Unlink the file system entity before closing the file descriptor.
+     * Doing it the other way around introduces a race where our process
+     * unlinks a socket with the same name that's just been created by
+     * another thread or process.
+     *
+     * This is less of an issue now that we attach a file lock
+     * to the socket but it's still a best practice.
+     */
+    unlink(handle->pipe_fname);
+    free((void*)handle->pipe_fname);
+  }
+
   errno = saved_errno;
   return status;
 }
@@ -1984,7 +2046,7 @@ static void uv__pipe_accept(EV_P_ ev_io* watcher, int revents) {
     }
   } else {
     pipe->accepted_fd = sockfd;
-    pipe->connection_cb((uv_handle_t*)pipe, 0);
+    pipe->connection_cb((uv_stream_t*)pipe, 0);
     if (pipe->accepted_fd == sockfd) {
       /* The user hasn't yet accepted called uv_accept() */
       ev_io_stop(EV_DEFAULT_ &pipe->read_watcher);
@@ -2113,4 +2175,183 @@ size_t uv__strlcpy(char* dst, const char* src, size_t size) {
   *dst = '\0';
 
   return src - org;
+}
+
+
+uv_stream_t* uv_std_handle(uv_std_type type) {
+  assert(0 && "implement me");
+  return NULL;
+}
+
+
+static void uv__chld(EV_P_ ev_child* watcher, int revents) {
+  int status = watcher->rstatus;
+  int exit_status = 0;
+  int term_signal = 0;
+  uv_process_t *process = watcher->data;
+
+  assert(&process->child_watcher == watcher);
+  assert(revents & EV_CHILD);
+
+  ev_child_stop(EV_A_ &process->child_watcher);
+
+  if (WIFEXITED(status)) {
+    exit_status = WEXITSTATUS(status);
+  }
+
+  if (WIFSIGNALED(status)) {
+    term_signal = WTERMSIG(status);
+  }
+
+  if (process->exit_cb) {
+    process->exit_cb(process, exit_status, term_signal);
+  }
+}
+
+
+int uv_spawn(uv_process_t* process, uv_process_options_t options) {
+  /*
+   * Save environ in the case that we get it clobbered
+   * by the child process.
+   */
+  char** save_our_env = environ;
+  int stdin_pipe[2] = { -1, -1 };
+  int stdout_pipe[2] = { -1, -1 };
+  int stderr_pipe[2] = { -1, -1 };
+  pid_t pid;
+
+  uv__handle_init((uv_handle_t*)process, UV_PROCESS);
+  uv_counters()->process_init++;
+
+  process->exit_cb = options.exit_cb;
+
+  if (options.stdin_stream) {
+    if (options.stdin_stream->type != UV_NAMED_PIPE) {
+      errno = EINVAL;
+      goto error;
+    }
+
+    if (pipe(stdin_pipe) < 0) {
+      goto error;
+    }
+  }
+
+  if (options.stdout_stream) {
+    if (options.stdout_stream->type != UV_NAMED_PIPE) {
+      errno = EINVAL;
+      goto error;
+    }
+
+    if (pipe(stdout_pipe) < 0) {
+      goto error;
+    }
+  }
+
+  if (options.stderr_stream) {
+    if (options.stderr_stream->type != UV_NAMED_PIPE) {
+      errno = EINVAL;
+      goto error;
+    }
+
+    if (pipe(stderr_pipe) < 0) {
+      goto error;
+    }
+  }
+
+  pid = fork();
+
+  if (pid == 0) {
+    if (stdin_pipe[0] >= 0) {
+      uv__close(stdin_pipe[1]);
+      dup2(stdin_pipe[0],  STDIN_FILENO);
+    }
+
+    if (stdout_pipe[1] >= 0) {
+      uv__close(stdout_pipe[0]);
+      dup2(stdout_pipe[1], STDOUT_FILENO);
+    }
+
+    if (stderr_pipe[1] >= 0) {
+      uv__close(stderr_pipe[0]);
+      dup2(stderr_pipe[1], STDERR_FILENO);
+    }
+
+    if (options.cwd && chdir(options.cwd)) {
+      perror("chdir()");
+      _exit(127);
+    }
+
+    environ = options.env;
+
+    execvp(options.file, options.args);
+    perror("execvp()");
+    _exit(127);
+    /* Execution never reaches here. */
+  } else if (pid == -1) {
+    /* Restore environment. */
+    environ = save_our_env;
+    goto error;
+  }
+
+  /* Parent. */
+
+  /* Restore environment. */
+  environ = save_our_env;
+
+  process->pid = pid;
+
+  ev_child_init(&process->child_watcher, uv__chld, pid, 0);
+  ev_child_start(EV_DEFAULT_UC_ &process->child_watcher);
+  process->child_watcher.data = process;
+
+  if (stdin_pipe[1] >= 0) {
+    assert(options.stdin_stream);
+    assert(stdin_pipe[0] >= 0);
+    uv__close(stdin_pipe[0]);
+    uv__nonblock(stdin_pipe[1], 1);
+    uv__stream_open((uv_stream_t*)options.stdin_stream, stdin_pipe[1],
+        UV_WRITABLE);
+  }
+
+  if (stdout_pipe[0] >= 0) {
+    assert(options.stdout_stream);
+    assert(stdout_pipe[1] >= 0);
+    uv__close(stdout_pipe[1]);
+    uv__nonblock(stdout_pipe[0], 1);
+    uv__stream_open((uv_stream_t*)options.stdout_stream, stdout_pipe[0],
+        UV_READABLE);
+  }
+
+  if (stderr_pipe[0] >= 0) {
+    assert(options.stderr_stream);
+    assert(stderr_pipe[1] >= 0);
+    uv__close(stderr_pipe[1]);
+    uv__nonblock(stderr_pipe[0], 1);
+    uv__stream_open((uv_stream_t*)options.stderr_stream, stderr_pipe[0],
+        UV_READABLE);
+  }
+
+  return 0;
+
+error:
+  uv_err_new((uv_handle_t*)process, errno);
+  uv__close(stdin_pipe[0]);
+  uv__close(stdin_pipe[1]);
+  uv__close(stdout_pipe[0]);
+  uv__close(stdout_pipe[1]);
+  uv__close(stderr_pipe[0]);
+  uv__close(stderr_pipe[1]);
+  return -1;
+}
+
+
+int uv_process_kill(uv_process_t* process, int signum) {
+  int r = kill(process->pid, signum);
+
+  if (r) {
+    uv_err_new((uv_handle_t*)process, errno);
+    return -1;
+  } else {
+    return 0;
+  }
 }

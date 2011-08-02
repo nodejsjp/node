@@ -204,6 +204,23 @@ def set_options(opt):
                 , dest='dest_cpu'
                 )
 
+def get_node_version():
+  def get_define_value(lines, define):
+    for line in lines:
+      if define in line:
+        return line.split()[-1] #define <NAME> <VALUE>
+
+  lines = open("src/node_version.h").readlines()
+  node_major_version = get_define_value(lines, 'NODE_MAJOR_VERSION')
+  node_minor_version = get_define_value(lines, 'NODE_MINOR_VERSION')
+  node_patch_version = get_define_value(lines, 'NODE_PATCH_VERSION')
+  node_is_release    = get_define_value(lines, 'NODE_VERSION_IS_RELEASE')
+
+  return "%s.%s.%s%s" % ( node_major_version,
+                           node_minor_version,
+                           node_patch_version,
+                           "-pre" if node_is_release == "0" else ""
+                         )
 
 
 
@@ -850,11 +867,12 @@ def build(bld):
     src/tcp_wrap.cc
     src/pipe_wrap.cc
     src/cares_wrap.cc
+    src/stdio_wrap.cc
+    src/process_wrap.cc
   """
 
   if sys.platform.startswith("win32"):
     node.source += " src/node_stdio_win32.cc "
-    node.source += " src/node_child_process_win32.cc "
   else:
     node.source += " src/node_cares.cc "
     node.source += " src/node_net.cc "
@@ -897,7 +915,7 @@ def build(bld):
         , 'CPPFLAGS'  : " ".join(program.env["CPPFLAGS"]).replace('"', '\\"')
         , 'LIBFLAGS'  : " ".join(program.env["LIBFLAGS"]).replace('"', '\\"')
         , 'PREFIX'    : safe_path(program.env["PREFIX"])
-        , 'VERSION'   : '0.5.2' # FIXME should not be hard-coded, see NODE_VERSION_STRING in src/node_version.
+        , 'VERSION'   : get_node_version()
         }
     return x
 
@@ -937,14 +955,6 @@ def build(bld):
   bld.install_files('${PREFIX}/bin/', 'tools/node-waf', chmod=0755)
   bld.install_files('${LIBDIR}/node/wafadmin', 'tools/wafadmin/*.py')
   bld.install_files('${LIBDIR}/node/wafadmin/Tools', 'tools/wafadmin/Tools/*.py')
-
-  # create a pkg-config(1) file
-  node_conf = bld.new_task_gen('subst', before="cxx")
-  node_conf.source = 'tools/nodejs.pc.in'
-  node_conf.target = 'tools/nodejs.pc'
-  node_conf.dict = subflags(node)
-
-  bld.install_files('${LIBDIR}/pkgconfig', 'tools/nodejs.pc')
 
 def shutdown():
   Options.options.debug
