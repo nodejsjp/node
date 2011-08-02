@@ -442,7 +442,7 @@ node は他で見つからなかったモジュールをそれらのパスから
 
 <!--
 
-Where `$HOME` is the user's home directory, and `PREFIX` is node's
+Where `$HOME` is the user's home directory, and `$PREFIX` is node's
 configured `installPrefix`.
 
 These are mostly for historic reasons.  You are highly encouraged to
@@ -488,65 +488,6 @@ by checking `require.main.filename`.
 `module` は `filename` プロパティ (通常 `__filename` と同じです) 
 を提供するため、現在のアプリケーションのエントリポイントは
 `require.main.filename` をチェックすることで得ることができます。
-
-## AMD Compatibility
-
-<!--
-
-Node's modules have access to a function named `define`, which may be
-used to specify the module's return value.  This is not necessary in node
-programs, but is present in the node API in order to provide
-compatibility with module loaders that use the Asynchronous Module
-Definition pattern.
-
--->
-Node のモジュールは `define` という名前の関数にアクセスできます。
-それはモジュールの戻り値を指定するために使われます。
-これは node プログラムには必要ありませんが、Asynchronous Module Definition
-パターンを使用するモジュールローダとの互換性を提供するために
-node API に存在しています。
-
-<!--
-
-The example module above could be structured like so:
-
--->
-上記の例のモジュールは次のように構築することが出来ます。
-
-    define(function (require, exports, module) {
-      var PI = Math.PI;
-
-      exports.area = function (r) {
-        return PI * r * r;
-      };
-
-      exports.circumference = function (r) {
-        return 2 * PI * r;
-      };
-    });
-
-<!--
-
-* Only the last argument to `define()` matters.  Other module loaders
-  sometimes use a `define(id, [deps], cb)` pattern, but since this is
-  not relevant in node programs, the other arguments are ignored.
-* If the `define` callback returns a value other than `undefined`, then
-  that value is assigned to `module.exports`.
-* **Important**: Despite being called "AMD", the node module loader **is
-  in fact synchronous**, and using `define()` does not change this fact.
-  Node executes the callback immediately, so please plan your programs
-  accordingly.
-
--->
-* `define()` の最後の引数だけが重要です。他のモジュールローダによっては
-  `define(id, [deps], cb)` パターンを使用しますが、
-  node プログラムには関係がないので、その他の引数は無視されます。
-* `define` のコールバックが `undefined` 以外の値を返した場合、
-  その値は `module.exports` に割り当てられます。
-* **重要**: "AMD" と呼ばれるにも関わらず、node のモジュールローダは
-  **実際には同期的です**。`define()` を使用してもこの事実は変わりません。
-  Node はコールバックをすぐに実行します。
-  それに応じてプログラムを設計してください。
 
 ## Addenda: Package Manager Tips
 

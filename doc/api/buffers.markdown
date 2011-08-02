@@ -105,18 +105,17 @@ Allocates a new buffer containing the given `str`.
 -->
 与えられた `str` を内容とする新しいバッファを割り当てます。
 
-### buffer.write(string, offset=0, encoding='utf8')
-
+### buffer.write(string, offset=0, length=buffer.length-offset, encoding='utf8')
 <!--
 
-Writes `string` to the buffer at `offset` using the given encoding. Returns
-number of octets written.  If `buffer` did not contain enough space to fit
-the entire string, it will write a partial amount of the string.
-The method will not write partial characters.
+Writes `string` to the buffer at `offset` using the given encoding. `length` is
+the number of bytes to write. Returns number of octets written. If `buffer` did
+not contain enough space to fit the entire string, it will write a partial
+amount of the string. The method will not write partial characters.
 
 -->
 与えられたエンコーディングを使用して、`string` をバッファの `offset` から書き込みます。
-書き込まれたオクテット数を返します。
+`length` は書き込むバイト数です。書き込まれたオクテット数を返します。
 もし `buffer` が文字列全体を挿入するのに十分なスペースを含んでいなければ、文字列の一部だけを書き込みます。
 このメソッドは文字の一部だけを書き込むことはありません。
 
@@ -341,8 +340,8 @@ Example:
     buf[3] = 0x42;
 
     for (ii = 0; ii < buf.length; ii++) {
-      console.log(buf.readUInt8(ii, 'big');
-      console.log(buf.readUInt8(ii, 'little');
+      console.log(buf.readUInt8(ii, 'big'));
+      console.log(buf.readUInt8(ii, 'little'));
     }
 
     // 0x3
@@ -377,12 +376,12 @@ Example:
     buf[2] = 0x23;
     buf[3] = 0x42;
 
-    console.log(buf.readUInt16(0, 'big');
-    console.log(buf.readUInt16(0, 'little');
-    console.log(buf.readUInt16(1, 'big');
-    console.log(buf.readUInt16(1, 'little');
-    console.log(buf.readUInt16(2, 'big');
-    console.log(buf.readUInt16(2, 'little');
+    console.log(buf.readUInt16(0, 'big'));
+    console.log(buf.readUInt16(0, 'little'));
+    console.log(buf.readUInt16(1, 'big'));
+    console.log(buf.readUInt16(1, 'little'));
+    console.log(buf.readUInt16(2, 'big'));
+    console.log(buf.readUInt16(2, 'little'));
 
     // 0x0304
     // 0x0403
@@ -414,8 +413,8 @@ Example:
     buf[2] = 0x23;
     buf[3] = 0x42;
 
-    console.log(buf.readUInt32(0, 'big');
-    console.log(buf.readUInt32(0, 'little');
+    console.log(buf.readUInt32(0, 'big'));
+    console.log(buf.readUInt32(0, 'little'));
 
     // 0x03042342
     // 0x42230403
@@ -496,7 +495,7 @@ Example:
     buf[2] = 0x80;
     buf[3] = 0x3f;
 
-    console.log(buf.readFloat(0, 'little');
+    console.log(buf.readFloat(0, 'little'));
 
     // 0x01
 
@@ -527,7 +526,7 @@ Example:
     buf[6] = 0xd5;
     buf[7] = 0x3f;
 
-    console.log(buf.readDouble(0, 'little');
+    console.log(buf.readDouble(0, 'little'));
 
     // 0.3333333333333333
 

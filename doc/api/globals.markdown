@@ -92,27 +92,6 @@ value from this object, the next `require` will reload the module.
 このオブジェクトからキーと値を削除すると、次にそのモジュールが
 `require` されたときにリロードされます。
 
-### require.paths
-
-<!--
-
-An array of search paths for `require()`.  This array can be modified to add
-custom paths.
-
--->
-`require()` のためのサーチパスの配列です。
-この配列はカスタムパスを追加するために変更することができます。
-
-<!--
-
-Example: add a new path to the beginning of the search list
-
--->
-例: サーチリストの先頭に新しいパスを追加する
-
-    require.paths.unshift('/usr/local/node');
-
-
 ### __filename
 
 <!--

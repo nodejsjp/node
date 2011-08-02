@@ -121,9 +121,14 @@ This can be called many times with new data as it is streamed.
 Calculates the digest of all of the passed data to be hashed.
 The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
 
+Note: `hash` object can not be used after `digest()` method been called.
+
 -->
 渡された全てのデータがハッシュ化されたダイジェストを計算します。
 `encoding` は `'hex'`、`'binary'`、または `'base64'` のいずれかです。
+
+注意: `digest()` メソッドを呼び出した後で `hash` 
+オブジェクトを使うことはできません。
 
 
 ### crypto.createHmac(algorithm, key)
@@ -162,29 +167,53 @@ This can be called many times with new data as it is streamed.
 Calculates the digest of all of the passed data to the hmac.
 The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
 
+Note: `hmac` object can not be used after `digest()` method been called.
+
 -->
 渡された全てのデータが HMAC 化されたダイジェストを計算します。
 `encoding` は `'hex'`、`'binary'`、または `'base64'` のいずれかです。
 
+注意: `digest()` メソッドを呼び出した後で `hmac` 
+オブジェクトを使うことはできません。
 
-### crypto.createCipher(algorithm, key)
 
-<!--
-
-Creates and returns a cipher object, with the given algorithm and key.
-
--->
-与えられたアルゴリズムとキーを使用する暗号オブジェクトを作成して返します。
+### crypto.createCipher(algorithm, password)
 
 <!--
+
+Creates and returns a cipher object, with the given algorithm and password.
 
 `algorithm` is dependent on OpenSSL, examples are `'aes192'`, etc.
-On recent releases, `openssl list-cipher-algorithms` will display the available cipher algorithms.
+On recent releases, `openssl list-cipher-algorithms` will display the
+available cipher algorithms.
+`password` is used to derive key and IV, which must be `'binary'` encoded
+string (See the [Buffers](buffers.html) for more information).
 
 -->
+与えられたアルゴリズムとパスワードを使用する暗号オブジェクトを作成して返します。
 `algorithm` は、OpenSSL に依存します。例えば `'aes192'` などです。
 最近のリリースでは、`openssl list-cipher-algorithms`
 で利用可能な暗号アルゴリズムが表示されます。
+`password` はキーと IV の生成に使用されます。
+これは `'binary'` でエンコードされた文字列でなければなりません
+(より詳細は [Buffers](buffers.html) を参照してください)。
+
+### crypto.createCipheriv(algorithm, key, iv)
+
+<!--
+
+Creates and returns a cipher object, with the given algorithm, key and iv.
+
+`algorithm` is the same as the `createCipher()`. `key` is a raw key used in
+algorithm. `iv` is an Initialization vector. `key` and `iv` must be `'binary'`
+encoded string (See the [Buffers](buffers.html) for more information).
+
+-->
+与えられたアルゴリズムとキーおよび IV を使用する暗号オブジェクトを作成して返します。
+`algorithm` は `createCSipher()` と同じです。
+`key` はアルゴリズムで使用される生のキーです。 `iv` は初期化ベクトルです。
+`key` と `iv` は `'binary'` でエンコードされた文字列でなければなりません
+(より詳細は [Buffers](buffers.html) を参照してください)。
 
 ### cipher.update(data, input_encoding='binary', output_encoding='binary')
 
@@ -213,20 +242,37 @@ Returns the enciphered contents, and can be called many times with new data as i
 
 Returns any remaining enciphered contents, with `output_encoding` being one of: `'binary'`, `'base64'` or `'hex'`.
 
+Note: `cipher` object can not be used after `final()` method been called.
+
 -->
 暗号化されたコンテンツの残りを返します。
 `output_encoding` は次のいずれかです: `'binary'`、`'base64'` または `'hex'`
 
-### crypto.createDecipher(algorithm, key)
+注意: `final()` メソッドを呼び出した後で `cipher` 
+オブジェクトを使うことはできません。
+
+
+### crypto.createDecipher(algorithm, password)
 
 <!--
 
 Creates and returns a decipher object, with the given algorithm and key.
-This is the mirror of the cipher object above.
+This is the mirror of the [createCipher()](#crypto.createCipher) above.
 
 -->
-与えられたアルゴリズムとキーを使用する復号オブジェクトを作成して返します。
-これは前述の暗号オブジェクトの鏡写しです。
+与えられたアルゴリズムとパスワードを使用する復号オブジェクトを作成して返します。
+これは前述の [createCipher()](#crypto.createCipher) の鏡写しです。
+
+### crypto.createDecipheriv(algorithm, key, iv)
+
+<!--
+
+Creates and returns a decipher object, with the given algorithm, key and iv.
+This is the mirror of the [createCipheriv()](#crypto.createCipheriv) above.
+
+-->
+与えられたアルゴリズムとキー、IV を使用する復号オブジェクトを作成して返します。
+これは前述の [createCipheriv()](#crypto.createCipheriv) の鏡写しです。
 
 ### decipher.update(data, input_encoding='binary', output_encoding='binary')
 
@@ -247,9 +293,13 @@ The `output_decoding` specifies in what format to return the deciphered plaintex
 Returns any remaining plaintext which is deciphered,
 with `output_encoding` being one of: `'binary'`, `'ascii'` or `'utf8'`.
 
+Note: `decipher` object can not be used after `final()` method been called.
 -->
 復号化されたプレーンテキストの残りを返します。
 `output_decoding` は `'binary'`、`'ascii'` あるいは `'utf8'` のいずれかです。
+
+注意: `final()` メソッドを呼び出した後で `decipher` 
+オブジェクトを使うことはできません。
 
 
 ### crypto.createSign(algorithm)
@@ -291,8 +341,14 @@ Calculates the signature on all the updated data passed through the signer.
 
 Returns the signature in `output_format` which can be `'binary'`, `'hex'` or `'base64'`.
 
+Note: `signer` object can not be used after `sign()` method been called.
+
 -->
 `'binary'`、`'hex'`、あるいは `'base64'` のいずれかを指定した `output_format` による署名を返します。
+
+注意: `sign()` メソッドを呼び出した後で `signer` 
+オブジェクトを使うことはできません。
+
 
 ### crypto.createVerify(algorithm)
 
@@ -336,8 +392,14 @@ PEM でエンコードしたオブジェクトです。
 
 Returns true or false depending on the validity of the signature for the data and public key.
 
+Note: `verifier` object can not be used after `verify()` method been called.
+
 -->
 署名されたデータと公開鍵による検証の結果によって true または false を返します。
+
+注意: `verify()` メソッドを呼び出した後で `verifier` 
+オブジェクトを使うことはできません。
+
 
 ### crypto.createDiffieHellman(prime_length)
 
