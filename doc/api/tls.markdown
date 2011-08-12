@@ -94,6 +94,13 @@ defaults to `localhost`.) `options` should be an object which specifies
     omitted several well known "root" CAs will be used, like VeriSign.
     These are used to authorize connections.
 
+  - `NPNProtocols`: An array of string or `Buffer` containing supported NPN
+    protocols. `Buffer` should have following format: `0x04hello0x5world`, where
+    first byte is next protocol name's length. (Passing array should usually be
+    much simplier: `['hello', 'world']`.)
+
+  - `servername`: Servername for SNI (Server Name Indication) TLS extension.
+
 -->
   - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です (必須)。
 
@@ -102,6 +109,14 @@ defaults to `localhost`.) `options` should be an object which specifies
   - `ca`: 信頼できる証明書の文字列または `Buffer` の配列です。
     省略された場合、ベリサインなどのよく知られた「ルート」認証局が使われます。
     これらはコネクションの認証に使われます。
+
+  - `NPNProtocols`: サポートする NPN プロトコルの文字列または `Buffer` 
+    の配列です。
+    `Buffer` は次のような形式です: `0x05hello0x5world`
+    最初のバイトは次のプロトコル名の長さです
+    (通常、配列を渡す方がシンプルです: `['hello', 'world']`)。
+
+  - `servername`: TLS 拡張である SNI (Server Name Indication) のサーバ名です。
 
 <!--
 
@@ -116,7 +131,8 @@ After the TLS/SSL handshake the `callback` is called. The `callback` will be
 called no matter if the server's certificate was authorized or not. It is up
 to the user to test `s.authorized` to see if the server certificate was
 signed by one of the specified CAs. If `s.authorized === false` then the error
-can be found in `s.authorizationError`.
+can be found in `s.authorizationError`. Also if NPN was used - you can check
+`s.npnProtocol` for negotiated protocol.
 
 -->
 TLS/SSL ハンドシェークの後で `callback` が呼び出されます。
@@ -124,6 +140,8 @@ TLS/SSL ハンドシェークの後で `callback` が呼び出されます。
 サーバ証明書が指定した認証局に承認されたかチェックするために
 `s.authorized` を確認するかはユーザ次第です。
 `s.authorized === false`の場合、`s.authorizationError` からエラーを見つけることができます。
+同様に NPN が使われている場合は `s.npnProtocol` から合意されたプロトコルを
+チェックすることが出来ます。
 
 ### STARTTLS
 
@@ -146,6 +164,23 @@ v0.4 ブランチでは、既に存在する TCP コネクション上で TLS �
 平文のストリームはその後ユーザとのインタラクションで使われます。
 
 [ここにそのコードがあります。](http://gist.github.com/848444)
+
+### NPN and SNI
+
+<!--
+NPN (Next Protocol Negotitation) and SNI (Server Name Indication) are TLS
+handshake extensions allowing you:
+-->
+NPN (Next Protocol Negotitation) と SNI (Server Name Indication) は
+TLS の拡張で、以下を可能にします。
+
+<!--
+  * NPN - to use one TLS server for multiple protocols (HTTP, SPDY)
+  * SNI - to use one TLS server for multiple hostnames with different SSL
+    certificates.
+-->
+  * NPN - 一つの TLS サーバで複数のプロトコル (HTTP、SPDY) を使用。
+  * SNI - 一つの TLS サーバでホスト名の異なる複数の証明書を使用。
 
 ### tls.Server
 
@@ -223,6 +258,16 @@ has these possibilities:
     which is not authorized with the list of supplied CAs. This option only
     has an effect if `requestCert` is `true`. Default: `false`.
 
+  - `NPNProtocols`: An array or `Buffer` of possible NPN protocols. (Protocols
+    should be ordered by their priority).
+
+  - `SNICallback`: A function that will be called if client supports SNI TLS
+    extension. Only one argument will be passed to it: `servername`. And
+    `SNICallback` should return SecureContext instance.
+    (You can use `crypto.createCredentials(...).context` to get proper
+    SecureContext). If `SNICallback` wasn't provided - default callback with
+    high-level API will be used (see below).
+
 -->
   - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です (必須)。
 
@@ -240,6 +285,17 @@ has these possibilities:
     このオプションは `requestCert` が `true` の場合だけ効果があります。
     デフォルトは `false` です。
 
+  - `NPNProtocols`: NPN プロトコルで使用可能な文字列または `Buffer` の配列
+    (プロトコルはその優先度に応じて並んでいる必要があります)。
+
+  - `SNICallback`: クライアントが TLS 拡張の SNI をサポートしている場合に
+    呼び出される関数です。
+    `servername` が唯一の引数として渡されます。
+    `SNICallback` は SecureContext のインスタンスを返す必要があります
+    (SecureContext を取得するために `crypto.createCredentials(...).context`
+    を使用することができます)。
+    `SNICallback` が渡されなかった場合は、デフォルトのコールバックとして
+    後述する高水準 API が使用されます。
 
 #### Event: 'secureConnection'
 
@@ -264,6 +320,9 @@ server. If `cleartextStream.authorized` is false, then
 `cleartextStream.authorizationError` is set to describe how authorization
 failed. Implied but worth mentioning: depending on the settings of the TLS
 server, you unauthorized connections may be accepted.
+`cleartextStream.npnProtocol` is a string containing selected NPN protocol.
+`cleartextStream.servername` is a string containing servername requested with
+SNI.
 
 -->
 `cleartextStream.authorized` は提供された認証局のいずれかによって認証されたかを示す boolean 値です。
@@ -271,7 +330,9 @@ server, you unauthorized connections may be accepted.
 `cleartextStream.authorizationError` にはどのように認証が失敗したのかが設定されます。
 暗黙的ですが言及する価値のあること:
 TLS サーバの設定に依存しますが、認証されていないコネクションも受け入れられることがあります。
-
+`cleartextStream.npnProtocol` は、選択された NPN プロトコルを持つ文字列です。
+`cleartextStream.servername` は、SNI でリクエストされたサーバ名を持つ
+文字列です。
 
 #### server.listen(port, [host], [callback])
 
@@ -314,6 +375,18 @@ event.
 サーバが新しい接続を受け入れることを終了します。
 この関数は非同期で、サーバが最終的にクローズされるとサーバは `'close'` イベントを生成します。
 
+#### server.addContext(hostname, credentials)
+
+<!--
+
+Add secure context that will be used if client request's SNI hostname is
+matching passed `hostname` (wildcards can be used). `credentials` can contain
+`key`, `cert` and `ca`.
+
+-->
+クライアントが要求してきた SNI ホスト名と `hostname` (ワイルドカードを使用可能)
+がマッチした場合のセキュリティコンテキストを追加します。
+`credentials` は `key`、`cert`、そして `ca` を含むことができます。
 
 #### server.maxConnections
 

@@ -145,6 +145,37 @@ Examples:
     // if currently in /home/myself/node, it returns
     '/home/myself/node/wwwroot/static_files/gif/image.gif'
 
+### path.relative(from, to)
+
+<!--
+Solve the relative path from `from` to `to`.
+-->
+`from` から `to` への相対パスを解決します。
+
+<!--
+Sometimes we've got two absolute pathes, and we need to calculate the relative path from one to another.
+It's accually the reverse transform of path.resolve, which means we assume:
+-->
+時折、二つの絶対パスが与えられて、
+一方からもう一方への相対パスを求める必要があります。
+これは実際のところ、`path.resolve()` とは逆の変換です。
+それは以下を意味します:
+
+    path.resolve(from, path.relative(from, to)) == path.resolve(to)
+
+<!--
+Examples:
+-->
+例:
+
+    path.relative('C:\\orandea\\test\\aaa', 'C:\\orandea\\impl\\bbb')
+    // returns
+    '..\\..\\impl\\bbb'
+
+    path.relative('/data/orandea/test/aaa', '/data/orandea/impl/bbb')
+    // returns
+    '../../impl/bbb'
+
 ### path.dirname(p)
 
 <!--
