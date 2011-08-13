@@ -269,4 +269,124 @@ TEST_IMPL(spawn_detect_pipe_name_collisions_on_windows) {
 
   return 0;
 }
+
+
+wchar_t* make_program_args(char** args, int verbatim_arguments);
+wchar_t* quote_cmd_arg(const wchar_t *source, wchar_t *target);
+
+TEST_IMPL(argument_escaping) {
+  const wchar_t* test_str[] = {
+    L"HelloWorld",
+    L"Hello World",
+    L"Hello\"World",
+    L"Hello World\\",
+    L"Hello\\\"World",
+    L"Hello\\World",
+    L"Hello\\\\World",
+    L"Hello World\\",
+    L"c:\\path\\to\\node.exe --eval \"require('c:\\\\path\\\\to\\\\test.js')\""
+  };
+  const int count = sizeof(test_str) / sizeof(*test_str);
+  wchar_t** test_output;
+  wchar_t* command_line;
+  wchar_t** cracked;
+  size_t total_size = 0;
+  int i;
+  int num_args;
+
+  char* verbatim[] = {
+    "cmd.exe",
+    "/c",
+    "c:\\path\\to\\node.exe --eval \"require('c:\\\\path\\\\to\\\\test.js')\"",
+    NULL
+  };
+  wchar_t* verbatim_output;
+  wchar_t* non_verbatim_output;
+
+  test_output = calloc(count, sizeof(wchar_t*));
+  for (i = 0; i < count; ++i) {
+    test_output[i] = calloc(2 * (wcslen(test_str[i]) + 2), sizeof(wchar_t));
+    quote_cmd_arg(test_str[i], test_output[i]);
+    wprintf(L"input : %s\n", test_str[i]);
+    wprintf(L"output: %s\n", test_output[i]);
+    total_size += wcslen(test_output[i]) + 1;
+  }
+  command_line = calloc(total_size + 1, sizeof(wchar_t));
+  for (i = 0; i < count; ++i) {
+    wcscat(command_line, test_output[i]);
+    wcscat(command_line, L" ");
+  }
+  command_line[total_size - 1] = L'\0';
+
+  wprintf(L"command_line: %s\n", command_line);
+
+  cracked = CommandLineToArgvW(command_line, &num_args);
+  for (i = 0; i < num_args; ++i) {
+    wprintf(L"%d: %s\t%s\n", i, test_str[i], cracked[i]);
+    ASSERT(wcscmp(test_str[i], cracked[i]) == 0);
+  }
+
+  LocalFree(cracked);
+  for (i = 0; i < count; ++i) {
+    free(test_output[i]);
+  }
+
+  verbatim_output = make_program_args(verbatim, 1);
+  non_verbatim_output = make_program_args(verbatim, 0);
+
+  wprintf(L"    verbatim_output: %s\n", verbatim_output);
+  wprintf(L"non_verbatim_output: %s\n", non_verbatim_output);
+
+  ASSERT(wcscmp(verbatim_output, L"cmd.exe /c c:\\path\\to\\node.exe --eval \"require('c:\\\\path\\\\to\\\\test.js')\"") == 0);
+  ASSERT(wcscmp(non_verbatim_output, L"cmd.exe /c \"c:\\path\\to\\node.exe --eval \\\"require('c:\\\\path\\\\to\\\\test.js')\\\"\"") == 0);
+
+  free(verbatim_output);
+  free(non_verbatim_output);
+
+  return 0;
+}
+
+wchar_t* make_program_env(char** env_block);
+
+TEST_IMPL(environment_creation) {
+  int i;
+  char* environment[] = {
+    "FOO=BAR",
+    "SYSTEM=ROOT", /* substring of a supplied var name */
+    "SYSTEMROOTED=OMG", /* supplied var name is a substring */
+    "TEMP=C:\\Temp",
+    "BAZ=QUX",
+    NULL
+  };
+
+  wchar_t expected[512];
+  wchar_t* ptr = expected;
+  wchar_t* result;
+  wchar_t* str;
+
+  for (i = 0; i < sizeof(environment) / sizeof(environment[0]) - 1; i++) {
+    ptr += uv_utf8_to_utf16(environment[i], ptr, expected + sizeof(expected) - ptr);
+  }
+
+  memcpy(ptr, L"SYSTEMROOT=", sizeof(L"SYSTEMROOT="));
+  ptr += sizeof(L"SYSTEMROOT=")/sizeof(wchar_t) - 1;
+  ptr += GetEnvironmentVariableW(L"SYSTEMROOT", ptr, expected + sizeof(expected) - ptr);
+  ++ptr;
+
+  memcpy(ptr, L"SYSTEMDRIVE=", sizeof(L"SYSTEMDRIVE="));
+  ptr += sizeof(L"SYSTEMDRIVE=")/sizeof(wchar_t) - 1;
+  ptr += GetEnvironmentVariableW(L"SYSTEMDRIVE", ptr, expected + sizeof(expected) - ptr);
+  ++ptr;
+  *ptr = '\0';
+  
+  result = make_program_env(environment);
+
+  for (str = result; *str; str += wcslen(str) + 1) {
+    wprintf(L"%s\n", str);
+  }
+
+  ASSERT(wcscmp(expected, result) == 0);
+ 
+  return 0;
+}
 #endif

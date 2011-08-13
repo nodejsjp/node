@@ -28,6 +28,16 @@
 #include <stdlib.h>
 #include <windows.h>
 
+typedef struct env_var {
+  const char* narrow;
+  const wchar_t* wide;
+  int len; /* including null or '=' */
+  int supplied;
+  int value_len;
+} env_var_t;
+
+#define E_V(str) { str "=", L##str, sizeof(str), 0, 0 }
+
 #define UTF8_TO_UTF16(s, t)                               \
   size = uv_utf8_to_utf16(s, NULL, 0) * sizeof(wchar_t);  \
   t = (wchar_t*)malloc(size);                             \
@@ -72,48 +82,6 @@ static void uv_process_init(uv_process_t* handle) {
   uv_counters()->process_init++;
 
   uv_ref();
-}
-
-
-/*
- * Quotes command line arguments
- * Returns a pointer to the end (next char to be written) of the buffer
- */
-static wchar_t* quote_cmd_arg(wchar_t *source, wchar_t *target,
-    wchar_t terminator) {
-  int len = wcslen(source),
-      i;
-
-  // Check if the string must be quoted;
-  // if unnecessary, don't do it, it may only confuse older programs.
-  if (len == 0) {
-    goto quote;
-  }
-  for (i = 0; i < len; i++) {
-    if (source[i] == L' ' || source[i] == L'"') {
-      goto quote;
-    }
-  }
-
-  // No quotation needed
-  wcsncpy(target, source, len);
-  target += len;
-  *(target++) = terminator;
-  return target;
-
-quote:
-  // Quote
-  *(target++) = L'"';
-  for (i = 0; i < len; i++) {
-    if (source[i] == L'"' || source[i] == L'\\') {
-      *(target++) = '\\';
-    }
-    *(target++) = source[i];
-  }
-  *(target++) = L'"';
-  *(target++) = terminator;
-
-  return target;
 }
 
 
@@ -404,7 +372,84 @@ static wchar_t* search_path(const wchar_t *file,
 }
 
 
-static wchar_t* make_program_args(char** args) {
+/*
+ * Quotes command line arguments
+ * Returns a pointer to the end (next char to be written) of the buffer
+ */
+wchar_t* quote_cmd_arg(const wchar_t *source, wchar_t *target) {
+  int len = wcslen(source),
+      i, quote_hit;
+  wchar_t* start;
+
+  /* 
+   * Check if the string must be quoted;
+   * if unnecessary, don't do it, it may only confuse older programs.
+   */
+  if (len == 0) {
+    return target;
+  }
+
+  if (NULL == wcspbrk(source, L" \t\"")) {
+    /* No quotation needed */
+    wcsncpy(target, source, len);
+    target += len;
+    return target;
+  }
+
+  if (NULL == wcspbrk(source, L"\"\\")) {
+    /* 
+     * No embedded double quotes or backlashes, so I can just wrap
+     * quote marks around the whole thing.
+     */
+    *(target++) = L'"';
+    wcsncpy(target, source, len);
+    target += len;
+    *(target++) = L'"';
+    return target;
+  }
+
+  /*
+   * Expected intput/output:
+   *   input : hello"world
+   *   output: "hello\"world"
+   *   input : hello""world
+   *   output: "hello\"\"world"
+   *   input : hello\world
+   *   output: hello\world
+   *   input : hello\\world
+   *   output: hello\\world
+   *   input : hello\"world
+   *   output: "hello\\\"world"
+   *   input : hello\\"world
+   *   output: "hello\\\\\"world"
+   *   input : hello world\
+   *   output: "hello world\"
+   */
+
+  *(target++) = L'"';
+  start = target;
+  quote_hit = 1;
+
+  for (i = len; i > 0; --i) {
+    *(target++) = source[i - 1];
+
+    if (quote_hit && source[i - 1] == L'\\') {
+      *(target++) = L'\\';
+    } else if(source[i - 1] == L'"') {
+      quote_hit = 1;
+      *(target++) = L'\\';
+    } else {
+      quote_hit = 0;
+    }
+  }
+  target[0] = L'\0';
+  wcsrev(start);
+  *(target++) = L'"';
+  return target;
+}
+
+
+wchar_t* make_program_args(char** args, int verbatim_arguments) {
   wchar_t* dst;
   wchar_t* ptr;
   char** arg;
@@ -423,13 +468,9 @@ static wchar_t* make_program_args(char** args) {
     arg_count++;
   }
 
-  /* Adjust for potential quotes. */
-  size += arg_count * 2;
-
-  /* Arguments are separated with a space. */
-  if (arg_count > 0) {
-    size += arg_count - 1;
-  }
+  /* Adjust for potential quotes. Also assume the worst-case scenario 
+  /* that every character needs escaping, so we need twice as much space. */
+  size = size * 2 + arg_count * 2;
 
   dst = (wchar_t*)malloc(size);
   if (!dst) {
@@ -447,8 +488,13 @@ static wchar_t* make_program_args(char** args) {
     if (!len) {
       goto error;
     }
-
-    ptr = quote_cmd_arg(buffer, ptr, *(arg + 1) ? L' ' : L'\0');
+    if (verbatim_arguments) {
+      wcscpy(ptr, buffer);
+      ptr += len - 1;
+    } else {
+      ptr = quote_cmd_arg(buffer, ptr);
+    }
+    *ptr++ = *(arg + 1) ? L' ' : L'\0';
   }
 
   free(buffer);
@@ -460,23 +506,69 @@ error:
   return NULL;
 }
 
+
 /*
-  * The way windows takes environment variables is different than what C does;
-  * Windows wants a contiguous block of null-terminated strings, terminated
-  * with an additional null.
-  */
+ * If we learn that people are passing in huge environment blocks
+ * then we should probably qsort() the array and then bsearch()
+ * to see if it contains this variable. But there are ownership
+ * issues associated with that solution; this is the caller's 
+ * char**, and modifying it is rude.
+ */
+static void check_required_vars_contains_var(env_var_t* required, int size, const char* var) {
+  int i;
+  for (i = 0; i < size; ++i) {
+    if (_strnicmp(required[i].narrow, var, required[i].len) == 0) {
+      required[i].supplied =  1;
+      return;
+    }
+  }
+}
+
+
+/*
+ * The way windows takes environment variables is different than what C does;
+ * Windows wants a contiguous block of null-terminated strings, terminated
+ * with an additional null.
+ * 
+ * Windows has a few "essential" environment variables. winsock will fail
+ * to initialize if SYSTEMROOT is not defined; some APIs make reference to
+ * TEMP. SYSTEMDRIVE is probably also important. We therefore ensure that
+ * these get defined if the input environment block does not contain any
+ * values for them.
+ */
 wchar_t* make_program_env(char** env_block) {
   wchar_t* dst;
   wchar_t* ptr;
   char** env;
   int env_len = 1 * sizeof(wchar_t); /* room for closing null */
   int len;
+  int i;
+  DWORD var_size;
+
+  env_var_t required_vars[] = {
+    E_V("SYSTEMROOT"),
+    E_V("SYSTEMDRIVE"),
+    E_V("TEMP"),
+  };
 
   for (env = env_block; *env; env++) {
+    check_required_vars_contains_var(required_vars, COUNTOF(required_vars), *env);
     env_len += (uv_utf8_to_utf16(*env, NULL, 0) * sizeof(wchar_t));
   }
 
-  dst = (wchar_t*)malloc(env_len);
+  for (i = 0; i < COUNTOF(required_vars); ++i) {
+    if (!required_vars[i].supplied) {
+      env_len += required_vars[i].len * sizeof(wchar_t);
+      var_size = GetEnvironmentVariableW(required_vars[i].wide, NULL, 0);
+      if (var_size == 0) {
+        uv_fatal_error(GetLastError(), "GetEnvironmentVariableW");
+      }
+      required_vars[i].value_len = (int)var_size;
+      env_len += (int)var_size * sizeof(wchar_t);
+    }
+  }
+
+  dst = malloc(env_len);
   if (!dst) {
     uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");
   }
@@ -488,6 +580,19 @@ wchar_t* make_program_env(char** env_block) {
     if (!len) {
       free(dst);
       return NULL;
+    }
+  }
+
+  for (i = 0; i < COUNTOF(required_vars); ++i) {
+    if (!required_vars[i].supplied) {
+      wcscpy(ptr, required_vars[i].wide);
+      ptr += required_vars[i].len - 1;
+      *ptr++ = L'=';
+      var_size = GetEnvironmentVariableW(required_vars[i].wide, ptr, required_vars[i].value_len);
+      if (var_size == 0) {
+        uv_fatal_error(GetLastError(), "GetEnvironmentVariableW");
+      }
+      ptr += required_vars[i].value_len;
     }
   }
 
@@ -743,7 +848,7 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
 
   process->exit_cb = options.exit_cb;
   UTF8_TO_UTF16(options.file, application);
-  arguments = options.args ? make_program_args(options.args) : NULL;
+  arguments = options.args ? make_program_args(options.args, options.windows_verbatim_arguments) : NULL;
   env = options.env ? make_program_env(options.env) : NULL;
 
   if (options.cwd) {

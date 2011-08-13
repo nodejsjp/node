@@ -146,6 +146,12 @@ class ProcessWrap : public HandleWrap {
       options.stderr_stream = stderr_wrap->UVHandle();
     }
 
+    // options.windows_verbatim_arguments
+#if defined(_WIN32) && !defined(__CYGWIN__)
+    options.windows_verbatim_arguments = js_options->
+        Get(String::NewSymbol("windowsVerbatimArguments"))->IsTrue();
+#endif
+
     int r = uv_spawn(&wrap->process_, options);
 
     wrap->SetHandle((uv_handle_t*)&wrap->process_);
@@ -193,7 +199,7 @@ class ProcessWrap : public HandleWrap {
 
     Local<Value> argv[2] = {
       Integer::New(exit_status),
-      Integer::New(term_signal)
+      String::New(signo_string(term_signal))
     };
 
     MakeCallback(wrap->object_, "onexit", 2, argv);

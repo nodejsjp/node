@@ -27,12 +27,12 @@
 
 #include <errno.h>
 #include <stdlib.h>
+#if defined(__MINGW32__)
 #include <sys/param.h> // for MAXPATHLEN
 #include <unistd.h> // getpagesize
+#endif
 
 #include <platform_win32.h>
-
-#include <platform_win32_winsock.cc>
 
 namespace node {
 

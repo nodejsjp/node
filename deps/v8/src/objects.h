@@ -51,6 +51,7 @@
 //       - JSReceiver  (suitable for property access)
 //         - JSObject
 //           - JSArray
+//           - JSWeakMap
 //           - JSRegExp
 //           - JSFunction
 //           - GlobalObject
@@ -71,17 +72,19 @@
 //         - ExternalIntArray
 //         - ExternalUnsignedIntArray
 //         - ExternalFloatArray
-//       - FixedArray
-//         - DescriptorArray
-//         - HashTable
-//           - Dictionary
-//           - SymbolTable
-//           - CompilationCacheTable
-//           - CodeCacheHashTable
-//           - MapCache
-//         - Context
-//         - JSFunctionResultCache
-//         - SerializedScopeInfo
+//       - FixedArrayBase
+//         - FixedArray
+//           - DescriptorArray
+//           - HashTable
+//             - Dictionary
+//             - SymbolTable
+//             - CompilationCacheTable
+//             - CodeCacheHashTable
+//             - MapCache
+//           - Context
+//           - JSFunctionResultCache
+//           - SerializedScopeInfo
+//         - FixedDoubleArray
 //       - String
 //         - SeqString
 //           - SeqAsciiString
@@ -331,6 +334,7 @@ static const int kVariableSizeSentinel = 0;
   V(JS_GLOBAL_PROXY_TYPE)                                                      \
   V(JS_ARRAY_TYPE)                                                             \
   V(JS_PROXY_TYPE)                                                             \
+  V(JS_WEAK_MAP_TYPE)                                                          \
   V(JS_REGEXP_TYPE)                                                            \
                                                                                \
   V(JS_FUNCTION_TYPE)                                                          \
@@ -568,6 +572,7 @@ enum InstanceType {
   JS_GLOBAL_PROXY_TYPE,
   JS_ARRAY_TYPE,
   JS_PROXY_TYPE,
+  JS_WEAK_MAP_TYPE,
 
   JS_REGEXP_TYPE,  // LAST_NONCALLABLE_SPEC_OBJECT_TYPE
 
@@ -630,8 +635,10 @@ enum CompareResult {
                          WriteBarrierMode mode = UPDATE_WRITE_BARRIER); \
 
 
+class ElementsAccessor;
 class StringStream;
 class ObjectVisitor;
+class DictionaryElementsAccessor;
 
 struct ValueInfo : public Malloced {
   ValueInfo() : type(FIRST_TYPE), ptr(NULL), str(NULL), number(0) { }
@@ -748,6 +755,7 @@ class MaybeObject BASE_EMBEDDED {
   V(JSArray)                                   \
   V(JSProxy)                                   \
   V(JSFunctionProxy)                           \
+  V(JSWeakMap)                                 \
   V(JSRegExp)                                  \
   V(HashTable)                                 \
   V(Dictionary)                                \
@@ -789,6 +797,8 @@ class Object : public MaybeObject {
 #define DECLARE_STRUCT_PREDICATE(NAME, Name, name) inline bool Is##Name();
   STRUCT_LIST(DECLARE_STRUCT_PREDICATE)
 #undef DECLARE_STRUCT_PREDICATE
+
+  INLINE(bool IsSpecObject());
 
   // Oddball testing.
   INLINE(bool IsUndefined());
@@ -1486,6 +1496,7 @@ class JSObject: public JSReceiver {
   inline void initialize_elements();
   MUST_USE_RESULT inline MaybeObject* ResetElements();
   inline ElementsKind GetElementsKind();
+  inline ElementsAccessor* GetElementsAccessor();
   inline bool HasFastElements();
   inline bool HasFastDoubleElements();
   inline bool HasDictionaryElements();
@@ -1636,6 +1647,23 @@ class JSObject: public JSReceiver {
   MUST_USE_RESULT inline MaybeObject* SetHiddenPropertiesObject(
       Object* hidden_obj);
 
+  // Indicates whether the hidden properties object should be created.
+  enum HiddenPropertiesFlag { ALLOW_CREATION, OMIT_CREATION };
+
+  // Retrieves the hidden properties object.
+  //
+  // The undefined value might be returned in case no hidden properties object
+  // is present and creation was omitted.
+  inline bool HasHiddenProperties();
+  MUST_USE_RESULT MaybeObject* GetHiddenProperties(HiddenPropertiesFlag flag);
+
+  // Retrieves a permanent object identity hash code.
+  //
+  // The identity hash is stored as a hidden property. The undefined value might
+  // be returned in case no hidden properties object is present and creation was
+  // omitted.
+  MUST_USE_RESULT MaybeObject* GetIdentityHash(HiddenPropertiesFlag flag);
+
   MUST_USE_RESULT MaybeObject* DeleteProperty(String* name, DeleteMode mode);
   MUST_USE_RESULT MaybeObject* DeleteElement(uint32_t index, DeleteMode mode);
 
@@ -1652,7 +1680,7 @@ class JSObject: public JSReceiver {
   bool ShouldConvertToFastElements();
   // Returns true if the elements of JSObject contains only values that can be
   // represented in a FixedDoubleArray.
-  bool ShouldConvertToFastDoubleElements();
+  bool CanConvertToFastDoubleElements();
 
   // Tells whether the index'th element is present.
   inline bool HasElement(uint32_t index);
@@ -1711,13 +1739,7 @@ class JSObject: public JSReceiver {
 
   // Returns the index'th element.
   // The undefined object if index is out of bounds.
-  MaybeObject* GetElementWithReceiver(Object* receiver, uint32_t index);
   MaybeObject* GetElementWithInterceptor(Object* receiver, uint32_t index);
-
-  // Get external element value at index if there is one and undefined
-  // otherwise. Can return a failure if allocation of a heap number
-  // failed.
-  MaybeObject* GetExternalElement(uint32_t index);
 
   // Replace the elements' backing store with fast elements of the given
   // capacity.  Update the length for JSArrays.  Returns the new backing
@@ -1946,8 +1968,21 @@ class JSObject: public JSReceiver {
   // Also maximal value of JSArray's length property.
   static const uint32_t kMaxElementCount = 0xffffffffu;
 
+  // Constants for heuristics controlling conversion of fast elements
+  // to slow elements.
+
+  // Maximal gap that can be introduced by adding an element beyond
+  // the current elements length.
   static const uint32_t kMaxGap = 1024;
-  static const int kMaxFastElementsLength = 5000;
+
+  // Maximal length of fast elements array that won't be checked for
+  // being dense enough on expansion.
+  static const int kMaxUncheckedFastElementsLength = 5000;
+
+  // Same as above but for old arrays. This limit is more strict. We
+  // don't want to be wasteful with long lived objects.
+  static const int kMaxUncheckedOldFastElementsLength = 500;
+
   static const int kInitialMaxFastElementArray = 100000;
   static const int kMaxFastProperties = 12;
   static const int kMaxInstanceSize = 255 * kPointerSize;
@@ -1969,6 +2004,8 @@ class JSObject: public JSReceiver {
   };
 
  private:
+  friend class DictionaryElementsAccessor;
+
   MUST_USE_RESULT MaybeObject* GetElementWithCallback(Object* receiver,
                                                       Object* structure,
                                                       uint32_t index,
@@ -1989,14 +2026,10 @@ class JSObject: public JSReceiver {
       StrictModeFlag strict_mode,
       bool check_prototype);
 
-  MaybeObject* GetElementPostInterceptor(Object* receiver, uint32_t index);
-
   MUST_USE_RESULT MaybeObject* DeletePropertyPostInterceptor(String* name,
                                                              DeleteMode mode);
   MUST_USE_RESULT MaybeObject* DeletePropertyWithInterceptor(String* name);
 
-  MUST_USE_RESULT MaybeObject* DeleteElementPostInterceptor(uint32_t index,
-                                                            DeleteMode mode);
   MUST_USE_RESULT MaybeObject* DeleteElementWithInterceptor(uint32_t index);
 
   MUST_USE_RESULT MaybeObject* DeleteFastElement(uint32_t index);
@@ -2012,6 +2045,9 @@ class JSObject: public JSReceiver {
 
   // Returns true if most of the elements backing storage is used.
   bool HasDenseElements();
+
+  // Gets the current elements capacity and the number of used elements.
+  void GetElementsCapacityAndUsage(int* capacity, int* used);
 
   bool CanSetCallback(String* name);
   MUST_USE_RESULT MaybeObject* SetElementCallback(
@@ -2048,6 +2084,7 @@ class FixedArrayBase: public HeapObject {
   static const int kHeaderSize = kLengthOffset + kPointerSize;
 };
 
+class FixedDoubleArray;
 
 // FixedArray describes fixed-sized arrays with element type Object*.
 class FixedArray: public FixedArrayBase {
@@ -2056,6 +2093,7 @@ class FixedArray: public FixedArrayBase {
   inline Object* get(int index);
   // Setter that uses write barrier.
   inline void set(int index, Object* value);
+  inline bool is_the_hole(int index);
 
   // Setter that doesn't need write barrier).
   inline void set(int index, Smi* value);
@@ -2157,7 +2195,8 @@ class FixedDoubleArray: public FixedArrayBase {
   inline void Initialize(NumberDictionary* from);
 
   // Setter and getter for elements.
-  inline double get(int index);
+  inline double get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, double value);
   inline void set_the_hole(int index);
 
@@ -2484,6 +2523,10 @@ class HashTable: public FixedArray {
       int at_least_space_for,
       PretenureFlag pretenure = NOT_TENURED);
 
+  // Computes the required capacity for a table holding the given
+  // number of elements. May be more than HashTable::kMaxCapacity.
+  static int ComputeCapacity(int at_least_space_for);
+
   // Returns the key at entry.
   Object* KeyAt(int entry) { return get(EntryToIndex(entry)); }
 
@@ -2761,7 +2804,7 @@ class Dictionary: public HashTable<Shape, Key> {
                   PropertyAttributes filter,
                   SortMode sort_mode);
   // Fill in details for properties into storage.
-  void CopyKeysTo(FixedArray* storage, SortMode sort_mode);
+  void CopyKeysTo(FixedArray* storage, int index, SortMode sort_mode);
 
   // Accessors for next enumeration index.
   void SetNextEnumerationIndex(int index) {
@@ -2903,6 +2946,48 @@ class NumberDictionary: public Dictionary<NumberDictionaryShape, uint32_t> {
   static const int kRequiresSlowElementsMask = 1;
   static const int kRequiresSlowElementsTagSize = 1;
   static const uint32_t kRequiresSlowElementsLimit = (1 << 29) - 1;
+};
+
+
+class ObjectHashTableShape {
+ public:
+  static inline bool IsMatch(JSObject* key, Object* other);
+  static inline uint32_t Hash(JSObject* key);
+  static inline uint32_t HashForObject(JSObject* key, Object* object);
+  MUST_USE_RESULT static inline MaybeObject* AsObject(JSObject* key);
+  static const int kPrefixSize = 0;
+  static const int kEntrySize = 2;
+};
+
+
+// ObjectHashTable maps keys that are JavaScript objects to object values by
+// using the identity hash of the key for hashing purposes.
+class ObjectHashTable: public HashTable<ObjectHashTableShape, JSObject*> {
+ public:
+  static inline ObjectHashTable* cast(Object* obj) {
+    ASSERT(obj->IsHashTable());
+    return reinterpret_cast<ObjectHashTable*>(obj);
+  }
+
+  // Looks up the value associated with the given key. The undefined value is
+  // returned in case the key is not present.
+  Object* Lookup(JSObject* key);
+
+  // Adds (or overwrites) the value associated with the given key. Mapping a
+  // key to the undefined value causes removal of the whole entry.
+  MUST_USE_RESULT MaybeObject* Put(JSObject* key, Object* value);
+
+ private:
+  friend class MarkCompactCollector;
+
+  void AddEntry(int entry, JSObject* key, Object* value);
+  void RemoveEntry(int entry, Heap* heap);
+  inline void RemoveEntry(int entry);
+
+  // Returns the index to the value of an entry.
+  static inline int EntryToValueIndex(int entry) {
+    return EntryToIndex(entry) + 1;
+  }
 };
 
 
@@ -3051,6 +3136,8 @@ class ExternalArray: public HeapObject {
   inline int length();
   inline void set_length(int value);
 
+  inline bool is_the_hole(int index) { return false; }
+
   // [external_pointer]: The pointer to the external memory area backing this
   // external array.
   DECL_ACCESSORS(external_pointer, void)  // Pointer to the data store.
@@ -3086,7 +3173,8 @@ class ExternalPixelArray: public ExternalArray {
   inline uint8_t* external_pixel_pointer();
 
   // Setter and getter.
-  inline uint8_t get(int index);
+  inline uint8_t get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, uint8_t value);
 
   // This accessor applies the correct conversion from Smi, HeapNumber and
@@ -3114,7 +3202,8 @@ class ExternalPixelArray: public ExternalArray {
 class ExternalByteArray: public ExternalArray {
  public:
   // Setter and getter.
-  inline int8_t get(int index);
+  inline int8_t get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, int8_t value);
 
   // This accessor applies the correct conversion from Smi, HeapNumber
@@ -3142,7 +3231,8 @@ class ExternalByteArray: public ExternalArray {
 class ExternalUnsignedByteArray: public ExternalArray {
  public:
   // Setter and getter.
-  inline uint8_t get(int index);
+  inline uint8_t get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, uint8_t value);
 
   // This accessor applies the correct conversion from Smi, HeapNumber
@@ -3170,7 +3260,8 @@ class ExternalUnsignedByteArray: public ExternalArray {
 class ExternalShortArray: public ExternalArray {
  public:
   // Setter and getter.
-  inline int16_t get(int index);
+  inline int16_t get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, int16_t value);
 
   // This accessor applies the correct conversion from Smi, HeapNumber
@@ -3198,7 +3289,8 @@ class ExternalShortArray: public ExternalArray {
 class ExternalUnsignedShortArray: public ExternalArray {
  public:
   // Setter and getter.
-  inline uint16_t get(int index);
+  inline uint16_t get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, uint16_t value);
 
   // This accessor applies the correct conversion from Smi, HeapNumber
@@ -3226,7 +3318,8 @@ class ExternalUnsignedShortArray: public ExternalArray {
 class ExternalIntArray: public ExternalArray {
  public:
   // Setter and getter.
-  inline int32_t get(int index);
+  inline int32_t get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, int32_t value);
 
   // This accessor applies the correct conversion from Smi, HeapNumber
@@ -3254,7 +3347,8 @@ class ExternalIntArray: public ExternalArray {
 class ExternalUnsignedIntArray: public ExternalArray {
  public:
   // Setter and getter.
-  inline uint32_t get(int index);
+  inline uint32_t get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, uint32_t value);
 
   // This accessor applies the correct conversion from Smi, HeapNumber
@@ -3282,7 +3376,8 @@ class ExternalUnsignedIntArray: public ExternalArray {
 class ExternalFloatArray: public ExternalArray {
  public:
   // Setter and getter.
-  inline float get(int index);
+  inline float get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, float value);
 
   // This accessor applies the correct conversion from Smi, HeapNumber
@@ -3310,7 +3405,8 @@ class ExternalFloatArray: public ExternalArray {
 class ExternalDoubleArray: public ExternalArray {
  public:
   // Setter and getter.
-  inline double get(int index);
+  inline double get_scalar(int index);
+  inline MaybeObject* get(int index);
   inline void set(int index, double value);
 
   // This accessor applies the correct conversion from Smi, HeapNumber
@@ -3480,13 +3576,14 @@ class Code: public HeapObject {
     UNARY_OP_IC,
     BINARY_OP_IC,
     COMPARE_IC,
+    TO_BOOLEAN_IC,
     // No more than 16 kinds. The value currently encoded in four bits in
     // Flags.
 
     // Pseudo-kinds.
     REGEXP = BUILTIN,
     FIRST_IC_KIND = LOAD_IC,
-    LAST_IC_KIND = COMPARE_IC
+    LAST_IC_KIND = TO_BOOLEAN_IC
   };
 
   enum {
@@ -3552,13 +3649,10 @@ class Code: public HeapObject {
   inline bool is_keyed_store_stub() { return kind() == KEYED_STORE_IC; }
   inline bool is_call_stub() { return kind() == CALL_IC; }
   inline bool is_keyed_call_stub() { return kind() == KEYED_CALL_IC; }
-  inline bool is_unary_op_stub() {
-    return kind() == UNARY_OP_IC;
-  }
-  inline bool is_binary_op_stub() {
-    return kind() == BINARY_OP_IC;
-  }
+  inline bool is_unary_op_stub() { return kind() == UNARY_OP_IC; }
+  inline bool is_binary_op_stub() { return kind() == BINARY_OP_IC; }
   inline bool is_compare_ic_stub() { return kind() == COMPARE_IC; }
+  inline bool is_to_boolean_ic_stub() { return kind() == TO_BOOLEAN_IC; }
 
   // [major_key]: For kind STUB or BINARY_OP_IC, the major key.
   inline int major_key();
@@ -3600,20 +3694,23 @@ class Code: public HeapObject {
   inline CheckType check_type();
   inline void set_check_type(CheckType value);
 
-  // [type-recording unary op type]: For all UNARY_OP_IC.
+  // [type-recording unary op type]: For kind UNARY_OP_IC.
   inline byte unary_op_type();
   inline void set_unary_op_type(byte value);
 
-  // [type-recording binary op type]: For all TYPE_RECORDING_BINARY_OP_IC.
+  // [type-recording binary op type]: For kind BINARY_OP_IC.
   inline byte binary_op_type();
   inline void set_binary_op_type(byte value);
   inline byte binary_op_result_type();
   inline void set_binary_op_result_type(byte value);
 
-  // [compare state]: For kind compare IC stubs, tells what state the
-  // stub is in.
+  // [compare state]: For kind COMPARE_IC, tells what state the stub is in.
   inline byte compare_state();
   inline void set_compare_state(byte value);
+
+  // [to_boolean_foo]: For kind TO_BOOLEAN_IC tells what state the stub is in.
+  inline byte to_boolean_state();
+  inline void set_to_boolean_state(byte value);
 
   // Get the safepoint entry for the given pc.
   SafepointEntry GetSafepointEntry(Address pc);
@@ -3756,9 +3853,10 @@ class Code: public HeapObject {
   static const int kStackSlotsOffset = kKindSpecificFlagsOffset;
   static const int kCheckTypeOffset = kKindSpecificFlagsOffset;
 
-  static const int kCompareStateOffset = kStubMajorKeyOffset + 1;
   static const int kUnaryOpTypeOffset = kStubMajorKeyOffset + 1;
   static const int kBinaryOpTypeOffset = kStubMajorKeyOffset + 1;
+  static const int kCompareStateOffset = kStubMajorKeyOffset + 1;
+  static const int kToBooleanTypeOffset = kStubMajorKeyOffset + 1;
   static const int kHasDeoptimizationSupportOffset = kOptimizableOffset + 1;
 
   static const int kBinaryOpReturnTypeOffset = kBinaryOpTypeOffset + 1;
@@ -4564,12 +4662,10 @@ class SharedFunctionInfo: public HeapObject {
   inline void set_end_position(int end_position);
 
   // Is this function a function expression in the source code.
-  inline bool is_expression();
-  inline void set_is_expression(bool value);
+  DECL_BOOLEAN_ACCESSORS(is_expression)
 
   // Is this function a top-level function (scripts, evals).
-  inline bool is_toplevel();
-  inline void set_is_toplevel(bool value);
+  DECL_BOOLEAN_ACCESSORS(is_toplevel)
 
   // Bit field containing various information collected by the compiler to
   // drive optimization.
@@ -4625,13 +4721,21 @@ class SharedFunctionInfo: public HeapObject {
   // These needs special threatment in .call and .apply since
   // null passed as the receiver should not be translated to the
   // global object.
-  inline bool native();
-  inline void set_native(bool value);
+  DECL_BOOLEAN_ACCESSORS(native)
+
+  // Indicates that the function was created by the Function function.
+  // Though it's anonymous, toString should treat it as if it had the name
+  // "anonymous".  We don't set the name itself so that the system does not
+  // see a binding for it.
+  DECL_BOOLEAN_ACCESSORS(name_should_print_as_anonymous)
 
   // Indicates whether the function is a bound function created using
   // the bind function.
-  inline bool bound();
-  inline void set_bound(bool value);
+  DECL_BOOLEAN_ACCESSORS(bound)
+
+  // Indicates that the function is anonymous (the name field can be set
+  // through the API, which does not change this flag).
+  DECL_BOOLEAN_ACCESSORS(is_anonymous)
 
   // Indicates whether or not the code in the shared function support
   // deoptimization.
@@ -4813,7 +4917,6 @@ class SharedFunctionInfo: public HeapObject {
   // Bit positions in compiler_hints.
   static const int kCodeAgeSize = 3;
   static const int kCodeAgeMask = (1 << kCodeAgeSize) - 1;
-  static const int kBoundFunction = 9;
 
   enum CompilerHints {
     kHasOnlySimpleThisPropertyAssignments,
@@ -4824,7 +4927,11 @@ class SharedFunctionInfo: public HeapObject {
     kStrictModeFunction,
     kUsesArguments,
     kHasDuplicateParameters,
-    kNative
+    kNative,
+    kBoundFunction,
+    kIsAnonymous,
+    kNameShouldPrintAsAnonymous,
+    kCompilerHintsCount  // Pseudo entry
   };
 
  private:
@@ -4837,6 +4944,9 @@ class SharedFunctionInfo: public HeapObject {
   static const int kCompilerHintsSmiTagSize = 0;
   static const int kCompilerHintsSize = kIntSize;
 #endif
+
+  STATIC_ASSERT(SharedFunctionInfo::kCompilerHintsCount <=
+                SharedFunctionInfo::kCompilerHintsSize * kBitsPerByte);
 
  public:
   // Constants for optimizing codegen for strict mode function and
@@ -5847,6 +5957,8 @@ class String: public HeapObject {
     StringPrint(stdout);
   }
   void StringPrint(FILE* out);
+
+  char* ToAsciiArray();
 #endif
 #ifdef DEBUG
   void StringVerify();
@@ -6538,6 +6650,40 @@ class JSFunctionProxy: public JSProxy {
 };
 
 
+// The JSWeakMap describes EcmaScript Harmony weak maps
+class JSWeakMap: public JSObject {
+ public:
+  // [table]: the backing hash table mapping keys to values.
+  DECL_ACCESSORS(table, ObjectHashTable)
+
+  // [next]: linked list of encountered weak maps during GC.
+  DECL_ACCESSORS(next, Object)
+
+  // Unchecked accessors to be used during GC.
+  inline ObjectHashTable* unchecked_table();
+
+  // Casting.
+  static inline JSWeakMap* cast(Object* obj);
+
+#ifdef OBJECT_PRINT
+  inline void JSWeakMapPrint() {
+    JSWeakMapPrint(stdout);
+  }
+  void JSWeakMapPrint(FILE* out);
+#endif
+#ifdef DEBUG
+  void JSWeakMapVerify();
+#endif
+
+  static const int kTableOffset = JSObject::kHeaderSize;
+  static const int kNextOffset = kTableOffset + kPointerSize;
+  static const int kSize = kNextOffset + kPointerSize;
+
+ private:
+  DISALLOW_IMPLICIT_CONSTRUCTORS(JSWeakMap);
+};
+
+
 // Foreign describes objects pointing from JavaScript to C structures.
 // Since they cannot contain references to JS HeapObjects they can be
 // placed in old_data_space.
@@ -6837,7 +6983,6 @@ class FunctionTemplateInfo: public TemplateInfo {
   DECL_ACCESSORS(instance_call_handler, Object)
   DECL_ACCESSORS(access_check_info, Object)
   DECL_ACCESSORS(flag, Smi)
-  DECL_ACCESSORS(prototype_attributes, Smi)
 
   // Following properties use flag bits.
   DECL_BOOLEAN_ACCESSORS(hidden_prototype)
@@ -6845,6 +6990,7 @@ class FunctionTemplateInfo: public TemplateInfo {
   // If the bit is set, object instances created by this function
   // requires access check.
   DECL_BOOLEAN_ACCESSORS(needs_access_check)
+  DECL_BOOLEAN_ACCESSORS(read_only_prototype)
 
   static inline FunctionTemplateInfo* cast(Object* obj);
 
@@ -6877,14 +7023,14 @@ class FunctionTemplateInfo: public TemplateInfo {
   static const int kAccessCheckInfoOffset =
       kInstanceCallHandlerOffset + kPointerSize;
   static const int kFlagOffset = kAccessCheckInfoOffset + kPointerSize;
-  static const int kPrototypeAttributesOffset = kFlagOffset + kPointerSize;
-  static const int kSize = kPrototypeAttributesOffset + kPointerSize;
+  static const int kSize = kFlagOffset + kPointerSize;
 
  private:
   // Bit position in the flag, from least significant bit position.
   static const int kHiddenPrototypeBit   = 0;
   static const int kUndetectableBit      = 1;
   static const int kNeedsAccessCheckBit  = 2;
+  static const int kReadOnlyPrototypeBit = 3;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(FunctionTemplateInfo);
 };
