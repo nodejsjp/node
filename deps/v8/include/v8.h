@@ -2231,11 +2231,10 @@ class V8EXPORT FunctionTemplate : public Template {
   void SetHiddenPrototype(bool value);
 
   /**
-   * Sets the property attributes of the 'prototype' property of functions
-   * created from this FunctionTemplate. Can be any combination of ReadOnly,
-   * DontEnum and DontDelete.
+   * Sets the ReadOnly flag in the attributes of the 'prototype' property
+   * of functions created from this FunctionTemplate to true.
    */
-  void SetPrototypeAttributes(int attributes);
+  void ReadOnlyPrototype();
 
   /**
    * Returns true if the given object is an instance of this function
@@ -3607,7 +3606,7 @@ class V8EXPORT Locker {
   /**
    * Returns whether v8::Locker is being used by this V8 instance.
    */
-  static bool IsActive() { return active_; }
+  static bool IsActive();
 
  private:
   bool has_lock_;

@@ -35,6 +35,7 @@
 #ifndef V8_OBJECTS_INL_H_
 #define V8_OBJECTS_INL_H_
 
+#include "elements.h"
 #include "objects.h"
 #include "contexts.h"
 #include "conversions-inl.h"
@@ -155,6 +156,12 @@ bool Object::IsHeapNumber() {
 bool Object::IsString() {
   return Object::IsHeapObject()
     && HeapObject::cast(this)->map()->instance_type() < FIRST_NONSTRING_TYPE;
+}
+
+
+bool Object::IsSpecObject() {
+  return Object::IsHeapObject()
+    && HeapObject::cast(this)->map()->instance_type() >= FIRST_SPEC_OBJECT_TYPE;
 }
 
 
@@ -471,6 +478,12 @@ bool Object::IsJSProxy() {
 bool Object::IsJSFunctionProxy() {
   return Object::IsHeapObject() &&
       HeapObject::cast(this)->map()->instance_type() == JS_FUNCTION_PROXY_TYPE;
+}
+
+
+bool Object::IsJSWeakMap() {
+  return Object::IsJSObject() &&
+      HeapObject::cast(this)->map()->instance_type() == JS_WEAK_MAP_TYPE;
 }
 
 
@@ -1333,6 +1346,8 @@ void JSObject::set_elements(HeapObject* value, WriteBarrierMode mode) {
   ASSERT(map()->has_fast_elements() ==
          (value->map() == GetHeap()->fixed_array_map() ||
           value->map() == GetHeap()->fixed_cow_array_map()));
+  ASSERT(map()->has_fast_double_elements() ==
+         value->IsFixedDoubleArray());
   ASSERT(value->HasValidElements());
   WRITE_FIELD(this, kElementsOffset, value);
   CONDITIONAL_WRITE_BARRIER(GetHeap(), this, kElementsOffset, mode);
@@ -1408,6 +1423,8 @@ int JSObject::GetHeaderSize() {
       return JSValue::kSize;
     case JS_ARRAY_TYPE:
       return JSValue::kSize;
+    case JS_WEAK_MAP_TYPE:
+      return JSWeakMap::kSize;
     case JS_REGEXP_TYPE:
       return JSValue::kSize;
     case JS_CONTEXT_EXTENSION_OBJECT_TYPE:
@@ -1595,6 +1612,7 @@ Object* FixedArray::get(int index) {
 
 void FixedArray::set(int index, Smi* value) {
   ASSERT(map() != HEAP->fixed_cow_array_map());
+  ASSERT(index >= 0 && index < this->length());
   ASSERT(reinterpret_cast<Object*>(value)->IsSmi());
   int offset = kHeaderSize + index * kPointerSize;
   WRITE_FIELD(this, offset, value);
@@ -1627,13 +1645,22 @@ inline double FixedDoubleArray::canonical_not_the_hole_nan_as_double() {
 }
 
 
-double FixedDoubleArray::get(int index) {
+double FixedDoubleArray::get_scalar(int index) {
   ASSERT(map() != HEAP->fixed_cow_array_map() &&
          map() != HEAP->fixed_array_map());
   ASSERT(index >= 0 && index < this->length());
   double result = READ_DOUBLE_FIELD(this, kHeaderSize + index * kDoubleSize);
   ASSERT(!is_the_hole_nan(result));
   return result;
+}
+
+
+MaybeObject* FixedDoubleArray::get(int index) {
+  if (is_the_hole(index)) {
+    return GetHeap()->the_hole_value();
+  } else {
+    return GetHeap()->NumberFromDouble(get_scalar(index));
+  }
 }
 
 
@@ -1961,6 +1988,17 @@ void DescriptorArray::Swap(int first, int second) {
 
 
 template<typename Shape, typename Key>
+int HashTable<Shape, Key>::ComputeCapacity(int at_least_space_for) {
+  const int kMinCapacity = 32;
+  int capacity = RoundUpToPowerOf2(at_least_space_for * 2);
+  if (capacity < kMinCapacity) {
+    capacity = kMinCapacity;  // Guarantee min capacity.
+  }
+  return capacity;
+}
+
+
+template<typename Shape, typename Key>
 int HashTable<Shape, Key>::FindEntry(Key key) {
   return FindEntry(GetIsolate(), key);
 }
@@ -2047,6 +2085,7 @@ CAST_ACCESSOR(JSArray)
 CAST_ACCESSOR(JSRegExp)
 CAST_ACCESSOR(JSProxy)
 CAST_ACCESSOR(JSFunctionProxy)
+CAST_ACCESSOR(JSWeakMap)
 CAST_ACCESSOR(Foreign)
 CAST_ACCESSOR(ByteArray)
 CAST_ACCESSOR(ExternalArray)
@@ -2350,10 +2389,15 @@ uint8_t* ExternalPixelArray::external_pixel_pointer() {
 }
 
 
-uint8_t ExternalPixelArray::get(int index) {
+uint8_t ExternalPixelArray::get_scalar(int index) {
   ASSERT((index >= 0) && (index < this->length()));
   uint8_t* ptr = external_pixel_pointer();
   return ptr[index];
+}
+
+
+MaybeObject* ExternalPixelArray::get(int index) {
+  return Smi::FromInt(static_cast<int>(get_scalar(index)));
 }
 
 
@@ -2376,10 +2420,15 @@ void ExternalArray::set_external_pointer(void* value, WriteBarrierMode mode) {
 }
 
 
-int8_t ExternalByteArray::get(int index) {
+int8_t ExternalByteArray::get_scalar(int index) {
   ASSERT((index >= 0) && (index < this->length()));
   int8_t* ptr = static_cast<int8_t*>(external_pointer());
   return ptr[index];
+}
+
+
+MaybeObject* ExternalByteArray::get(int index) {
+  return Smi::FromInt(static_cast<int>(get_scalar(index)));
 }
 
 
@@ -2390,10 +2439,15 @@ void ExternalByteArray::set(int index, int8_t value) {
 }
 
 
-uint8_t ExternalUnsignedByteArray::get(int index) {
+uint8_t ExternalUnsignedByteArray::get_scalar(int index) {
   ASSERT((index >= 0) && (index < this->length()));
   uint8_t* ptr = static_cast<uint8_t*>(external_pointer());
   return ptr[index];
+}
+
+
+MaybeObject* ExternalUnsignedByteArray::get(int index) {
+  return Smi::FromInt(static_cast<int>(get_scalar(index)));
 }
 
 
@@ -2404,10 +2458,15 @@ void ExternalUnsignedByteArray::set(int index, uint8_t value) {
 }
 
 
-int16_t ExternalShortArray::get(int index) {
+int16_t ExternalShortArray::get_scalar(int index) {
   ASSERT((index >= 0) && (index < this->length()));
   int16_t* ptr = static_cast<int16_t*>(external_pointer());
   return ptr[index];
+}
+
+
+MaybeObject* ExternalShortArray::get(int index) {
+  return Smi::FromInt(static_cast<int>(get_scalar(index)));
 }
 
 
@@ -2418,10 +2477,15 @@ void ExternalShortArray::set(int index, int16_t value) {
 }
 
 
-uint16_t ExternalUnsignedShortArray::get(int index) {
+uint16_t ExternalUnsignedShortArray::get_scalar(int index) {
   ASSERT((index >= 0) && (index < this->length()));
   uint16_t* ptr = static_cast<uint16_t*>(external_pointer());
   return ptr[index];
+}
+
+
+MaybeObject* ExternalUnsignedShortArray::get(int index) {
+  return Smi::FromInt(static_cast<int>(get_scalar(index)));
 }
 
 
@@ -2432,10 +2496,15 @@ void ExternalUnsignedShortArray::set(int index, uint16_t value) {
 }
 
 
-int32_t ExternalIntArray::get(int index) {
+int32_t ExternalIntArray::get_scalar(int index) {
   ASSERT((index >= 0) && (index < this->length()));
   int32_t* ptr = static_cast<int32_t*>(external_pointer());
   return ptr[index];
+}
+
+
+MaybeObject* ExternalIntArray::get(int index) {
+    return GetHeap()->NumberFromInt32(get_scalar(index));
 }
 
 
@@ -2446,10 +2515,15 @@ void ExternalIntArray::set(int index, int32_t value) {
 }
 
 
-uint32_t ExternalUnsignedIntArray::get(int index) {
+uint32_t ExternalUnsignedIntArray::get_scalar(int index) {
   ASSERT((index >= 0) && (index < this->length()));
   uint32_t* ptr = static_cast<uint32_t*>(external_pointer());
   return ptr[index];
+}
+
+
+MaybeObject* ExternalUnsignedIntArray::get(int index) {
+    return GetHeap()->NumberFromUint32(get_scalar(index));
 }
 
 
@@ -2460,10 +2534,15 @@ void ExternalUnsignedIntArray::set(int index, uint32_t value) {
 }
 
 
-float ExternalFloatArray::get(int index) {
+float ExternalFloatArray::get_scalar(int index) {
   ASSERT((index >= 0) && (index < this->length()));
   float* ptr = static_cast<float*>(external_pointer());
   return ptr[index];
+}
+
+
+MaybeObject* ExternalFloatArray::get(int index) {
+    return GetHeap()->NumberFromDouble(get_scalar(index));
 }
 
 
@@ -2474,10 +2553,15 @@ void ExternalFloatArray::set(int index, float value) {
 }
 
 
-double ExternalDoubleArray::get(int index) {
+double ExternalDoubleArray::get_scalar(int index) {
   ASSERT((index >= 0) && (index < this->length()));
   double* ptr = static_cast<double*>(external_pointer());
   return ptr[index];
+}
+
+
+MaybeObject* ExternalDoubleArray::get(int index) {
+    return GetHeap()->NumberFromDouble(get_scalar(index));
 }
 
 
@@ -2757,7 +2841,8 @@ int Code::major_key() {
   ASSERT(kind() == STUB ||
          kind() == UNARY_OP_IC ||
          kind() == BINARY_OP_IC ||
-         kind() == COMPARE_IC);
+         kind() == COMPARE_IC ||
+         kind() == TO_BOOLEAN_IC);
   return READ_BYTE_FIELD(this, kStubMajorKeyOffset);
 }
 
@@ -2766,7 +2851,8 @@ void Code::set_major_key(int major) {
   ASSERT(kind() == STUB ||
          kind() == UNARY_OP_IC ||
          kind() == BINARY_OP_IC ||
-         kind() == COMPARE_IC);
+         kind() == COMPARE_IC ||
+         kind() == TO_BOOLEAN_IC);
   ASSERT(0 <= major && major < 256);
   WRITE_BYTE_FIELD(this, kStubMajorKeyOffset, major);
 }
@@ -2907,6 +2993,17 @@ void Code::set_compare_state(byte value) {
   WRITE_BYTE_FIELD(this, kCompareStateOffset, value);
 }
 
+
+byte Code::to_boolean_state() {
+  ASSERT(is_to_boolean_ic_stub());
+  return READ_BYTE_FIELD(this, kToBooleanTypeOffset);
+}
+
+
+void Code::set_to_boolean_state(byte value) {
+  ASSERT(is_to_boolean_ic_stub());
+  WRITE_BYTE_FIELD(this, kToBooleanTypeOffset, value);
+}
 
 bool Code::is_inline_cache_stub() {
   Kind kind = this->kind();
@@ -3249,8 +3346,6 @@ ACCESSORS(FunctionTemplateInfo, instance_call_handler, Object,
 ACCESSORS(FunctionTemplateInfo, access_check_info, Object,
           kAccessCheckInfoOffset)
 ACCESSORS(FunctionTemplateInfo, flag, Smi, kFlagOffset)
-ACCESSORS(FunctionTemplateInfo, prototype_attributes, Smi,
-          kPrototypeAttributesOffset)
 
 ACCESSORS(ObjectTemplateInfo, constructor, Object, kConstructorOffset)
 ACCESSORS(ObjectTemplateInfo, internal_field_count, Object,
@@ -3305,6 +3400,8 @@ BOOL_ACCESSORS(FunctionTemplateInfo, flag, hidden_prototype,
 BOOL_ACCESSORS(FunctionTemplateInfo, flag, undetectable, kUndetectableBit)
 BOOL_ACCESSORS(FunctionTemplateInfo, flag, needs_access_check,
                kNeedsAccessCheckBit)
+BOOL_ACCESSORS(FunctionTemplateInfo, flag, read_only_prototype,
+               kReadOnlyPrototypeBit)
 BOOL_ACCESSORS(SharedFunctionInfo, start_position_and_type, is_expression,
                kIsExpressionBit)
 BOOL_ACCESSORS(SharedFunctionInfo, start_position_and_type, is_toplevel,
@@ -3437,35 +3534,14 @@ void SharedFunctionInfo::set_optimization_disabled(bool disable) {
 }
 
 
-BOOL_ACCESSORS(SharedFunctionInfo,
-               compiler_hints,
-               strict_mode,
+BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, strict_mode,
                kStrictModeFunction)
-
-
-bool SharedFunctionInfo::native() {
-  return BooleanBit::get(compiler_hints(), kNative);
-}
-
-
-void SharedFunctionInfo::set_native(bool value) {
-  set_compiler_hints(BooleanBit::set(compiler_hints(),
-                                     kNative,
-                                     value));
-}
-
-
-bool SharedFunctionInfo::bound() {
-  return BooleanBit::get(compiler_hints(), kBoundFunction);
-}
-
-
-void SharedFunctionInfo::set_bound(bool value) {
-  set_compiler_hints(BooleanBit::set(compiler_hints(),
-                                     kBoundFunction,
-                                     value));
-}
-
+BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, native, kNative)
+BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints,
+               name_should_print_as_anonymous,
+               kNameShouldPrintAsAnonymous)
+BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, bound, kBoundFunction)
+BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, is_anonymous, kIsAnonymous)
 
 ACCESSORS(CodeCache, default_cache, FixedArray, kDefaultCacheOffset)
 ACCESSORS(CodeCache, normal_type_cache, Object, kNormalTypeCacheOffset)
@@ -3764,6 +3840,15 @@ ACCESSORS(JSProxy, handler, Object, kHandlerOffset)
 ACCESSORS(JSProxy, padding, Object, kPaddingOffset)
 
 
+ACCESSORS(JSWeakMap, table, ObjectHashTable, kTableOffset)
+ACCESSORS_GCSAFE(JSWeakMap, next, Object, kNextOffset)
+
+
+ObjectHashTable* JSWeakMap::unchecked_table() {
+  return reinterpret_cast<ObjectHashTable*>(READ_FIELD(this, kTableOffset));
+}
+
+
 Address Foreign::address() {
   return AddressFrom<Address>(READ_INTPTR_FIELD(this, kAddressOffset));
 }
@@ -3946,6 +4031,11 @@ JSObject::ElementsKind JSObject::GetElementsKind() {
           elements()->IsDictionary()) ||
          (kind > DICTIONARY_ELEMENTS));
   return kind;
+}
+
+
+ElementsAccessor* JSObject::GetElementsAccessor() {
+  return ElementsAccessor::ForKind(GetElementsKind());
 }
 
 
@@ -4222,6 +4312,11 @@ MaybeObject* JSObject::SetHiddenPropertiesObject(Object* hidden_obj) {
 }
 
 
+bool JSObject::HasHiddenProperties() {
+  return !GetHiddenProperties(OMIT_CREATION)->ToObjectChecked()->IsUndefined();
+}
+
+
 bool JSObject::HasElement(uint32_t index) {
   return HasElementWithReceiver(this, index);
 }
@@ -4334,6 +4429,36 @@ uint32_t StringDictionaryShape::HashForObject(String* key, Object* other) {
 
 MaybeObject* StringDictionaryShape::AsObject(String* key) {
   return key;
+}
+
+
+bool ObjectHashTableShape::IsMatch(JSObject* key, Object* other) {
+  return key == JSObject::cast(other);
+}
+
+
+uint32_t ObjectHashTableShape::Hash(JSObject* key) {
+  MaybeObject* maybe_hash = key->GetIdentityHash(JSObject::OMIT_CREATION);
+  ASSERT(!maybe_hash->IsFailure());
+  return Smi::cast(maybe_hash->ToObjectUnchecked())->value();
+}
+
+
+uint32_t ObjectHashTableShape::HashForObject(JSObject* key, Object* other) {
+  MaybeObject* maybe_hash = JSObject::cast(other)->GetIdentityHash(
+      JSObject::OMIT_CREATION);
+  ASSERT(!maybe_hash->IsFailure());
+  return Smi::cast(maybe_hash->ToObjectUnchecked())->value();
+}
+
+
+MaybeObject* ObjectHashTableShape::AsObject(JSObject* key) {
+  return key;
+}
+
+
+void ObjectHashTable::RemoveEntry(int entry) {
+  RemoveEntry(entry, GetHeap());
 }
 
 

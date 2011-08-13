@@ -11,8 +11,8 @@ web_root = ryan@nodejs.org:~/web/nodejs.org/
 export NODE_MAKE := $(MAKE)
 
 all: program
-	@-ls -lh build/default/node
-	@-ls -lh build/debug/node_g || echo ""
+	@-[ -f build/default/node ] && ls -lh build/default/node
+	@-[ -f build/debug/node_g ] && ls -lh build/debug/node_g
 
 all-progress:
 	@$(WAF) -p build
@@ -35,8 +35,8 @@ uninstall:
 test: all
 	python tools/test.py --mode=release simple message
 
-test-http2: all
-	python tools/test.py --mode=release --use-http2 simple message
+test-http1: all
+	python tools/test.py --mode=release --use-http1 simple message
 
 test-valgrind: all
 	python tools/test.py --mode=release --valgrind simple message
@@ -44,8 +44,8 @@ test-valgrind: all
 test-all: all
 	python tools/test.py --mode=debug,release
 
-test-all-http2: all
-	python tools/test.py --mode=debug,release --use-http2
+test-all-http1: all
+	python tools/test.py --mode=debug,release --use-http1
 
 test-all-valgrind: all
 	python tools/test.py --mode=debug,release --valgrind
@@ -116,6 +116,7 @@ UVTEST += simple/test-http-client-race-2
 UVTEST += simple/test-http-client-upload
 UVTEST += simple/test-http-client-upload-buf
 UVTEST += simple/test-http-contentLength0
+UVTEST += simple/test-http-curl-chunk-problem
 UVTEST += simple/test-http-default-encoding
 UVTEST += simple/test-http-dns-fail
 UVTEST += simple/test-http-eof-on-connect
@@ -175,6 +176,8 @@ UVTEST += simple/test-next-tick-starvation
 UVTEST += simple/test-module-load-list
 UVTEST += simple/test-path
 UVTEST += simple/test-pipe-stream
+UVTEST += simple/test-pipe-file-to-http
+UVTEST += simple/test-process-env
 UVTEST += simple/test-pump-file2tcp
 UVTEST += simple/test-pump-file2tcp-noexist
 UVTEST += simple/test-punycode
@@ -184,9 +187,11 @@ UVTEST += simple/test-readdouble
 UVTEST += simple/test-readfloat
 UVTEST += simple/test-readint
 UVTEST += simple/test-readuint
+UVTEST += simple/test-regress-GH-746
 UVTEST += simple/test-regress-GH-819
 UVTEST += simple/test-regress-GH-897
 UVTEST += simple/test-regression-object-prototype
+UVTEST += simple/test-repl
 UVTEST += simple/test-require-cache
 UVTEST += simple/test-require-cache-without-stat
 UVTEST += simple/test-require-exceptions
@@ -208,6 +213,7 @@ UVTEST += simple/test-tcp-wrap-connect
 UVTEST += simple/test-tcp-wrap-listen
 UVTEST += simple/test-timers-linked-list
 UVTEST += simple/test-tty-stdout-end
+UVTEST += simple/test-umask
 UVTEST += simple/test-url
 UVTEST += simple/test-utf8-scripts
 UVTEST += simple/test-vm-create-context-circular-reference

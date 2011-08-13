@@ -84,7 +84,7 @@ namespace v8 {
     if (has_pending_exception) {                                               \
       if (handle_scope_implementer->CallDepthIsZero() &&                       \
           (isolate)->is_out_of_memory()) {                                     \
-        if (!handle_scope_implementer->ignore_out_of_memory())                 \
+        if (!(isolate)->ignore_out_of_memory())                                \
           i::V8::FatalProcessOutOfMemory(NULL);                                \
       }                                                                        \
       bool call_depth_is_zero = handle_scope_implementer->CallDepthIsZero();   \
@@ -877,7 +877,6 @@ static void InitializeFunctionTemplate(
       i::Handle<i::FunctionTemplateInfo> info) {
   info->set_tag(i::Smi::FromInt(Consts::FUNCTION_TEMPLATE));
   info->set_flag(0);
-  info->set_prototype_attributes(i::Smi::FromInt(v8::None));
 }
 
 
@@ -1100,14 +1099,13 @@ void FunctionTemplate::SetHiddenPrototype(bool value) {
 }
 
 
-void FunctionTemplate::SetPrototypeAttributes(int attributes) {
+void FunctionTemplate::ReadOnlyPrototype() {
   i::Isolate* isolate = Utils::OpenHandle(this)->GetIsolate();
   if (IsDeadCheck(isolate, "v8::FunctionTemplate::SetPrototypeAttributes()")) {
     return;
   }
   ENTER_V8(isolate);
-  Utils::OpenHandle(this)->set_prototype_attributes(
-      i::Smi::FromInt(attributes));
+  Utils::OpenHandle(this)->set_read_only_prototype(true);
 }
 
 
@@ -3194,39 +3192,7 @@ int v8::Object::GetIdentityHash() {
   ENTER_V8(isolate);
   i::HandleScope scope(isolate);
   i::Handle<i::JSObject> self = Utils::OpenHandle(this);
-  i::Handle<i::Object> hidden_props_obj(i::GetHiddenProperties(self, true));
-  if (!hidden_props_obj->IsJSObject()) {
-    // We failed to create hidden properties.  That's a detached
-    // global proxy.
-    ASSERT(hidden_props_obj->IsUndefined());
-    return 0;
-  }
-  i::Handle<i::JSObject> hidden_props =
-      i::Handle<i::JSObject>::cast(hidden_props_obj);
-  i::Handle<i::String> hash_symbol = isolate->factory()->identity_hash_symbol();
-  if (hidden_props->HasLocalProperty(*hash_symbol)) {
-    i::Handle<i::Object> hash = i::GetProperty(hidden_props, hash_symbol);
-    CHECK(!hash.is_null());
-    CHECK(hash->IsSmi());
-    return i::Smi::cast(*hash)->value();
-  }
-
-  int hash_value;
-  int attempts = 0;
-  do {
-    // Generate a random 32-bit hash value but limit range to fit
-    // within a smi.
-    hash_value = i::V8::Random(self->GetIsolate()) & i::Smi::kMaxValue;
-    attempts++;
-  } while (hash_value == 0 && attempts < 30);
-  hash_value = hash_value != 0 ? hash_value : 1;  // never return 0
-  CHECK(!i::SetLocalPropertyIgnoreAttributes(
-          hidden_props,
-          hash_symbol,
-          i::Handle<i::Object>(i::Smi::FromInt(hash_value)),
-          static_cast<PropertyAttributes>(None)).is_null());
-
-  return hash_value;
+  return i::GetIdentityHash(self);
 }
 
 
@@ -3237,7 +3203,9 @@ bool v8::Object::SetHiddenValue(v8::Handle<v8::String> key,
   ENTER_V8(isolate);
   i::HandleScope scope(isolate);
   i::Handle<i::JSObject> self = Utils::OpenHandle(this);
-  i::Handle<i::Object> hidden_props(i::GetHiddenProperties(self, true));
+  i::Handle<i::Object> hidden_props(i::GetHiddenProperties(
+      self,
+      i::JSObject::ALLOW_CREATION));
   i::Handle<i::Object> key_obj = Utils::OpenHandle(*key);
   i::Handle<i::Object> value_obj = Utils::OpenHandle(*value);
   EXCEPTION_PREAMBLE(isolate);
@@ -3259,7 +3227,9 @@ v8::Local<v8::Value> v8::Object::GetHiddenValue(v8::Handle<v8::String> key) {
              return Local<v8::Value>());
   ENTER_V8(isolate);
   i::Handle<i::JSObject> self = Utils::OpenHandle(this);
-  i::Handle<i::Object> hidden_props(i::GetHiddenProperties(self, false));
+  i::Handle<i::Object> hidden_props(i::GetHiddenProperties(
+      self,
+      i::JSObject::OMIT_CREATION));
   if (hidden_props->IsUndefined()) {
     return v8::Local<v8::Value>();
   }
@@ -3281,7 +3251,9 @@ bool v8::Object::DeleteHiddenValue(v8::Handle<v8::String> key) {
   ENTER_V8(isolate);
   i::HandleScope scope(isolate);
   i::Handle<i::JSObject> self = Utils::OpenHandle(this);
-  i::Handle<i::Object> hidden_props(i::GetHiddenProperties(self, false));
+  i::Handle<i::Object> hidden_props(i::GetHiddenProperties(
+      self,
+      i::JSObject::OMIT_CREATION));
   if (hidden_props->IsUndefined()) {
     return true;
   }
@@ -4287,8 +4259,8 @@ static void* ExternalValueImpl(i::Handle<i::Object> obj) {
 Local<Value> v8::External::Wrap(void* data) {
   i::Isolate* isolate = i::Isolate::Current();
   STATIC_ASSERT(sizeof(data) == sizeof(i::Address));
-  LOG_API(isolate, "External::Wrap");
   EnsureInitializedForIsolate(isolate, "v8::External::Wrap()");
+  LOG_API(isolate, "External::Wrap");
   ENTER_V8(isolate);
 
   v8::Local<v8::Value> result = CanBeEncodedAsSmi(data)
@@ -4332,8 +4304,8 @@ void* v8::External::FullUnwrap(v8::Handle<v8::Value> wrapper) {
 Local<External> v8::External::New(void* data) {
   STATIC_ASSERT(sizeof(data) == sizeof(i::Address));
   i::Isolate* isolate = i::Isolate::Current();
-  LOG_API(isolate, "External::New");
   EnsureInitializedForIsolate(isolate, "v8::External::New()");
+  LOG_API(isolate, "External::New");
   ENTER_V8(isolate);
   return ExternalNewImpl(data);
 }
@@ -4825,8 +4797,7 @@ Local<Integer> Integer::NewFromUnsigned(uint32_t value) {
 
 
 void V8::IgnoreOutOfMemoryException() {
-  EnterIsolateIfNeeded()->handle_scope_implementer()->set_ignore_out_of_memory(
-      true);
+  EnterIsolateIfNeeded()->set_ignore_out_of_memory(true);
 }
 
 
