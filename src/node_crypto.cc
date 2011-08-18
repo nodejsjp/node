@@ -993,7 +993,7 @@ Handle<Value> Connection::ReceivedShutdown(const Arguments& args) {
   if (ss->ssl_ == NULL) return False();
   int r = SSL_get_shutdown(ss->ssl_);
 
-  if (r | SSL_RECEIVED_SHUTDOWN) return True();
+  if (r & SSL_RECEIVED_SHUTDOWN) return True();
 
   return False();
 }
@@ -1673,6 +1673,19 @@ class Cipher : public ObjectWrap {
         outString = Encode(out_hexdigest, out_hex_len, BINARY);
         delete [] out_hexdigest;
       } else if (strcasecmp(*encoding, "base64") == 0) {
+        // Check to see if we need to add in previous base64 overhang
+        if (cipher->incomplete_base64!=NULL){
+          unsigned char* complete_base64 = new unsigned char[out_len+cipher->incomplete_base64_len+1];
+          memcpy(complete_base64, cipher->incomplete_base64, cipher->incomplete_base64_len);
+          memcpy(&complete_base64[cipher->incomplete_base64_len], out_value, out_len);
+          delete [] out_value;
+
+          delete [] cipher->incomplete_base64;
+          cipher->incomplete_base64=NULL;
+
+          out_value=complete_base64;
+          out_len += cipher->incomplete_base64_len;
+        }
         base64(out_value, out_len, &out_hexdigest, &out_hex_len);
         outString = Encode(out_hexdigest, out_hex_len, BINARY);
         delete [] out_hexdigest;

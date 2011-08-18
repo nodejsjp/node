@@ -246,10 +246,11 @@ buffer object.  It does not change when the contents of the buffer are changed.
 
 <!--
 
-Does a memcpy() between buffers.
+Does copy between buffers. The source and target regions can be overlapped.
 
 -->
-バッファ間で memcpy() をします。
+バッファ間でコピーします。
+ソースとターゲットの領域は重なっていても構いません。
 
 <!--
 

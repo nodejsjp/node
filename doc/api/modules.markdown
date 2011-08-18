@@ -448,18 +448,21 @@ Global modules are lower priority than bundled dependencies.
 `require.paths` からロードされるのは、モジュールが前述の `node_modules` アルゴリズムで見つけられなかった場合だけです。
 グローバルモジュールはバンドルされた依存性よりも低プライオリティです。
 
-#### **Note:** Please Avoid Modifying `require.paths`
+#### **Note:** Please Avoid Using `require.paths`
 
 <!--
 
-`require.paths` may disappear in a future release.
+`require.paths` will only be supported through the end of the v0.4
+stable branch.  It is removed from node as of v0.5.
 
 While it seemed like a good idea at the time, and enabled a lot of
 useful experimentation, in practice a mutable `require.paths` list is
 often a troublesome source of confusion and headaches.
 
 -->
-将来のバージョンでは `require.paths` は無くなる予定です。
+
+`require.paths` は安定版である v0.4 の終わりまでしかサポートされません。
+Node v0.5 からは削除されました。
 
 実装当時はよいアイデアだと思われ実験的に使う分にはとても有用でしたが、実際に使いだしてみると変更可能な `require.paths` のリストというものはやっかいな混乱と頭痛の種になることがしばしばあったのです。
 

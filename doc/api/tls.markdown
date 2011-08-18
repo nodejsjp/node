@@ -105,18 +105,19 @@ defaults to `localhost`.) `options` should be an object which specifies
 
 <!--
 
-`tls.connect()` returns a cleartext `CryptoStream` object.
+`tls.connect()` returns a [CleartextStream](#tls.CleartextStream) object.
 
 -->
-`tls.connect()` は平文の `CryptoStream` オブジェクトを返します。
+`tls.connect()` は [CleartextStream](#tls.CleartextStream)
+オブジェクトを返します。
 
 <!--
 
 After the TLS/SSL handshake the `callback` is called. The `callback` will be
 called no matter if the server's certificate was authorized or not. It is up
-to the user to test `s.authorized` to see if the server certificate was
-signed by one of the specified CAs. If `s.authorized === false` then the error
-can be found in `s.authorizationError`.
+to the user to test `s.authorized` to see if the server certificate was signed
+by one of the specified CAs. If `s.authorized === false` then the error can be
+found in `s.authorizationError`.
 
 -->
 TLS/SSL ハンドシェークの後で `callback` が呼び出されます。
@@ -132,8 +133,9 @@ TLS/SSL ハンドシェークの後で `callback` が呼び出されます。
 In the v0.4 branch no function exists for starting a TLS session on an
 already existing TCP connection.  This is possible it just requires a bit of
 work. The technique is to use `tls.createSecurePair()` which returns two
-streams: an encrypted stream and a plaintext stream. The encrypted stream is then
-piped to the socket, the plaintext stream is what the user interacts with thereafter.
+streams: an encrypted stream and a cleartext stream. The encrypted stream is
+then piped to the socket, the cleartext stream is what the user interacts with
+thereafter.
 
 [Here is some code that does it.](http://gist.github.com/848444)
 
@@ -146,6 +148,71 @@ v0.4 ブランチでは、既に存在する TCP コネクション上で TLS �
 平文のストリームはその後ユーザとのインタラクションで使われます。
 
 [ここにそのコードがあります。](http://gist.github.com/848444)
+
+### pair = tls.createSecurePair([credentials], [isServer], [requestCert], [rejectUnauthorized])
+
+<!--
+
+Creates a new secure pair object with two streams, one of which reads/writes
+encrypted data, and one reads/writes cleartext data.
+Generally the encrypted one is piped to/from an incoming encrypted data stream,
+and the cleartext one is used as a replacement for the initial encrypted stream.
+
+ - `credentials`: A credentials object from crypto.createCredentials( ... )
+
+ - `isServer`: A boolean indicating whether this tls connection should be
+   opened as a server or a client.
+
+ - `requestCert`: A boolean indicating whether a server should request a
+   certificate from a connecting client. Only applies to server connections.
+
+ - `rejectUnauthorized`: A boolean indicating whether a server should
+   automatically reject clients with invalid certificates. Only applies to
+   servers with `requestCert` enabled.
+
+`tls.createSecurePair()` returns a SecurePair object with
+[cleartext](#tls.CleartextStream) and `encrypted` stream properties.
+
+-->
+二つのストリームを持つセキュアペアオブジェクトを作成します。
+一つは暗号化されたデータを読み書きし、もう一つは平文のデータを読み書きします。
+通常、暗号化されたストリームに外部からの暗号化されたデータが連結され、
+暗号化されたストリームの代わりに平文のストリームが使われます。
+
+ - `credentials`: `crypto.createCredentials( ... )` で作成された
+   証明書オブジェクト。
+
+ - `isServer`: この TLS コネクションをサーバとしてオープンするかどうかを示す
+   ブーリアン値。
+
+ - `requestCert`: クライアントからの接続に対して、サーバがクライアントに
+   証明書を要求するかどうかを示すブーリアン値。
+   サーバコネクションにのみ適用されます。
+
+ - `rejectUnauthorized`: クライアント認証が不正だった場合に、
+   自動的にクライアントを破棄するかどうかを示すブーリアン値。
+   `requestCert` が有効なサーバにのみ適用されます。
+
+`tls.createSequrePair()` は、[cleartext](#tls.CleartextStream) と `encrypted`
+をプロパティとして持つ `SecurePair` オブジェクトを返します。
+
+#### Event: 'secure'
+
+<!--
+
+The event is emitted from the SecurePair once the pair has successfully
+established a secure connection.
+
+Similarly to the checking for the server 'secureConnection' event,
+pair.cleartext.authorized should be checked to confirm whether the certificate
+used properly authorized.
+
+-->
+SecurePair オブジェクトのペアが安全な接続を確立した場合に発生します。
+
+サーバの `'secureConnection'` イベントと同様に、
+`pari.cleartext.authorized` によって接続相手の証明書を承認できたかどうかを
+チェックすることができます。
 
 ### tls.Server
 
@@ -248,8 +315,9 @@ has these possibilities:
 <!--
 
 This event is emitted after a new connection has been successfully
-handshaked. The argument is a duplex instance of `stream.Stream`. It has all
-the common stream methods and events.
+handshaked. The argument is a instance of
+[CleartextStream](#tls.CleartextStream). It has all the common stream methods
+and events.
 
 -->
 このイベントは、新しい接続のハンドシェークが成功した場合に生成されます。
@@ -319,7 +387,8 @@ event.
 
 <!--
 
-Set this property to reject connections when the server's connection count gets high.
+Set this property to reject connections when the server's connection count
+gets high.
 
 -->
 このプロパティを設定すると、サーバの接続数がこれを越えた場合に接続を破棄します。
@@ -332,3 +401,87 @@ The number of concurrent connections on the server.
 
 -->
 サーバの並行コネクションの数です。
+
+### tls.CleartextStream
+
+<!--
+
+This is a stream on top of the *Encrypted* stream that makes it possible to
+read/write an encrypted data as a cleartext data.
+
+This instance implements a duplex [Stream](streams.html#streams) interfaces.
+It has all the common stream methods and events.
+
+-->
+暗号化されたストリーム上で、暗号化されたデータを平文のデータとして
+読み書きすることができるストリームです。
+
+このインスタンスは双方向の [Stream](streams.html#streams) インタフェースを
+実装します。
+ストリームに共通な全てのメソッドとイベントを持ちます。
+
+#### cleartextStream.authorized
+
+<!--
+
+A boolean that is `true` if the peer certificate was signed by one of the
+specified CAs, otherwise `false`
+
+-->
+接続相手の証明書が CA の一つによって署名されていれば `true`、
+そうでなければ `false` です。
+
+#### cleartextStream.authorizationError
+
+<!--
+
+The reason why the peer's certificate has not been verified. This property
+becomes available only when `cleartextStream.authorized === false`.
+
+-->
+接続相手の証明書が認証されなかった理由です。
+このプロパティは `cleartextStream.authorized === false`
+の場合だけ利用可能になります。
+
+#### cleartextStream.getPeerCertificate()
+
+<!--
+
+Returns an object representing the peer's certicicate. The returned object has
+some properties corresponding to the field of the certificate.
+
+->
+接続相手の証明書を表現するオブジェクトを返します。
+返されるオブジェクトは証明書のフィールドに対応するプロパティを持ちます。
+
+<!--
+Example:
+-->
+例:
+
+    { subject: 
+       { C: 'UK',
+         ST: 'Acknack Ltd',
+         L: 'Rhys Jones',
+         O: 'node.js',
+         OU: 'Test TLS Certificate',
+         CN: 'localhost' },
+      issuer: 
+       { C: 'UK',
+         ST: 'Acknack Ltd',
+         L: 'Rhys Jones',
+         O: 'node.js',
+         OU: 'Test TLS Certificate',
+         CN: 'localhost' },
+      valid_from: 'Nov 11 09:52:22 2009 GMT',
+      valid_to: 'Nov  6 09:52:22 2029 GMT',
+      fingerprint: '2A:7A:C2:DD:E5:F9:CC:53:72:35:99:7A:02:5A:71:38:52:EC:8A:DF' }
+
+<!--
+
+If the peer does not provide a certificate, it returns `null` or an empty
+object.
+
+-->
+接続相手が証明書を提供しなかった場合は、
+`null` または空のオブジェクトを返します。

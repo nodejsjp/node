@@ -19,38 +19,48 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+var common = require('../common');
+var assert = require('assert');
+var http = require('http');
 
-#include "node_config.h"
+// Simple test of Node's HTTP ServerResponse.statusCode
+// ServerResponse.prototype.statusCode
 
-#ifndef NODE_VERSION_H
-#define NODE_VERSION_H
+var testsComplete = 0;
+var tests = [200, 202, 300, 404, 500];
+var testIdx = 0;
 
-#define NODE_MAJOR_VERSION 0
-#define NODE_MINOR_VERSION 4
-#define NODE_PATCH_VERSION 11
-#define NODE_VERSION_IS_RELEASE 1
+var s = http.createServer(function(req, res) {
+  var t = tests[testIdx];
+  res.writeHead(t, {'Content-Type': 'text/plain'});
+  console.log('--\nserver: statusCode after writeHead: '+res.statusCode);
+  assert.equal(res.statusCode, t);
+  res.end('hello world\n');
+});
 
-#ifndef NODE_STRINGIFY
-#define NODE_STRINGIFY(n) NODE_STRINGIFY_HELPER(n)
-#define NODE_STRINGIFY_HELPER(n) #n
-#endif
-
-#if NODE_VERSION_IS_RELEASE
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION)
-#else
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION) "-pre"
-#endif
-
-#define NODE_VERSION "v" NODE_VERSION_STRING
+s.listen(common.PORT, nextTest);
 
 
-#define NODE_VERSION_AT_LEAST(major, minor, patch) \
-  (( (major) < NODE_MAJOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) < NODE_MINOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) == NODE_MINOR_VERSION && (patch) <= NODE_PATCH_VERSION))
+function nextTest () {
+  if (testIdx + 1 === tests.length) {
+    return s.close();
+  }
+  var test = tests[testIdx];
 
-#endif /* NODE_VERSION_H */
+  http.get({ port: common.PORT }, function(response) {
+    console.log('client: expected status: ' + test);
+    console.log('client: statusCode: ' + response.statusCode);
+    assert.equal(response.statusCode, test);
+    response.on('end', function() {
+      testsComplete++;
+      testIdx += 1;
+      nextTest();
+    });
+  });
+}
+
+
+process.on('exit', function() {
+  assert.equal(4, testsComplete);
+});
+
