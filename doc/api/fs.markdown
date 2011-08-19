@@ -139,7 +139,7 @@ Synchronous ftruncate(2).
 -->
 同期の ftruncate(2)。
 
-### fs.chown(path, mode, [callback])
+### fs.chown(path, uid, gid, [callback])
 
 <!--
 
@@ -149,7 +149,7 @@ to the completion callback.
 -->
 非同期の chown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.chownSync(path, mode)
+### fs.chownSync(path, uid, gid)
 
 <!--
 
@@ -158,7 +158,8 @@ Synchronous chown(2).
 -->
 同期の chown(2)。
 
-### fs.fchown(path, mode, [callback])
+### fs.fchown(path, uid, gid, [callback])
+>>>>>>> v0.4
 
 <!--
 
@@ -168,7 +169,7 @@ to the completion callback.
 -->
 非同期の fchown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.fchownSync(path, mode)
+### fs.fchownSync(path, uid, gid)
 
 <!--
 
@@ -177,7 +178,7 @@ Synchronous fchown(2).
 -->
 同期の fchown(2)。
 
-### fs.lchown(path, mode, [callback])
+### fs.lchown(path, uid, gid, [callback])
 
 <!--
 
@@ -187,7 +188,7 @@ to the completion callback.
 -->
 非同期の lchown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.lchownSync(path, mode)
+### fs.lchownSync(path, uid, gid)
 
 <!--
 
@@ -823,7 +824,7 @@ stat object:
 -->
 `listener` は現在の状態オブジェクトと前の状態オブジェクトの 2 つの引数を受け取ります:
 
-    fs.watchFile(f, function (curr, prev) {
+    fs.watchFile('message.text', function (curr, prev) {
       console.log('the current mtime is: ' + curr.mtime);
       console.log('the previous mtime was: ' + prev.mtime);
     });
@@ -833,12 +834,13 @@ stat object:
 These stat objects are instances of `fs.Stat`.
 
 If you want to be notified when the file was modified, not just accessed
-you need to compare `curr.mtime` and `prev.mtime.
+you need to compare `curr.mtime` and `prev.mtime`.
 -->
 
 これらの状態オブジェクトは `fs.Stat` のインスタンスです。
 
-もしファイルがアクセスされただけでなく、変更された時の通知が必要であれば、`curr.mtime` と `prev.mtime` を比較する必要があります。
+もしファイルがアクセスされただけでなく、変更された時の通知が必要であれば、
+`curr.mtime` と `prev.mtime` を比較する必要があります。
 
 ### fs.unwatchFile(filename)
 
