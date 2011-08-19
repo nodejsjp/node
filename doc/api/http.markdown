@@ -94,13 +94,13 @@ per connection (in the case of keep-alive connections).
 
  When a new TCP stream is established. `socket` is an object of type
  `net.Socket`. Usually users will not want to access this event. The
- `stream` can also be accessed at `request.connection`.
+ `socket` can also be accessed at `request.connection`.
 
 -->
 新しい TCP ストリームが確立した時。
 `socket` は `net.Socket` 型のオブジェクトです。
 通常の利用者がこのイベントにアクセスしたくなることはないでしょう。
-`stream` は `request.connection` からアクセスすることもできます。
+`socket` は `request.connection` からアクセスすることもできます。
 
 ### Event: 'close'
 
@@ -612,12 +612,16 @@ Note: that Content-Length is given in bytes not characters. The above example
 works because the string `'hello world'` contains only single byte characters.
 If the body contains higher coded characters then `Buffer.byteLength()`
 should be used to determine the number of bytes in a given encoding.
+And Node does not check whether Content-Length and the length of the body
+which has been transmitted are equal or not.
 
 -->
 注意: `Content-Length` は文字数ではなくバイト数で与えられます。
 上の例が動作するのは `'hello world'` という文字列が単一バイト文字だけを含むためです。
 もしボディがより上位にコード化された文字を含む場合は、
 指定したエンコーディングによるバイト数を得るために `Buffer.byteLength()` を使うべきです。
+Node は Content-Length ヘッダの値と、
+実際に送信されたボディの長さが等しいかをチェックしません。
 
 ### response.statusCode
 
@@ -638,6 +642,15 @@ Example:
 例:
 
     response.statusCode = 404;
+
+<!--
+
+After response header was sent to the client, this property indicates the
+status code which was sent out.
+
+-->
+クライアントにレスポンスヘッダが送信された後、
+このプロパティは実際に送信されたステータスコードを示します。
 
 ### response.setHeader(name, value)
 
@@ -1168,9 +1181,14 @@ event, the entire body will be caught.
 <!--
 
 This is a `Writable Stream`.
+Note: Node does not check whether Content-Length and the length of the body
+which has been transmitted are equal or not.
 
 -->
 これは `Writable Stream` です。
+注意: Node は Content-Length ヘッダの値と、
+実際に送信されたボディの長さが等しいかをチェックしません。
+
 
 <!--
 
