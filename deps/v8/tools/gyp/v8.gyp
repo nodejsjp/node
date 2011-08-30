@@ -144,7 +144,6 @@
           'Debug': {
             'defines': [
               'DEBUG',
-              '_DEBUG',
               'ENABLE_DISASSEMBLER',
               'V8_ENABLE_CHECKS',
               'OBJECT_PRINT',
@@ -372,7 +371,10 @@
                 '<(INTERMEDIATE_DIR)/snapshot.cc',
               ],
               'variables': {
-                'mksnapshot_flags': [],
+                'mksnapshot_flags': [
+                  '--log-snapshot-positions',
+                  '--logfile', '<(INTERMEDIATE_DIR)/snapshot.log',
+                ],
               },
               'conditions': [
                 ['v8_target_arch=="arm"', {
@@ -497,7 +499,6 @@
             '../../src/code-stubs.cc',
             '../../src/code-stubs.h',
             '../../src/code.h',
-            '../../src/codegen-inl.h',
             '../../src/codegen.cc',
             '../../src/codegen.h',
             '../../src/compilation-cache.cc',

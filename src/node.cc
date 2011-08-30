@@ -98,8 +98,7 @@ extern "C" {
 # include <node_crypto.h>
 #endif
 #include <node_script.h>
-
-#define ARRAY_SIZE(a) (sizeof(a) / sizeof(*(a)))
+#include <v8_typed_array.h>
 
 using namespace v8;
 
@@ -1689,6 +1688,7 @@ typedef void (*extInit)(Handle<Object> exports);
 // DLOpen is node.dlopen(). Used to load 'module.node' dynamically shared
 // objects.
 Handle<Value> DLOpen(const v8::Arguments& args) {
+  node_module_struct compat_mod;
   HandleScope scope;
 
   if (args.Length() < 2) return Undefined();
@@ -1731,10 +1731,13 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
   // Get the init() function from the dynamically shared object.
   node_module_struct *mod = static_cast<node_module_struct *>(dlsym(handle, symstr));
   free(symstr);
+  symstr = NULL;
+
   // Error out if not found.
   if (mod == NULL) {
     /* Start Compatibility hack: Remove once everyone is using NODE_MODULE macro */
-    node_module_struct compat_mod;
+    memset(&compat_mod, 0, sizeof compat_mod);
+
     mod = &compat_mod;
     mod->version = NODE_MODULE_VERSION;
 
@@ -2081,6 +2084,14 @@ static Handle<Object> GetFeatures() {
   HandleScope scope;
 
   Local<Object> obj = Object::New();
+  obj->Set(String::NewSymbol("debug"),
+#if defined(DEBUG) && DEBUG
+    True()
+#else
+    False()
+#endif
+  );
+
   obj->Set(String::NewSymbol("uv"), Boolean::New(use_uv));
   obj->Set(String::NewSymbol("http1"), Boolean::New(use_http1));
   obj->Set(String::NewSymbol("ipv6"), True()); // TODO ping libuv
@@ -2592,6 +2603,7 @@ int Start(int argc, char *argv[]) {
   v8::Context::Scope context_scope(context);
 
   Handle<Object> process = SetupProcessObject(argc, argv);
+  v8_typed_array::AttachBindings(context->Global());
 
   // Create all the objects, load modules, do everything.
   // so your next reading stop should be node::Load()!

@@ -51,7 +51,7 @@ typedef struct {
 void pinger_try_read(pinger_t* pinger);
 
 
-static uv_buf_t alloc_cb(uv_stream_t* tcp, size_t size) {
+static uv_buf_t alloc_cb(uv_handle_t* handle, size_t size) {
   uv_buf_t buf;
   buf.base = (char*)malloc(size);
   buf.len = size;
@@ -94,7 +94,7 @@ static void pinger_write_ping(pinger_t* pinger) {
 
 
 static void pinger_read_cb(uv_stream_t* stream, ssize_t nread, uv_buf_t buf) {
-  unsigned int i;
+  ssize_t i;
   pinger_t* pinger;
 
   pinger = (pinger_t*)stream->data;

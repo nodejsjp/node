@@ -503,10 +503,11 @@ What platform you're running on. `'linux2'`, `'darwin'`, etc.
 
 <!--
 
-Returns an object describing the memory usage of the Node process.
+Returns an object describing the memory usage of the Node process
+measured in bytes.
 
 -->
-Node プロセスのメモリ使用状況を記述したオブジェクトを返します。
+Node プロセスのメモリ使用状況をバイト単位で記述したオブジェクトを返します。
 
     var util = require('util');
 

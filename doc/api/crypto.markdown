@@ -503,3 +503,15 @@ Sets the Diffie-Hellman private key. Key encoding can be `'binary'`, `'hex'`, or
 -->
 ディフィー・ヘルマン法による秘密鍵を設定します。
 鍵のエンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+
+### pbkdf2(password, salt, iterations, keylen, callback)
+
+<!--
+Asynchronous PBKDF2 applies pseudorandom function HMAC-SHA1 to derive
+a key of given length from the given password, salt and iterations.
+The callback gets two arguments `(err, derivedKey)`.
+-->
+疑似乱数を HMAC-SHA1 関数に適用して、与えられたパスワードと salt 
+(ランダムなバイト値)、および繰り返しから、指定された長さの鍵を生成する、
+非同期の PBKDF2 です。
+コールバック関数は二つの引数を受け取る `(err, derivedKey)` です。
