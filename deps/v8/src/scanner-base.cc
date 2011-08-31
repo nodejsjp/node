@@ -41,12 +41,12 @@ Scanner::Scanner(UnicodeCache* unicode_cache)
     : unicode_cache_(unicode_cache) { }
 
 
-uc32 Scanner::ScanHexEscape(uc32 c, int length) {
-  ASSERT(length <= 4);  // prevent overflow
+uc32 Scanner::ScanHexNumber(int expected_length) {
+  ASSERT(expected_length <= 4);  // prevent overflow
 
-  uc32 digits[4];
+  uc32 digits[4] = { 0, 0, 0, 0 };
   uc32 x = 0;
-  for (int i = 0; i < length; i++) {
+  for (int i = 0; i < expected_length; i++) {
     digits[i] = c0_;
     int d = HexValue(c0_);
     if (d < 0) {
@@ -54,12 +54,11 @@ uc32 Scanner::ScanHexEscape(uc32 c, int length) {
       // should be illegal, but other JS VMs just return the
       // non-escaped version of the original character.
 
-      // Push back digits read, except the last one (in c0_).
+      // Push back digits that we have advanced past.
       for (int j = i-1; j >= 0; j--) {
         PushBack(digits[j]);
       }
-      // Notice: No handling of error - treat it as "\u"->"u".
-      return c;
+      return -1;
     }
     x = x * 16 + d;
     Advance();
@@ -74,7 +73,9 @@ uc32 Scanner::ScanHexEscape(uc32 c, int length) {
 // JavaScriptScanner
 
 JavaScriptScanner::JavaScriptScanner(UnicodeCache* scanner_contants)
-  : Scanner(scanner_contants), octal_pos_(Location::invalid()) { }
+    : Scanner(scanner_contants),
+      octal_pos_(Location::invalid()),
+      harmony_block_scoping_(false) { }
 
 
 void JavaScriptScanner::Initialize(UC16CharacterStream* source) {
@@ -638,9 +639,17 @@ void JavaScriptScanner::ScanEscape() {
     case 'n' : c = '\n'; break;
     case 'r' : c = '\r'; break;
     case 't' : c = '\t'; break;
-    case 'u' : c = ScanHexEscape(c, 4); break;
+    case 'u' : {
+      c = ScanHexNumber(4);
+      if (c < 0) c = 'u';
+      break;
+    }
     case 'v' : c = '\v'; break;
-    case 'x' : c = ScanHexEscape(c, 2); break;
+    case 'x' : {
+      c = ScanHexNumber(2);
+      if (c < 0) c = 'x';
+      break;
+    }
     case '0' :  // fall through
     case '1' :  // fall through
     case '2' :  // fall through
@@ -800,84 +809,84 @@ Token::Value JavaScriptScanner::ScanNumber(bool seen_period) {
 
 uc32 JavaScriptScanner::ScanIdentifierUnicodeEscape() {
   Advance();
-  if (c0_ != 'u') return unibrow::Utf8::kBadChar;
+  if (c0_ != 'u') return -1;
   Advance();
-  uc32 c = ScanHexEscape('u', 4);
-  // We do not allow a unicode escape sequence to start another
-  // unicode escape sequence.
-  if (c == '\\') return unibrow::Utf8::kBadChar;
-  return c;
+  uc32 result = ScanHexNumber(4);
+  if (result < 0) PushBack('u');
+  return result;
 }
 
 
 // ----------------------------------------------------------------------------
 // Keyword Matcher
 
-#define KEYWORDS(KEYWORD_GROUP, KEYWORD)                      \
-  KEYWORD_GROUP('b')                                          \
-  KEYWORD("break", BREAK)                                     \
-  KEYWORD_GROUP('c')                                          \
-  KEYWORD("case", CASE)                                       \
-  KEYWORD("catch", CATCH)                                     \
-  KEYWORD("class", FUTURE_RESERVED_WORD)                      \
-  KEYWORD("const", CONST)                                     \
-  KEYWORD("continue", CONTINUE)                               \
-  KEYWORD_GROUP('d')                                          \
-  KEYWORD("debugger", DEBUGGER)                               \
-  KEYWORD("default", DEFAULT)                                 \
-  KEYWORD("delete", DELETE)                                   \
-  KEYWORD("do", DO)                                           \
-  KEYWORD_GROUP('e')                                          \
-  KEYWORD("else", ELSE)                                       \
-  KEYWORD("enum", FUTURE_RESERVED_WORD)                       \
-  KEYWORD("export", FUTURE_RESERVED_WORD)                     \
-  KEYWORD("extends", FUTURE_RESERVED_WORD)                    \
-  KEYWORD_GROUP('f')                                          \
-  KEYWORD("false", FALSE_LITERAL)                             \
-  KEYWORD("finally", FINALLY)                                 \
-  KEYWORD("for", FOR)                                         \
-  KEYWORD("function", FUNCTION)                               \
-  KEYWORD_GROUP('i')                                          \
-  KEYWORD("if", IF)                                           \
-  KEYWORD("implements", FUTURE_STRICT_RESERVED_WORD)          \
-  KEYWORD("import", FUTURE_RESERVED_WORD)                     \
-  KEYWORD("in", IN)                                           \
-  KEYWORD("instanceof", INSTANCEOF)                           \
-  KEYWORD("interface", FUTURE_STRICT_RESERVED_WORD)           \
-  KEYWORD_GROUP('l')                                          \
-  KEYWORD("let", FUTURE_STRICT_RESERVED_WORD)                 \
-  KEYWORD_GROUP('n')                                          \
-  KEYWORD("new", NEW)                                         \
-  KEYWORD("null", NULL_LITERAL)                               \
-  KEYWORD_GROUP('p')                                          \
-  KEYWORD("package", FUTURE_STRICT_RESERVED_WORD)             \
-  KEYWORD("private", FUTURE_STRICT_RESERVED_WORD)             \
-  KEYWORD("protected", FUTURE_STRICT_RESERVED_WORD)           \
-  KEYWORD("public", FUTURE_STRICT_RESERVED_WORD)              \
-  KEYWORD_GROUP('r')                                          \
-  KEYWORD("return", RETURN)                                   \
-  KEYWORD_GROUP('s')                                          \
-  KEYWORD("static", FUTURE_STRICT_RESERVED_WORD)              \
-  KEYWORD("super", FUTURE_RESERVED_WORD)                      \
-  KEYWORD("switch", SWITCH)                                   \
-  KEYWORD_GROUP('t')                                          \
-  KEYWORD("this", THIS)                                       \
-  KEYWORD("throw", THROW)                                     \
-  KEYWORD("true", TRUE_LITERAL)                               \
-  KEYWORD("try", TRY)                                         \
-  KEYWORD("typeof", TYPEOF)                                   \
-  KEYWORD_GROUP('v')                                          \
-  KEYWORD("var", VAR)                                         \
-  KEYWORD("void", VOID)                                       \
-  KEYWORD_GROUP('w')                                          \
-  KEYWORD("while", WHILE)                                     \
-  KEYWORD("with", WITH)                                       \
-  KEYWORD_GROUP('y')                                          \
-  KEYWORD("yield", FUTURE_STRICT_RESERVED_WORD)
+#define KEYWORDS(KEYWORD_GROUP, KEYWORD)                            \
+  KEYWORD_GROUP('b')                                                \
+  KEYWORD("break", Token::BREAK)                                    \
+  KEYWORD_GROUP('c')                                                \
+  KEYWORD("case", Token::CASE)                                      \
+  KEYWORD("catch", Token::CATCH)                                    \
+  KEYWORD("class", Token::FUTURE_RESERVED_WORD)                     \
+  KEYWORD("const", Token::CONST)                                    \
+  KEYWORD("continue", Token::CONTINUE)                              \
+  KEYWORD_GROUP('d')                                                \
+  KEYWORD("debugger", Token::DEBUGGER)                              \
+  KEYWORD("default", Token::DEFAULT)                                \
+  KEYWORD("delete", Token::DELETE)                                  \
+  KEYWORD("do", Token::DO)                                          \
+  KEYWORD_GROUP('e')                                                \
+  KEYWORD("else", Token::ELSE)                                      \
+  KEYWORD("enum", Token::FUTURE_RESERVED_WORD)                      \
+  KEYWORD("export", Token::FUTURE_RESERVED_WORD)                    \
+  KEYWORD("extends", Token::FUTURE_RESERVED_WORD)                   \
+  KEYWORD_GROUP('f')                                                \
+  KEYWORD("false", Token::FALSE_LITERAL)                            \
+  KEYWORD("finally", Token::FINALLY)                                \
+  KEYWORD("for", Token::FOR)                                        \
+  KEYWORD("function", Token::FUNCTION)                              \
+  KEYWORD_GROUP('i')                                                \
+  KEYWORD("if", Token::IF)                                          \
+  KEYWORD("implements", Token::FUTURE_STRICT_RESERVED_WORD)         \
+  KEYWORD("import", Token::FUTURE_RESERVED_WORD)                    \
+  KEYWORD("in", Token::IN)                                          \
+  KEYWORD("instanceof", Token::INSTANCEOF)                          \
+  KEYWORD("interface", Token::FUTURE_STRICT_RESERVED_WORD)          \
+  KEYWORD_GROUP('l')                                                \
+  KEYWORD("let", harmony_block_scoping                              \
+                 ? Token::LET : Token::FUTURE_STRICT_RESERVED_WORD) \
+  KEYWORD_GROUP('n')                                                \
+  KEYWORD("new", Token::NEW)                                        \
+  KEYWORD("null", Token::NULL_LITERAL)                              \
+  KEYWORD_GROUP('p')                                                \
+  KEYWORD("package", Token::FUTURE_STRICT_RESERVED_WORD)            \
+  KEYWORD("private", Token::FUTURE_STRICT_RESERVED_WORD)            \
+  KEYWORD("protected", Token::FUTURE_STRICT_RESERVED_WORD)          \
+  KEYWORD("public", Token::FUTURE_STRICT_RESERVED_WORD)             \
+  KEYWORD_GROUP('r')                                                \
+  KEYWORD("return", Token::RETURN)                                  \
+  KEYWORD_GROUP('s')                                                \
+  KEYWORD("static", Token::FUTURE_STRICT_RESERVED_WORD)             \
+  KEYWORD("super", Token::FUTURE_RESERVED_WORD)                     \
+  KEYWORD("switch", Token::SWITCH)                                  \
+  KEYWORD_GROUP('t')                                                \
+  KEYWORD("this", Token::THIS)                                      \
+  KEYWORD("throw", Token::THROW)                                    \
+  KEYWORD("true", Token::TRUE_LITERAL)                              \
+  KEYWORD("try", Token::TRY)                                        \
+  KEYWORD("typeof", Token::TYPEOF)                                  \
+  KEYWORD_GROUP('v')                                                \
+  KEYWORD("var", Token::VAR)                                        \
+  KEYWORD("void", Token::VOID)                                      \
+  KEYWORD_GROUP('w')                                                \
+  KEYWORD("while", Token::WHILE)                                    \
+  KEYWORD("with", Token::WITH)                                      \
+  KEYWORD_GROUP('y')                                                \
+  KEYWORD("yield", Token::FUTURE_STRICT_RESERVED_WORD)
 
 
 static Token::Value KeywordOrIdentifierToken(const char* input,
-                                             int input_length) {
+                                             int input_length,
+                                             bool harmony_block_scoping) {
   ASSERT(input_length >= 1);
   const int kMinLength = 2;
   const int kMaxLength = 10;
@@ -906,7 +915,7 @@ static Token::Value KeywordOrIdentifierToken(const char* input,
           (keyword_length <= 7 || input[7] == keyword[7]) &&  \
           (keyword_length <= 8 || input[8] == keyword[8]) &&  \
           (keyword_length <= 9 || input[9] == keyword[9])) {  \
-        return Token::token;                                  \
+        return token;                                         \
       }                                                       \
     }
     KEYWORDS(KEYWORD_GROUP_CASE, KEYWORD)
@@ -922,7 +931,11 @@ Token::Value JavaScriptScanner::ScanIdentifierOrKeyword() {
   if (c0_ == '\\') {
     uc32 c = ScanIdentifierUnicodeEscape();
     // Only allow legal identifier start characters.
-    if (!unicode_cache_->IsIdentifierStart(c)) return Token::ILLEGAL;
+    if (c < 0 ||
+        c == '\\' ||  // No recursive escapes.
+        !unicode_cache_->IsIdentifierStart(c)) {
+      return Token::ILLEGAL;
+    }
     AddLiteralChar(c);
     return ScanIdentifierSuffix(&literal);
   }
@@ -947,7 +960,9 @@ Token::Value JavaScriptScanner::ScanIdentifierOrKeyword() {
 
   if (next_.literal_chars->is_ascii()) {
     Vector<const char> chars = next_.literal_chars->ascii_literal();
-    return KeywordOrIdentifierToken(chars.start(), chars.length());
+    return KeywordOrIdentifierToken(chars.start(),
+                                    chars.length(),
+                                    harmony_block_scoping_);
   }
 
   return Token::IDENTIFIER;
@@ -960,7 +975,11 @@ Token::Value JavaScriptScanner::ScanIdentifierSuffix(LiteralScope* literal) {
     if (c0_ == '\\') {
       uc32 c = ScanIdentifierUnicodeEscape();
       // Only allow legal identifier part characters.
-      if (!unicode_cache_->IsIdentifierPart(c)) return Token::ILLEGAL;
+      if (c < 0 ||
+          c == '\\' ||
+          !unicode_cache_->IsIdentifierPart(c)) {
+        return Token::ILLEGAL;
+      }
       AddLiteralChar(c);
     } else {
       AddLiteralChar(c0_);
@@ -986,8 +1005,9 @@ bool JavaScriptScanner::ScanRegExpPattern(bool seen_equal) {
   // the scanner should pass uninterpreted bodies to the RegExp
   // constructor.
   LiteralScope literal(this);
-  if (seen_equal)
+  if (seen_equal) {
     AddLiteralChar('=');
+  }
 
   while (c0_ != '/' || in_character_class) {
     if (unicode_cache_->IsLineTerminator(c0_) || c0_ < 0) return false;
@@ -1019,20 +1039,47 @@ bool JavaScriptScanner::ScanRegExpPattern(bool seen_equal) {
 }
 
 
+bool JavaScriptScanner::ScanLiteralUnicodeEscape() {
+  ASSERT(c0_ == '\\');
+  uc32 chars_read[6] = {'\\', 'u', 0, 0, 0, 0};
+  Advance();
+  int i = 1;
+  if (c0_ == 'u') {
+    i++;
+    while (i < 6) {
+      Advance();
+      if (!IsHexDigit(c0_)) break;
+      chars_read[i] = c0_;
+      i++;
+    }
+  }
+  if (i < 6) {
+    // Incomplete escape. Undo all advances and return false.
+    while (i > 0) {
+      i--;
+      PushBack(chars_read[i]);
+    }
+    return false;
+  }
+  // Complete escape. Add all chars to current literal buffer.
+  for (int i = 0; i < 6; i++) {
+    AddLiteralChar(chars_read[i]);
+  }
+  return true;
+}
+
+
 bool JavaScriptScanner::ScanRegExpFlags() {
   // Scan regular expression flags.
   LiteralScope literal(this);
   while (unicode_cache_->IsIdentifierPart(c0_)) {
-    if (c0_ == '\\') {
-      uc32 c = ScanIdentifierUnicodeEscape();
-      if (c != static_cast<uc32>(unibrow::Utf8::kBadChar)) {
-        // We allow any escaped character, unlike the restriction on
-        // IdentifierPart when it is used to build an IdentifierName.
-        AddLiteralChar(c);
-        continue;
+    if (c0_ != '\\') {
+      AddLiteralCharAdvance();
+    } else {
+      if (!ScanLiteralUnicodeEscape()) {
+        break;
       }
     }
-    AddLiteralCharAdvance();
   }
   literal.Complete();
 

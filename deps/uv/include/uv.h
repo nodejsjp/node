@@ -19,6 +19,8 @@
  * IN THE SOFTWARE.
  */
 
+/* See uv_init for an introduction. */
+
 #ifndef UV_H
 #define UV_H
 #ifdef __cplusplus
@@ -43,6 +45,7 @@ typedef struct uv_err_s uv_err_t;
 typedef struct uv_handle_s uv_handle_t;
 typedef struct uv_stream_s uv_stream_t;
 typedef struct uv_tcp_s uv_tcp_t;
+typedef struct uv_udp_s uv_udp_t;
 typedef struct uv_pipe_s uv_pipe_t;
 typedef struct uv_timer_s uv_timer_t;
 typedef struct uv_prepare_s uv_prepare_t;
@@ -56,6 +59,7 @@ typedef struct uv_req_s uv_req_t;
 typedef struct uv_shutdown_s uv_shutdown_t;
 typedef struct uv_write_s uv_write_t;
 typedef struct uv_connect_s uv_connect_t;
+typedef struct uv_udp_send_s uv_udp_send_t;
 
 #if defined(__unix__) || defined(__POSIX__) || defined(__APPLE__)
 # include "uv-unix.h"
@@ -64,7 +68,39 @@ typedef struct uv_connect_s uv_connect_t;
 #endif
 
 
-/* The status parameter is 0 if the request completed successfully,
+/*
+ * This function must be called before any other functions in libuv.
+ *
+ * At the moment libuv is single threaded but this will likely change in the
+ * near future. Basically it will change by uv_init() taking a 'loop'
+ * argument and all other _init having a first argument as the the 'loop'.
+ *
+ * All functions besides uv_run() are non-blocking.
+ *
+ * All callbacks in libuv are made asynchronously. That is they are never
+ * made by the function that takes them as a parameter.
+ */
+void uv_init();
+
+/*
+ * This function starts the event loop. It blocks until the reference count
+ * of the loop drops to zero.
+ */
+int uv_run();
+
+/*
+ * Manually modify the event loop's reference count. Useful if the user wants
+ * to have a handle or timeout that doesn't keep the loop alive.
+ */
+void uv_ref();
+void uv_unref();
+
+void uv_update_time();
+int64_t uv_now();
+
+
+/*
+ * The status parameter is 0 if the request completed successfully,
  * and should be -1 if the request was cancelled or failed.
  * For uv_close_cb, -1 means that the handle was closed due to an error.
  * Error details can be obtained by calling uv_last_error().
@@ -72,8 +108,8 @@ typedef struct uv_connect_s uv_connect_t;
  * In the case of uv_read_cb the uv_buf_t returned should be freed by the
  * user.
  */
-typedef uv_buf_t (*uv_alloc_cb)(uv_stream_t* tcp, size_t suggested_size);
-typedef void (*uv_read_cb)(uv_stream_t* tcp, ssize_t nread, uv_buf_t buf);
+typedef uv_buf_t (*uv_alloc_cb)(uv_handle_t* handle, size_t suggested_size);
+typedef void (*uv_read_cb)(uv_stream_t* stream, ssize_t nread, uv_buf_t buf);
 typedef void (*uv_write_cb)(uv_write_t* req, int status);
 typedef void (*uv_connect_cb)(uv_connect_t* req, int status);
 typedef void (*uv_shutdown_cb)(uv_shutdown_t* req, int status);
@@ -112,6 +148,7 @@ typedef enum {
   UV_EINVAL,
   UV_EISCONN,
   UV_EMFILE,
+  UV_EMSGSIZE,
   UV_ENETDOWN,
   UV_ENETUNREACH,
   UV_ENFILE,
@@ -138,6 +175,7 @@ typedef enum {
 typedef enum {
   UV_UNKNOWN_HANDLE = 0,
   UV_TCP,
+  UV_UDP,
   UV_NAMED_PIPE,
   UV_TTY,
   UV_FILE,
@@ -160,6 +198,7 @@ typedef enum {
   UV_WRITE,
   UV_SHUTDOWN,
   UV_WAKEUP,
+  UV_UDP_SEND,
   UV_REQ_TYPE_PRIVATE
 } uv_req_type;
 
@@ -170,6 +209,16 @@ struct uv_err_s {
   /* private */
   int sys_errno_;
 };
+
+
+/*
+ * Most functions return boolean: 0 for success and -1 for failure.
+ * On error the user should then call uv_last_error() to determine
+ * the error code.
+ */
+uv_err_t uv_last_error();
+char* uv_strerror(uv_err_t err);
+const char* uv_err_name(uv_err_t err);
 
 
 #define UV_REQ_FIELDS \
@@ -191,19 +240,21 @@ UV_PRIVATE_REQ_TYPES
 
 
 /*
+ * uv_shutdown_t is a subclass of uv_req_t
+ *
  * Shutdown the outgoing (write) side of a duplex stream. It waits for
  * pending write requests to complete. The handle should refer to a
  * initialized stream. req should be an uninitalized shutdown request
  * struct. The cb is a called after shutdown is complete.
  */
+int uv_shutdown(uv_shutdown_t* req, uv_stream_t* handle, uv_shutdown_cb cb);
+
 struct uv_shutdown_s {
   UV_REQ_FIELDS
   uv_stream_t* handle;
   uv_shutdown_cb cb;
   UV_SHUTDOWN_PRIVATE_FIELDS
 };
-
-int uv_shutdown(uv_shutdown_t* req, uv_stream_t* handle, uv_shutdown_cb cb);
 
 
 #define UV_HANDLE_FIELDS \
@@ -237,13 +288,29 @@ int uv_is_active(uv_handle_t* handle);
 void uv_close(uv_handle_t* handle, uv_close_cb close_cb);
 
 
+/*
+ * Constructor for uv_buf_t.
+ * Due to platform differences the user cannot rely on the ordering of the
+ * base and len members of the uv_buf_t struct. The user is responsible for
+ * freeing base after the uv_buf_t is done. Return struct passed by value.
+ */
+uv_buf_t uv_buf_init(char* base, size_t len);
+
+
 #define UV_STREAM_FIELDS \
   /* number of bytes queued for writing */ \
   size_t write_queue_size; \
   /* private */ \
   UV_STREAM_PRIVATE_FIELDS
 
-/* The abstract base class for all streams. */
+/*
+ * uv_stream_t is a subclass of uv_handle_t
+ *
+ * uv_stream is an abstract class.
+ *
+ * uv_stream_t is the parent class of uv_tcp_t, uv_pipe_t
+ * and soon uv_file_t.
+ */
 struct uv_stream_s {
   UV_HANDLE_FIELDS
   UV_STREAM_FIELDS
@@ -251,7 +318,8 @@ struct uv_stream_s {
 
 int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb);
 
-/* This call is used in conjunction with uv_listen() to accept incoming
+/*
+ * This call is used in conjunction with uv_listen() to accept incoming
  * connections. Call uv_accept after receiving a uv_connection_cb to accept
  * the connection. Before calling uv_accept use uv_*_init() must be
  * called on the client. Non-zero return value indicates an error.
@@ -263,7 +331,8 @@ int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb);
  */
 int uv_accept(uv_stream_t* server, uv_stream_t* client);
 
-/* Read data from an incoming stream. The callback will be made several
+/*
+ * Read data from an incoming stream. The callback will be made several
  * several times until there is no more data to read or uv_read_stop is
  * called. When we've reached EOF nread will be set to -1 and the error is
  * set to UV_EOF. When nread == -1 the buf parameter might not point to a
@@ -298,10 +367,14 @@ uv_stream_t* uv_std_handle(uv_std_type type);
  *   };
  *
  *   // writes "1234"
- *   uv_write(req, a, 2);
- *   uv_write(req, b, 2);
+ *   uv_write(req, stream, a, 2);
+ *   uv_write(req, stream, b, 2);
  *
  */
+int uv_write(uv_write_t* req, uv_stream_t* handle, uv_buf_t bufs[], int bufcnt,
+    uv_write_cb cb);
+
+/* uv_write_t is a subclass of uv_req_t */
 struct uv_write_s {
   UV_REQ_FIELDS
   uv_write_cb cb;
@@ -309,14 +382,12 @@ struct uv_write_s {
   UV_WRITE_PRIVATE_FIELDS
 };
 
-int uv_write(uv_write_t* req, uv_stream_t* handle, uv_buf_t bufs[], int bufcnt,
-    uv_write_cb cb);
 
 
 /*
- * A subclass of uv_stream_t representing a TCP stream or TCP server. In the
- * future this will probably be split into two classes - one a stream and
- * the other a server.
+ * uv_tcp_t is a subclass of uv_stream_t
+ *
+ * Represents a TCP stream or TCP server.
  */
 struct uv_tcp_s {
   UV_HANDLE_FIELDS
@@ -335,6 +406,12 @@ int uv_tcp_bind6(uv_tcp_t* handle, struct sockaddr_in6);
  * initialized TCP handle and an uninitialized uv_connect_t*. The callback
  * will be made when the connection is estabished.
  */
+int uv_tcp_connect(uv_connect_t* req, uv_tcp_t* handle,
+    struct sockaddr_in address, uv_connect_cb cb);
+int uv_tcp_connect6(uv_connect_t* req, uv_tcp_t* handle,
+    struct sockaddr_in6 address, uv_connect_cb cb);
+
+/* uv_connect_t is a subclass of uv_req_t */
 struct uv_connect_s {
   UV_REQ_FIELDS
   uv_connect_cb cb;
@@ -342,16 +419,163 @@ struct uv_connect_s {
   UV_CONNECT_PRIVATE_FIELDS
 };
 
-int uv_tcp_connect(uv_connect_t* req, uv_tcp_t* handle,
-    struct sockaddr_in address, uv_connect_cb cb);
-int uv_tcp_connect6(uv_connect_t* req, uv_tcp_t* handle,
-    struct sockaddr_in6 address, uv_connect_cb cb);
 
-int uv_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen);
+int uv_getsockname(uv_handle_t* handle, struct sockaddr* name, int* namelen);
 
 
 /*
- * A subclass of uv_stream_t representing a pipe stream or pipe server.
+ * UDP support.
+ */
+
+enum uv_udp_flags {
+  /* Disables dual stack mode. Used with uv_udp_bind6(). */
+  UV_UDP_IPV6ONLY = 1,
+  /*
+   * Indicates message was truncated because read buffer was too small. The
+   * remainder was discarded by the OS. Used in uv_udp_recv_cb.
+   */
+  UV_UDP_PARTIAL = 2
+};
+
+/*
+ * Called after a uv_udp_send() or uv_udp_send6(). status 0 indicates
+ * success otherwise error.
+ */
+typedef void (*uv_udp_send_cb)(uv_udp_send_t* req, int status);
+
+/*
+ * Callback that is invoked when a new UDP datagram is received.
+ *
+ *  handle  UDP handle.
+ *  nread   Number of bytes that have been received.
+ *          0 if there is no more data to read. You may
+ *          discard or repurpose the read buffer.
+ *          -1 if a transmission error was detected.
+ *  buf     uv_buf_t with the received data.
+ *  addr    struct sockaddr_in or struct sockaddr_in6.
+ *          Valid for the duration of the callback only.
+ *  flags   One or more OR'ed UV_UDP_* constants.
+ *          Right now only UV_UDP_PARTIAL is used.
+ */
+typedef void (*uv_udp_recv_cb)(uv_udp_t* handle, ssize_t nread, uv_buf_t buf,
+    struct sockaddr* addr, unsigned flags);
+
+/* uv_udp_t is a subclass of uv_handle_t */
+struct uv_udp_s {
+  UV_HANDLE_FIELDS
+  UV_UDP_PRIVATE_FIELDS
+};
+
+/* uv_udp_send_t is a subclass of uv_req_t */
+struct uv_udp_send_s {
+  UV_REQ_FIELDS
+  uv_udp_t* handle;
+  uv_udp_send_cb cb;
+  UV_UDP_SEND_PRIVATE_FIELDS
+};
+
+/*
+ * Initialize a new UDP handle. The actual socket is created lazily.
+ * Returns 0 on success.
+ */
+int uv_udp_init(uv_udp_t* handle);
+
+/*
+ * Bind to a IPv4 address and port.
+ *
+ * Arguments:
+ *  handle    UDP handle. Should have been initialized with `uv_udp_init`.
+ *  addr      struct sockaddr_in with the address and port to bind to.
+ *  flags     Unused.
+ *
+ * Returns:
+ *  0 on success, -1 on error.
+ */
+int uv_udp_bind(uv_udp_t* handle, struct sockaddr_in addr, unsigned flags);
+
+/*
+ * Bind to a IPv6 address and port.
+ *
+ * Arguments:
+ *  handle    UDP handle. Should have been initialized with `uv_udp_init`.
+ *  addr      struct sockaddr_in with the address and port to bind to.
+ *  flags     Should be 0 or UV_UDP_IPV6ONLY.
+ *
+ * Returns:
+ *  0 on success, -1 on error.
+ */
+int uv_udp_bind6(uv_udp_t* handle, struct sockaddr_in6 addr, unsigned flags);
+
+/*
+ * Send data. If the socket has not previously been bound with `uv_udp_bind`
+ * or `uv_udp_bind6`, it is bound to 0.0.0.0 (the "all interfaces" address)
+ * and a random port number.
+ *
+ * Arguments:
+ *  req       UDP request handle. Need not be initialized.
+ *  handle    UDP handle. Should have been initialized with `uv_udp_init`.
+ *  bufs      List of buffers to send.
+ *  bufcnt    Number of buffers in `bufs`.
+ *  addr      Address of the remote peer. See `uv_ip4_addr`.
+ *  send_cb   Callback to invoke when the data has been sent out.
+ *
+ * Returns:
+ *  0 on success, -1 on error.
+ */
+int uv_udp_send(uv_udp_send_t* req, uv_udp_t* handle, uv_buf_t bufs[],
+    int bufcnt, struct sockaddr_in addr, uv_udp_send_cb send_cb);
+
+/*
+ * Send data. If the socket has not previously been bound with `uv_udp_bind6`,
+ * it is bound to ::0 (the "all interfaces" address) and a random port number.
+ *
+ * Arguments:
+ *  req       UDP request handle. Need not be initialized.
+ *  handle    UDP handle. Should have been initialized with `uv_udp_init`.
+ *  bufs      List of buffers to send.
+ *  bufcnt    Number of buffers in `bufs`.
+ *  addr      Address of the remote peer. See `uv_ip6_addr`.
+ *  send_cb   Callback to invoke when the data has been sent out.
+ *
+ * Returns:
+ *  0 on success, -1 on error.
+ */
+int uv_udp_send6(uv_udp_send_t* req, uv_udp_t* handle, uv_buf_t bufs[],
+    int bufcnt, struct sockaddr_in6 addr, uv_udp_send_cb send_cb);
+
+/*
+ * Send data. If the socket has not previously been bound with `uv_udp_bind`
+ * or `uv_udp_bind6`, it is bound to 0.0.0.0 (the "all interfaces" address)
+ * and a random port number.
+ *
+ * Arguments:
+ *  handle    UDP handle. Should have been initialized with `uv_udp_init`.
+ *  alloc_cb  Callback to invoke when temporary storage is needed.
+ *  recv_cb   Callback to invoke with received data.
+ *
+ * Returns:
+ *  0 on success, -1 on error.
+ */
+int uv_udp_recv_start(uv_udp_t* handle, uv_alloc_cb alloc_cb,
+    uv_udp_recv_cb recv_cb);
+
+/*
+ * Stop listening for incoming datagrams.
+ *
+ * Arguments:
+ *  handle    UDP handle. Should have been initialized with `uv_udp_init`.
+ *
+ * Returns:
+ *  0 on success, -1 on error.
+ */
+int uv_udp_recv_stop(uv_udp_t* handle);
+
+
+/*
+ * uv_pipe_t is a subclass of uv_stream_t
+ *
+ * Representing a pipe stream or pipe server. On Windows this is a Named
+ * Pipe. On Unix this is a UNIX domain socket.
  */
 struct uv_pipe_s {
   UV_HANDLE_FIELDS
@@ -368,9 +592,11 @@ int uv_pipe_connect(uv_connect_t* req, uv_pipe_t* handle,
 
 
 /*
- * Subclass of uv_handle_t. libev wrapper. Every active prepare handle gets
- * its callback called exactly once per loop iteration, just before the
- * system blocks to wait for completed i/o.
+ * uv_prepare_t is a subclass of uv_handle_t.
+ *
+ * libev wrapper. Every active prepare handle gets its callback called
+ * exactly once per loop iteration, just before the system blocks to wait
+ * for completed i/o.
  */
 struct uv_prepare_s {
   UV_HANDLE_FIELDS
@@ -385,9 +611,10 @@ int uv_prepare_stop(uv_prepare_t* prepare);
 
 
 /*
- * Subclass of uv_handle_t. libev wrapper. Every active check handle gets
- * its callback called exactly once per loop iteration, just after the
- * system returns from blocking.
+ * uv_check_t is a subclass of uv_handle_t.
+ *
+ * libev wrapper. Every active check handle gets its callback called exactly
+ * once per loop iteration, just after the system returns from blocking.
  */
 struct uv_check_s {
   UV_HANDLE_FIELDS
@@ -402,10 +629,12 @@ int uv_check_stop(uv_check_t* check);
 
 
 /*
- * Subclass of uv_handle_t. libev wrapper. Every active idle handle gets its
- * callback called repeatedly until it is stopped. This happens after all
- * other types of callbacks are processed.  When there are multiple "idle"
- * handles active, their callbacks are called in turn.
+ * uv_idle_t is a subclass of uv_handle_t.
+ *
+ * libev wrapper. Every active idle handle gets its callback called
+ * repeatedly until it is stopped. This happens after all other types of
+ * callbacks are processed.  When there are multiple "idle" handles active,
+ * their callbacks are called in turn.
  */
 struct uv_idle_s {
   UV_HANDLE_FIELDS
@@ -420,7 +649,9 @@ int uv_idle_stop(uv_idle_t* idle);
 
 
 /*
- * Subclass of uv_handle_t. libev wrapper. uv_async_send wakes up the event
+ * uv_async_t is a subclass of uv_handle_t.
+ *
+ * libev wrapper. uv_async_send wakes up the event
  * loop and calls the async handle's callback There is no guarantee that
  * every uv_async_send call leads to exactly one invocation of the callback;
  * The only guarantee is that the callback function is  called at least once
@@ -434,12 +665,19 @@ struct uv_async_s {
 
 int uv_async_init(uv_async_t* async, uv_async_cb async_cb);
 
+/*
+ * This can be called from other threads to wake up a libuv thread.
+ *
+ * libuv is single threaded at the moment.
+ */
 int uv_async_send(uv_async_t* async);
 
 
 /*
- * Subclass of uv_handle_t. Wraps libev's ev_timer watcher. Used to get
- * woken up at a specified time in the future.
+ * uv_timer_t is a subclass of uv_handle_t.
+ *
+ * Wraps libev's ev_timer watcher. Used to get woken up at a specified time
+ * in the future.
  */
 struct uv_timer_s {
   UV_HANDLE_FIELDS
@@ -448,7 +686,8 @@ struct uv_timer_s {
 
 int uv_timer_init(uv_timer_t* timer);
 
-int uv_timer_start(uv_timer_t* timer, uv_timer_cb cb, int64_t timeout, int64_t repeat);
+int uv_timer_start(uv_timer_t* timer, uv_timer_cb cb, int64_t timeout,
+    int64_t repeat);
 
 int uv_timer_stop(uv_timer_t* timer);
 
@@ -472,14 +711,18 @@ int64_t uv_timer_get_repeat(uv_timer_t* timer);
 
 /* c-ares integration initialize and terminate */
 int uv_ares_init_options(ares_channel *channelptr,
-                        struct ares_options *options,
-                        int optmask);
+                         struct ares_options *options,
+                         int optmask);
 
 void uv_ares_destroy(ares_channel channel);
 
 
 /*
- * Subclass of uv_handle_t. Used for integration of getaddrinfo.
+ * uv_getaddrinfo_t is a subclass of uv_handle_t
+ *
+ * TODO this should be a subclass of uv_req_t
+ *
+ * Request object for uv_getaddrinfo.
  */
 struct uv_getaddrinfo_s {
   UV_HANDLE_FIELDS
@@ -487,12 +730,13 @@ struct uv_getaddrinfo_s {
 };
 
 
-/* uv_getaddrinfo
- * return code of UV_OK means that request is accepted,
- * and callback will be called with result.
- * Other return codes mean that there will not be a callback.
- * Input arguments may be released after return from this call.
- * Callback must not call freeaddrinfo
+/*
+ * Asynchronous getaddrinfo(3).
+ *
+ * Return code 0 means that request is accepted and callback will be called
+ * with result. Other return codes mean that there will not be a callback.
+ * Input arguments may be released after return from this call. Callback
+ * must not call freeaddrinfo.
  */
  int uv_getaddrinfo(uv_getaddrinfo_t* handle,
                     uv_getaddrinfo_cb getaddrinfo_cb,
@@ -500,25 +744,46 @@ struct uv_getaddrinfo_s {
                     const char* service,
                     const struct addrinfo* hints);
 
-/*
- * Child process. Subclass of uv_handle_t.
- */
+/* uv_spawn() options */
 typedef struct uv_process_options_s {
-  uv_exit_cb exit_cb;
-  const char* file;
+  uv_exit_cb exit_cb; /* Called after the process exits. */
+  const char* file; /* Path to program to execute. */
+  /*
+   * Command line arguments. args[0] should be the path to the program. On
+   * Windows this uses CreateProcess which concatinates the arguments into a
+   * string this can cause some strange errors. See the note at
+   * windows_verbatim_arguments.
+   */
   char** args;
+  /*
+   * This will be set as the environ variable in the subprocess. If this is
+   * NULL then the parents environ will be used.
+   */
   char** env;
+  /*
+   * If non-null this represents a directory the subprocess should execute
+   * in. Stands for current working directory.
+   */
   char* cwd;
+
+  /*
+   * TODO describe how this works.
+   */
   int windows_verbatim_arguments;
+
   /*
    * The user should supply pointers to initialized uv_pipe_t structs for
-   * stdio. The user is reponsible for calling uv_close on them.
+   * stdio. This is used to to send or receive input from the subprocess.
+   * The user is reponsible for calling uv_close on them.
    */
   uv_pipe_t* stdin_stream;
   uv_pipe_t* stdout_stream;
   uv_pipe_t* stderr_stream;
 } uv_process_options_t;
 
+/*
+ * uv_process_t is a subclass of uv_handle_t
+ */
 struct uv_process_s {
   UV_HANDLE_FIELDS
   uv_exit_cb exit_cb;
@@ -534,29 +799,6 @@ int uv_spawn(uv_process_t*, uv_process_options_t options);
  * call uv_close on the process.
  */
 int uv_process_kill(uv_process_t*, int signum);
-
-
-/*
- * Most functions return boolean: 0 for success and -1 for failure.
- * On error the user should then call uv_last_error() to determine
- * the error code.
- */
-uv_err_t uv_last_error();
-char* uv_strerror(uv_err_t err);
-const char* uv_err_name(uv_err_t err);
-
-void uv_init();
-int uv_run();
-
-/*
- * Manually modify the event loop's reference count. Useful if the user wants
- * to have a handle or timeout that doesn't keep the loop alive.
- */
-void uv_ref();
-void uv_unref();
-
-void uv_update_time();
-int64_t uv_now();
 
 
 /* Utility */
@@ -610,6 +852,7 @@ typedef struct {
   uint64_t handle_init;
   uint64_t stream_init;
   uint64_t tcp_init;
+  uint64_t udp_init;
   uint64_t pipe_init;
   uint64_t prepare_init;
   uint64_t check_init;

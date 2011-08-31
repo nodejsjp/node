@@ -72,8 +72,6 @@ using ::v8::Undefined;
 using ::v8::V8;
 using ::v8::Value;
 
-namespace i = ::i;
-
 
 static void ExpectString(const char* code, const char* expected) {
   Local<Value> result = CompileRun(code);
@@ -331,16 +329,14 @@ static uint16_t* AsciiToTwoByteString(const char* source) {
 
 class TestResource: public String::ExternalStringResource {
  public:
-  static int dispose_count;
-
-  explicit TestResource(uint16_t* data)
-      : data_(data), length_(0) {
+  explicit TestResource(uint16_t* data, int* counter = NULL)
+    : data_(data), length_(0), counter_(counter) {
     while (data[length_]) ++length_;
   }
 
   ~TestResource() {
     i::DeleteArray(data_);
-    ++dispose_count;
+    if (counter_ != NULL) ++*counter_;
   }
 
   const uint16_t* data() const {
@@ -353,23 +349,18 @@ class TestResource: public String::ExternalStringResource {
  private:
   uint16_t* data_;
   size_t length_;
+  int* counter_;
 };
-
-
-int TestResource::dispose_count = 0;
 
 
 class TestAsciiResource: public String::ExternalAsciiStringResource {
  public:
-  static int dispose_count;
-
-  explicit TestAsciiResource(const char* data)
-      : data_(data),
-        length_(strlen(data)) { }
+  explicit TestAsciiResource(const char* data, int* counter = NULL)
+    : data_(data), length_(strlen(data)), counter_(counter) { }
 
   ~TestAsciiResource() {
     i::DeleteArray(data_);
-    ++dispose_count;
+    if (counter_ != NULL) ++*counter_;
   }
 
   const char* data() const {
@@ -382,20 +373,18 @@ class TestAsciiResource: public String::ExternalAsciiStringResource {
  private:
   const char* data_;
   size_t length_;
+  int* counter_;
 };
 
 
-int TestAsciiResource::dispose_count = 0;
-
-
 THREADED_TEST(ScriptUsingStringResource) {
-  TestResource::dispose_count = 0;
+  int dispose_count = 0;
   const char* c_source = "1 + 2 * 3";
   uint16_t* two_byte_source = AsciiToTwoByteString(c_source);
   {
     v8::HandleScope scope;
     LocalContext env;
-    TestResource* resource = new TestResource(two_byte_source);
+    TestResource* resource = new TestResource(two_byte_source, &dispose_count);
     Local<String> source = String::NewExternal(resource);
     Local<Script> script = Script::Compile(source);
     Local<Value> value = script->Run();
@@ -405,37 +394,38 @@ THREADED_TEST(ScriptUsingStringResource) {
     CHECK_EQ(resource,
              static_cast<TestResource*>(source->GetExternalStringResource()));
     HEAP->CollectAllGarbage(false);
-    CHECK_EQ(0, TestResource::dispose_count);
+    CHECK_EQ(0, dispose_count);
   }
   v8::internal::Isolate::Current()->compilation_cache()->Clear();
   HEAP->CollectAllGarbage(false);
-  CHECK_EQ(1, TestResource::dispose_count);
+  CHECK_EQ(1, dispose_count);
 }
 
 
 THREADED_TEST(ScriptUsingAsciiStringResource) {
-  TestAsciiResource::dispose_count = 0;
+  int dispose_count = 0;
   const char* c_source = "1 + 2 * 3";
   {
     v8::HandleScope scope;
     LocalContext env;
     Local<String> source =
-        String::NewExternal(new TestAsciiResource(i::StrDup(c_source)));
+        String::NewExternal(new TestAsciiResource(i::StrDup(c_source),
+                                                  &dispose_count));
     Local<Script> script = Script::Compile(source);
     Local<Value> value = script->Run();
     CHECK(value->IsNumber());
     CHECK_EQ(7, value->Int32Value());
     HEAP->CollectAllGarbage(false);
-    CHECK_EQ(0, TestAsciiResource::dispose_count);
+    CHECK_EQ(0, dispose_count);
   }
   i::Isolate::Current()->compilation_cache()->Clear();
   HEAP->CollectAllGarbage(false);
-  CHECK_EQ(1, TestAsciiResource::dispose_count);
+  CHECK_EQ(1, dispose_count);
 }
 
 
 THREADED_TEST(ScriptMakingExternalString) {
-  TestResource::dispose_count = 0;
+  int dispose_count = 0;
   uint16_t* two_byte_source = AsciiToTwoByteString("1 + 2 * 3");
   {
     v8::HandleScope scope;
@@ -444,23 +434,24 @@ THREADED_TEST(ScriptMakingExternalString) {
     // Trigger GCs so that the newly allocated string moves to old gen.
     HEAP->CollectGarbage(i::NEW_SPACE);  // in survivor space now
     HEAP->CollectGarbage(i::NEW_SPACE);  // in old gen now
-    bool success = source->MakeExternal(new TestResource(two_byte_source));
+    bool success = source->MakeExternal(new TestResource(two_byte_source,
+                                                         &dispose_count));
     CHECK(success);
     Local<Script> script = Script::Compile(source);
     Local<Value> value = script->Run();
     CHECK(value->IsNumber());
     CHECK_EQ(7, value->Int32Value());
     HEAP->CollectAllGarbage(false);
-    CHECK_EQ(0, TestResource::dispose_count);
+    CHECK_EQ(0, dispose_count);
   }
   i::Isolate::Current()->compilation_cache()->Clear();
   HEAP->CollectAllGarbage(false);
-  CHECK_EQ(1, TestResource::dispose_count);
+  CHECK_EQ(1, dispose_count);
 }
 
 
 THREADED_TEST(ScriptMakingExternalAsciiString) {
-  TestAsciiResource::dispose_count = 0;
+  int dispose_count = 0;
   const char* c_source = "1 + 2 * 3";
   {
     v8::HandleScope scope;
@@ -470,18 +461,18 @@ THREADED_TEST(ScriptMakingExternalAsciiString) {
     HEAP->CollectGarbage(i::NEW_SPACE);  // in survivor space now
     HEAP->CollectGarbage(i::NEW_SPACE);  // in old gen now
     bool success = source->MakeExternal(
-        new TestAsciiResource(i::StrDup(c_source)));
+        new TestAsciiResource(i::StrDup(c_source), &dispose_count));
     CHECK(success);
     Local<Script> script = Script::Compile(source);
     Local<Value> value = script->Run();
     CHECK(value->IsNumber());
     CHECK_EQ(7, value->Int32Value());
     HEAP->CollectAllGarbage(false);
-    CHECK_EQ(0, TestAsciiResource::dispose_count);
+    CHECK_EQ(0, dispose_count);
   }
   i::Isolate::Current()->compilation_cache()->Clear();
   HEAP->CollectAllGarbage(false);
-  CHECK_EQ(1, TestAsciiResource::dispose_count);
+  CHECK_EQ(1, dispose_count);
 }
 
 
@@ -605,49 +596,52 @@ THREADED_TEST(UsingExternalAsciiString) {
 
 
 THREADED_TEST(ScavengeExternalString) {
-  TestResource::dispose_count = 0;
+  int dispose_count = 0;
   bool in_new_space = false;
   {
     v8::HandleScope scope;
     uint16_t* two_byte_string = AsciiToTwoByteString("test string");
     Local<String> string =
-        String::NewExternal(new TestResource(two_byte_string));
+      String::NewExternal(new TestResource(two_byte_string,
+                                           &dispose_count));
     i::Handle<i::String> istring = v8::Utils::OpenHandle(*string);
     HEAP->CollectGarbage(i::NEW_SPACE);
     in_new_space = HEAP->InNewSpace(*istring);
     CHECK(in_new_space || HEAP->old_data_space()->Contains(*istring));
-    CHECK_EQ(0, TestResource::dispose_count);
+    CHECK_EQ(0, dispose_count);
   }
   HEAP->CollectGarbage(in_new_space ? i::NEW_SPACE : i::OLD_DATA_SPACE);
-  CHECK_EQ(1, TestResource::dispose_count);
+  CHECK_EQ(1, dispose_count);
 }
 
 
 THREADED_TEST(ScavengeExternalAsciiString) {
-  TestAsciiResource::dispose_count = 0;
+  int dispose_count = 0;
   bool in_new_space = false;
   {
     v8::HandleScope scope;
     const char* one_byte_string = "test string";
     Local<String> string = String::NewExternal(
-        new TestAsciiResource(i::StrDup(one_byte_string)));
+        new TestAsciiResource(i::StrDup(one_byte_string), &dispose_count));
     i::Handle<i::String> istring = v8::Utils::OpenHandle(*string);
     HEAP->CollectGarbage(i::NEW_SPACE);
     in_new_space = HEAP->InNewSpace(*istring);
     CHECK(in_new_space || HEAP->old_data_space()->Contains(*istring));
-    CHECK_EQ(0, TestAsciiResource::dispose_count);
+    CHECK_EQ(0, dispose_count);
   }
   HEAP->CollectGarbage(in_new_space ? i::NEW_SPACE : i::OLD_DATA_SPACE);
-  CHECK_EQ(1, TestAsciiResource::dispose_count);
+  CHECK_EQ(1, dispose_count);
 }
 
 
 class TestAsciiResourceWithDisposeControl: public TestAsciiResource {
  public:
+  // Only used by non-threaded tests, so it can use static fields.
   static int dispose_calls;
+  static int dispose_count;
 
   TestAsciiResourceWithDisposeControl(const char* data, bool dispose)
-      : TestAsciiResource(data),
+      : TestAsciiResource(data, &dispose_count),
         dispose_(dispose) { }
 
   void Dispose() {
@@ -659,6 +653,7 @@ class TestAsciiResourceWithDisposeControl: public TestAsciiResource {
 };
 
 
+int TestAsciiResourceWithDisposeControl::dispose_count = 0;
 int TestAsciiResourceWithDisposeControl::dispose_calls = 0;
 
 
@@ -666,7 +661,7 @@ TEST(ExternalStringWithDisposeHandling) {
   const char* c_source = "1 + 2 * 3";
 
   // Use a stack allocated external string resource allocated object.
-  TestAsciiResource::dispose_count = 0;
+  TestAsciiResourceWithDisposeControl::dispose_count = 0;
   TestAsciiResourceWithDisposeControl::dispose_calls = 0;
   TestAsciiResourceWithDisposeControl res_stack(i::StrDup(c_source), false);
   {
@@ -678,15 +673,15 @@ TEST(ExternalStringWithDisposeHandling) {
     CHECK(value->IsNumber());
     CHECK_EQ(7, value->Int32Value());
     HEAP->CollectAllGarbage(false);
-    CHECK_EQ(0, TestAsciiResource::dispose_count);
+    CHECK_EQ(0, TestAsciiResourceWithDisposeControl::dispose_count);
   }
   i::Isolate::Current()->compilation_cache()->Clear();
   HEAP->CollectAllGarbage(false);
   CHECK_EQ(1, TestAsciiResourceWithDisposeControl::dispose_calls);
-  CHECK_EQ(0, TestAsciiResource::dispose_count);
+  CHECK_EQ(0, TestAsciiResourceWithDisposeControl::dispose_count);
 
   // Use a heap allocated external string resource allocated object.
-  TestAsciiResource::dispose_count = 0;
+  TestAsciiResourceWithDisposeControl::dispose_count = 0;
   TestAsciiResourceWithDisposeControl::dispose_calls = 0;
   TestAsciiResource* res_heap =
       new TestAsciiResourceWithDisposeControl(i::StrDup(c_source), true);
@@ -699,12 +694,12 @@ TEST(ExternalStringWithDisposeHandling) {
     CHECK(value->IsNumber());
     CHECK_EQ(7, value->Int32Value());
     HEAP->CollectAllGarbage(false);
-    CHECK_EQ(0, TestAsciiResource::dispose_count);
+    CHECK_EQ(0, TestAsciiResourceWithDisposeControl::dispose_count);
   }
   i::Isolate::Current()->compilation_cache()->Clear();
   HEAP->CollectAllGarbage(false);
   CHECK_EQ(1, TestAsciiResourceWithDisposeControl::dispose_calls);
-  CHECK_EQ(1, TestAsciiResource::dispose_count);
+  CHECK_EQ(1, TestAsciiResourceWithDisposeControl::dispose_count);
 }
 
 
@@ -3622,6 +3617,52 @@ THREADED_TEST(IndexedInterceptorUnboxedDoubleWithIndexedAccessor) {
 }
 
 
+Handle<v8::Array> NonStrictArgsIndexedPropertyEnumerator(
+    const AccessorInfo& info) {
+  // Force the list of returned keys to be stored in a Arguments object.
+  Local<Script> indexed_property_names_script = Script::Compile(v8_str(
+      "function f(w,x) {"
+      " return arguments;"
+      "}"
+      "keys = f(0, 1, 2, 3);"
+      "keys;"));
+  Local<Value> result = indexed_property_names_script->Run();
+  return Local<v8::Array>(static_cast<v8::Array*>(::v8::Object::Cast(*result)));
+}
+
+
+static v8::Handle<Value> NonStrictIndexedPropertyGetter(
+    uint32_t index,
+    const AccessorInfo& info) {
+  ApiTestFuzzer::Fuzz();
+  if (index < 4) {
+    return v8::Handle<Value>(v8_num(index));
+  }
+  return v8::Handle<Value>();
+}
+
+
+// Make sure that the the interceptor code in the runtime properly handles
+// merging property name lists for non-string arguments arrays.
+THREADED_TEST(IndexedInterceptorNonStrictArgsWithIndexedAccessor) {
+  v8::HandleScope scope;
+  Local<ObjectTemplate> templ = ObjectTemplate::New();
+  templ->SetIndexedPropertyHandler(NonStrictIndexedPropertyGetter,
+                                   0,
+                                   0,
+                                   0,
+                                   NonStrictArgsIndexedPropertyEnumerator);
+  LocalContext context;
+  context->Global()->Set(v8_str("obj"), templ->NewInstance());
+  Local<Script> create_args_script =
+      Script::Compile(v8_str(
+          "var key_count = 0;"
+          "for (x in obj) {key_count++;} key_count;"));
+  Local<Value> result = create_args_script->Run();
+  CHECK_EQ(v8_num(4), result);
+}
+
+
 static v8::Handle<Value> IdentityIndexedPropertyGetter(
     uint32_t index,
     const AccessorInfo& info) {
@@ -5255,6 +5296,40 @@ THREADED_TEST(StringWrite) {
   CHECK_EQ(0, strncmp("d\1", buf, 2));
   uint16_t answer7[] = {'d', 0x101};
   CHECK_EQ(0, StrNCmp16(answer7, wbuf, 2));
+
+  memset(wbuf, 0x1, sizeof(wbuf));
+  wbuf[5] = 'X';
+  len = str->Write(wbuf, 0, 6, String::NO_NULL_TERMINATION);
+  CHECK_EQ(5, len);
+  CHECK_EQ('X', wbuf[5]);
+  uint16_t answer8a[] = {'a', 'b', 'c', 'd', 'e'};
+  uint16_t answer8b[] = {'a', 'b', 'c', 'd', 'e', '\0'};
+  CHECK_EQ(0, StrNCmp16(answer8a, wbuf, 5));
+  CHECK_NE(0, StrCmp16(answer8b, wbuf));
+  wbuf[5] = '\0';
+  CHECK_EQ(0, StrCmp16(answer8b, wbuf));
+
+  memset(buf, 0x1, sizeof(buf));
+  buf[5] = 'X';
+  len = str->WriteAscii(buf, 0, 6, String::NO_NULL_TERMINATION);
+  CHECK_EQ(5, len);
+  CHECK_EQ('X', buf[5]);
+  CHECK_EQ(0, strncmp("abcde", buf, 5));
+  CHECK_NE(0, strcmp("abcde", buf));
+  buf[5] = '\0';
+  CHECK_EQ(0, strcmp("abcde", buf));
+
+  memset(utf8buf, 0x1, sizeof(utf8buf));
+  utf8buf[8] = 'X';
+  len = str2->WriteUtf8(utf8buf, sizeof(utf8buf), &charlen,
+                        String::NO_NULL_TERMINATION);
+  CHECK_EQ(8, len);
+  CHECK_EQ('X', utf8buf[8]);
+  CHECK_EQ(5, charlen);
+  CHECK_EQ(0, strncmp(utf8buf, "abc\303\260\342\230\203", 8));
+  CHECK_NE(0, strcmp(utf8buf, "abc\303\260\342\230\203"));
+  utf8buf[8] = '\0';
+  CHECK_EQ(0, strcmp(utf8buf, "abc\303\260\342\230\203"));
 }
 
 
@@ -13652,6 +13727,9 @@ THREADED_TEST(TwoByteStringInAsciiCons) {
       "str2;";
   Local<Value> result = CompileRun(init_code);
 
+  Local<Value> indexof = CompileRun("str2.indexOf('els')");
+  Local<Value> lastindexof = CompileRun("str2.lastIndexOf('dab')");
+
   CHECK(result->IsString());
   i::Handle<i::String> string = v8::Utils::OpenHandle(String::Cast(*result));
   int length = string->length();
@@ -13716,6 +13794,10 @@ THREADED_TEST(TwoByteStringInAsciiCons) {
   ExpectString("str2.substring(2, 20);", "elspendabelabelspe");
 
   ExpectString("str2.charAt(2);", "e");
+
+  ExpectObject("str2.indexOf('els');", indexof);
+
+  ExpectObject("str2.lastIndexOf('dab');", lastindexof);
 
   reresult = CompileRun("str2.charCodeAt(2);");
   CHECK_EQ(static_cast<int32_t>('e'), reresult->Int32Value());
@@ -14592,6 +14674,24 @@ THREADED_TEST(CreationContext) {
   context1.Dispose();
   context2.Dispose();
   context3.Dispose();
+}
+
+
+THREADED_TEST(CreationContextOfJsFunction) {
+  HandleScope handle_scope;
+  Persistent<Context> context = Context::New();
+  InstallContextId(context, 1);
+
+  Local<Object> function;
+  {
+    Context::Scope scope(context);
+    function = CompileRun("function foo() {}; foo").As<Object>();
+  }
+
+  CHECK(function->CreationContext() == context);
+  CheckContextId(function, 1);
+
+  context.Dispose();
 }
 
 

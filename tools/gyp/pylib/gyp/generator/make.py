@@ -368,11 +368,12 @@ command_changed = $(or $(subst $(cmd_$(1)),,$(cmd_$(call replace_spaces,$@))),\\
 # so we can check their command lines.
 #   $? -- new prerequisites
 #   $| -- order-only dependencies
-prereq_changed = $(filter-out $|,$?)
+prereq_changed = $(filter-out FORCE_DO_CMD,$(filter-out $|,$?))
 
 # do_cmd: run a command via the above cmd_foo names, if necessary.
 # Should always run for a given target to handle command-line changes.
 # Second argument, if non-zero, makes it do asm/C/C++ dependency munging.
+# Third argument, if non-zero, makes it do POSTBUILDS processing.
 # Note: We intentionally do NOT call dirx for depfile, since it contains """ + \
                                                      SPACE_REPLACEMENT + """ for
 # spaces already and dirx strips the """ + SPACE_REPLACEMENT + \
@@ -388,6 +389,9 @@ $(if $(or $(command_changed),$(prereq_changed)),
   )
   @$(call exact_echo,$(call escape_vars,cmd_$(call replace_spaces,$@) := $(cmd_$(1)))) > $(depfile)
   @$(if $(2),$(fixup_dep))
+  $(if $(and $(3), $(POSTBUILDS)),
+    @for p in $(POSTBUILDS); do eval $$p; done
+  )
 )
 endef
 
@@ -421,12 +425,13 @@ quiet_cmd_pch_mm = CXX($(TOOLSET)) $@
 cmd_pch_mm = $(CC.$(TOOLSET)) $(GYP_PCH_OBJCXXFLAGS) $(DEPFLAGS) -c -o $@ $<
 
 # gyp-mac-tool is written next to the root Makefile by gyp.
-# Use #(3) for the command, since $(2) is used as flag by do_cmd already.
-quiet_cmd_mac_tool = MACTOOL $(3) $<
-cmd_mac_tool = ./gyp-mac-tool $(3) $< "$@"
+# Use $(4) for the command, since $(2) and $(3) are used as flag by do_cmd
+# already.
+quiet_cmd_mac_tool = MACTOOL $(4) $<
+cmd_mac_tool = ./gyp-mac-tool $(4) $< "$@"
 
 quiet_cmd_mac_package_framework = PACKAGE FRAMEWORK $@
-cmd_mac_package_framework = ./gyp-mac-tool package-framework "$@" $(3)
+cmd_mac_package_framework = ./gyp-mac-tool package-framework "$@" $(4)
 """
 
 
@@ -454,90 +459,11 @@ SHARED_HEADER_SUFFIX_RULES_COMMENT1 = ("""\
 # Suffix rules, putting all outputs into $(obj).
 """)
 
-SHARED_HEADER_SUFFIX_RULES_SRCDIR = {
-    '.c': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(srcdir)/%.c FORCE_DO_CMD
-	@$(call do_cmd,cc,1)
-"""),
-    '.s': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(srcdir)/%.s FORCE_DO_CMD
-	@$(call do_cmd,cc,1)
-"""),
-    '.S': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(srcdir)/%.S FORCE_DO_CMD
-	@$(call do_cmd,cc,1)
-"""),
-    '.cpp': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(srcdir)/%.cpp FORCE_DO_CMD
-	@$(call do_cmd,cxx,1)
-"""),
-    '.cc': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(srcdir)/%.cc FORCE_DO_CMD
-	@$(call do_cmd,cxx,1)
-"""),
-    '.cxx': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(srcdir)/%.cxx FORCE_DO_CMD
-	@$(call do_cmd,cxx,1)
-"""),
-    '.m': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(srcdir)/%.m FORCE_DO_CMD
-	@$(call do_cmd,objc,1)
-"""),
-    '.mm': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(srcdir)/%.mm FORCE_DO_CMD
-	@$(call do_cmd,objcxx,1)
-"""),
-}
 
 SHARED_HEADER_SUFFIX_RULES_COMMENT2 = ("""\
 # Try building from generated source, too.
 """)
 
-SHARED_HEADER_SUFFIX_RULES_OBJDIR1 = {
-    '.c': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj).$(TOOLSET)/%.c FORCE_DO_CMD
-	@$(call do_cmd,cc,1)
-"""),
-    '.cc': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj).$(TOOLSET)/%.cc FORCE_DO_CMD
-	@$(call do_cmd,cxx,1)
-"""),
-    '.cpp': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj).$(TOOLSET)/%.cpp FORCE_DO_CMD
-	@$(call do_cmd,cxx,1)
-"""),
-    '.m': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj).$(TOOLSET)/%.m FORCE_DO_CMD
-	@$(call do_cmd,objc,1)
-"""),
-    '.mm': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj).$(TOOLSET)/%.mm FORCE_DO_CMD
-	@$(call do_cmd,objcxx,1)
-"""),
-}
-
-SHARED_HEADER_SUFFIX_RULES_OBJDIR2 = {
-    '.c': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj)/%.c FORCE_DO_CMD
-	@$(call do_cmd,cc,1)
-"""),
-    '.cc': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj)/%.cc FORCE_DO_CMD
-	@$(call do_cmd,cxx,1)
-"""),
-    '.cpp': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj)/%.cpp FORCE_DO_CMD
-	@$(call do_cmd,cxx,1)
-"""),
-    '.m': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj)/%.m FORCE_DO_CMD
-	@$(call do_cmd,objc,1)
-"""),
-    '.mm': ("""\
-$(obj).$(TOOLSET)/$(TARGET)/%.o: $(obj)/%.mm FORCE_DO_CMD
-	@$(call do_cmd,objcxx,1)
-"""),
-}
 
 SHARED_FOOTER = """\
 # "all" is a concatenation of the "all" targets from all the included
@@ -700,7 +626,7 @@ class XcodeSettings(object):
     assert self._IsBundle()
     return self.GetPerTargetSetting('FRAMEWORK_VERSION', default='A')
 
-  def _GetBundleExtension(self):
+  def GetWrapperExtension(self):
     """Returns the bundle extension (.app, .framework, .plugin, etc).  Only
     valid for bundles."""
     assert self._IsBundle()
@@ -714,12 +640,15 @@ class XcodeSettings(object):
       assert False, "Don't know extension for '%s', target '%s'" % (
           self.spec['type'], self.spec['target_name'])
 
-  def GetBundleName(self):
+  def GetProductName(self):
+    """Returns PRODUCT_NAME."""
+    return self.spec.get('product_name', self.spec['target_name'])
+
+  def GetWrapperName(self):
     """Returns the directory name of the bundle represented by this target.
     Only valid for bundles."""
     assert self._IsBundle()
-    return self.spec.get('product_name',
-                         self.spec['target_name']) + self._GetBundleExtension()
+    return self.GetProductName() + self.GetWrapperExtension()
 
   def GetBundleContentsFolderPath(self):
     """Returns the qualified path to the bundle's contents folder. E.g.
@@ -727,10 +656,10 @@ class XcodeSettings(object):
     assert self._IsBundle()
     if self.spec['type'] == 'shared_library':
       return os.path.join(
-          self.GetBundleName(), 'Versions', self.GetFrameworkVersion())
+          self.GetWrapperName(), 'Versions', self.GetFrameworkVersion())
     else:
       # loadable_modules have a 'Contents' folder like executables.
-      return os.path.join(self.GetBundleName(), 'Contents')
+      return os.path.join(self.GetWrapperName(), 'Contents')
 
   def GetBundleResourceFolder(self):
     """Returns the qualified path to the bundle's resource folder. E.g.
@@ -751,9 +680,9 @@ class XcodeSettings(object):
       return os.path.join(self.GetBundleContentsFolderPath(),
                           'Resources', 'Info.plist')
 
-  def GetBundleBinaryPath(self):
-    """Returns the directory name of the bundle represented by this target. E.g.
-    Chromium.app/Contents/MacOS/Chromium. Only valid for bundles."""
+  def _GetBundleBinaryPath(self):
+    """Returns the name of the bundle binary of by this target.
+    E.g. Chromium.app/Contents/MacOS/Chromium. Only valid for bundles."""
     assert self._IsBundle()
     if self.spec['type'] in ('loadable_module', 'shared_library'):
       path = self.GetBundleContentsFolderPath()
@@ -761,6 +690,53 @@ class XcodeSettings(object):
       path = os.path.join(self.GetBundleContentsFolderPath(), 'MacOS')
     return os.path.join(path, self.spec.get('product_name',
                                             self.spec['target_name']))
+
+  def _GetStandaloneExecutableSuffix(self):
+    if 'product_extension' in self.spec:
+      return '.' + self.spec['product_extension']
+    return {
+      'executable': '',
+      'static_library': '.a',
+      'shared_library': '.dylib',
+      'loadable_module': '.so',
+    }[self.spec['type']]
+
+  def _GetStandaloneExecutablePrefix(self):
+    return self.spec.get('product_prefix', {
+      'executable': '',
+      'static_library': 'lib',
+      'shared_library': 'lib',
+      # Non-bundled loadable_modules are called foo.so for some reason
+      # (that is, .so and no prefix) with the xcode build -- match that.
+      'loadable_module': '',
+    }[self.spec['type']])
+
+  def _GetStandaloneBinaryPath(self):
+    """Returns the name of the non-bundle binary represented by this target.
+    E.g. hello_world. Only valid for non-bundles."""
+    assert not self._IsBundle()
+    assert self.spec['type'] in (
+        'executable', 'shared_library', 'static_library', 'loadable_module')
+    target = self.spec['target_name']
+    if self.spec['type'] == 'static_library':
+      if target[:3] == 'lib':
+        target = target[3:]
+    elif self.spec['type'] in ('loadable_module', 'shared_library'):
+      if target[:3] == 'lib':
+        target = target[3:]
+
+    target_prefix = self._GetStandaloneExecutablePrefix()
+    target = self.spec.get('product_name', target)
+    target_ext = self._GetStandaloneExecutableSuffix()
+    return target_prefix + target + target_ext
+
+  def GetExecutablePath(self):
+    """Returns the directory name of the bundle represented by this target. E.g.
+    Chromium.app/Contents/MacOS/Chromium."""
+    if self._IsBundle():
+      return self._GetBundleBinaryPath()
+    else:
+      return self._GetStandaloneBinaryPath()
 
   def GetCflags(self, configname):
     """Returns flags that need to be added to .c, .cc, .m, and .mm
@@ -826,10 +802,8 @@ class XcodeSettings(object):
     self._WarnUnimplemented('ARCHS')
     self._WarnUnimplemented('COPY_PHASE_STRIP')
     self._WarnUnimplemented('DEPLOYMENT_POSTPROCESSING')
-    self._WarnUnimplemented('DYLIB_INSTALL_NAME_BASE')
     self._WarnUnimplemented('INFOPLIST_PREPROCESS')
     self._WarnUnimplemented('INFOPLIST_PREPROCESSOR_DEFINITIONS')
-    self._WarnUnimplemented('LD_DYLIB_INSTALL_NAME')
     self._WarnUnimplemented('STRIPFLAGS')
     self._WarnUnimplemented('STRIP_INSTALLED_PRODUCT')
 
@@ -915,6 +889,10 @@ class XcodeSettings(object):
         ldflags, 'DYLIB_COMPATIBILITY_VERSION', '-compatibility_version %s')
     self._Appendf(
         ldflags, 'DYLIB_CURRENT_VERSION', '-current_version %s')
+    self._Appendf(
+        ldflags, 'MACOSX_DEPLOYMENT_TARGET', '-mmacosx-version-min=%s')
+    self._Appendf(
+        ldflags, 'SDKROOT', '-isysroot /Developer/SDKs/%s.sdk')
 
     for library_path in self._Settings().get('LIBRARY_SEARCH_PATHS', []):
       ldflags.append('-L' + library_path)
@@ -931,6 +909,49 @@ class XcodeSettings(object):
     ldflags.append('-L' + generator_default_variables['LIB_DIR'])
     ldflags.append('-L' + generator_default_variables['PRODUCT_DIR'])
 
+    install_name = self.GetPerTargetSetting('LD_DYLIB_INSTALL_NAME')
+    install_base = self.GetPerTargetSetting('DYLIB_INSTALL_NAME_BASE')
+    default_install_name = \
+          '$(DYLIB_INSTALL_NAME_BASE:standardizepath)/$(EXECUTABLE_PATH)'
+    if not install_name and install_base:
+      install_name = default_install_name
+
+    if install_name:
+      # Hardcode support for the variables used in chromium for now, to unblock
+      # people using the make build.
+      if '$' in install_name:
+        assert install_name in ('$(DYLIB_INSTALL_NAME_BASE:standardizepath)/'
+            '$(WRAPPER_NAME)/$(PRODUCT_NAME)', default_install_name), (
+            'Variables in LD_DYLIB_INSTALL_NAME are not generally supported yet'
+            ' in target \'%s\' (got \'%s\')' %
+                (self.spec['target_name'], install_name))
+        # I'm not quite sure what :standardizepath does. Just call normpath(),
+        # but don't let @executable_path/../foo collapse to foo.
+        if '/' in install_base:
+          prefix, rest = '', install_base
+          if install_base.startswith('@'):
+            prefix, rest = install_base.split('/', 1)
+          rest = os.path.normpath(rest)  # :standardizepath
+          install_base = os.path.join(prefix, rest)
+
+        install_name = install_name.replace(
+            '$(DYLIB_INSTALL_NAME_BASE:standardizepath)', install_base)
+        if self._IsBundle():
+          # These are only valid for bundles, hence the |if|.
+          install_name = install_name.replace(
+              '$(WRAPPER_NAME)', self.GetWrapperName())
+          install_name = install_name.replace(
+              '$(PRODUCT_NAME)', self.GetProductName())
+        else:
+          assert '$(WRAPPER_NAME)' not in install_name
+          assert '$(PRODUCT_NAME)' not in install_name
+
+        install_name = install_name.replace(
+            '$(EXECUTABLE_PATH)', self.GetExecutablePath())
+
+      install_name = QuoteSpaces(install_name)
+      ldflags.append('-install_name ' + install_name)
+
     self.configname = None
     return ldflags
 
@@ -946,7 +967,7 @@ class XcodeSettings(object):
       else:
         assert result == self.xcode_settings[configname].get(setting, None), (
             "Expected per-target setting for '%s', got per-config setting "
-            "(target %s" % (setting, spec['target_name']))
+            "(target %s)" % (setting, spec['target_name']))
     if result is None:
       return default
     return result
@@ -1057,6 +1078,28 @@ class MakefileWriter:
     # Keep track of the total number of outputs for this makefile.
     self._num_outputs = 0
 
+    self.suffix_rules_srcdir = {}
+    self.suffix_rules_objdir1 = {}
+    self.suffix_rules_objdir2 = {}
+
+    # Generate suffix rules for all compilable extensions.
+    for ext in COMPILABLE_EXTENSIONS.keys():
+      # Suffix rules for source folder.
+      self.suffix_rules_srcdir.update({ext: ("""\
+$(obj).$(TOOLSET)/$(TARGET)/%%.o: $(srcdir)/%%%s FORCE_DO_CMD
+	@$(call do_cmd,%s,1)
+""" % (ext, COMPILABLE_EXTENSIONS[ext]))})
+
+      # Suffix rules for generated source files.
+      self.suffix_rules_objdir1.update({ext: ("""\
+$(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj).$(TOOLSET)/%%%s FORCE_DO_CMD
+	@$(call do_cmd,%s,1)
+""" % (ext, COMPILABLE_EXTENSIONS[ext]))})
+      self.suffix_rules_objdir2.update({ext: ("""\
+$(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
+	@$(call do_cmd,%s,1)
+""" % (ext, COMPILABLE_EXTENSIONS[ext]))})
+
 
   def NumOutputs(self):
     return self._num_outputs
@@ -1165,15 +1208,15 @@ class MakefileWriter:
         self.WriteLn(SHARED_HEADER_SUFFIX_RULES_COMMENT1)
         extensions = set([os.path.splitext(s)[1] for s in sources])
         for ext in extensions:
-          if ext in SHARED_HEADER_SUFFIX_RULES_SRCDIR:
-            self.WriteLn(SHARED_HEADER_SUFFIX_RULES_SRCDIR[ext])
+          if ext in self.suffix_rules_srcdir:
+            self.WriteLn(self.suffix_rules_srcdir[ext])
         self.WriteLn(SHARED_HEADER_SUFFIX_RULES_COMMENT2)
         for ext in extensions:
-          if ext in SHARED_HEADER_SUFFIX_RULES_OBJDIR1:
-            self.WriteLn(SHARED_HEADER_SUFFIX_RULES_OBJDIR1[ext])
+          if ext in self.suffix_rules_objdir1:
+            self.WriteLn(self.suffix_rules_objdir1[ext])
         for ext in extensions:
-          if ext in SHARED_HEADER_SUFFIX_RULES_OBJDIR2:
-            self.WriteLn(SHARED_HEADER_SUFFIX_RULES_OBJDIR2[ext])
+          if ext in self.suffix_rules_objdir2:
+            self.WriteLn(self.suffix_rules_objdir2[ext])
         self.WriteLn('# End of this set of suffix rules')
 
         # Add dependency from bundle to bundle binary.
@@ -1262,12 +1305,11 @@ class MakefileWriter:
         self.WriteLn('quiet_cmd_%s = ACTION %s $@' % (name, name))
       if len(dirs) > 0:
         command = 'mkdir -p %s' % ' '.join(dirs) + '; ' + command
+
+      cd_action = 'cd %s; ' % Sourceify(self.path or '.')
+
       # Set LD_LIBRARY_PATH in case the action runs an executable from this
       # build which links to shared libs from this build.
-      if self.path:
-        cd_action = 'cd %s; ' % Sourceify(self.path)
-      else:
-        cd_action = ''
       # actions run on the host, so they should in theory only use host
       # libraries, but until everything is made cross-compile safe, also use
       # target libraries.
@@ -1373,10 +1415,7 @@ class MakefileWriter:
         mkdirs = ''
         if len(dirs) > 0:
           mkdirs = 'mkdir -p %s; ' % ' '.join(dirs)
-        if self.path:
-          cd_action = 'cd %s; ' % Sourceify(self.path)
-        else:
-          cd_action = ''
+        cd_action = 'cd %s; ' % Sourceify(self.path or '.')
         # Set LD_LIBRARY_PATH in case the rule runs an executable from this
         # build which links to shared libs from this build.
         # rules run on the host, so they should in theory only use host
@@ -1479,7 +1518,7 @@ class MakefileWriter:
       if output.endswith('.xib'):
         output = output[0:-3] + 'nib'
 
-      self.WriteDoCmd([output], [path], 'mac_tool,,copy-bundle-resource',
+      self.WriteDoCmd([output], [path], 'mac_tool,,,copy-bundle-resource',
                       part_of_all=True)
       bundle_deps.append(output)
 
@@ -1493,7 +1532,7 @@ class MakefileWriter:
     dest_plist = os.path.join(path, self.xcode_settings.GetBundlePlistPath())
     dest_plist = QuoteSpaces(dest_plist)
     self.WriteXcodeEnv(dest_plist, spec)  # plists can contain envvars.
-    self.WriteDoCmd([dest_plist], [info_plist], 'mac_tool,,copy-info-plist',
+    self.WriteDoCmd([dest_plist], [info_plist], 'mac_tool,,,copy-info-plist',
                     part_of_all=True)
     bundle_deps.append(dest_plist)
 
@@ -1619,18 +1658,21 @@ class MakefileWriter:
     self.WriteLn()
 
 
-  def ComputeOutput(self, spec):
-    """Return the 'output' (full output path) of a gyp spec.
+  def ComputeOutputBasename(self, spec):
+    """Return the 'output basename' of a gyp spec.
 
     E.g., the loadable module 'foobar' in directory 'baz' will produce
-      '$(obj)/baz/libfoobar.so'
+      'libfoobar.so'
     """
     assert not self.is_mac_bundle
+
+    if self.flavor == 'mac' and self.type in (
+        'static_library', 'executable', 'shared_library', 'loadable_module'):
+      return self.xcode_settings.GetExecutablePath()
 
     target = spec['target_name']
     target_prefix = ''
     target_ext = ''
-    path = os.path.join('$(obj).' + self.toolset, self.path)
     if self.type == 'static_library':
       if target[:3] == 'lib':
         target = target[3:]
@@ -1641,44 +1683,50 @@ class MakefileWriter:
         target = target[3:]
       target_prefix = 'lib'
       target_ext = '.so'
-      if self.flavor == 'mac':
-        if self.type == 'shared_library':
-          target_ext = '.dylib'
-        else:
-          # Non-bundled loadable_modules are called foo.so for some reason
-          # (that is, .so and no prefix) with the xcode build -- match that.
-          target_prefix = ''
     elif self.type == 'none':
       target = '%s.stamp' % target
-    elif self.type == 'settings':
-      return ''  # Doesn't have any output.
-    elif self.type == 'executable':
-      path = os.path.join('$(builddir)')
-    else:
+    elif self.type != 'executable':
       print ("ERROR: What output file should be generated?",
              "type", self.type, "target", target)
 
-    path = spec.get('product_dir', path)
     target_prefix = spec.get('product_prefix', target_prefix)
     target = spec.get('product_name', target)
     product_ext = spec.get('product_extension')
     if product_ext:
       target_ext = '.' + product_ext
 
-    return os.path.join(path, target_prefix + target + target_ext)
+    return target_prefix + target + target_ext
+
+
+  def ComputeOutput(self, spec):
+    """Return the 'output' (full output path) of a gyp spec.
+
+    E.g., the loadable module 'foobar' in directory 'baz' will produce
+      '$(obj)/baz/libfoobar.so'
+    """
+    assert not self.is_mac_bundle
+
+    if self.type == 'settings':
+      return ''  # Doesn't have any output.
+
+    path = os.path.join('$(obj).' + self.toolset, self.path)
+    if self.type == 'executable':
+      path = '$(builddir)'
+    path = spec.get('product_dir', path)
+    return os.path.join(path, self.ComputeOutputBasename(spec))
 
 
   def ComputeMacBundleOutput(self, spec):
     """Return the 'output' (full output path) to a bundle output directory."""
     assert self.is_mac_bundle
     path = generator_default_variables['PRODUCT_DIR']
-    return os.path.join(path, self.xcode_settings.GetBundleName())
+    return os.path.join(path, self.xcode_settings.GetWrapperName())
 
 
   def ComputeMacBundleBinaryOutput(self, spec):
     """Return the 'output' (full output path) to the binary in a bundle."""
     path = generator_default_variables['PRODUCT_DIR']
-    return os.path.join(path, self.xcode_settings.GetBundleBinaryPath())
+    return os.path.join(path, self.xcode_settings.GetExecutablePath())
 
 
   def ComputeDeps(self, spec):
@@ -1735,7 +1783,12 @@ class MakefileWriter:
         if self.flavor == 'mac':
           ldflags = self.xcode_settings.GetLdflags(self, configname)
         else:
-          ldflags = config.get('ldflags')
+          ldflags = config.get('ldflags', [])
+          # Compute an rpath for this output if needed.
+          if any(dep.endswith('.so') for dep in deps):
+            # We want to get the literal string "$ORIGIN" into the link command,
+            # so we need lots of escaping.
+            ldflags.append(r'-Wl,-rpath=\$$ORIGIN/lib.%s/' % self.toolset)
         self.WriteList(ldflags, 'LDFLAGS_%s' % configname)
       libraries = spec.get('libraries')
       if libraries:
@@ -1751,6 +1804,21 @@ class MakefileWriter:
       self.WriteLn(
           '%s: GYP_LDFLAGS := $(LDFLAGS_$(BUILDTYPE))' % self.output_binary)
       self.WriteLn('%s: LIBS := $(LIBS)' % self.output_binary)
+
+    postbuilds = []
+    if self.flavor == 'mac':
+      # Postbuild actions. Like actions, but implicitly depend on the target's
+      # output.
+      for postbuild in spec.get('postbuilds', []):
+        postbuilds.append('echo POSTBUILD\\(%s\\) %s' % (
+              self.target, postbuild['postbuild_name']))
+        shell_list = postbuild['action']
+        # The first element is the command. If it's a relative path, it's
+        # a script in the source tree relative to the gyp file and needs to be
+        # absolutified. Else, it's in the PATH (e.g. install_name_tool, ln).
+        if os.path.sep in shell_list[0]:
+          shell_list[0] = self.Absolutify(shell_list[0])
+        postbuilds.append('%s' % gyp.common.EncodePOSIXShellList(shell_list))
 
     # A bundle directory depends on its dependencies such as bundle resources
     # and bundle binary. When all dependencies have been built, the bundle
@@ -1770,22 +1838,14 @@ class MakefileWriter:
       # After the framework is built, package it. Needs to happen before
       # postbuilds, since postbuilds depend on this.
       if self.type in ('shared_library', 'loadable_module'):
-        self.WriteLn('\t@$(call do_cmd,mac_package_framework,0,%s)' %
+        self.WriteLn('\t@$(call do_cmd,mac_package_framework,0,0,%s)' %
             self.xcode_settings.GetFrameworkVersion())
 
-      # Postbuild actions. Like actions, but implicitly depend on the output
-      # framework.
-      for postbuild in spec.get('postbuilds', []):
-        self.WriteLn('\t@echo POSTBUILD %s' % postbuild['postbuild_name'])
-        shell_list = postbuild['action']
-        # The first element is the command. If it's a relative path, it's
-        # a script in the source tree relative to the gyp file and needs to be
-        # absolutified. Else, it's in the PATH (e.g. install_name_tool, ln).
-        if os.path.sep in shell_list[0]:
-          shell_list[0] = self.Absolutify(shell_list[0])
-        # TODO: Honor V=1 etc. Not using do_cmd because since this is part of
-        # the framework rule, there's no need for .d file processing here.
-        self.WriteLn('\t@%s' % gyp.common.EncodePOSIXShellList(shell_list))
+      # Bundle postbuilds can depend on the whole bundle, so run them after
+      # the bundle is packaged, not already after the bundle binary is done.
+      for postbuild in postbuilds:
+        self.WriteLn('\t@' + postbuild)
+      postbuilds = []  # Don't write postbuilds for target's output.
 
       # Needed by test/mac/gyptest-rebuild.py.
       self.WriteLn('\t@true  # No-op, used by tests')
@@ -1796,32 +1856,43 @@ class MakefileWriter:
       # on every build (expensive, especially with postbuilds), expliclity
       # update the time on the framework directory.
       self.WriteLn('\t@touch -c %s' % self.output)
-    elif 'postbuilds' in spec:
-      print ("Warning: 'postbuild' support for non-bundles "
-             "isn't implemented yet (target '%s)'." % self.target)
+
+    if postbuilds:
+      assert not self.is_mac_bundle, ('Postbuilds for bundles should be done '
+          'on the bundle, not the binary (target \'%s\')' % self.target)
+      self.WriteXcodeEnv(self.output_binary, spec)  # For postbuilds
+      postbuilds = [EscapeShellArgument(p) for p in postbuilds]
+      self.WriteLn('%s: builddir := $(abs_builddir)' % self.output_binary)
+      self.WriteLn('%s: POSTBUILDS := %s' % (
+          self.output_binary, ' '.join(postbuilds)))
 
     if self.type == 'executable':
       self.WriteLn(
           '%s: LD_INPUTS := %s' % (self.output_binary, ' '.join(link_deps)))
-      self.WriteDoCmd([self.output_binary], link_deps, 'link', part_of_all)
+      self.WriteDoCmd([self.output_binary], link_deps, 'link', part_of_all,
+                      postbuilds=postbuilds)
     elif self.type == 'static_library':
       for link_dep in link_deps:
         assert ' ' not in link_dep, (
             "Spaces in alink input filenames not supported (%s)"  % link_dep)
-      self.WriteDoCmd([self.output_binary], link_deps, 'alink', part_of_all)
+      self.WriteDoCmd([self.output_binary], link_deps, 'alink', part_of_all,
+                      postbuilds=postbuilds)
     elif self.type == 'shared_library':
       self.WriteLn(
           '%s: LD_INPUTS := %s' % (self.output_binary, ' '.join(link_deps)))
-      self.WriteDoCmd([self.output_binary], link_deps, 'solink', part_of_all)
+      self.WriteDoCmd([self.output_binary], link_deps, 'solink', part_of_all,
+                      postbuilds=postbuilds)
     elif self.type == 'loadable_module':
       for link_dep in link_deps:
         assert ' ' not in link_dep, (
             "Spaces in module input filenames not supported (%s)"  % link_dep)
       self.WriteDoCmd(
-          [self.output_binary], link_deps, 'solink_module', part_of_all)
+          [self.output_binary], link_deps, 'solink_module', part_of_all,
+          postbuilds=postbuilds)
     elif self.type == 'none':
       # Write a stamp line.
-      self.WriteDoCmd([self.output_binary], deps, 'touch', part_of_all)
+      self.WriteDoCmd([self.output_binary], deps, 'touch', part_of_all,
+                      postbuilds=postbuilds)
     elif self.type == 'settings':
       # Only used for passing flags around.
       pass
@@ -1888,14 +1959,19 @@ class MakefileWriter:
     self.fp.write("\n\n")
 
 
-  def WriteDoCmd(self, outputs, inputs, command, part_of_all, comment=None):
+  def WriteDoCmd(self, outputs, inputs, command, part_of_all, comment=None,
+                 postbuilds=False):
     """Write a Makefile rule that uses do_cmd.
 
     This makes the outputs dependent on the command line that was run,
     as well as support the V= make command line flag.
     """
+    suffix = ''
+    if postbuilds:
+      assert ',' not in command
+      suffix = ',,1'  # Tell do_cmd to honor $POSTBUILDS
     self.WriteMakeRule(outputs, inputs,
-                       actions = ['$(call do_cmd,%s)' % command],
+                       actions = ['$(call do_cmd,%s%s)' % (command, suffix)],
                        comment = comment,
                        force = True)
     # Add our outputs to the list of targets we read depfiles from.
@@ -2063,6 +2139,18 @@ class MakefileWriter:
 
     product_name = spec.get('product_name', self.output)
 
+    # Some postbuilds try to read a build output file at
+    # ""${BUILT_PRODUCTS_DIR}/${FULL_PRODUCT_NAME}". Static libraries end up
+    # "$(obj).target", so
+    #   BUILT_PRODUCTS_DIR is $(builddir)
+    #   FULL_PRODUCT_NAME is $(out).target/path/to/lib.a
+    # Since $(obj) contains out/Debug already, the postbuild
+    # would get out/Debug/out/Debug/obj.target/path/to/lib.a. To prevent this,
+    # remove the "out/Debug" prefix from $(obj).
+    if product_name.startswith('$(obj)'):
+      product_name = (
+          '$(subst $(builddir)/,,$(obj))' + product_name[len('$(obj)'):])
+
     built_products_dir = generator_default_variables['PRODUCT_DIR']
     srcroot = self.path
     if target_relative_path:
@@ -2073,6 +2161,8 @@ class MakefileWriter:
       'BUILT_PRODUCTS_DIR' : built_products_dir,
       'CONFIGURATION' : '$(BUILDTYPE)',
       'PRODUCT_NAME' : product_name,
+      # See /Developer/Platforms/MacOSX.platform/Developer/Library/Xcode/Specifications/MacOSX\ Product\ Types.xcspec for FULL_PRODUCT_NAME
+      'FULL_PRODUCT_NAME' : product_name,
       'SRCROOT' : srcroot,
       # This is not true for static libraries, but currently the env is only
       # written for bundles:
@@ -2081,13 +2171,9 @@ class MakefileWriter:
     }
     if self.type in ('executable', 'shared_library'):
       env['EXECUTABLE_NAME'] = os.path.basename(self.output_binary)
-      # Can't use self.output_binary here because it's not in the products dir.
-      # We really care about the final location of the dylib anyway.
-      env['EXECUTABLE_PATH'] = StripProductDir(
-          self._InstallableTargetInstallPath())
+    if self.type in ('executable', 'shared_library', 'loadable_module'):
+      env['EXECUTABLE_PATH'] = self.xcode_settings.GetExecutablePath()
     if self.is_mac_bundle:
-      # Overwrite this to point to the binary _in_ the bundle.
-      env['EXECUTABLE_PATH'] = self.xcode_settings.GetBundleBinaryPath()
       env['CONTENTS_FOLDER_PATH'] = \
         self.xcode_settings.GetBundleContentsFolderPath()
       env['INFOPLIST_PATH'] = self.xcode_settings.GetBundlePlistPath()

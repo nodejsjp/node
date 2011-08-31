@@ -860,7 +860,8 @@ Options:
 - `path`: Request path. Should include query string and fragments if any.
    E.G. `'/index.html?page=12'`
 - `headers`: An object containing request headers.
-- `agent`: Controls `Agent` behavior. When an Agent is used request will default to Connection:keep-alive. Possible values:
+- `agent`: Controls `Agent` behavior. When an Agent is used request will default to 
+   Connection:keep-alive. Possible values:
  - `undefined` (default): use default `Agent` for this host and port.
  - `Agent` object: explicitly use the passed in `Agent`.
  - `false`: opts out of connection pooling with an Agent, defaults request to Connection:close.
@@ -875,7 +876,7 @@ Options:
    例. `'/index.html?page=12'`
 - `headers`: リクエストヘッダを含むオブジェクト。
 - `agent`: `Agent` の振る舞いを制御します。
- リクエストが Connection:keep-alive の場合、デフォルトでエージェントが使用されます。
+ エージェントが使われる場合、Connection:keep-alive がデフォルトになります。
  可能な値は:
  - `undefined` (デフォルト): ホストとポートからデフォルトの `Agent` 
 を使用します。
@@ -1011,6 +1012,61 @@ Example:
 
 ## http.Agent
 
+<!--
+In node 0.5.3+ there is a new implementation of the HTTP Agent which is used 
+for pooling sockets used in HTTP client requests.
+
+Previously, a single agent instance help the pool for single host+port. The 
+current implementation now holds sockets for any number of hosts.
+
+The current HTTP Agent also defaults client requests to using 
+Connection:keep-alive. If no pending HTTP requests are waiting on a socket 
+to become free the socket is closed. This means that node's pool has the 
+benefit of keep-alive when under load but still does not require developers 
+to manually close the HTTP clients using keep-alive.
+
+Sockets are removed from the agent's pool when the socket emits either a 
+"close" event or a special "agentRemove" event. This means that if you intend 
+to keep one HTTP request open for a long time and don't want it to stay in the 
+pool you can do something along the lines of:
+-->
+Node 0.5.3 以降には、HTTP クライアントリクエストのソケットを
+プーリングするために新しい HTTP Agent の実装が存在します。
+
+以前は、エージェントの一つのインスタンスが一つのホスト + ポートのプールを
+助けていましたが、現在の実装では任意の数のホストに対するソケットを
+保持できるようになりました。
+
+現在の HTTP Agent では、クライアントリクエストはデフォルトで
+Connection:keep-alive を使うようにもなりました。
+ソケットを待ってペンディングになっている HTTP リクエストがなければ、
+ソケットはクローズされます。
+これは、node のプールは高負荷時に keep-alive のメリットを持ちながら、
+keep-alive を使用する HTTP クライアントを開発者が手動でクローズする
+必要がないことを意味します。
+
+ソケットは `'close'` イベントまたは特別な `'agentRemove'` イベントが
+生成された時にエージェントのプールから削除されます。
+これは、一つの HTTP リクエストを長時間オープンしたままにするために、
+プールにソケットがとどまらないことを意図するなら、
+以下のようにすることができることを意味します:
+
+    http.get(options, function(res) {
+      // Do stuff
+    }).on("socket", function (socket) {
+      socket.emit("agentRemove");
+    });
+
+<!--
+Alternatively, you could just opt out of pooling entirely using `agent:false`:
+-->
+別の方法として、 `agent: false` を指定することで、
+プーリングを使用しないこともできます:
+
+    http.get({host:'localhost', port:80, path:'/', agent:false}, function (res) {
+      // Do stuff
+    })
+
 ## http.globalAgent
 
 <!--
@@ -1021,7 +1077,8 @@ Global instance of Agent which is used as the default for all http client reques
 ### agent.maxSockets
 
 <!--
-By default set to 5. Determines how many concurrent sockets the agent can have open per host.
+By default set to 5. Determines how many concurrent sockets the agent can have 
+open per host.
 -->
 デフォルトでは 5 に設定されます。
 エージェントがいくつのソケットを並行にオープンするかを決定します。
@@ -1029,7 +1086,8 @@ By default set to 5. Determines how many concurrent sockets the agent can have o
 ### agent.sockets
 
 <!--
-An object which contains arrays of sockets currently in use by the Agent. Do not modify.
+An object which contains arrays of sockets currently in use by the Agent. Do not 
+modify.
 -->
 エージェントが現在使っているソケットの配列です。
 変更しないでください。
@@ -1037,7 +1095,8 @@ An object which contains arrays of sockets currently in use by the Agent. Do not
 ### agent.requests
 
 <!--
-An object which contains queues of requests that have not yet been assigned to sockets. Do not modify.
+An object which contains queues of requests that have not yet been assigned to 
+sockets. Do not modify.
 -->
 まだソケットが割り当てられていないリクエストのキューを含むオブジェクトです。
 変更しないでください。
@@ -1307,6 +1366,35 @@ Aborts a request.  (New since v0.3.8.)
 
 -->
 リクエストをアボートします (v0.3.8 からの新機能)
+
+### request.setTimeout(timeout, [callback])
+
+<!--
+Once a socket is assigned to this request and is connected 
+socket.setTimeout(timeout, [callback]) will be called.
+-->
+このリクエストにソケットが割り当てられて接続した際に、
+`socket.setTimeout(timeout, [callback])` が呼び出されます。
+
+### request.setNoDelay(noDelay=true)
+
+<!--
+Once a socket is assigned to this request and is connected 
+socket.setNoDelay(noDelay) will be called.
+-->
+このリクエストにソケットが割り当てられて接続した際に、
+`socket.setNoDelay(noDelay)` が呼び出されます。
+
+
+### request.setSocketKeepAlive(enable=false, [initialDelay])
+
+<!--
+Once a socket is assigned to this request and is connected 
+socket.setKeepAlive(enable, [initialDelay]) will be called.
+-->
+このリクエストにソケットが割り当てられて接続した際に、
+`socket.setKeepAlive(enable, [initialDelay])` が呼び出されます。
+
 
 ## http.ClientResponse
 

@@ -95,17 +95,28 @@ The following methods are provided by the URL module:
 -->
 以下のメソッドはURLモジュールにより提供されます:
 
-### url.parse(urlStr, parseQueryString=false)
+### url.parse(urlStr, parseQueryString=false, slashesDenoteHost=false)
 
 <!--
 
-Take a URL string, and return an object.  Pass `true` as the second argument to also parse
+Take a URL string, and return an object.
+
+Pass `true` as the second argument to also parse
 the query string using the `querystring` module.
+
+Pass `true` as the third argument to treat `//foo/bar` as
+`{ host: 'foo', pathname: '/bar' }` rather than
+`{ pathname: '//foo/bar' }`.
 
 -->
 URL文字列を引数に取り、解析結果のオブジェクトを返します。
+
 `querystring` モジュールを使ってクエリ文字列も解析したい場合は、
 第 2 引数に `true` を渡してください。
+
+`//foo/bar` を `{ pathname: '//foo/bar' }` ではなく
+`{ host: 'foo', pathname: '/bar' }` としたい場合は、
+第 3 引数に `true` を渡してください。
 
 ### url.format(urlObj)
 

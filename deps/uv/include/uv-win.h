@@ -48,7 +48,8 @@ typedef struct uv_buf_t {
   UV_ARES_CLEANUP_REQ,                    \
   UV_GETADDRINFO_REQ,                     \
   UV_PROCESS_EXIT,                        \
-  UV_PROCESS_CLOSE
+  UV_PROCESS_CLOSE,                       \
+  UV_UDP_RECV
 
 #define UV_REQ_PRIVATE_FIELDS             \
   union {                                 \
@@ -58,7 +59,6 @@ typedef struct uv_buf_t {
       size_t queued_bytes;                \
     };                                    \
   };                                      \
-  uv_err_t error;                         \
   struct uv_req_s* next_req;
 
 #define UV_WRITE_PRIVATE_FIELDS           \
@@ -70,12 +70,21 @@ typedef struct uv_buf_t {
 #define UV_SHUTDOWN_PRIVATE_FIELDS        \
   /* empty */
 
+#define UV_UDP_SEND_PRIVATE_FIELDS        \
+  /* empty */
+
 #define UV_PRIVATE_REQ_TYPES              \
   typedef struct uv_pipe_accept_s {       \
     UV_REQ_FIELDS                         \
     HANDLE pipeHandle;                    \
     struct uv_pipe_accept_s* next_pending; \
-  } uv_pipe_accept_t;
+  } uv_pipe_accept_t;                     \
+  typedef struct uv_tcp_accept_s {        \
+    UV_REQ_FIELDS                         \
+    SOCKET accept_socket;                 \
+    char accept_buffer[sizeof(struct sockaddr_storage) * 2 + 32]; \
+    struct uv_tcp_accept_s* next_pending; \
+  } uv_tcp_accept_t;
 
 #define uv_stream_connection_fields       \
   unsigned int write_reqs_pending;        \
@@ -94,23 +103,40 @@ typedef struct uv_buf_t {
     struct { uv_stream_server_fields     };  \
   };
 
+#define uv_tcp_server_fields              \
+  uv_tcp_accept_t* accept_reqs;           \
+  uv_tcp_accept_t* pending_accepts;
+
+#define uv_tcp_connection_fields          \
+  uv_buf_t read_buffer;
+
 #define UV_TCP_PRIVATE_FIELDS             \
+  SOCKET socket;                          \
+  uv_err_t bind_error;                    \
   union {                                 \
-    SOCKET socket;                        \
-    HANDLE handle;                        \
-  };                                      \
-  SOCKET accept_socket;                   \
-  char accept_buffer[sizeof(struct sockaddr_storage) * 2 + 32]; \
-  struct uv_req_s accept_req;             \
+    struct { uv_tcp_server_fields };      \
+    struct { uv_tcp_connection_fields };  \
+  };
+
+#define UV_UDP_PRIVATE_FIELDS             \
+  SOCKET socket;                          \
+  unsigned int reqs_pending;              \
+  uv_req_t recv_req;                      \
+  uv_buf_t recv_buffer;                   \
+  struct sockaddr_storage recv_from;      \
+  int recv_from_len;                      \
+  uv_udp_recv_cb recv_cb;                 \
+  uv_alloc_cb alloc_cb;
 
 #define uv_pipe_server_fields             \
     uv_pipe_accept_t accept_reqs[4];      \
     uv_pipe_accept_t* pending_accepts;
 
 #define uv_pipe_connection_fields         \
-  HANDLE handle;
+  uv_timer_t* eof_timer;
 
 #define UV_PIPE_PRIVATE_FIELDS            \
+  HANDLE handle;                          \
   wchar_t* name;                          \
   union {                                 \
     struct { uv_pipe_server_fields };     \
@@ -146,8 +172,7 @@ typedef struct uv_buf_t {
 
 #define UV_HANDLE_PRIVATE_FIELDS          \
   uv_handle_t* endgame_next;              \
-  unsigned int flags;                     \
-  uv_err_t error;
+  unsigned int flags;
 
 #define UV_ARES_TASK_PRIVATE_FIELDS       \
   struct uv_req_s ares_req;               \
