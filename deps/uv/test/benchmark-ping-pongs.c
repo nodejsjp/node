@@ -52,7 +52,7 @@ static int completed_pingers = 0;
 static int64_t start_time;
 
 
-static uv_buf_t buf_alloc(uv_stream_t* tcp, size_t size) {
+static uv_buf_t buf_alloc(uv_handle_t* tcp, size_t size) {
   buf_t* ab;
 
   ab = buf_freelist;
@@ -124,7 +124,7 @@ static void pinger_shutdown_cb(uv_shutdown_t* req, int status) {
 
 
 static void pinger_read_cb(uv_stream_t* tcp, ssize_t nread, uv_buf_t buf) {
-  unsigned int i;
+  ssize_t i;
   pinger_t* pinger;
 
   pinger = (pinger_t*)tcp->data;

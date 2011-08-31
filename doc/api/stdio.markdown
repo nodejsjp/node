@@ -22,6 +22,7 @@ is used on each argument.
 -->
 最初の引数文字列からフォーマット要素が見つからなかった場合は、
 `util.inspect` が各引数に使われます。
+より詳細は [util.format()](util.html#util.format) を参照してください。
 
 ### console.info()
 

@@ -419,7 +419,7 @@ class Scanner {
     }
   }
 
-  uc32 ScanHexEscape(uc32 c, int length);
+  uc32 ScanHexNumber(int expected_length);
 
   // Return the current source position.
   int source_pos() {
@@ -507,6 +507,14 @@ class JavaScriptScanner : public Scanner {
   // tokens, which is what it is used for.
   void SeekForward(int pos);
 
+  bool HarmonyBlockScoping() const {
+    return harmony_block_scoping_;
+  }
+  void SetHarmonyBlockScoping(bool block_scoping) {
+    harmony_block_scoping_ = block_scoping;
+  }
+
+
  protected:
   bool SkipWhiteSpace();
   Token::Value SkipSingleLineComment();
@@ -529,6 +537,10 @@ class JavaScriptScanner : public Scanner {
   // Decodes a unicode escape-sequence which is part of an identifier.
   // If the escape sequence cannot be decoded the result is kBadChar.
   uc32 ScanIdentifierUnicodeEscape();
+  // Recognizes a uniocde escape-sequence and adds its characters,
+  // uninterpreted, to the current literal. Used for parsing RegExp
+  // flags.
+  bool ScanLiteralUnicodeEscape();
 
   // Start position of the octal literal last scanned.
   Location octal_pos_;
@@ -540,6 +552,9 @@ class JavaScriptScanner : public Scanner {
   // Whether there is a multi-line comment that contains a
   // line-terminator after the current token, and before the next.
   bool has_multiline_comment_before_next_;
+  // Whether we scan 'let' as a keyword for harmony block scoped
+  // let bindings.
+  bool harmony_block_scoping_;
 };
 
 } }  // namespace v8::internal

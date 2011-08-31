@@ -2,12 +2,10 @@
 
 <!--
 
-Datagram sockets are available through `require('dgram')`.  Datagrams are most commonly
-handled as IP/UDP messages but they can also be used over Unix domain sockets.
+Datagram sockets are available through `require('dgram')`.
 
 -->
 データグラムソケットは `require('dgram')` で利用可能になります。
-データグラムはほとんどの場合 IP/UDP メッセージで扱われますが、UNIX ドメインソケットでも使用することができます。
 
 ### Event: 'message'
 
@@ -29,12 +27,11 @@ an object with the sender's address information and the number of bytes in the d
 <!--
 
 Emitted when a socket starts listening for datagrams.  This happens as soon as UDP sockets
-are created.  Unix domain sockets do not start listening until calling `bind()` on them.
+are created.
 
 -->
 ソケットでデータグラムの待ち受けを開始すると生成されます。
 これは UDP ソケットが作成されるとすぐに発生します。
-UNIX ドメインソケットでは `bind()` を呼び出すまで待ち受けを開始しません。
 
 ### Event: 'close'
 
@@ -53,54 +50,27 @@ on this socket.
 
 <!--
 
-Creates a datagram socket of the specified types.  Valid types are:
-`udp4`, `udp6`, and `unix_dgram`.
-
--->
-指定された種類のデータグラムソケットを作成します。
-妥当な種類は: `udp4`、`udp6`、そして`unix_dgram` です。
-
-<!--
+Creates a datagram socket of the specified types.  Valid types are `udp4`
+and `udp6`.
 
 Takes an optional callback which is added as a listener for `message` events.
 
+Call `socket.bind` if you want to receive datagrams. `socket.bind()` will bind
+to the "all interfaces" address on a random port (it does the right thing for
+both `udp4` and `udp6` sockets). You can then retrieve the address and port
+with `socket.address().address` and `socket.address().port`.
+
 -->
+指定された種類のデータグラムソケットを作成します。
+妥当な種類は `udp4` と `udp6`です。
+
 オプションのコールバックは `message` イベントのリスナーとして加えられます。
 
-### dgram.send(buf, offset, length, path, [callback])
-
-<!--
-
-For Unix domain datagram sockets, the destination address is a pathname in the filesystem.
-An optional callback may be supplied that is invoked after the `sendto` call is completed
-by the OS.  It is not safe to re-use `buf` until the callback is invoked.  Note that
-unless the socket is bound to a pathname with `bind()` there is no way to receive messages
-on this socket.
-
--->
-UNIX ドメインのデータグラムソケット用です。相手先のアドレスはファイルシステムのパス名です。
-オプションのコールバックはOSによって`sendto`の呼び出しが完了した後に起動されるために提供されるかもしれません。
-コールバックが呼び出されるまで `buf` の再利用は安全ではありません。
-`bind()` によってソケットがパスネームにバインドされていない限り、
-このソケットでメッセージを受信することはないことに注意してください。
-
-<!--
-
-Example of sending a message to syslogd on OSX via Unix domain socket `/var/run/syslog`:
-
--->
-UNIXドメインソケット `/var/run/syslog` を通じて OSX 上の syslogd にメッセージを送信する例:
-
-    var dgram = require('dgram');
-    var message = new Buffer("A message to log.");
-    var client = dgram.createSocket("unix_dgram");
-    client.send(message, 0, message.length, "/var/run/syslog",
-      function (err, bytes) {
-        if (err) {
-          throw err;
-        }
-        console.log("Wrote " + bytes + " bytes to socket.");
-    });
+データグラムを受信したい場合は `socket.bind()` を呼び出します。
+`socket.bind()` は「全てのインタフェース」のアドレスにランダムなポート
+(`udp4` と `udp6` ソケットの両方で正しいものです) をバインドします。
+そのアドレスとポートは `socket.address().address` および
+`socket.address().port` で取得することができます。
 
 ### dgram.send(buf, offset, length, port, address, [callback])
 
@@ -113,6 +83,10 @@ re-used.  Note that DNS lookups will delay the time that a send takes place, at
 least until the next tick.  The only way to know for sure that a send has taken place
 is to use the callback.
 
+If the socket has not been previously bound with a call to `bind`, it's
+assigned a random port number and bound to the "all interfaces" address
+(0.0.0.0 for `udp4` sockets, ::0 for `udp6` sockets).
+
 -->
 UDP ソケット用です。相手先のポートと IP アドレスは必ず指定しなければなりません。
 `address` パラメータに文字列を提供すると、それは DNS によって解決されます。
@@ -120,6 +94,9 @@ DNS エラーと `buf` が再利用可能になった時のためにオプショ
 DNS ルックアップは送信を少なくとも次の機会まで遅らせることに注意してください。
 送信が行われたことを確実に知る唯一の手段はコールバックを使うことです。
 
+ソケットが以前に `bind` の呼び出しによってバインドされていない場合は、
+ランダムなポート番号が「全てのインタフェース」アドレスに対してバインドされます
+(`udp4` ソケットでは 0.0.0.0、`udp6` では ::0)。
 <!--
 
 Example of sending a UDP packet to a random port on `localhost`;
@@ -133,68 +110,6 @@ Example of sending a UDP packet to a random port on `localhost`;
     client.send(message, 0, message.length, 41234, "localhost");
     client.close();
 
-
-### dgram.bind(path)
-
-<!--
-
-For Unix domain datagram sockets, start listening for incoming datagrams on a
-socket specified by `path`. Note that clients may `send()` without `bind()`,
-but no datagrams will be received without a `bind()`.
-
--->
-UNIX ドメインのデータグラムソケット用です。
-`path` で指定されたソケット上でデータグラムの着信待ち受けを開始します。
-クライアントは `bind()` しなくても `send()` することができますが、
-`bind()` しないでデータグラムを受信することはありません。
-
-<!--
-
-Example of a Unix domain datagram server that echoes back all messages it receives:
-
--->
-受信した全てのメッセージをエコーバックする UNIX ドメインのデータグラムソケットサーバの例:
-
-    var dgram = require("dgram");
-    var serverPath = "/tmp/dgram_server_sock";
-    var server = dgram.createSocket("unix_dgram");
-
-    server.on("message", function (msg, rinfo) {
-      console.log("got: " + msg + " from " + rinfo.address);
-      server.send(msg, 0, msg.length, rinfo.address);
-    });
-
-    server.on("listening", function () {
-      console.log("server listening " + server.address().address);
-    })
-
-    server.bind(serverPath);
-
-<!--
-
-Example of a Unix domain datagram client that talks to this server:
-
--->
-このサーバと対話する UNIX ドメインのデータグラムクライアントの例:
-
-    var dgram = require("dgram");
-    var serverPath = "/tmp/dgram_server_sock";
-    var clientPath = "/tmp/dgram_client_sock";
-
-    var message = new Buffer("A message at " + (new Date()));
-
-    var client = dgram.createSocket("unix_dgram");
-
-    client.on("message", function (msg, rinfo) {
-      console.log("got: " + msg + " from " + rinfo.address);
-    });
-
-    client.on("listening", function () {
-      console.log("client listening " + client.address().address);
-      client.send(message, 0, message.length, serverPath);
-    });
-
-    client.bind(clientPath);
 
 ### dgram.bind(port, [address])
 
@@ -237,25 +152,21 @@ Example of a UDP server listening on port 41234:
 
 <!--
 
-Close the underlying socket and stop listening for data on it.  UDP sockets
-automatically listen for messages, even if they did not call `bind()`.
+Close the underlying socket and stop listening for data on it.
 
 -->
 下層のソケットをクローズし、データの待ち受けを終了します。
-`bind()` が呼び出されていない、自動的にメッセージを待ち受けていた UDP ソケットでも同じです。
 
 ### dgram.address()
 
 <!--
 
 Returns an object containing the address information for a socket.  For UDP sockets,
-this object will contain `address` and `port`.  For Unix domain sockets, it will contain
-only `address`.
+this object will contain `address` and `port`.
 
 -->
 オブジェクトが持っているソケットのアドレス情報を返します。
-UDP ソケットでは、このオブジェクトは `address` と `port` を持っています。
-UNIX ドメインソケットでは、`address` だけを持っています。
+このオブジェクトは `address` と `port` を持っています。
 
 ### dgram.setBroadcast(flag)
 

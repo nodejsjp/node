@@ -26,7 +26,8 @@
 #include "../uv-common.h"
 
 #include "tree.h"
-#include "ntdll.h"
+#include "winapi.h"
+#include "winsock.h"
 
 
 /*
@@ -106,6 +107,8 @@ extern uv_loop_t uv_main_loop_;
 #define UV_HANDLE_READ_PENDING     0x8000
 #define UV_HANDLE_GIVEN_OS_HANDLE  0x10000
 #define UV_HANDLE_UV_ALLOCED       0x20000
+#define UV_HANDLE_SYNC_BYPASS_IOCP 0x40000
+#define UV_HANDLE_ZERO_READ        0x80000
 
 void uv_want_endgame(uv_handle_t* handle);
 void uv_process_endgames();
@@ -121,6 +124,12 @@ void uv_process_endgames();
     }                                         \
   } while (0)
 
+#define UV_SUCCEEDED_WITHOUT_IOCP(result)                     \
+  ((result) && (handle->flags & UV_HANDLE_SYNC_BYPASS_IOCP))
+
+#define UV_SUCCEEDED_WITH_IOCP(result)                        \
+  ((result) || (GetLastError() == ERROR_IO_PENDING))
+
 
 /*
  * Requests
@@ -131,6 +140,14 @@ uv_req_t* uv_overlapped_to_req(OVERLAPPED* overlapped);
 
 void uv_insert_pending_req(uv_req_t* req);
 void uv_process_reqs();
+
+#define POST_COMPLETION_FOR_REQ(req)                                    \
+  if (!PostQueuedCompletionStatus(LOOP->iocp,                           \
+                                  0,                                    \
+                                  0,                                    \
+                                  &((req)->overlapped))) {              \
+    uv_fatal_error(GetLastError(), "PostQueuedCompletionStatus");       \
+  }
 
 
 /*
@@ -145,21 +162,31 @@ size_t uv_count_bufs(uv_buf_t bufs[], int count);
 /*
  * TCP
  */
-void uv_winsock_startup();
-
-void uv_tcp_endgame(uv_tcp_t* handle);
-
 int uv_tcp_listen(uv_tcp_t* handle, int backlog, uv_connection_cb cb);
 int uv_tcp_accept(uv_tcp_t* server, uv_tcp_t* client);
 int uv_tcp_read_start(uv_tcp_t* handle, uv_alloc_cb alloc_cb,
     uv_read_cb read_cb);
 int uv_tcp_write(uv_write_t* req, uv_tcp_t* handle, uv_buf_t bufs[],
     int bufcnt, uv_write_cb cb);
+int uv_tcp_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen);
 
 void uv_process_tcp_read_req(uv_tcp_t* handle, uv_req_t* req);
 void uv_process_tcp_write_req(uv_tcp_t* handle, uv_write_t* req);
 void uv_process_tcp_accept_req(uv_tcp_t* handle, uv_req_t* req);
 void uv_process_tcp_connect_req(uv_tcp_t* handle, uv_connect_t* req);
+
+void uv_tcp_endgame(uv_tcp_t* handle);
+
+
+/*
+ * UDP
+ */
+int uv_udp_getsockname(uv_udp_t* handle, struct sockaddr* name, int* namelen);
+
+void uv_process_udp_recv_req(uv_udp_t* handle, uv_req_t* req);
+void uv_process_udp_send_req(uv_udp_t* handle, uv_udp_send_t* req);
+
+void uv_udp_endgame(uv_udp_t* handle);
 
 
 /*
@@ -181,6 +208,7 @@ void uv_process_pipe_read_req(uv_pipe_t* handle, uv_req_t* req);
 void uv_process_pipe_write_req(uv_pipe_t* handle, uv_write_t* req);
 void uv_process_pipe_accept_req(uv_pipe_t* handle, uv_req_t* raw_req);
 void uv_process_pipe_connect_req(uv_pipe_t* handle, uv_connect_t* req);
+void uv_process_pipe_shutdown_req(uv_pipe_t* handle, uv_shutdown_t* req);
 
 /*
  * Loop watchers
@@ -235,14 +263,40 @@ uv_err_t uv_new_sys_error(int sys_errno);
 void uv_set_sys_error(int sys_errno);
 void uv_set_error(uv_err_code code, int sys_errno);
 
+#define SET_REQ_STATUS(req, status)                                     \
+   (req)->overlapped.Internal = (ULONG_PTR) (status)
+
+#define SET_REQ_ERROR(req, error)                                       \
+  SET_REQ_STATUS((req), NTSTATUS_FROM_WIN32((error)))
+
+#define SET_REQ_SUCCESS(req)                                            \
+  SET_REQ_STATUS((req), STATUS_SUCCESS)
+
+#define GET_REQ_STATUS(req)                                             \
+  ((req)->overlapped.Internal)
+
+#define REQ_SUCCESS(req)                                                \
+  (NT_SUCCESS(GET_REQ_STATUS((req))))
+
+#define GET_REQ_ERROR(req)                                              \
+  (pRtlNtStatusToDosError(GET_REQ_STATUS((req))))
+
+#define GET_REQ_SOCK_ERROR(req)                                         \
+  (uv_ntstatus_to_winsock_error(GET_REQ_STATUS((req))))
+
+#define GET_REQ_UV_ERROR(req)                                           \
+  (uv_new_sys_error(GET_REQ_ERROR((req))))
+
+#define GET_REQ_UV_SOCK_ERROR(req)                                      \
+  (uv_new_sys_error(GET_REQ_SOCK_ERROR((req))))
+
 
 /*
- * Windows api functions that we need to retrieve dynamically
+ * Initialization for the windows and winsock api
  */
 void uv_winapi_init();
-
-extern sRtlNtStatusToDosError pRtlNtStatusToDosError;
-extern sNtQueryInformationFile pNtQueryInformationFile;
+void uv_winsock_init();
+int uv_ntstatus_to_winsock_error(NTSTATUS status);
 
 
 #endif /* UV_WIN_INTERNAL_H_ */
