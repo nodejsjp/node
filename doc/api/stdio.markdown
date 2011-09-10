@@ -1,9 +1,13 @@
 ## console
 
 <!--
-Browser-like object for printing to stdout and stderr.
+For printing to stdout and stderr.  Similar to the console object functions
+provided by most web browsers, here the output is sent to stdout or stderr.
 -->
-標準出力と標準エラー出力に対するブラウザライクなオブジェクトです。
+標準出力と標準エラーに出力するためのものです。
+ほとんどのブラウザで提供されているコンソールオブジェクトと同様ですが、
+出力は標準出力か標準エラー出力に送られます。
+
 
 ### console.log()
 
@@ -19,6 +23,7 @@ Prints to stdout with newline. This function can take multiple arguments in a
 <!--
 If formating elements are not found in the first string then `util.inspect`
 is used on each argument.
+See [util.format()](util.html#util.format) for more infomation.
 -->
 最初の引数文字列からフォーマット要素が見つからなかった場合は、
 `util.inspect` が各引数に使われます。

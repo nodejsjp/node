@@ -45,14 +45,15 @@ typedef struct env_var {
     uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");          \
   }                                                       \
   if (!uv_utf8_to_utf16(s, t, size / sizeof(wchar_t))) {  \
-    uv_set_sys_error(GetLastError());                     \
+    uv_set_sys_error(loop, GetLastError());                     \
     err = -1;                                             \
     goto done;                                            \
   }
 
 
-static void uv_process_init(uv_process_t* handle) {
+static void uv_process_init(uv_loop_t* loop, uv_process_t* handle) {
   handle->type = UV_PROCESS;
+  handle->loop = loop;
   handle->flags = 0;
   handle->exit_cb = NULL;
   handle->pid = 0;
@@ -60,24 +61,21 @@ static void uv_process_init(uv_process_t* handle) {
   handle->wait_handle = INVALID_HANDLE_VALUE;
   handle->process_handle = INVALID_HANDLE_VALUE;
   handle->close_handle = INVALID_HANDLE_VALUE;
-  handle->stdio_pipes[0].server_pipe = NULL;
-  handle->stdio_pipes[0].child_pipe = INVALID_HANDLE_VALUE;
-  handle->stdio_pipes[1].server_pipe = NULL;
-  handle->stdio_pipes[1].child_pipe = INVALID_HANDLE_VALUE;
-  handle->stdio_pipes[2].server_pipe = NULL;
-  handle->stdio_pipes[2].child_pipe = INVALID_HANDLE_VALUE;
+  handle->child_stdio[0] = INVALID_HANDLE_VALUE;
+  handle->child_stdio[1] = INVALID_HANDLE_VALUE;
+  handle->child_stdio[2] = INVALID_HANDLE_VALUE;
 
-  uv_req_init((uv_req_t*)&handle->exit_req);
+  uv_req_init(loop, (uv_req_t*)&handle->exit_req);
   handle->exit_req.type = UV_PROCESS_EXIT;
   handle->exit_req.data = handle;
-  uv_req_init((uv_req_t*)&handle->close_req);
+  uv_req_init(loop, (uv_req_t*)&handle->close_req);
   handle->close_req.type = UV_PROCESS_CLOSE;
   handle->close_req.data = handle;
 
-  uv_counters()->handle_init++;
-  uv_counters()->process_init++;
+  loop->counters.handle_init++;
+  loop->counters.process_init++;
 
-  uv_ref();
+  uv_ref(loop);
 }
 
 
@@ -122,8 +120,8 @@ static wchar_t* search_path_join_test(const wchar_t* dir,
   }
 
   /* Allocate buffer for output */
-  result = result_pos =
-      (wchar_t*)malloc(sizeof(wchar_t) * (cwd_len + 1 + dir_len + 1 + name_len + 1 + ext_len + 1));
+  result = result_pos = (wchar_t*)malloc(sizeof(wchar_t) *
+      (cwd_len + 1 + dir_len + 1 + name_len + 1 + ext_len + 1));
 
   /* Copy cwd */
   wcsncpy(result_pos, cwd, cwd_len);
@@ -280,7 +278,8 @@ static wchar_t* search_path(const wchar_t *file,
     return NULL;
   }
 
-  /* Find the start of the filename so we can split the directory from the name */
+  /* Find the start of the filename so we can split the directory from the */
+  /* name. */
   for (file_name_start = (wchar_t*)file + file_len;
        file_name_start > file
            && file_name_start[-1] != L'\\'
@@ -489,7 +488,8 @@ error:
  * issues associated with that solution; this is the caller's
  * char**, and modifying it is rude.
  */
-static void check_required_vars_contains_var(env_var_t* required, int size, const char* var) {
+static void check_required_vars_contains_var(env_var_t* required, int size,
+    const char* var) {
   int i;
   for (i = 0; i < size; ++i) {
     if (_strnicmp(required[i].narrow, var, required[i].len) == 0) {
@@ -527,7 +527,9 @@ wchar_t* make_program_env(char** env_block) {
   };
 
   for (env = env_block; *env; env++) {
-    check_required_vars_contains_var(required_vars, COUNTOF(required_vars), *env);
+    check_required_vars_contains_var(required_vars,
+                                     COUNTOF(required_vars),
+                                     *env);
     env_len += (uv_utf8_to_utf16(*env, NULL, 0) * sizeof(wchar_t));
   }
 
@@ -563,7 +565,9 @@ wchar_t* make_program_env(char** env_block) {
       wcscpy(ptr, required_vars[i].wide);
       ptr += required_vars[i].len - 1;
       *ptr++ = L'=';
-      var_size = GetEnvironmentVariableW(required_vars[i].wide, ptr, required_vars[i].value_len);
+      var_size = GetEnvironmentVariableW(required_vars[i].wide,
+                                         ptr,
+                                         required_vars[i].value_len);
       if (var_size == 0) {
         uv_fatal_error(GetLastError(), "GetEnvironmentVariableW");
       }
@@ -582,12 +586,13 @@ wchar_t* make_program_env(char** env_block) {
  */
 static void CALLBACK exit_wait_callback(void* data, BOOLEAN didTimeout) {
   uv_process_t* process = (uv_process_t*)data;
+  uv_loop_t* loop = process->loop;
 
   assert(didTimeout == FALSE);
   assert(process);
 
   /* Post completed */
-  POST_COMPLETION_FOR_REQ(&process->exit_req);
+  POST_COMPLETION_FOR_REQ(loop, &process->exit_req);
 }
 
 
@@ -597,12 +602,13 @@ static void CALLBACK exit_wait_callback(void* data, BOOLEAN didTimeout) {
  */
 static void CALLBACK close_wait_callback(void* data, BOOLEAN didTimeout) {
   uv_process_t* process = (uv_process_t*)data;
+  uv_loop_t* loop = process->loop;
 
   assert(didTimeout == FALSE);
   assert(process);
 
   /* Post completed */
-  POST_COMPLETION_FOR_REQ(&process->close_req);
+  POST_COMPLETION_FOR_REQ(loop, &process->close_req);
 }
 
 
@@ -615,7 +621,8 @@ static DWORD WINAPI spawn_failure(void* data) {
   char syscall[] = "CreateProcessW: ";
   char unknown[] = "unknown error\n";
   uv_process_t* process = (uv_process_t*) data;
-  HANDLE child_stderr = process->stdio_pipes[2].child_pipe;
+  uv_loop_t* loop = process->loop;
+  HANDLE child_stderr = process->child_stdio[2];
   char* buf = NULL;
   DWORD count, written;
 
@@ -641,24 +648,29 @@ static DWORD WINAPI spawn_failure(void* data) {
   FlushFileBuffers(child_stderr);
 
   /* Post completed */
-  POST_COMPLETION_FOR_REQ(&process->exit_req);
+  POST_COMPLETION_FOR_REQ(loop, &process->exit_req);
 
   return 0;
 }
 
 
-/* Called on main thread after a child process has exited. */
-void uv_process_proc_exit(uv_process_t* handle) {
+static void close_child_stdio(uv_process_t* process) {
   int i;
-  DWORD exit_code;
+  HANDLE handle;
 
-  /* Close stdio handles. */
-  for (i = 0; i < COUNTOF(handle->stdio_pipes); i++) {
-    if (handle->stdio_pipes[i].child_pipe != INVALID_HANDLE_VALUE) {
-      CloseHandle(handle->stdio_pipes[i].child_pipe);
-      handle->stdio_pipes[i].child_pipe = INVALID_HANDLE_VALUE;
+  for (i = 0; i < COUNTOF(process->child_stdio); i++) {
+    handle = process->child_stdio[i];
+    if (handle != NULL && handle != INVALID_HANDLE_VALUE) {
+      CloseHandle(handle);
+      process->child_stdio[i] = INVALID_HANDLE_VALUE;
     }
   }
+}
+
+
+/* Called on main thread after a child process has exited. */
+void uv_process_proc_exit(uv_loop_t* loop, uv_process_t* handle) {
+  DWORD exit_code;
 
   /* Unregister from process notification. */
   if (handle->wait_handle != INVALID_HANDLE_VALUE) {
@@ -676,6 +688,10 @@ void uv_process_proc_exit(uv_process_t* handle) {
     CloseHandle(handle->process_handle);
     handle->process_handle = INVALID_HANDLE_VALUE;
   } else {
+    /* We probably left the child stdio handles open to report the error */
+    /* asynchronously, so close them now. */
+    close_child_stdio(handle);
+
     /* The process never even started in the first place. */
     exit_code = 127;
   }
@@ -688,12 +704,12 @@ void uv_process_proc_exit(uv_process_t* handle) {
 
 
 /* Called on main thread after UnregisterWaitEx finishes. */
-void uv_process_proc_close(uv_process_t* handle) {
-  uv_want_endgame((uv_handle_t*)handle);
+void uv_process_proc_close(uv_loop_t* loop, uv_process_t* handle) {
+  uv_want_endgame(loop, (uv_handle_t*)handle);
 }
 
 
-void uv_process_endgame(uv_process_t* handle) {
+void uv_process_endgame(uv_loop_t* loop, uv_process_t* handle) {
   if (handle->flags & UV_HANDLE_CLOSING) {
     assert(!(handle->flags & UV_HANDLE_CLOSED));
     handle->flags |= UV_HANDLE_CLOSED;
@@ -702,12 +718,12 @@ void uv_process_endgame(uv_process_t* handle) {
       handle->close_cb((uv_handle_t*)handle);
     }
 
-    uv_unref();
+    uv_unref(loop);
   }
 }
 
 
-void uv_process_close(uv_process_t* handle) {
+void uv_process_close(uv_loop_t* loop, uv_process_t* handle) {
   if (handle->wait_handle != INVALID_HANDLE_VALUE) {
     handle->close_handle = CreateEvent(NULL, FALSE, FALSE, NULL);
     UnregisterWaitEx(handle->wait_handle, handle->close_handle);
@@ -717,25 +733,30 @@ void uv_process_close(uv_process_t* handle) {
         close_wait_callback, (void*)handle, INFINITE,
         WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE);
   } else {
-    uv_want_endgame((uv_handle_t*)handle);
+    uv_want_endgame(loop, (uv_handle_t*)handle);
   }
 }
 
 
-static int uv_create_stdio_pipe_pair(uv_pipe_t* server_pipe, HANDLE* child_pipe,  DWORD server_access, DWORD child_access) {
+static int uv_create_stdio_pipe_pair(uv_loop_t* loop, uv_pipe_t* server_pipe,
+    HANDLE* child_pipe,  DWORD server_access, DWORD child_access) {
   int err;
   SECURITY_ATTRIBUTES sa = { sizeof(SECURITY_ATTRIBUTES), NULL, TRUE };
   char pipe_name[64];
   DWORD mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT;
 
   if (server_pipe->type != UV_NAMED_PIPE) {
-    uv_set_error(UV_EINVAL, 0);
+    uv_set_error(loop, UV_EINVAL, 0);
     err = -1;
     goto done;
   }
 
   /* Create server pipe handle. */
-  err = uv_stdio_pipe_server(server_pipe, server_access, pipe_name, sizeof(pipe_name));
+  err = uv_stdio_pipe_server(loop,
+                             server_pipe,
+                             server_access,
+                             pipe_name,
+                             sizeof(pipe_name));
   if (err) {
     goto done;
   }
@@ -750,13 +771,13 @@ static int uv_create_stdio_pipe_pair(uv_pipe_t* server_pipe, HANDLE* child_pipe,
                             NULL);
 
   if (*child_pipe == INVALID_HANDLE_VALUE) {
-    uv_set_sys_error(GetLastError());
+    uv_set_sys_error(loop, GetLastError());
     err = -1;
     goto done;
   }
 
   if (!SetNamedPipeHandleState(*child_pipe, &mode, NULL, NULL)) {
-    uv_set_sys_error(GetLastError());
+    uv_set_sys_error(loop, GetLastError());
     err = -1;
     goto done;
   }
@@ -766,7 +787,7 @@ static int uv_create_stdio_pipe_pair(uv_pipe_t* server_pipe, HANDLE* child_pipe,
    */
   if (!ConnectNamedPipe(server_pipe->handle, NULL)) {
     if (GetLastError() != ERROR_PIPE_CONNECTED) {
-      uv_set_sys_error(GetLastError());
+      uv_set_sys_error(loop, GetLastError());
       err = -1;
       goto done;
     }
@@ -790,19 +811,54 @@ done:
 }
 
 
-int uv_spawn(uv_process_t* process, uv_process_options_t options) {
-  int err = 0, i;
+static int duplicate_std_handle(uv_loop_t* loop, DWORD id, HANDLE* dup) {
+  HANDLE handle;
+  HANDLE current_process = GetCurrentProcess();
+  
+  handle = GetStdHandle(id);
+
+  if (handle == NULL) {
+    *dup = NULL;
+    return 0;
+  } else if (handle == INVALID_HANDLE_VALUE) {
+    *dup = INVALID_HANDLE_VALUE;
+    uv_set_sys_error(loop, GetLastError());
+    return -1;
+  }
+
+  if (!DuplicateHandle(current_process,
+                       handle,
+                       current_process,
+                       dup,
+                       0,
+                       TRUE,
+                       DUPLICATE_SAME_ACCESS)) {
+    *dup = INVALID_HANDLE_VALUE;
+    uv_set_sys_error(loop, GetLastError());
+    return -1;
+  }
+
+  return 0;
+}
+
+
+int uv_spawn(uv_loop_t* loop, uv_process_t* process,
+    uv_process_options_t options) {
+  int err = 0, keep_child_stdio_open = 0;
   wchar_t* path;
   int size;
+  BOOL result;
   wchar_t* application_path, *application, *arguments, *env, *cwd;
+  HANDLE* child_stdio = process->child_stdio;
   STARTUPINFOW startup;
   PROCESS_INFORMATION info;
 
-  uv_process_init(process);
+  uv_process_init(loop, process);
 
   process->exit_cb = options.exit_cb;
   UTF8_TO_UTF16(options.file, application);
-  arguments = options.args ? make_program_args(options.args, options.windows_verbatim_arguments) : NULL;
+  arguments = options.args ? make_program_args(options.args,
+      options.windows_verbatim_arguments) : NULL;
   env = options.env ? make_program_env(options.env) : NULL;
 
   if (options.cwd) {
@@ -816,7 +872,7 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
       }
       GetCurrentDirectoryW(size, cwd);
     } else {
-      uv_set_sys_error(GetLastError());
+      uv_set_sys_error(loop, GetLastError());
       err = -1;
       goto done;
     }
@@ -843,30 +899,44 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
 
   /* Create stdio pipes. */
   if (options.stdin_stream) {
-    err = uv_create_stdio_pipe_pair(options.stdin_stream, &process->stdio_pipes[0].child_pipe, PIPE_ACCESS_OUTBOUND, GENERIC_READ | FILE_WRITE_ATTRIBUTES);
-    if (err) {
-      goto done;
-    }
-
-    process->stdio_pipes[0].server_pipe = options.stdin_stream;
+    err = uv_create_stdio_pipe_pair(
+        loop,
+        options.stdin_stream,
+        &child_stdio[0],
+        PIPE_ACCESS_OUTBOUND,
+        GENERIC_READ | FILE_WRITE_ATTRIBUTES);
+  } else {
+    err = duplicate_std_handle(loop, STD_INPUT_HANDLE, &child_stdio[0]);
+  }
+  if (err) {
+    goto done;
   }
 
   if (options.stdout_stream) {
-    err = uv_create_stdio_pipe_pair(options.stdout_stream, &process->stdio_pipes[1].child_pipe, PIPE_ACCESS_INBOUND, GENERIC_WRITE);
-    if (err) {
-      goto done;
-    }
-
-    process->stdio_pipes[1].server_pipe = options.stdout_stream;
+    err = uv_create_stdio_pipe_pair(
+        loop, options.stdout_stream,
+        &child_stdio[1],
+        PIPE_ACCESS_INBOUND,
+        GENERIC_WRITE);
+  } else {
+    err = duplicate_std_handle(loop, STD_OUTPUT_HANDLE, &child_stdio[1]);
+  }
+  if (err) {
+    goto done;
   }
 
   if (options.stderr_stream) {
-    err = uv_create_stdio_pipe_pair(options.stderr_stream, &process->stdio_pipes[2].child_pipe, PIPE_ACCESS_INBOUND, GENERIC_WRITE);
-    if (err) {
-      goto done;
-    }
-
-    process->stdio_pipes[2].server_pipe = options.stderr_stream;
+    err = uv_create_stdio_pipe_pair(
+        loop,
+        options.stderr_stream,
+        &child_stdio[2],
+        PIPE_ACCESS_INBOUND,
+        GENERIC_WRITE);
+  } else {
+    err = duplicate_std_handle(loop, STD_ERROR_HANDLE, &child_stdio[2]);
+  }
+  if (err) {
+    goto done;
   }
 
   startup.cb = sizeof(startup);
@@ -876,9 +946,9 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
   startup.dwFlags = STARTF_USESTDHANDLES;
   startup.cbReserved2 = 0;
   startup.lpReserved2 = NULL;
-  startup.hStdInput = process->stdio_pipes[0].child_pipe;
-  startup.hStdOutput = process->stdio_pipes[1].child_pipe;
-  startup.hStdError = process->stdio_pipes[2].child_pipe;
+  startup.hStdInput = child_stdio[0];
+  startup.hStdOutput = child_stdio[1];
+  startup.hStdError = child_stdio[2];
 
   if (CreateProcessW(application_path,
                      arguments,
@@ -895,9 +965,10 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
     process->pid = info.dwProcessId;
 
     /* Setup notifications for when the child process exits. */
-    if (!RegisterWaitForSingleObject(&process->wait_handle, process->process_handle,
-        exit_wait_callback, (void*)process, INFINITE,
-        WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE)) {
+    result = RegisterWaitForSingleObject(&process->wait_handle,
+        process->process_handle, exit_wait_callback, (void*)process, INFINITE,
+        WT_EXECUTEINWAITTHREAD | WT_EXECUTEONLYONCE);
+    if (!result) {
       uv_fatal_error(GetLastError(), "RegisterWaitForSingleObject");
     }
 
@@ -909,6 +980,7 @@ int uv_spawn(uv_process_t* process, uv_process_options_t options) {
     /* succeeded, and start a thread instead that prints an error */
     /* to the child's intended stderr. */
     process->spawn_errno = GetLastError();
+    keep_child_stdio_open = 1;
     if (!QueueUserWorkItem(spawn_failure, process, WT_EXECUTEDEFAULT)) {
       uv_fatal_error(GetLastError(), "QueueUserWorkItem");
     }
@@ -924,14 +996,22 @@ done:
   free(env);
   free(path);
 
-  if (err) {
-    for (i = 0; i < COUNTOF(process->stdio_pipes); i++) {
-      if (process->stdio_pipes[i].child_pipe != INVALID_HANDLE_VALUE) {
-        CloseHandle(process->stdio_pipes[i].child_pipe);
-        process->stdio_pipes[i].child_pipe = INVALID_HANDLE_VALUE;
-      }
+  /* Under normal circumstances we should close the stdio handles now - */
+  /* the child now has its own duplicates, or something went horribly wrong. */
+  /* The only exception is when CreateProcess has failed, then we actually */
+  /* need to keep the stdio handles to report the error asynchronously. */
+  if (!keep_child_stdio_open) {
+    close_child_stdio(process);
+  } else {
+    /* We're keeping the handles open, the thread pool is going to have */
+    /* it's way with them. But at least make them noninheritable. */
+    int i;
+    for (i = 0; i < COUNTOF(process->child_stdio); i++) {
+      SetHandleInformation(child_stdio[i], HANDLE_FLAG_INHERIT, 0);
     }
+  }
 
+  if (err) {
     if (process->wait_handle != INVALID_HANDLE_VALUE) {
       UnregisterWait(process->wait_handle);
       process->wait_handle = INVALID_HANDLE_VALUE;

@@ -26,16 +26,15 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 {
+  'includes': ['../../build/common.gypi'],
   'variables': {
     'generated_file': '<(SHARED_INTERMEDIATE_DIR)/resources.cc',
   },
-  'includes': [ '../../build/v8-features.gypi' ],
   'targets': [
     {
       'target_name': 'cctest',
       'type': 'executable',
       'dependencies': [
-        '../../tools/gyp/v8.gyp:v8',
         'resources',
       ],
       'include_dirs': [
@@ -135,6 +134,20 @@
           'sources': [
             'test-platform-win32.cc',
           ],
+        }],
+        ['component=="shared_library"', {
+          # cctest can't be built against a shared library, so we need to
+          # depend on the underlying static target in that case.
+          'conditions': [
+            ['v8_use_snapshot=="true"', {
+              'dependencies': ['../../tools/gyp/v8.gyp:v8_snapshot'],
+            },
+            {
+              'dependencies': ['../../tools/gyp/v8.gyp:v8_nosnapshot'],
+            }],
+          ],
+        }, {
+          'dependencies': ['../../tools/gyp/v8.gyp:v8'],
         }],
       ],
     },

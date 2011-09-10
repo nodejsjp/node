@@ -2,12 +2,25 @@
 
 <!--
 
-This module contains utilities for dealing with file paths.  Use
-`require('path')` to use it.  It provides the following methods:
+This module contains utilities for handling and transforming file
+paths.  Almost all these methods perform only string transformations.
+The file system is not consulted to check whether paths are valid.
+
+`path.exists` and `path.existsSync` are the exceptions, and should
+logically be found in the fs module as they do access the file system.
+
+Use `require('path')` to use this module.  The following methods are provided:
 
 -->
-このモジュールはファイルパスを扱うユーティリティを含みます。
-利用するには`require('path')`を呼び出してください。
+このモジュールはファイルのパスに対する処理や変換を行うユーティリティを含みます。
+ほとんどのメソッドは文字列の変換だけを行います。
+パスが正しいか検証するためにファイルシステムに尋ねることはありません。
+
+例外は `path.exists` および `path.existsSync` で、
+これらはファイルシステムにアクセスするため、
+論理的には fs モジュールにあるべきです。
+
+このモジュールを利用するには`require('path')`を呼び出してください。
 このモジュールは以下のメソッドを提供します。
 
 ### path.normalize(p)
@@ -16,12 +29,12 @@ This module contains utilities for dealing with file paths.  Use
 
 Normalize a string path, taking care of `'..'` and `'.'` parts.
 
--->
+->
 文字列によるパスを正規化します。`'..'` と `'.'` の要素には注意してください。
 
 <!--
 
-When multiple slashes are found, they're replaces by a single one;
+When multiple slashes are found, they're replaced by a single one;
 when the path contains a trailing slash, it is preserved.
 On windows backslashes are used. 
 
@@ -153,13 +166,15 @@ Solve the relative path from `from` to `to`.
 `from` から `to` への相対パスを解決します。
 
 <!--
-Sometimes we've got two absolute pathes, and we need to calculate the relative path from one to another.
-It's accually the reverse transform of path.resolve, which means we assume:
+At times we have two absolute paths, and we need to derive the relative
+path from one to the other.  This is actually the reverse transform of
+`path.resolve`, which means we see that:
 -->
-時折、二つの絶対パスが与えられて、
-一方からもう一方への相対パスを求める必要があります。
+二つの絶対パスがあり、一方から他方への相対パスを得なければならない場合があります。
 これは実際のところ、`path.resolve()` とは逆の変換です。
 それは以下を意味します:
+
+
 
     path.resolve(from, path.relative(from, to)) == path.resolve(to)
 
@@ -224,19 +239,23 @@ Example:
 
 <!--
 
-Return the extension of the path.  Everything after the last '.' in the last portion
-of the path.  If there is no '.' in the last portion of the path or the only '.' is
-the first character, then it returns an empty string.  Examples:
+Return the extension of the path, from the last '.' to end of string
+in the last portion of the path.  If there is no '.' in the last portion
+of the path or the first character of it is '.', then it returns
+an empty string.  Examples:
 
 -->
-パスの拡張子を返します。
-パスの最後の要素について、最後の '.' から後にある文字列が対象になります。
+パスの最後の要素について、最後の '.' から文字列の最後までのパスの拡張子を返します。
 最後の要素に '.' が含まれていなかった場合、もしくは '.' が最初の文字だった場合は、空の文字列を返します。
 例:
 
     path.extname('index.html')
     // returns
     '.html'
+
+    path.extname('index.')
+    // returns
+    '.'
 
     path.extname('index')
     // returns
@@ -246,11 +265,11 @@ the first character, then it returns an empty string.  Examples:
 
 <!--
 
-Test whether or not the given path exists.  Then, call the `callback` argument
-with either true or false. Example:
+Test whether or not the given path exists by checking with the file system.
+Then call the `callback` argument with either true or false.  Example:
 
 -->
-与えられたパスが存在するかどうか検査します。
+与えられたパスがファイルシステム上に存在するかどうか検査します。
 そして引数の `callback` を真か偽か検査の結果とともに呼び出します。
 例:
 
