@@ -18,11 +18,17 @@ The arguments passed to the completion callback depend on the method, but the
 first argument is always reserved for an exception. If the operation was
 completed successfully, then the first argument will be `null` or `undefined`.
 
+When using the synchronous form any exceptions are immediately thrown.
+You can use try/catch to handle exceptions or allow them to bubble up.
+
 -->
 非同期の形式は常に最後の引数として完了コールバックを受け取ります。
 引数として渡される完了コールバックはメソッドに依存しますが、
 最初の引数は常に例外のために予約されています。
 操作が成功で完了すると最初の引数は `null` または `undefined` となります
+
+同期の形式では、全ての例外はすぐにスローされます。
+例外は try/catch で捕まえることも、そのまま通過させることもできます。
 
 <!--
 
@@ -143,7 +149,7 @@ Synchronous ftruncate(2).
 
 <!--
 
-Asycnronous chown(2). No arguments other than a possible exception are given
+Asynchronous chown(2). No arguments other than a possible exception are given
 to the completion callback.
 
 -->
@@ -162,7 +168,7 @@ Synchronous chown(2).
 
 <!--
 
-Asycnronous fchown(2). No arguments other than a possible exception are given
+Asynchronous fchown(2). No arguments other than a possible exception are given
 to the completion callback.
 
 -->
@@ -181,7 +187,7 @@ Synchronous fchown(2).
 
 <!--
 
-Asycnronous lchown(2). No arguments other than a possible exception are given
+Asynchronous lchown(2). No arguments other than a possible exception are given
 to the completion callback.
 
 -->
@@ -383,29 +389,30 @@ Synchronous symlink(2).
 <!--
 
 Asynchronous readlink(2). The callback gets two arguments `(err,
-resolvedPath)`.
+linkString)`.
 
 -->
-非同期の readlink(2)。コールバックは 2 つの引数を受け取る `(err, resolvedPath)`です。
+非同期の readlink(2)。コールバックは 2 つの引数を受け取る `(err, linkString)`です。
 
 ### fs.readlinkSync(path)
 
 <!--
 
-Synchronous readlink(2). Returns the resolved path.
+Synchronous readlink(2). Returns the symbolic link's string value.
 
 -->
-同期の readlink(2)。解決されたパスを返します。
+同期の readlink(2)。シンボリックリンクの持つ文字列値を返します。
 
 ### fs.realpath(path, [callback])
 
 <!--
 
 Asynchronous realpath(2).  The callback gets two arguments `(err,
-resolvedPath)`.
+resolvedPath)`.  May use `process.cwd` to resolve relative paths.
 
 -->
 非同期の realpath(2)。コールバックは 2 つの引数を受け取る `(err, resolvedPath)`です。
+相対パスを解決するために `process.cwd` を使用することができます。
 
 ### fs.realpathSync(path)
 
@@ -650,7 +657,7 @@ pwrite(2) を参照してください。
 The callback will be given two arguments `(err, written)` where `written`
 specifies how many _bytes_ were written.
 The callback will be given three arguments `(err, written, buffer)` where `written`
-specifies how many _bytes_ were written into `buffer`.
+specifies how many _bytes_ were written from `buffer`.
 
 -->
 コールバックは 3 つの引数が与えられる `(err, written, buffer)` で、
@@ -680,7 +687,7 @@ written.
 
 <!--
 
-Synchronous version of string-based `fs.write()`. Returns the number of bytes
+Synchronous version of string-based `fs.write()`. Returns the number of _bytes_
 written.
 
 -->

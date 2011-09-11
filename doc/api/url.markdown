@@ -127,6 +127,38 @@ Take a parsed URL object, and return a formatted URL string.
 -->
 URL オブジェクトを引数に取り、フォーマットした URL 文字列を返します。
 
+<!--
+
+* `href` will be ignored.
+* `protocol`is treated the same with or without the trailing `:` (colon).
+  * The protocols `http`, `https`, `ftp`, `gopher`, `file` will be postfixed with `://` (colon-slash-slash).
+  * All other protocols `mailto`, `xmpp`, `aim`, `sftp`, `foo`, etc will be postfixed with `:` (colon)
+* `auth` will only be used if `host` is absent.
+* `hostname` will only be used if `host` is absent.
+* `port` will only be used if `host` is absent.
+* `host` will be used in place of `auth`, `hostname`, and `port`
+* `pathname` is treated the same with or without the leading `/` (slash)
+* `search` will be used in place of `query`
+* `query` (object; see `querystring`) will only be used if `search` is absent.
+* `search` is treated the same with or without the leading `?` (question mark)
+* `hash` is treated the same with or without the leading `#` (pound sign, anchor)
+
+-->
+* `href` は無視されます。
+* `protocol` の末尾に `:` (コロン) があってもなくても同じように扱われます。
+  * `http`、`https`、`ftp`、`gopher`、`file` は末尾に `://` (コロン、スラッシュ、スラッシュ) が付けられます。
+  * `mailto`、`xmpp`、`aim`、`sftp`、`foo` など、その他のプロトコルは末尾に `:` (コロン) が付けられます。
+* `auth` は `host` が与えられなかった場合だけ使われます。
+* `hostname` は `host` が与えられなかった場合だけ使われます。
+* `port` は `host` が与えられなかった場合だけ使われます。
+* `host` は `auth`、`hostname`、`port` の位置で使われます。
+* `pathname` の先頭に `/` (スラッシュ) があってもなくても同じように扱われます。
+* `search` は `query` の位置で使われます。
+* `query` (文字列ではなくオブジェクトです; `querystring` を参照してください) は `search` が与えられなかった場合だけ使われます。
+* `search` の先頭に `?` (クエスチョンマーク) があってもなくても同じように扱われます。
+* `hash` の先頭に `#` (シャープ, アンカー) があってもなくても同じように扱われます。
+
+
 ### url.resolve(from, to)
 
 <!--

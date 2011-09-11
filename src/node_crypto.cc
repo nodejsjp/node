@@ -50,6 +50,11 @@
 static const char *PUBLIC_KEY_PFX =  "-----BEGIN PUBLIC KEY-----";
 static const int PUBLIC_KEY_PFX_LEN = strlen(PUBLIC_KEY_PFX);
 
+static const int X509_NAME_FLAGS = ASN1_STRFLGS_ESC_CTRL
+                                 | ASN1_STRFLGS_ESC_MSB
+                                 | XN_FLAG_SEP_MULTILINE
+                                 | XN_FLAG_FN_SN;
+
 namespace node {
 namespace crypto {
 
@@ -58,6 +63,9 @@ using namespace v8;
 static Persistent<String> errno_symbol;
 static Persistent<String> syscall_symbol;
 static Persistent<String> subject_symbol;
+static Persistent<String> subjectaltname_symbol;
+static Persistent<String> modulus_symbol;
+static Persistent<String> exponent_symbol;
 static Persistent<String> issuer_symbol;
 static Persistent<String> valid_from_symbol;
 static Persistent<String> valid_to_symbol;
@@ -580,6 +588,9 @@ void Connection::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "clearPending", Connection::ClearPending);
   NODE_SET_PROTOTYPE_METHOD(t, "encPending", Connection::EncPending);
   NODE_SET_PROTOTYPE_METHOD(t, "getPeerCertificate", Connection::GetPeerCertificate);
+  NODE_SET_PROTOTYPE_METHOD(t, "getSession", Connection::GetSession);
+  NODE_SET_PROTOTYPE_METHOD(t, "setSession", Connection::SetSession);
+  NODE_SET_PROTOTYPE_METHOD(t, "isSessionReused", Connection::IsSessionReused);
   NODE_SET_PROTOTYPE_METHOD(t, "isInitFinished", Connection::IsInitFinished);
   NODE_SET_PROTOTYPE_METHOD(t, "verifyError", Connection::VerifyError);
   NODE_SET_PROTOTYPE_METHOD(t, "getCurrentCipher", Connection::GetCurrentCipher);
@@ -1066,27 +1077,63 @@ Handle<Value> Connection::GetPeerCertificate(const Arguments& args) {
   Local<Object> info = Object::New();
   X509* peer_cert = SSL_get_peer_certificate(ss->ssl_);
   if (peer_cert != NULL) {
-    char* subject = X509_NAME_oneline(X509_get_subject_name(peer_cert), 0, 0);
-    if (subject != NULL) {
-      info->Set(subject_symbol, String::New(subject));
-      OPENSSL_free(subject);
-    }
-    char* issuer = X509_NAME_oneline(X509_get_issuer_name(peer_cert), 0, 0);
-    if (subject != NULL) {
-      info->Set(issuer_symbol, String::New(issuer));
-      OPENSSL_free(issuer);
-    }
-    char buf[256];
     BIO* bio = BIO_new(BIO_s_mem());
+    BUF_MEM* mem;
+    if (X509_NAME_print_ex(bio, X509_get_subject_name(peer_cert), 0,
+                           X509_NAME_FLAGS) > 0) {
+      BIO_get_mem_ptr(bio, &mem);
+      info->Set(subject_symbol, String::New(mem->data, mem->length));
+    }
+    (void) BIO_reset(bio);
+
+    if (X509_NAME_print_ex(bio, X509_get_issuer_name(peer_cert), 0,
+                           X509_NAME_FLAGS) > 0) {
+      BIO_get_mem_ptr(bio, &mem);
+      info->Set(issuer_symbol, String::New(mem->data, mem->length));
+    }
+    (void) BIO_reset(bio);
+
+    int index = X509_get_ext_by_NID(peer_cert, NID_subject_alt_name, -1);
+    if (index >= 0) {
+      X509_EXTENSION* ext;
+      int rv;
+
+      ext = X509_get_ext(peer_cert, index);
+      assert(ext != NULL);
+
+      rv = X509V3_EXT_print(bio, ext, 0, 0);
+      assert(rv == 1);
+
+      BIO_get_mem_ptr(bio, &mem);
+      info->Set(subjectaltname_symbol, String::New(mem->data, mem->length));
+
+      (void) BIO_reset(bio);
+    }
+
+    EVP_PKEY *pkey = NULL;
+    RSA *rsa = NULL;
+    if( NULL != (pkey = X509_get_pubkey(peer_cert))
+        && NULL != (rsa = EVP_PKEY_get1_RSA(pkey)) ) {
+        BN_print(bio, rsa->n);
+        BIO_get_mem_ptr(bio, &mem);
+        info->Set(modulus_symbol, String::New(mem->data, mem->length) );
+        (void) BIO_reset(bio);
+
+        BN_print(bio, rsa->e);
+        BIO_get_mem_ptr(bio, &mem);
+        info->Set(exponent_symbol, String::New(mem->data, mem->length) );
+        (void) BIO_reset(bio);
+    }
+
     ASN1_TIME_print(bio, X509_get_notBefore(peer_cert));
-    memset(buf, 0, sizeof(buf));
-    BIO_read(bio, buf, sizeof(buf) - 1);
-    info->Set(valid_from_symbol, String::New(buf));
+    BIO_get_mem_ptr(bio, &mem);
+    info->Set(valid_from_symbol, String::New(mem->data, mem->length));
+    (void) BIO_reset(bio);
+
     ASN1_TIME_print(bio, X509_get_notAfter(peer_cert));
-    memset(buf, 0, sizeof(buf));
-    BIO_read(bio, buf, sizeof(buf) - 1);
+    BIO_get_mem_ptr(bio, &mem);
+    info->Set(valid_to_symbol, String::New(mem->data, mem->length));
     BIO_free(bio);
-    info->Set(valid_to_symbol, String::New(buf));
 
     unsigned int md_size, i;
     unsigned char md[EVP_MAX_MD_SIZE];
@@ -1114,6 +1161,7 @@ Handle<Value> Connection::GetPeerCertificate(const Arguments& args) {
         peer_cert, NID_ext_key_usage, NULL, NULL);
     if (eku != NULL) {
       Local<Array> ext_key_usage = Array::New();
+      char buf[256];
 
       for (int i = 0; i < sk_ASN1_OBJECT_num(eku); i++) {
         memset(buf, 0, sizeof(buf));
@@ -1129,6 +1177,83 @@ Handle<Value> Connection::GetPeerCertificate(const Arguments& args) {
   }
   return scope.Close(info);
 }
+
+Handle<Value> Connection::GetSession(const Arguments& args) {
+  HandleScope scope;
+
+  Connection *ss = Connection::Unwrap(args);
+
+  if (ss->ssl_ == NULL) return Undefined();
+
+  SSL_SESSION* sess = SSL_get_session(ss->ssl_);
+  if (!sess) return Undefined();
+
+  int slen = i2d_SSL_SESSION(sess, NULL);
+  assert(slen > 0);
+
+  if (slen > 0) {
+    unsigned char* sbuf = new unsigned char[slen];
+    unsigned char* p = sbuf;
+    i2d_SSL_SESSION(sess, &p);
+    Local<Value> s = Encode(sbuf, slen, BINARY);
+    delete[] sbuf;
+    return scope.Close(s);
+  }
+
+  return Null();
+}
+
+Handle<Value> Connection::SetSession(const Arguments& args) {
+  HandleScope scope;
+
+  Connection *ss = Connection::Unwrap(args);
+
+  if (args.Length() < 1 || !args[0]->IsString()) {
+    Local<Value> exception = Exception::TypeError(String::New("Bad argument"));
+    return ThrowException(exception);
+  }
+
+  ASSERT_IS_STRING_OR_BUFFER(args[0]);
+  ssize_t slen = DecodeBytes(args[0], BINARY);
+
+  if (slen < 0) {
+    Local<Value> exception = Exception::TypeError(String::New("Bad argument"));
+    return ThrowException(exception);
+  }
+
+  char* sbuf = new char[slen];
+
+  ssize_t wlen = DecodeWrite(sbuf, slen, args[0], BINARY);
+  assert(wlen == slen);
+
+  const unsigned char* p = (unsigned char*) sbuf;
+  SSL_SESSION* sess = d2i_SSL_SESSION(NULL, &p, wlen);
+
+  delete [] sbuf;
+
+  if (!sess)
+    return Undefined();
+
+  int r = SSL_set_session(ss->ssl_, sess);
+  SSL_SESSION_free(sess);
+
+  if (!r) {
+    Local<String> eStr = String::New("SSL_set_session error");
+    return ThrowException(Exception::Error(eStr));
+  }
+
+  return True();
+}
+
+Handle<Value> Connection::IsSessionReused(const Arguments& args) {
+  HandleScope scope;
+
+  Connection *ss = Connection::Unwrap(args);
+
+  if (ss->ssl_ == NULL) return False();
+  return SSL_session_reused(ss->ssl_) ? True() : False();
+}
+
 
 Handle<Value> Connection::Start(const Arguments& args) {
   HandleScope scope;
@@ -3770,7 +3895,7 @@ struct pbkdf2_req {
 };
 
 void
-EIO_PBKDF2(eio_req* req) {
+EIO_PBKDF2(uv_work_t* req) {
   pbkdf2_req* request = (pbkdf2_req*)req->data;
   request->err = PKCS5_PBKDF2_HMAC_SHA1(
     request->pass,
@@ -3784,13 +3909,13 @@ EIO_PBKDF2(eio_req* req) {
   memset(request->salt, 0, request->saltlen);
 }
 
-int
-EIO_PBKDF2After(eio_req* req) {
+void
+EIO_PBKDF2After(uv_work_t* req) {
   HandleScope scope;
 
-  uv_unref();
-
   pbkdf2_req* request = (pbkdf2_req*)req->data;
+  delete req;
+
   Handle<Value> argv[2];
   if (request->err) {
     argv[0] = Undefined();
@@ -3814,8 +3939,6 @@ EIO_PBKDF2After(eio_req* req) {
   request->callback.Dispose();
 
   delete request;
-
-  return 0;
 }
 
 Handle<Value>
@@ -3869,8 +3992,9 @@ PBKDF2(const Arguments& args) {
   request->keylen = keylen;
   request->callback = Persistent<Function>::New(callback);
 
-  eio_custom(EIO_PBKDF2, EIO_PRI_DEFAULT, EIO_PBKDF2After, request);
-  uv_ref();
+  uv_work_t* req = new uv_work_t();
+  req->data = request;
+  uv_queue_work(uv_default_loop(), req, EIO_PBKDF2, EIO_PBKDF2After);
 
   return Undefined();
 }
@@ -3913,6 +4037,9 @@ void InitCrypto(Handle<Object> target) {
   issuer_symbol     = NODE_PSYMBOL("issuer");
   valid_from_symbol = NODE_PSYMBOL("valid_from");
   valid_to_symbol   = NODE_PSYMBOL("valid_to");
+  subjectaltname_symbol = NODE_PSYMBOL("subjectaltname");
+  modulus_symbol        = NODE_PSYMBOL("modulus");
+  exponent_symbol       = NODE_PSYMBOL("exponent");
   fingerprint_symbol   = NODE_PSYMBOL("fingerprint");
   name_symbol       = NODE_PSYMBOL("name");
   version_symbol    = NODE_PSYMBOL("version");

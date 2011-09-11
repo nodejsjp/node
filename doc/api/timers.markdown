@@ -4,12 +4,13 @@
 
 <!--
 
-To schedule execution of `callback` after `delay` milliseconds. Returns a
-`timeoutId` for possible use with `clearTimeout()`. Optionally, you can
+To schedule execution of a one-time `callback` after `delay` milliseconds. Returns a
+`timeoutId` for possible use with `clearTimeout()`. Optionally you can
 also pass arguments to the callback.
 
 -->
-`delay` ミリ秒が経過した後で `callback` が実行されるようにスケジュールします。
+`delay` ミリ秒が経過した後で、
+`callback` が一度だけ実行されるようにスケジュールします。
 `clearTimeout()` で使うことができる `timeoutId` を返します。
 オプションとして、コールバックへの引数を渡すこともできます。
 
@@ -27,7 +28,7 @@ Prevents a timeout from triggering.
 <!--
 
 To schedule the repeated execution of `callback` every `delay` milliseconds.
-Returns a `intervalId` for possible use with `clearInterval()`. Optionally,
+Returns a `intervalId` for possible use with `clearInterval()`. Optionally
 you can also pass arguments to the callback.
 
 -->

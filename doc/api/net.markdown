@@ -83,10 +83,10 @@ The arguments for this method change the type of connection:
 
 <!--
 
-The `callback` parameter will be added as an listener for the 'connect` event.
+The `callback` parameter will be added as an listener for the `'connect'` event.
 
 -->
-`callback` 引数は `connect` イベントのリスナとして追加されます。
+`callback` 引数は `'connect'` イベントのリスナとして追加されます。
 
 ---
 
@@ -95,9 +95,11 @@ The `callback` parameter will be added as an listener for the 'connect` event.
 <!--
 
 This class is used to create a TCP or UNIX server.
+A server is a `net.Socket` that can listen for new incoming connections.
 
 -->
 このクラスは TCP または UNIX ドメインのサーバを作成するために使われます。
+サーバは `net.Scoket` であり、新たに到着する接続を待ち受けることができます。
 
 <!--
 
@@ -142,25 +144,19 @@ Use `nc` to connect to a UNIX domain socket server:
 
     nc -U /tmp/echo.sock
 
-<!--
-
-`net.Server` is an `EventEmitter` with the following events:
-
--->
-`net.Server` は以下のイベントを持つ `EventEmitter` です:
-
 #### server.listen(port, [host], [callback])
 
 <!--
 
 Begin accepting connections on the specified `port` and `host`.  If the
 `host` is omitted, the server will accept connections directed to any
-IPv4 address (`INADDR_ANY`).
+IPv4 address (`INADDR_ANY`). A port value of zero will assign a random port.
 
 -->
 指定された `port` と `host` でコネクションの受け入れを開始します。
 `host` が省略されると、サーバはどんな IPv4 アドレスへの接続も受け入れます
 (`INADDR_ANY`)。
+ポート番号に 0 を指定すると、ランダムなポートが割り当てられます。
 
 <!--
 
@@ -172,14 +168,14 @@ when the server has been bound.
 
 <!--
 
-One issue some users run into is getting `EADDRINUSE` errors. Meaning
+One issue some users run into is getting `EADDRINUSE` errors. This means that
 another server is already running on the requested port. One way of handling this
-would be to wait a second and the try again. This can be done with
+would be to wait a second and then try again. This can be done with
 
 -->
 一部のユーザが陥る問題の一つは、`EADDRINUSE` エラーです。
-これは、他のサーバが要求されたポートを使っているという意味です。
-これに対照する方法の一つは、1秒待機してリトライすることです。
+これは、他のサーバが要求されたポートを使っていることを意味します。
+これに対照する方法の一つは、1秒待機してからリトライすることです。
 これは次のようになります
 
     server.on('error', function (e) {
@@ -315,6 +311,24 @@ The number of concurrent connections on the server.
 -->
 このサーバ上の並行コネクションの数です。
 
+<!--
+
+`net.Server` is an `EventEmitter` with the following events:
+
+-->
+`net.Server` は以下のイベントを持つ `EventEmitter` です:
+
+#### Event: 'listening'
+
+`function () {}`
+
+<!--
+
+Emitted when the server has been bound after calling `server.listen`.
+
+-->
+`server.listen()` が呼ばれた後、サーバがバインドされると生成されます。
+
 #### Event: 'connection'
 
 `function (socket) {}`
@@ -339,13 +353,27 @@ Emitted when the server closes.
 -->
 サーバがクローズした時に生成されます。
 
+#### Event: 'error'
+
+`function (exception) {}`
+
+<!--
+
+Emitted when an error occurs.  The `'close'` event will be called directly
+following this event.  See example in discussion of `server.listen`.
+
+-->
+エラーが発生すると生成されます。
+このイベントに続いて `'close'` イベントが直接生成される場合があります。
+`server.listen()` の例を参照してください。
+
 ---
 
 ### net.Socket
 
 <!--
 
-This object is an abstraction of of a TCP or UNIX socket.  `net.Socket`
+This object is an abstraction of a TCP or UNIX socket.  `net.Socket`
 instances implement a duplex Stream interface.  They can be created by the
 user and used as a client (with `connect()`) or they can be created by Node
 and passed to the user through the `'connection'` event of a server.
@@ -355,13 +383,6 @@ and passed to the user through the `'connection'` event of a server.
 `net.Socket` のインスタンスは双方向のストリームインタフェースを実装します。
 それらはユーザによって (`connect()` によって) 作成されてクライアントとして使われるか、
 Node によって作成されてサーバの `'connection'` イベントを通じてユーザに渡されます。
-
-<!--
-
-`net.Socket` instances are EventEmitters with the following events:
-
--->
-`net.Socket` のインスタンスは以下のイベントを持つ EventEmitter です:
 
 #### new net.Socket([options])
 
@@ -452,7 +473,7 @@ event.
 <!--
 
 `net.Socket` has the property that `socket.write()` always works. This is to
-help users get up an running quickly. The computer cannot necessarily keep up
+help users get up and running quickly. The computer cannot always keep up
 with the amount of data that is written to a socket - the network connection simply
 might be too slow. Node will internally queue up the data written to a socket and
 send it out over the wire when it is possible. (Internally it is polling on
@@ -465,12 +486,13 @@ written, but the buffer may contain strings, and the strings are lazily
 encoded, so the exact number of bytes is not known.)
 
 Users who experience large or growing `bufferSize` should attempt to
-"throttle" the data flows in their program with `pause()` and resume()`.
+"throttle" the data flows in their program with `pause()` and `resume()`.
 
 -->
 `net.Socket` には、`socket.write()` と常に協調するプロパティがあります。
 これはユーザが実行速度を向上させる手助けになります。
-コンピュータはソケットに書き込まれるデータ量と必ずしも同じ速度で進むわけではありません - ネットワーク接続は、単純に遅すぎます。
+コンピュータは、ソケットに書き込まれるデータ量についていくことはできません。
+- ネットワーク接続は、単純に遅すぎます。
 Node は、ソケットに書き込まれるデータを内部のキューに入れ、可能になった時にワイヤ上に送信します (内部ではソケットのファイル記述子が書き込み可能になるのをポーリングします)。
 
 内部的なバッファリングの結果、メモリ消費が増大するかもしれません。
@@ -550,7 +572,7 @@ UNIX ソケットの場合、ファイル記述子をソケットに送信する
 
 <!--
 
-Half-closes the socket. I.E., it sends a FIN packet. It is possible the
+Half-closes the socket. i.e., it sends a FIN packet. It is possible the
 server will still send some data.
 
 -->
@@ -724,6 +746,12 @@ The amount of bytes sent.
 -->
 送信したバイトの合計です。
 
+<!--
+
+`net.Socket` instances are EventEmitters with the following events:
+
+-->
+`net.Socket` のインスタンスは以下のイベントを持つ EventEmitter です:
 
 #### Event: 'connect'
 
@@ -731,7 +759,7 @@ The amount of bytes sent.
 
 <!--
 
-Emitted when a socket connection successfully is established.
+Emitted when a socket connection is successfully established.
 See `connect()`.
 
 -->
@@ -790,12 +818,14 @@ caveat that the user is required to `end()` their side now.
 Emitted if the socket times out from inactivity. This is only to notify that
 the socket has been idle. The user must manually close the connection.
 
+See also: `socket.setTimeout()`
+
 -->
 ソケットがタイムアウトして非アクティブになった場合に生成されます。
 これはソケットがアイドルになったことを通知するだけです。
 利用者は手動でコネクションをクローズする必要があります。
 
-See also: `socket.setTimeout()`
+`socket.setTimeout()` を参照してください。
 
 
 #### Event: 'drain'
@@ -806,8 +836,12 @@ See also: `socket.setTimeout()`
 
 Emitted when the write buffer becomes empty. Can be used to throttle uploads.
 
+See also: the return values of `socket.write()`
+
 -->
 書き込みバッファが空になった場合に生成されます。アップロード速度を落とすために使うことができます。
+
+`socket.write()` の戻り値を参照してください。
 
 #### Event: 'error'
 

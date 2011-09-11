@@ -237,12 +237,13 @@ A `Writable Stream` has the following methods, members, and events.
 
 <!--
 
-Emitted after a `write()` method was called that returned `false` to
+After a `write()` method returned `false`, this event is emitted to
 indicate that it is safe to write again.
 
 -->
-呼び出された `write()` メソッドが `false` で戻った後に生成され、
-再び安全に書き込むことができるようになったことを示します。
+`write()` メソッドが `false` でリターンした後、
+再び安全に書き込むことができるようになったことを示すために、
+このイベントは生成されます。
 
 ### Event: 'error'
 
@@ -335,9 +336,12 @@ Same as the above except with a raw buffer.
 <!--
 
 Terminates the stream with EOF or FIN.
+This call will allow queued write data to be sent before closing the stream.
 
 -->
 ストリームを EOF または FIN で終了します。
+この呼び出しは、ストリームがクローズされる前にキューイングされたデータが
+送信されることを許します。
 
 ### stream.end(string, encoding)
 
@@ -364,9 +368,11 @@ Same as above but with a `buffer`.
 <!--
 
 Closes the underlying file descriptor. Stream will not emit any more events.
+Any queued write data will not be sent.
 
 -->
 下層のファイル記述子をクローズします。ストリームはそれ以上イベントを生成しなくなります。
+キューイングされたデータは送信されません。
 
 ### stream.destroySoon()
 

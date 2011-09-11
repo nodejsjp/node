@@ -703,52 +703,114 @@ void MacroAssembler::li(Register rd, Operand j, bool gen2instr) {
 
 
 void MacroAssembler::MultiPush(RegList regs) {
-  int16_t NumSaved = 0;
-  int16_t NumToPush = NumberOfBitsSet(regs);
+  int16_t num_to_push = NumberOfBitsSet(regs);
+  int16_t stack_offset = num_to_push * kPointerSize;
 
-  addiu(sp, sp, -4 * NumToPush);
+  Subu(sp, sp, Operand(stack_offset));
   for (int16_t i = kNumRegisters; i > 0; i--) {
     if ((regs & (1 << i)) != 0) {
-      sw(ToRegister(i), MemOperand(sp, 4 * (NumToPush - ++NumSaved)));
+      stack_offset -= kPointerSize;
+      sw(ToRegister(i), MemOperand(sp, stack_offset));
     }
   }
 }
 
 
 void MacroAssembler::MultiPushReversed(RegList regs) {
-  int16_t NumSaved = 0;
-  int16_t NumToPush = NumberOfBitsSet(regs);
+  int16_t num_to_push = NumberOfBitsSet(regs);
+  int16_t stack_offset = num_to_push * kPointerSize;
 
-  addiu(sp, sp, -4 * NumToPush);
+  Subu(sp, sp, Operand(stack_offset));
   for (int16_t i = 0; i < kNumRegisters; i++) {
     if ((regs & (1 << i)) != 0) {
-      sw(ToRegister(i), MemOperand(sp, 4 * (NumToPush - ++NumSaved)));
+      stack_offset -= kPointerSize;
+      sw(ToRegister(i), MemOperand(sp, stack_offset));
     }
   }
 }
 
 
 void MacroAssembler::MultiPop(RegList regs) {
-  int16_t NumSaved = 0;
+  int16_t stack_offset = 0;
 
   for (int16_t i = 0; i < kNumRegisters; i++) {
     if ((regs & (1 << i)) != 0) {
-      lw(ToRegister(i), MemOperand(sp, 4 * (NumSaved++)));
+      lw(ToRegister(i), MemOperand(sp, stack_offset));
+      stack_offset += kPointerSize;
     }
   }
-  addiu(sp, sp, 4 * NumSaved);
+  addiu(sp, sp, stack_offset);
 }
 
 
 void MacroAssembler::MultiPopReversed(RegList regs) {
-  int16_t NumSaved = 0;
+  int16_t stack_offset = 0;
 
   for (int16_t i = kNumRegisters; i > 0; i--) {
     if ((regs & (1 << i)) != 0) {
-      lw(ToRegister(i), MemOperand(sp, 4 * (NumSaved++)));
+      lw(ToRegister(i), MemOperand(sp, stack_offset));
+      stack_offset += kPointerSize;
     }
   }
-  addiu(sp, sp, 4 * NumSaved);
+  addiu(sp, sp, stack_offset);
+}
+
+
+void MacroAssembler::MultiPushFPU(RegList regs) {
+  CpuFeatures::Scope scope(FPU);
+  int16_t num_to_push = NumberOfBitsSet(regs);
+  int16_t stack_offset = num_to_push * kDoubleSize;
+
+  Subu(sp, sp, Operand(stack_offset));
+  for (int16_t i = kNumRegisters; i > 0; i--) {
+    if ((regs & (1 << i)) != 0) {
+      stack_offset -= kDoubleSize;
+      sdc1(FPURegister::from_code(i), MemOperand(sp, stack_offset));
+    }
+  }
+}
+
+
+void MacroAssembler::MultiPushReversedFPU(RegList regs) {
+  CpuFeatures::Scope scope(FPU);
+  int16_t num_to_push = NumberOfBitsSet(regs);
+  int16_t stack_offset = num_to_push * kDoubleSize;
+
+  Subu(sp, sp, Operand(stack_offset));
+  for (int16_t i = 0; i < kNumRegisters; i++) {
+    if ((regs & (1 << i)) != 0) {
+      stack_offset -= kDoubleSize;
+      sdc1(FPURegister::from_code(i), MemOperand(sp, stack_offset));
+    }
+  }
+}
+
+
+void MacroAssembler::MultiPopFPU(RegList regs) {
+  CpuFeatures::Scope scope(FPU);
+  int16_t stack_offset = 0;
+
+  for (int16_t i = 0; i < kNumRegisters; i++) {
+    if ((regs & (1 << i)) != 0) {
+      ldc1(FPURegister::from_code(i), MemOperand(sp, stack_offset));
+      stack_offset += kDoubleSize;
+    }
+  }
+  addiu(sp, sp, stack_offset);
+}
+
+
+void MacroAssembler::MultiPopReversedFPU(RegList regs) {
+  CpuFeatures::Scope scope(FPU);
+  int16_t stack_offset = 0;
+
+  for (int16_t i = kNumRegisters; i > 0; i--) {
+    if ((regs & (1 << i)) != 0) {
+      ldc1(FPURegister::from_code(i), MemOperand(sp, stack_offset));
+      stack_offset += kDoubleSize;
+    }
+  }
+  addiu(sp, sp, stack_offset);
 }
 
 
@@ -757,15 +819,20 @@ void MacroAssembler::Ext(Register rt,
                          uint16_t pos,
                          uint16_t size) {
   ASSERT(pos < 32);
-  ASSERT(pos + size < 32);
+  ASSERT(pos + size < 33);
 
   if (mips32r2) {
     ext_(rt, rs, pos, size);
   } else {
     // Move rs to rt and shift it left then right to get the
     // desired bitfield on the right side and zeroes on the left.
-    sll(rt, rs, 32 - (pos + size));
-    srl(rt, rt, 32 - size);
+    int shift_left = 32 - (pos + size);
+    sll(rt, rs, shift_left);  // Acts as a move if shift_left == 0.
+
+    int shift_right = 32 - size;
+    if (shift_right > 0) {
+      srl(rt, rt, shift_right);
+    }
   }
 }
 
@@ -807,28 +874,32 @@ void MacroAssembler::Ins(Register rt,
 }
 
 
-void MacroAssembler::Cvt_d_uw(FPURegister fd, FPURegister fs) {
-  // Move the data from fs to t4.
-  mfc1(t4, fs);
-  return Cvt_d_uw(fd, t4);
+void MacroAssembler::Cvt_d_uw(FPURegister fd,
+                              FPURegister fs,
+                              FPURegister scratch) {
+  // Move the data from fs to t8.
+  mfc1(t8, fs);
+  Cvt_d_uw(fd, t8, scratch);
 }
 
 
-void MacroAssembler::Cvt_d_uw(FPURegister fd, Register rs) {
+void MacroAssembler::Cvt_d_uw(FPURegister fd,
+                              Register rs,
+                              FPURegister scratch) {
   // Convert rs to a FP value in fd (and fd + 1).
   // We do this by converting rs minus the MSB to avoid sign conversion,
-  // then adding 2^31-1 and 1 to the result.
+  // then adding 2^31 to the result (if needed).
 
-  ASSERT(!fd.is(f20));
+  ASSERT(!fd.is(scratch));
   ASSERT(!rs.is(t9));
-  ASSERT(!rs.is(t8));
+  ASSERT(!rs.is(at));
 
-  // Save rs's MSB to t8.
-  And(t8, rs, 0x80000000);
+  // Save rs's MSB to t9.
+  Ext(t9, rs, 31, 1);
   // Remove rs's MSB.
-  And(t9, rs, 0x7FFFFFFF);
-  // Move t9 to fd.
-  mtc1(t9, fd);
+  Ext(at, rs, 0, 31);
+  // Move the result to fd.
+  mtc1(at, fd);
 
   // Convert fd to a real FP value.
   cvt_d_w(fd, fd);
@@ -837,41 +908,39 @@ void MacroAssembler::Cvt_d_uw(FPURegister fd, Register rs) {
 
   // If rs's MSB was 0, it's done.
   // Otherwise we need to add that to the FP register.
-  Branch(&conversion_done, eq, t8, Operand(zero_reg));
+  Branch(&conversion_done, eq, t9, Operand(zero_reg));
 
-  // First load 2^31 - 1 into f20.
-  Or(t9, zero_reg, 0x7FFFFFFF);
-  mtc1(t9, f20);
+  // Load 2^31 into f20 as its float representation.
+  li(at, 0x41E00000);
+  mtc1(at, FPURegister::from_code(scratch.code() + 1));
+  mtc1(zero_reg, scratch);
+  // Add it to fd.
+  add_d(fd, fd, scratch);
 
-  // Convert it to FP and add it to fd.
-  cvt_d_w(f20, f20);
-  add_d(fd, fd, f20);
-  // Now add 1.
-  Or(t9, zero_reg, 1);
-  mtc1(t9, f20);
-
-  cvt_d_w(f20, f20);
-  add_d(fd, fd, f20);
   bind(&conversion_done);
 }
 
 
-void MacroAssembler::Trunc_uw_d(FPURegister fd, FPURegister fs) {
-  Trunc_uw_d(fs, t4);
-  mtc1(t4, fd);
+void MacroAssembler::Trunc_uw_d(FPURegister fd,
+                                FPURegister fs,
+                                FPURegister scratch) {
+  Trunc_uw_d(fs, t8, scratch);
+  mtc1(t8, fd);
 }
 
 
-void MacroAssembler::Trunc_uw_d(FPURegister fd, Register rs) {
-  ASSERT(!fd.is(f22));
-  ASSERT(!rs.is(t8));
+void MacroAssembler::Trunc_uw_d(FPURegister fd,
+                                Register rs,
+                                FPURegister scratch) {
+  ASSERT(!fd.is(scratch));
+  ASSERT(!rs.is(at));
 
-  // Load 2^31 into f22.
-  Or(t8, zero_reg, 0x80000000);
-  Cvt_d_uw(f22, t8);
-
-  // Test if f22 > fd.
-  c(OLT, D, fd, f22);
+  // Load 2^31 into scratch as its float representation.
+  li(at, 0x41E00000);
+  mtc1(at, FPURegister::from_code(scratch.code() + 1));
+  mtc1(zero_reg, scratch);
+  // Test if scratch > fd.
+  c(OLT, D, fd, scratch);
 
   Label simple_convert;
   // If fd < 2^31 we can convert it normally.
@@ -879,18 +948,17 @@ void MacroAssembler::Trunc_uw_d(FPURegister fd, Register rs) {
 
   // First we subtract 2^31 from fd, then trunc it to rs
   // and add 2^31 to rs.
-
-  sub_d(f22, fd, f22);
-  trunc_w_d(f22, f22);
-  mfc1(rs, f22);
-  or_(rs, rs, t8);
+  sub_d(scratch, fd, scratch);
+  trunc_w_d(scratch, scratch);
+  mfc1(rs, scratch);
+  Or(rs, rs, 1 << 31);
 
   Label done;
   Branch(&done);
   // Simple conversion.
   bind(&simple_convert);
-  trunc_w_d(f22, fd);
-  mfc1(rs, f22);
+  trunc_w_d(scratch, fd);
+  mfc1(rs, scratch);
 
   bind(&done);
 }
@@ -1551,12 +1619,14 @@ void MacroAssembler::BranchShort(Label* L, Condition cond, Register rs,
         b(offset);
         break;
       case eq:
+        ASSERT(!scratch.is(rs));
         r2 = scratch;
         li(r2, rt);
         offset = shifted_branch_offset(L, false);
         beq(rs, r2, offset);
         break;
       case ne:
+        ASSERT(!scratch.is(rs));
         r2 = scratch;
         li(r2, rt);
         offset = shifted_branch_offset(L, false);
@@ -1568,6 +1638,7 @@ void MacroAssembler::BranchShort(Label* L, Condition cond, Register rs,
           offset = shifted_branch_offset(L, false);
           bgtz(rs, offset);
         } else {
+          ASSERT(!scratch.is(rs));
           r2 = scratch;
           li(r2, rt);
           slt(scratch, r2, rs);
@@ -1584,6 +1655,7 @@ void MacroAssembler::BranchShort(Label* L, Condition cond, Register rs,
           offset = shifted_branch_offset(L, false);
           beq(scratch, zero_reg, offset);
         } else {
+          ASSERT(!scratch.is(rs));
           r2 = scratch;
           li(r2, rt);
           slt(scratch, rs, r2);
@@ -1600,6 +1672,7 @@ void MacroAssembler::BranchShort(Label* L, Condition cond, Register rs,
           offset = shifted_branch_offset(L, false);
           bne(scratch, zero_reg, offset);
         } else {
+          ASSERT(!scratch.is(rs));
           r2 = scratch;
           li(r2, rt);
           slt(scratch, rs, r2);
@@ -1612,6 +1685,7 @@ void MacroAssembler::BranchShort(Label* L, Condition cond, Register rs,
           offset = shifted_branch_offset(L, false);
           blez(rs, offset);
         } else {
+          ASSERT(!scratch.is(rs));
           r2 = scratch;
           li(r2, rt);
           slt(scratch, r2, rs);
@@ -1625,6 +1699,7 @@ void MacroAssembler::BranchShort(Label* L, Condition cond, Register rs,
           offset = shifted_branch_offset(L, false);
           bgtz(rs, offset);
         } else {
+          ASSERT(!scratch.is(rs));
           r2 = scratch;
           li(r2, rt);
           sltu(scratch, r2, rs);
@@ -1641,6 +1716,7 @@ void MacroAssembler::BranchShort(Label* L, Condition cond, Register rs,
           offset = shifted_branch_offset(L, false);
           beq(scratch, zero_reg, offset);
         } else {
+          ASSERT(!scratch.is(rs));
           r2 = scratch;
           li(r2, rt);
           sltu(scratch, rs, r2);
@@ -1657,6 +1733,7 @@ void MacroAssembler::BranchShort(Label* L, Condition cond, Register rs,
           offset = shifted_branch_offset(L, false);
           bne(scratch, zero_reg, offset);
         } else {
+          ASSERT(!scratch.is(rs));
           r2 = scratch;
           li(r2, rt);
           sltu(scratch, rs, r2);
@@ -1669,6 +1746,7 @@ void MacroAssembler::BranchShort(Label* L, Condition cond, Register rs,
           offset = shifted_branch_offset(L, false);
           b(offset);
         } else {
+          ASSERT(!scratch.is(rs));
           r2 = scratch;
           li(r2, rt);
           sltu(scratch, r2, rs);
@@ -2732,6 +2810,46 @@ void MacroAssembler::AllocateAsciiConsString(Register result,
   InitializeNewString(result,
                       length,
                       Heap::kConsAsciiStringMapRootIndex,
+                      scratch1,
+                      scratch2);
+}
+
+
+void MacroAssembler::AllocateTwoByteSlicedString(Register result,
+                                                 Register length,
+                                                 Register scratch1,
+                                                 Register scratch2,
+                                                 Label* gc_required) {
+  AllocateInNewSpace(SlicedString::kSize,
+                     result,
+                     scratch1,
+                     scratch2,
+                     gc_required,
+                     TAG_OBJECT);
+
+  InitializeNewString(result,
+                      length,
+                      Heap::kSlicedStringMapRootIndex,
+                      scratch1,
+                      scratch2);
+}
+
+
+void MacroAssembler::AllocateAsciiSlicedString(Register result,
+                                               Register length,
+                                               Register scratch1,
+                                               Register scratch2,
+                                               Label* gc_required) {
+  AllocateInNewSpace(SlicedString::kSize,
+                     result,
+                     scratch1,
+                     scratch2,
+                     gc_required,
+                     TAG_OBJECT);
+
+  InitializeNewString(result,
+                      length,
+                      Heap::kSlicedAsciiStringMapRootIndex,
                       scratch1,
                       scratch2);
 }
@@ -4135,11 +4253,9 @@ void MacroAssembler::PrepareCallCFunction(int num_arguments, Register scratch) {
   // mips, even though those argument slots are not normally used.
   // Remaining arguments are pushed on the stack, above (higher address than)
   // the argument slots.
-  ASSERT(StandardFrameConstants::kCArgsSlotsSize % kPointerSize == 0);
   int stack_passed_arguments = ((num_arguments <= kRegisterPassedArguments) ?
                                  0 : num_arguments - kRegisterPassedArguments) +
-                               (StandardFrameConstants::kCArgsSlotsSize /
-                               kPointerSize);
+                                kCArgSlotCount;
   if (frame_alignment > kPointerSize) {
     // Make stack end at alignment and make room for num_arguments - 4 words
     // and the original value of sp.
@@ -4211,11 +4327,9 @@ void MacroAssembler::CallCFunctionHelper(Register function,
 
   Call(function);
 
-  ASSERT(StandardFrameConstants::kCArgsSlotsSize % kPointerSize == 0);
   int stack_passed_arguments = ((num_arguments <= kRegisterPassedArguments) ?
                                 0 : num_arguments - kRegisterPassedArguments) +
-                               (StandardFrameConstants::kCArgsSlotsSize /
-                               kPointerSize);
+                               kCArgSlotCount;
 
   if (OS::ActivationFrameAlignment() > kPointerSize) {
     lw(sp, MemOperand(sp, stack_passed_arguments * kPointerSize));

@@ -19,7 +19,7 @@
  * IN THE SOFTWARE.
  */
 
-/* See uv_init for an introduction. */
+/* See uv_loop_new for an introduction. */
 
 #ifndef UV_H
 #define UV_H
@@ -41,6 +41,8 @@ extern "C" {
 typedef intptr_t ssize_t;
 #endif
 
+typedef struct uv_loop_s uv_loop_t;
+typedef struct uv_ares_task_s uv_ares_task_t;
 typedef struct uv_err_s uv_err_t;
 typedef struct uv_handle_s uv_handle_t;
 typedef struct uv_stream_s uv_stream_t;
@@ -54,26 +56,25 @@ typedef struct uv_idle_s uv_idle_t;
 typedef struct uv_async_s uv_async_t;
 typedef struct uv_getaddrinfo_s uv_getaddrinfo_t;
 typedef struct uv_process_s uv_process_t;
+typedef struct uv_counters_s uv_counters_t;
 /* Request types */
 typedef struct uv_req_s uv_req_t;
 typedef struct uv_shutdown_s uv_shutdown_t;
 typedef struct uv_write_s uv_write_t;
 typedef struct uv_connect_s uv_connect_t;
 typedef struct uv_udp_send_s uv_udp_send_t;
+typedef struct uv_fs_s uv_fs_t;
+typedef struct uv_work_s uv_work_t;
 
 #if defined(__unix__) || defined(__POSIX__) || defined(__APPLE__)
-# include "uv-unix.h"
+# include "uv-private/uv-unix.h"
 #else
-# include "uv-win.h"
+# include "uv-private/uv-win.h"
 #endif
 
 
 /*
  * This function must be called before any other functions in libuv.
- *
- * At the moment libuv is single threaded but this will likely change in the
- * near future. Basically it will change by uv_init() taking a 'loop'
- * argument and all other _init having a first argument as the the 'loop'.
  *
  * All functions besides uv_run() are non-blocking.
  *
@@ -81,22 +82,30 @@ typedef struct uv_udp_send_s uv_udp_send_t;
  * made by the function that takes them as a parameter.
  */
 void uv_init();
+uv_loop_t* uv_loop_new();
+
+void uv_loop_delete(uv_loop_t*);
+
+/*
+ * Returns the default loop.
+ */
+uv_loop_t* uv_default_loop();
 
 /*
  * This function starts the event loop. It blocks until the reference count
  * of the loop drops to zero.
  */
-int uv_run();
+int uv_run(uv_loop_t*);
 
 /*
  * Manually modify the event loop's reference count. Useful if the user wants
  * to have a handle or timeout that doesn't keep the loop alive.
  */
-void uv_ref();
-void uv_unref();
+void uv_ref(uv_loop_t*);
+void uv_unref(uv_loop_t*);
 
-void uv_update_time();
-int64_t uv_now();
+void uv_update_time(uv_loop_t*);
+int64_t uv_now(uv_loop_t*);
 
 
 /*
@@ -121,8 +130,12 @@ typedef void (*uv_async_cb)(uv_async_t* handle, int status);
 typedef void (*uv_prepare_cb)(uv_prepare_t* handle, int status);
 typedef void (*uv_check_cb)(uv_check_t* handle, int status);
 typedef void (*uv_idle_cb)(uv_idle_t* handle, int status);
-typedef void (*uv_getaddrinfo_cb)(uv_getaddrinfo_t* handle, int status, struct addrinfo* res);
+typedef void (*uv_getaddrinfo_cb)(uv_getaddrinfo_t* handle, int status,
+    struct addrinfo* res);
 typedef void (*uv_exit_cb)(uv_process_t*, int exit_status, int term_signal);
+typedef void (*uv_fs_cb)(uv_fs_t* req);
+typedef void (*uv_work_cb)(uv_work_t* req);
+typedef void (*uv_after_work_cb)(uv_work_t* req);
 
 
 /* Expand this list if necessary. */
@@ -159,6 +172,7 @@ typedef enum {
   UV_ENOTCONN,
   UV_ENOTSOCK,
   UV_ENOTSUP,
+  UV_ENOENT,
   UV_EPIPE,
   UV_EPROTO,
   UV_EPROTONOSUPPORT,
@@ -199,6 +213,8 @@ typedef enum {
   UV_SHUTDOWN,
   UV_WAKEUP,
   UV_UDP_SEND,
+  UV_FS,
+  UV_WORK,
   UV_REQ_TYPE_PRIVATE
 } uv_req_type;
 
@@ -216,7 +232,7 @@ struct uv_err_s {
  * On error the user should then call uv_last_error() to determine
  * the error code.
  */
-uv_err_t uv_last_error();
+uv_err_t uv_last_error(uv_loop_t*);
 char* uv_strerror(uv_err_t err);
 const char* uv_err_name(uv_err_t err);
 
@@ -259,6 +275,7 @@ struct uv_shutdown_s {
 
 #define UV_HANDLE_FIELDS \
   /* read-only */ \
+  uv_loop_t* loop; \
   uv_handle_type type; \
   /* public */ \
   uv_close_cb close_cb; \
@@ -351,7 +368,7 @@ typedef enum {
   UV_STDERR
 } uv_std_type;
 
-uv_stream_t* uv_std_handle(uv_std_type type);
+uv_stream_t* uv_std_handle(uv_loop_t*, uv_std_type type);
 
 /*
  * Write data to stream. Buffers are written in order. Example:
@@ -395,10 +412,12 @@ struct uv_tcp_s {
   UV_TCP_PRIVATE_FIELDS
 };
 
-int uv_tcp_init(uv_tcp_t* handle);
+int uv_tcp_init(uv_loop_t*, uv_tcp_t* handle);
 
 int uv_tcp_bind(uv_tcp_t* handle, struct sockaddr_in);
 int uv_tcp_bind6(uv_tcp_t* handle, struct sockaddr_in6);
+int uv_tcp_getsockname(uv_tcp_t* handle, struct sockaddr* name, int* namelen);
+int uv_tcp_getpeername(uv_tcp_t* handle, struct sockaddr* name, int* namelen);
 
 /*
  * uv_tcp_connect, uv_tcp_connect6
@@ -418,9 +437,6 @@ struct uv_connect_s {
   uv_stream_t* handle;
   UV_CONNECT_PRIVATE_FIELDS
 };
-
-
-int uv_getsockname(uv_handle_t* handle, struct sockaddr* name, int* namelen);
 
 
 /*
@@ -478,7 +494,7 @@ struct uv_udp_send_s {
  * Initialize a new UDP handle. The actual socket is created lazily.
  * Returns 0 on success.
  */
-int uv_udp_init(uv_udp_t* handle);
+int uv_udp_init(uv_loop_t*, uv_udp_t* handle);
 
 /*
  * Bind to a IPv4 address and port.
@@ -505,6 +521,7 @@ int uv_udp_bind(uv_udp_t* handle, struct sockaddr_in addr, unsigned flags);
  *  0 on success, -1 on error.
  */
 int uv_udp_bind6(uv_udp_t* handle, struct sockaddr_in6 addr, unsigned flags);
+int uv_udp_getsockname(uv_udp_t* handle, struct sockaddr* name, int* namelen);
 
 /*
  * Send data. If the socket has not previously been bound with `uv_udp_bind`
@@ -583,7 +600,7 @@ struct uv_pipe_s {
   UV_PIPE_PRIVATE_FIELDS
 };
 
-int uv_pipe_init(uv_pipe_t* handle);
+int uv_pipe_init(uv_loop_t*, uv_pipe_t* handle);
 
 int uv_pipe_bind(uv_pipe_t* handle, const char* name);
 
@@ -603,7 +620,7 @@ struct uv_prepare_s {
   UV_PREPARE_PRIVATE_FIELDS
 };
 
-int uv_prepare_init(uv_prepare_t* prepare);
+int uv_prepare_init(uv_loop_t*, uv_prepare_t* prepare);
 
 int uv_prepare_start(uv_prepare_t* prepare, uv_prepare_cb cb);
 
@@ -621,7 +638,7 @@ struct uv_check_s {
   UV_CHECK_PRIVATE_FIELDS
 };
 
-int uv_check_init(uv_check_t* check);
+int uv_check_init(uv_loop_t*, uv_check_t* check);
 
 int uv_check_start(uv_check_t* check, uv_check_cb cb);
 
@@ -641,7 +658,7 @@ struct uv_idle_s {
   UV_IDLE_PRIVATE_FIELDS
 };
 
-int uv_idle_init(uv_idle_t* idle);
+int uv_idle_init(uv_loop_t*, uv_idle_t* idle);
 
 int uv_idle_start(uv_idle_t* idle, uv_idle_cb cb);
 
@@ -663,7 +680,7 @@ struct uv_async_s {
   UV_ASYNC_PRIVATE_FIELDS
 };
 
-int uv_async_init(uv_async_t* async, uv_async_cb async_cb);
+int uv_async_init(uv_loop_t*, uv_async_t* async, uv_async_cb async_cb);
 
 /*
  * This can be called from other threads to wake up a libuv thread.
@@ -684,7 +701,7 @@ struct uv_timer_s {
   UV_TIMER_PRIVATE_FIELDS
 };
 
-int uv_timer_init(uv_timer_t* timer);
+int uv_timer_init(uv_loop_t*, uv_timer_t* timer);
 
 int uv_timer_start(uv_timer_t* timer, uv_timer_cb cb, int64_t timeout,
     int64_t repeat);
@@ -710,11 +727,13 @@ int64_t uv_timer_get_repeat(uv_timer_t* timer);
 
 
 /* c-ares integration initialize and terminate */
-int uv_ares_init_options(ares_channel *channelptr,
+int uv_ares_init_options(uv_loop_t*,
+                         ares_channel *channelptr,
                          struct ares_options *options,
                          int optmask);
 
-void uv_ares_destroy(ares_channel channel);
+/* TODO remove the loop argument from this function? */
+void uv_ares_destroy(uv_loop_t*, ares_channel channel);
 
 
 /*
@@ -738,7 +757,8 @@ struct uv_getaddrinfo_s {
  * Input arguments may be released after return from this call. Callback
  * must not call freeaddrinfo.
  */
- int uv_getaddrinfo(uv_getaddrinfo_t* handle,
+ int uv_getaddrinfo(uv_loop_t*,
+                    uv_getaddrinfo_t* handle,
                     uv_getaddrinfo_cb getaddrinfo_cb,
                     const char* node,
                     const char* service,
@@ -792,13 +812,164 @@ struct uv_process_s {
 };
 
 /* Initializes uv_process_t and starts the process. */
-int uv_spawn(uv_process_t*, uv_process_options_t options);
+int uv_spawn(uv_loop_t*, uv_process_t*, uv_process_options_t options);
 
 /*
  * Kills the process with the specified signal. The user must still
  * call uv_close on the process.
  */
 int uv_process_kill(uv_process_t*, int signum);
+
+
+/*
+ * uv_work_t is a subclass of uv_req_t
+ */
+struct uv_work_s {
+  UV_REQ_FIELDS
+  uv_loop_t* loop;
+  uv_work_cb work_cb;
+  uv_after_work_cb after_work_cb;
+  UV_WORK_PRIVATE_FIELDS
+};
+
+/* Queues a work request to execute asynchronously on the thread pool. */
+int uv_queue_work(uv_loop_t* loop, uv_work_t* req, uv_work_cb work_cb,
+    uv_after_work_cb after_work_cb);
+
+
+
+
+/*
+ * File System Methods.
+ *
+ * The uv_fs_* functions execute a blocking system call asynchronously (in a
+ * thread pool) and call the specified callback in the specified loop after
+ * completion. If the user gives NULL as the callback the blocking system
+ * call will be called synchronously. req should be a pointer to an
+ * uninitialized uv_fs_t object.
+ *
+ * uv_fs_req_cleanup() must be called after completion of the uv_fs_
+ * function to free any internal memory allocations associted with the
+ * request.
+ */
+
+typedef enum {
+  UV_FS_UNKNOWN = -1,
+  UV_FS_CUSTOM,
+  UV_FS_OPEN,
+  UV_FS_CLOSE,
+  UV_FS_READ,
+  UV_FS_WRITE,
+  UV_FS_SENDFILE,
+  UV_FS_STAT,
+  UV_FS_LSTAT,
+  UV_FS_FSTAT,
+  UV_FS_FTRUNCATE,
+  UV_FS_UTIME,
+  UV_FS_FUTIME,
+  UV_FS_CHMOD,
+  UV_FS_FCHMOD,
+  UV_FS_FSYNC,
+  UV_FS_FDATASYNC,
+  UV_FS_UNLINK,
+  UV_FS_RMDIR,
+  UV_FS_MKDIR,
+  UV_FS_RENAME,
+  UV_FS_READDIR,
+  UV_FS_LINK,
+  UV_FS_SYMLINK,
+  UV_FS_READLINK,
+  UV_FS_CHOWN,
+  UV_FS_FCHOWN
+} uv_fs_type;
+
+/* uv_fs_t is a subclass of uv_req_t */
+struct uv_fs_s {
+  UV_REQ_FIELDS
+  uv_loop_t* loop;
+  uv_fs_type fs_type;
+  uv_fs_cb cb;
+  ssize_t result;
+  void* ptr;
+  char* path;
+  int errorno;
+  UV_FS_PRIVATE_FIELDS
+};
+
+void uv_fs_req_cleanup(uv_fs_t* req);
+
+int uv_fs_close(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb);
+
+int uv_fs_open(uv_loop_t* loop, uv_fs_t* req, const char* path, int flags,
+    int mode, uv_fs_cb cb);
+
+int uv_fs_read(uv_loop_t* loop, uv_fs_t* req, uv_file file, void* buf,
+    size_t length, off_t offset, uv_fs_cb cb);
+
+int uv_fs_unlink(uv_loop_t* loop, uv_fs_t* req, const char* path, uv_fs_cb cb);
+
+int uv_fs_write(uv_loop_t* loop, uv_fs_t* req, uv_file file, void* buf,
+    size_t length, off_t offset, uv_fs_cb cb);
+
+int uv_fs_mkdir(uv_loop_t* loop, uv_fs_t* req, const char* path, int mode,
+    uv_fs_cb cb);
+
+int uv_fs_rmdir(uv_loop_t* loop, uv_fs_t* req, const char* path, uv_fs_cb cb);
+
+int uv_fs_readdir(uv_loop_t* loop, uv_fs_t* req, const char* path, int flags,
+    uv_fs_cb cb);
+
+int uv_fs_stat(uv_loop_t* loop, uv_fs_t* req, const char* path, uv_fs_cb cb);
+
+int uv_fs_fstat(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb);
+
+int uv_fs_rename(uv_loop_t* loop, uv_fs_t* req, const char* path,
+    const char* new_path, uv_fs_cb cb);
+
+int uv_fs_fsync(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb);
+
+int uv_fs_fdatasync(uv_loop_t* loop, uv_fs_t* req, uv_file file, uv_fs_cb cb);
+
+int uv_fs_ftruncate(uv_loop_t* loop, uv_fs_t* req, uv_file file,
+    off_t offset, uv_fs_cb cb);
+
+int uv_fs_sendfile(uv_loop_t* loop, uv_fs_t* req, uv_file out_fd,
+    uv_file in_fd, off_t in_offset, size_t length, uv_fs_cb cb);
+
+int uv_fs_chmod(uv_loop_t* loop, uv_fs_t* req, const char* path, int mode,
+    uv_fs_cb cb);
+
+int uv_fs_utime(uv_loop_t* loop, uv_fs_t* req, const char* path, double atime,
+    double mtime, uv_fs_cb cb);
+
+int uv_fs_futime(uv_loop_t* loop, uv_fs_t* req, uv_file file, double atime,
+    double mtime, uv_fs_cb cb);
+
+int uv_fs_lstat(uv_loop_t* loop, uv_fs_t* req, const char* path, uv_fs_cb cb);
+
+int uv_fs_link(uv_loop_t* loop, uv_fs_t* req, const char* path,
+    const char* new_path, uv_fs_cb cb);
+
+/* 
+ * This flag can be used with uv_fs_symlink on Windows
+ * to specify whether path argument points to a directory.
+ */
+#define UV_FS_SYMLINK_DIR          0x0001
+
+int uv_fs_symlink(uv_loop_t* loop, uv_fs_t* req, const char* path,
+    const char* new_path, int flags, uv_fs_cb cb);
+
+int uv_fs_readlink(uv_loop_t* loop, uv_fs_t* req, const char* path,
+    uv_fs_cb cb);
+
+int uv_fs_fchmod(uv_loop_t* loop, uv_fs_t* req, uv_file file, int mode,
+    uv_fs_cb cb);
+
+int uv_fs_chown(uv_loop_t* loop, uv_fs_t* req, const char* path, int uid,
+    int gid, uv_fs_cb cb);
+
+int uv_fs_fchown(uv_loop_t* loop, uv_fs_t* req, uv_file file, int uid,
+    int gid, uv_fs_cb cb);
 
 
 /* Utility */
@@ -843,11 +1014,13 @@ union uv_any_req {
   uv_write_t write;
   uv_connect_t connect;
   uv_shutdown_t shutdown;
+  uv_fs_t fs_req;
+  uv_work_t work_req;
 };
 
 
-/* Diagnostic counters */
-typedef struct {
+struct uv_counters_s {
+  uint64_t eio_init;
   uint64_t req_init;
   uint64_t handle_init;
   uint64_t stream_init;
@@ -860,9 +1033,24 @@ typedef struct {
   uint64_t async_init;
   uint64_t timer_init;
   uint64_t process_init;
-} uv_counters_t;
+};
 
-uv_counters_t* uv_counters();
+
+struct uv_loop_s {
+  UV_LOOP_PRIVATE_FIELDS
+  /* list used for ares task handles */
+  uv_ares_task_t* uv_ares_handles_;
+  /* Various thing for libeio. */
+  uv_async_t uv_eio_want_poll_notifier;
+  uv_async_t uv_eio_done_poll_notifier;
+  uv_idle_t uv_eio_poller;
+  /* Diagnostic counters */
+  uv_counters_t counters;
+  /* The last error */
+  uv_err_t last_err;
+  /* User data - use this for whatever. */
+  void* data;
+};
 
 
 /* Don't export the private CPP symbols. */
@@ -876,6 +1064,8 @@ uv_counters_t* uv_counters();
 #undef UV_ASYNC_PRIVATE_FIELDS
 #undef UV_TIMER_PRIVATE_FIELDS
 #undef UV_GETADDRINFO_PRIVATE_FIELDS
+#undef UV_FS_REQ_PRIVATE_FIELDS
+#undef UV_WORK_PRIVATE_FIELDS
 
 #ifdef __cplusplus
 }
