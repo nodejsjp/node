@@ -171,17 +171,21 @@ bool Object::IsSymbol() {
   // Because the symbol tag is non-zero and no non-string types have the
   // symbol bit set we can test for symbols with a very simple test
   // operation.
-  ASSERT(kSymbolTag != 0);
+  STATIC_ASSERT(kSymbolTag != 0);
   ASSERT(kNotStringTag + kIsSymbolMask > LAST_TYPE);
   return (type & kIsSymbolMask) != 0;
 }
 
 
 bool Object::IsConsString() {
-  if (!this->IsHeapObject()) return false;
-  uint32_t type = HeapObject::cast(this)->map()->instance_type();
-  return (type & (kIsNotStringMask | kStringRepresentationMask)) ==
-         (kStringTag | kConsStringTag);
+  if (!IsString()) return false;
+  return StringShape(String::cast(this)).IsCons();
+}
+
+
+bool Object::IsSlicedString() {
+  if (!IsString()) return false;
+  return StringShape(String::cast(this)).IsSliced();
 }
 
 
@@ -252,7 +256,7 @@ StringShape::StringShape(InstanceType t)
 
 bool StringShape::IsSymbol() {
   ASSERT(valid());
-  ASSERT(kSymbolTag != 0);
+  STATIC_ASSERT(kSymbolTag != 0);
   return (type_ & kIsSymbolMask) != 0;
 }
 
@@ -269,6 +273,38 @@ bool String::IsTwoByteRepresentation() {
 }
 
 
+bool String::IsAsciiRepresentationUnderneath() {
+  uint32_t type = map()->instance_type();
+  STATIC_ASSERT(kIsIndirectStringTag != 0);
+  STATIC_ASSERT((kIsIndirectStringMask & kStringEncodingMask) == 0);
+  ASSERT(IsFlat());
+  switch (type & (kIsIndirectStringMask | kStringEncodingMask)) {
+    case kAsciiStringTag:
+      return true;
+    case kTwoByteStringTag:
+      return false;
+    default:  // Cons or sliced string.  Need to go deeper.
+      return GetUnderlying()->IsAsciiRepresentation();
+  }
+}
+
+
+bool String::IsTwoByteRepresentationUnderneath() {
+  uint32_t type = map()->instance_type();
+  STATIC_ASSERT(kIsIndirectStringTag != 0);
+  STATIC_ASSERT((kIsIndirectStringMask & kStringEncodingMask) == 0);
+  ASSERT(IsFlat());
+  switch (type & (kIsIndirectStringMask | kStringEncodingMask)) {
+    case kAsciiStringTag:
+      return false;
+    case kTwoByteStringTag:
+      return true;
+    default:  // Cons or sliced string.  Need to go deeper.
+      return GetUnderlying()->IsTwoByteRepresentation();
+  }
+}
+
+
 bool String::HasOnlyAsciiChars() {
   uint32_t type = map()->instance_type();
   return (type & kStringEncodingMask) == kAsciiStringTag ||
@@ -278,6 +314,16 @@ bool String::HasOnlyAsciiChars() {
 
 bool StringShape::IsCons() {
   return (type_ & kStringRepresentationMask) == kConsStringTag;
+}
+
+
+bool StringShape::IsSliced() {
+  return (type_ & kStringRepresentationMask) == kSlicedStringTag;
+}
+
+
+bool StringShape::IsIndirect() {
+  return (type_ & kIsIndirectStringMask) == kIsIndirectStringTag;
 }
 
 
@@ -1703,9 +1749,15 @@ bool FixedDoubleArray::is_the_hole(int index) {
 void FixedDoubleArray::Initialize(FixedDoubleArray* from) {
   int old_length = from->length();
   ASSERT(old_length < length());
-  OS::MemCopy(FIELD_ADDR(this, kHeaderSize),
-              FIELD_ADDR(from, kHeaderSize),
-              old_length * kDoubleSize);
+  if (old_length * kDoubleSize >= OS::kMinComplexMemCopy) {
+    OS::MemCopy(FIELD_ADDR(this, kHeaderSize),
+                FIELD_ADDR(from, kHeaderSize),
+                old_length * kDoubleSize);
+  } else {
+    for (int i = 0; i < old_length; ++i) {
+      set(i, from->get_scalar(i));
+    }
+  }
   int offset = kHeaderSize + old_length * kDoubleSize;
   for (int current = from->length(); current < length(); ++current) {
     WRITE_DOUBLE_FIELD(this, offset, hole_nan_as_double());
@@ -2075,6 +2127,7 @@ CAST_ACCESSOR(String)
 CAST_ACCESSOR(SeqString)
 CAST_ACCESSOR(SeqAsciiString)
 CAST_ACCESSOR(SeqTwoByteString)
+CAST_ACCESSOR(SlicedString)
 CAST_ACCESSOR(ConsString)
 CAST_ACCESSOR(ExternalString)
 CAST_ACCESSOR(ExternalAsciiString)
@@ -2156,7 +2209,7 @@ bool String::Equals(String* other) {
 MaybeObject* String::TryFlatten(PretenureFlag pretenure) {
   if (!StringShape(this).IsCons()) return this;
   ConsString* cons = ConsString::cast(this);
-  if (cons->second()->length() == 0) return cons->first();
+  if (cons->IsFlat()) return cons->first();
   return SlowTryFlatten(pretenure);
 }
 
@@ -2164,10 +2217,8 @@ MaybeObject* String::TryFlatten(PretenureFlag pretenure) {
 String* String::TryFlattenGetString(PretenureFlag pretenure) {
   MaybeObject* flat = TryFlatten(pretenure);
   Object* successfully_flattened;
-  if (flat->ToObject(&successfully_flattened)) {
-    return String::cast(successfully_flattened);
-  }
-  return this;
+  if (!flat->ToObject(&successfully_flattened)) return this;
+  return String::cast(successfully_flattened);
 }
 
 
@@ -2185,6 +2236,9 @@ uint16_t String::Get(int index) {
       return ExternalAsciiString::cast(this)->ExternalAsciiStringGet(index);
     case kExternalStringTag | kTwoByteStringTag:
       return ExternalTwoByteString::cast(this)->ExternalTwoByteStringGet(index);
+    case kSlicedStringTag | kAsciiStringTag:
+    case kSlicedStringTag | kTwoByteStringTag:
+      return SlicedString::cast(this)->SlicedStringGet(index);
     default:
       break;
   }
@@ -2205,15 +2259,19 @@ void String::Set(int index, uint16_t value) {
 
 
 bool String::IsFlat() {
-  switch (StringShape(this).representation_tag()) {
-    case kConsStringTag: {
-      String* second = ConsString::cast(this)->second();
-      // Only flattened strings have second part empty.
-      return second->length() == 0;
-    }
-    default:
-      return true;
-  }
+  if (!StringShape(this).IsCons()) return true;
+  return ConsString::cast(this)->second()->length() == 0;
+}
+
+
+String* String::GetUnderlying() {
+  // Giving direct access to underlying string only makes sense if the
+  // wrapping string is already flattened.
+  ASSERT(this->IsFlat());
+  ASSERT(StringShape(this).IsIndirect());
+  STATIC_ASSERT(ConsString::kFirstOffset == SlicedString::kParentOffset);
+  const int kUnderlyingOffset = SlicedString::kParentOffset;
+  return String::cast(READ_FIELD(this, kUnderlyingOffset));
 }
 
 
@@ -2270,6 +2328,20 @@ int SeqTwoByteString::SeqTwoByteStringSize(InstanceType instance_type) {
 int SeqAsciiString::SeqAsciiStringSize(InstanceType instance_type) {
   return SizeFor(length());
 }
+
+
+String* SlicedString::parent() {
+  return String::cast(READ_FIELD(this, kParentOffset));
+}
+
+
+void SlicedString::set_parent(String* parent) {
+  ASSERT(parent->IsSeqString());
+  WRITE_FIELD(this, kParentOffset, parent);
+}
+
+
+SMI_ACCESSORS(SlicedString, offset, kOffsetOffset)
 
 
 String* ConsString::first() {

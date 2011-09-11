@@ -491,8 +491,12 @@ def configure(conf):
     conf.env.append_value('LINKFLAGS', '-pg')
 
   if sys.platform.startswith("win32"):
-    conf.env.append_value('LIB', 'ws2_32')
+    conf.env.append_value('LIB', 'psapi')
     conf.env.append_value('LIB', 'winmm')
+    # This enforces ws2_32 to be linked after crypto, otherwise the linker
+    # will run into undefined references from libcrypto.a
+    if not Options.options.use_openssl:
+      conf.env.append_value('LIB', 'ws2_32')
 
   conf.env.append_value('CPPFLAGS', '-Wno-unused-parameter');
   conf.env.append_value('CPPFLAGS', '-D_FORTIFY_SOURCE=2');
@@ -500,12 +504,6 @@ def configure(conf):
   # Split off debug variant before adding variant specific defines
   debug_env = conf.env.copy()
   conf.set_env_name('Debug', debug_env)
-
-  if (sys.platform.startswith("win32")):
-    # Static pthread
-    conf.env.append_value('LINKFLAGS', '../deps/pthread-win32/libpthreadGC2.a')
-    debug_env.append_value('LINKFLAGS', '../deps/pthread-win32/libpthreadGC2d.a')
-    conf.env.append_value('CPPFLAGS', "-DPTW32_STATIC_LIB")
 
   # Configure debug variant
   conf.setenv('Debug')
@@ -641,7 +639,6 @@ def build_uv(bld):
   uv.env.env = dict(os.environ)
   uv.env.env['CC'] = sh_escape(bld.env['CC'][0])
   uv.env.env['CXX'] = sh_escape(bld.env['CXX'][0])
-  uv.env.env['CPPFLAGS'] = "-DPTW32_STATIC_LIB"
 
   t = join(bld.srcnode.abspath(bld.env_of_name("Release")), uv.target)
   bld.env_of_name('Release').append_value("LINKFLAGS_UV", t)
@@ -650,13 +647,12 @@ def build_uv(bld):
     uv_debug = uv.clone("Debug")
     uv_debug.rule = uv_cmd(bld, 'Debug')
     uv_debug.env.env = dict(os.environ)
-    uv_debug.env.env['CPPFLAGS'] = "-DPTW32_STATIC_LIB"
 
     t = join(bld.srcnode.abspath(bld.env_of_name("Debug")), uv_debug.target)
     bld.env_of_name('Debug').append_value("LINKFLAGS_UV", t)
 
   bld.install_files('${PREFIX}/include/node/', 'deps/uv/include/*.h')
-
+  bld.install_files('${PREFIX}/include/node/uv-private', 'deps/uv/include/uv-private/*.h')
   bld.install_files('${PREFIX}/include/node/ev', 'deps/uv/src/ev/*.h')
   bld.install_files('${PREFIX}/include/node/c-ares', """
     deps/uv/include/ares.h
@@ -900,6 +896,9 @@ def build(bld):
   """
 
   if not bld.env["USE_SHARED_V8"]: node.includes += ' deps/v8/include '
+
+  if os.environ.has_key('RPATH'):
+    node.rpath = os.environ['RPATH']
 
   if sys.platform.startswith('cygwin'):
     bld.env.append_value('LINKFLAGS', '-Wl,--export-all-symbols')

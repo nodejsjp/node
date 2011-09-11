@@ -41,7 +41,6 @@
 const $isNaN = GlobalIsNaN;
 const $isFinite = GlobalIsFinite;
 
-
 // ----------------------------------------------------------------------------
 
 
@@ -66,9 +65,39 @@ function InstallFunctions(object, attributes, functions) {
 // functions on String.prototype etc. and then restore the old function
 // with delete.  See http://code.google.com/p/chromium/issues/detail?id=1717
 function InstallFunctionsOnHiddenPrototype(object, attributes, functions) {
+  %CheckIsBootstrapping();
   var hidden_prototype = new $Object();
   %SetHiddenPrototype(object, hidden_prototype);
   InstallFunctions(hidden_prototype, attributes, functions);
+}
+
+
+// Prevents changes to the prototype of a built-infunction.
+// The "prototype" property of the function object is made non-configurable,
+// and the prototype object is made non-extensible. The latter prevents
+// changing the __proto__ property.
+function SetUpLockedPrototype(constructor, fields, methods) {
+  %CheckIsBootstrapping();
+  var prototype = constructor.prototype;
+  // Install functions first, because this function is used to initialize
+  // PropertyDescriptor itself.
+  var property_count = (methods.length >> 1) + (fields ? fields.length : 0);
+  if (property_count >= 4) {
+    %OptimizeObjectForAddingMultipleProperties(prototype, property_count);
+  }
+  if (fields) {
+    for (var i = 0; i < fields.length; i++) {
+      %SetProperty(prototype, fields[i], void 0, DONT_ENUM | DONT_DELETE);
+    }
+  }
+  for (var i = 0; i < methods.length; i += 2) {
+    var key = methods[i];
+    var f = methods[i + 1];
+    %SetProperty(prototype, key, f, DONT_ENUM | DONT_DELETE | READ_ONLY);
+    %SetNativeFlag(f);
+  }
+  prototype.__proto__ = null;
+  %ToFastProperties(prototype);
 }
 
 
@@ -77,17 +106,15 @@ function InstallFunctionsOnHiddenPrototype(object, attributes, functions) {
 
 // ECMA 262 - 15.1.4
 function GlobalIsNaN(number) {
-  var n = ToNumber(number);
-  return NUMBER_IS_NAN(n);
+  if (!IS_NUMBER(number)) number = NonNumberToNumber(number);
+  return NUMBER_IS_NAN(number);
 }
 
 
 // ECMA 262 - 15.1.5
 function GlobalIsFinite(number) {
   if (!IS_NUMBER(number)) number = NonNumberToNumber(number);
-
-  // NaN - NaN == NaN, Infinity - Infinity == NaN, -Infinity - -Infinity == NaN.
-  return %_IsSmi(number) || number - number == 0;
+  return NUMBER_IS_FINITE(number);
 }
 
 
@@ -106,13 +133,16 @@ function GlobalParseInt(string, radix) {
       // Truncate number.
       return string | 0;
     }
+    string = TO_STRING_INLINE(string);
     radix = radix | 0;
   } else {
+    // The spec says ToString should be evaluated before ToInt32.
+    string = TO_STRING_INLINE(string);
     radix = TO_INT32(radix);
     if (!(radix == 0 || (2 <= radix && radix <= 36)))
       return $NaN;
   }
-  string = TO_STRING_INLINE(string);
+
   if (%_HasCachedArrayIndex(string) &&
       (radix == 0 || radix == 10)) {
     return %_GetCachedArrayIndex(string);
@@ -159,8 +189,9 @@ function GlobalEval(x) {
 
 // ----------------------------------------------------------------------------
 
-
-function SetupGlobal() {
+// Set up global object.
+function SetUpGlobal() {
+  %CheckIsBootstrapping();
   // ECMA 262 - 15.1.1.1.
   %SetProperty(global, "NaN", $NaN, DONT_ENUM | DONT_DELETE);
 
@@ -170,7 +201,7 @@ function SetupGlobal() {
   // ECMA-262 - 15.1.1.3.
   %SetProperty(global, "undefined", void 0, DONT_ENUM | DONT_DELETE);
 
-  // Setup non-enumerable function on the global object.
+  // Set up non-enumerable function on the global object.
   InstallFunctions(global, DONT_ENUM, $Array(
     "isNaN", GlobalIsNaN,
     "isFinite", GlobalIsFinite,
@@ -180,8 +211,7 @@ function SetupGlobal() {
   ));
 }
 
-SetupGlobal();
-
+SetUpGlobal();
 
 // ----------------------------------------------------------------------------
 // Boolean (first part of definition)
@@ -354,32 +384,49 @@ function IsInconsistentDescriptor(desc) {
 // ES5 8.10.4
 function FromPropertyDescriptor(desc) {
   if (IS_UNDEFINED(desc)) return desc;
-  var obj = new $Object();
+
   if (IsDataDescriptor(desc)) {
-    obj.value = desc.getValue();
-    obj.writable = desc.isWritable();
+    return { value: desc.getValue(),
+             writable: desc.isWritable(),
+             enumerable: desc.isEnumerable(),
+             configurable: desc.isConfigurable() };
   }
-  if (IsAccessorDescriptor(desc)) {
-    obj.get = desc.getGet();
-    obj.set = desc.getSet();
-  }
-  obj.enumerable = desc.isEnumerable();
-  obj.configurable = desc.isConfigurable();
-  return obj;
+  // Must be an AccessorDescriptor then. We never return a generic descriptor.
+  return { get: desc.getGet(),
+           set: desc.getSet(),
+           enumerable: desc.isEnumerable(),
+           configurable: desc.isConfigurable() };
 }
+
 
 // Harmony Proxies
 function FromGenericPropertyDescriptor(desc) {
   if (IS_UNDEFINED(desc)) return desc;
   var obj = new $Object();
-  if (desc.hasValue()) obj.value = desc.getValue();
-  if (desc.hasWritable()) obj.writable = desc.isWritable();
-  if (desc.hasGetter()) obj.get = desc.getGet();
-  if (desc.hasSetter()) obj.set = desc.getSet();
-  if (desc.hasEnumerable()) obj.enumerable = desc.isEnumerable();
-  if (desc.hasConfigurable()) obj.configurable = desc.isConfigurable();
+
+  if (desc.hasValue()) {
+    %IgnoreAttributesAndSetProperty(obj, "value", desc.getValue(), NONE);
+  }
+  if (desc.hasWritable()) {
+    %IgnoreAttributesAndSetProperty(obj, "writable", desc.isWritable(), NONE);
+  }
+  if (desc.hasGetter()) {
+    %IgnoreAttributesAndSetProperty(obj, "get", desc.getGet(), NONE);
+  }
+  if (desc.hasSetter()) {
+    %IgnoreAttributesAndSetProperty(obj, "set", desc.getSet(), NONE);
+  }
+  if (desc.hasEnumerable()) {
+    %IgnoreAttributesAndSetProperty(obj, "enumerable",
+                                    desc.isEnumerable(), NONE);
+  }
+  if (desc.hasConfigurable()) {
+    %IgnoreAttributesAndSetProperty(obj, "configurable",
+                                    desc.isConfigurable(), NONE);
+  }
   return obj;
 }
+
 
 // ES5 8.10.5.
 function ToPropertyDescriptor(obj) {
@@ -461,106 +508,83 @@ function PropertyDescriptor() {
   this.hasSetter_ = false;
 }
 
-PropertyDescriptor.prototype.__proto__ = null;
-
-PropertyDescriptor.prototype.toString = function() {
-  return "[object PropertyDescriptor]";
-};
-
-PropertyDescriptor.prototype.setValue = function(value) {
-  this.value_ = value;
-  this.hasValue_ = true;
-}
-
-
-PropertyDescriptor.prototype.getValue = function() {
-  return this.value_;
-}
-
-
-PropertyDescriptor.prototype.hasValue = function() {
-  return this.hasValue_;
-}
-
-
-PropertyDescriptor.prototype.setEnumerable = function(enumerable) {
-  this.enumerable_ = enumerable;
-  this.hasEnumerable_ = true;
-}
-
-
-PropertyDescriptor.prototype.isEnumerable = function () {
-  return this.enumerable_;
-}
-
-
-PropertyDescriptor.prototype.hasEnumerable = function() {
-  return this.hasEnumerable_;
-}
-
-
-PropertyDescriptor.prototype.setWritable = function(writable) {
-  this.writable_ = writable;
-  this.hasWritable_ = true;
-}
-
-
-PropertyDescriptor.prototype.isWritable = function() {
-  return this.writable_;
-}
-
-
-PropertyDescriptor.prototype.hasWritable = function() {
-  return this.hasWritable_;
-}
-
-
-PropertyDescriptor.prototype.setConfigurable = function(configurable) {
-  this.configurable_ = configurable;
-  this.hasConfigurable_ = true;
-}
-
-
-PropertyDescriptor.prototype.hasConfigurable = function() {
-  return this.hasConfigurable_;
-}
-
-
-PropertyDescriptor.prototype.isConfigurable = function() {
-  return this.configurable_;
-}
-
-
-PropertyDescriptor.prototype.setGet = function(get) {
-  this.get_ = get;
-  this.hasGetter_ = true;
-}
-
-
-PropertyDescriptor.prototype.getGet = function() {
-  return this.get_;
-}
-
-
-PropertyDescriptor.prototype.hasGetter = function() {
-  return this.hasGetter_;
-}
-
-
-PropertyDescriptor.prototype.setSet = function(set) {
-  this.set_ = set;
-  this.hasSetter_ = true;
-}
-
-
-PropertyDescriptor.prototype.getSet = function() {
-  return this.set_;
-}
-
-
-PropertyDescriptor.prototype.hasSetter = function() {
-  return this.hasSetter_;
-}
+SetUpLockedPrototype(PropertyDescriptor, $Array(
+    "value_",
+    "hasValue_",
+    "writable_",
+    "hasWritable_",
+    "enumerable_",
+    "hasEnumerable_",
+    "configurable_",
+    "hasConfigurable_",
+    "get_",
+    "hasGetter_",
+    "set_",
+    "hasSetter_"
+  ), $Array(
+    "toString", function() {
+      return "[object PropertyDescriptor]";
+    },
+    "setValue", function(value) {
+      this.value_ = value;
+      this.hasValue_ = true;
+    },
+    "getValue", function() {
+      return this.value_;
+    },
+    "hasValue", function() {
+      return this.hasValue_;
+    },
+    "setEnumerable", function(enumerable) {
+      this.enumerable_ = enumerable;
+        this.hasEnumerable_ = true;
+    },
+    "isEnumerable", function () {
+      return this.enumerable_;
+    },
+    "hasEnumerable", function() {
+      return this.hasEnumerable_;
+    },
+    "setWritable", function(writable) {
+      this.writable_ = writable;
+      this.hasWritable_ = true;
+    },
+    "isWritable", function() {
+      return this.writable_;
+    },
+    "hasWritable", function() {
+      return this.hasWritable_;
+    },
+    "setConfigurable", function(configurable) {
+      this.configurable_ = configurable;
+      this.hasConfigurable_ = true;
+    },
+    "hasConfigurable", function() {
+      return this.hasConfigurable_;
+    },
+    "isConfigurable", function() {
+      return this.configurable_;
+    },
+    "setGet", function(get) {
+      this.get_ = get;
+        this.hasGetter_ = true;
+    },
+    "getGet", function() {
+      return this.get_;
+    },
+    "hasGetter", function() {
+      return this.hasGetter_;
+    },
+    "setSet", function(set) {
+      this.set_ = set;
+      this.hasSetter_ = true;
+    },
+    "getSet", function() {
+      return this.set_;
+    },
+    "hasSetter", function() {
+      return this.hasSetter_;
+  }));
 
 
 // Converts an array returned from Runtime_GetOwnProperty to an actual
@@ -618,38 +642,6 @@ function CallTrap1(handler, name, defaultTrap, x) {
 
 function CallTrap2(handler, name, defaultTrap, x, y) {
   return %_CallFunction(handler, x, y, GetTrap(handler, name, defaultTrap));
-}
-
-
-// ES5 section 8.12.2.
-function GetProperty(obj, p) {
-  if (%IsJSProxy(obj)) {
-    var handler = %GetHandler(obj);
-    var descriptor = CallTrap1(obj, "getPropertyDescriptor", void 0, p);
-    if (IS_UNDEFINED(descriptor)) return descriptor;
-    var desc = ToCompletePropertyDescriptor(descriptor);
-    if (!desc.isConfigurable()) {
-      throw MakeTypeError("proxy_prop_not_configurable",
-                          [handler, "getPropertyDescriptor", p, descriptor]);
-    }
-    return desc;
-  }
-  var prop = GetOwnProperty(obj);
-  if (!IS_UNDEFINED(prop)) return prop;
-  var proto = %GetPrototype(obj);
-  if (IS_NULL(proto)) return void 0;
-  return GetProperty(proto, p);
-}
-
-
-// ES5 section 8.12.6
-function HasProperty(obj, p) {
-  if (%IsJSProxy(obj)) {
-    var handler = %GetHandler(obj);
-    return ToBoolean(CallTrap1(handler, "has", DerivedHasTrap, p));
-  }
-  var desc = GetProperty(obj, p);
-  return IS_UNDEFINED(desc) ? false : true;
 }
 
 
@@ -1180,10 +1172,11 @@ function ObjectIsExtensible(obj) {
 %SetExpectedNumberOfProperties($Object, 4);
 
 // ----------------------------------------------------------------------------
+// Object
 
-
-function SetupObject() {
-  // Setup non-enumerable functions on the Object.prototype object.
+function SetUpObject() {
+  %CheckIsBootstrapping();
+  // Set Up non-enumerable functions on the Object.prototype object.
   InstallFunctions($Object.prototype, DONT_ENUM, $Array(
     "toString", ObjectToString,
     "toLocaleString", ObjectToLocaleString,
@@ -1213,8 +1206,7 @@ function SetupObject() {
   ));
 }
 
-SetupObject();
-
+SetUpObject();
 
 // ----------------------------------------------------------------------------
 // Boolean
@@ -1245,14 +1237,16 @@ function BooleanValueOf() {
 // ----------------------------------------------------------------------------
 
 
-function SetupBoolean() {
+function SetUpBoolean () {
+  %CheckIsBootstrapping();
   InstallFunctions($Boolean.prototype, DONT_ENUM, $Array(
     "toString", BooleanToString,
     "valueOf", BooleanValueOf
   ));
 }
 
-SetupBoolean();
+SetUpBoolean();
+
 
 // ----------------------------------------------------------------------------
 // Number
@@ -1366,9 +1360,10 @@ function NumberToPrecision(precision) {
 
 // ----------------------------------------------------------------------------
 
-function SetupNumber() {
+function SetUpNumber() {
+  %CheckIsBootstrapping();
   %OptimizeObjectForAddingMultipleProperties($Number.prototype, 8);
-  // Setup the constructor property on the Number prototype object.
+  // Set up the constructor property on the Number prototype object.
   %SetProperty($Number.prototype, "constructor", $Number, DONT_ENUM);
 
   %OptimizeObjectForAddingMultipleProperties($Number, 5);
@@ -1397,7 +1392,7 @@ function SetupNumber() {
                DONT_ENUM | DONT_DELETE | READ_ONLY);
   %ToFastProperties($Number);
 
-  // Setup non-enumerable functions on the Number prototype object.
+  // Set up non-enumerable functions on the Number prototype object.
   InstallFunctions($Number.prototype, DONT_ENUM, $Array(
     "toString", NumberToString,
     "toLocaleString", NumberToLocaleString,
@@ -1408,7 +1403,7 @@ function SetupNumber() {
   ));
 }
 
-SetupNumber();
+SetUpNumber();
 
 
 // ----------------------------------------------------------------------------
@@ -1537,11 +1532,12 @@ function NewFunction(arg1) {  // length == 1
 
 // ----------------------------------------------------------------------------
 
-function SetupFunction() {
+function SetUpFunction() {
+  %CheckIsBootstrapping();
   InstallFunctions($Function.prototype, DONT_ENUM, $Array(
     "bind", FunctionBind,
     "toString", FunctionToString
   ));
 }
 
-SetupFunction();
+SetUpFunction();

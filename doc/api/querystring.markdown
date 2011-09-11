@@ -25,13 +25,13 @@ Example:
 -->
 例:
 
-    querystring.stringify({foo: 'bar'})
+    querystring.stringify({ foo: 'bar', baz: ['qux', 'quux'], corge: '' })
     // returns
-    'foo=bar'
+    'foo=bar&baz=qux&baz=quux&corge='
 
-    querystring.stringify({foo: 'bar', baz: 'bob'}, ';', ':')
+    querystring.stringify({foo: 'bar', baz: 'qux'}, ';', ':')
     // returns
-    'foo:bar;baz:bob'
+    'foo:bar;baz:qux'
 
 ### querystring.parse(str, sep='&', eq='=')
 
@@ -50,9 +50,9 @@ Example:
 -->
 例:
 
-    querystring.parse('a=b&b=c')
+    querystring.parse('foo=bar&baz=qux&baz=quux&corge')
     // returns
-    { a: 'b', b: 'c' }
+    { foo: 'bar', baz: ['qux', 'quux'], corge: '' }
 
 ### querystring.escape
 
