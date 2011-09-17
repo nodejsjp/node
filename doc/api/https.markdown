@@ -109,19 +109,73 @@ The options argument has the following options
 - port: port of host to request to. Defaults to 443.
 - path: Path to request. Default `'/'`.
 - method: HTTP request method. Default `'GET'`.
+
+The following options can also be specified.
+However, a global [Agent](http.html#http.Agent) cannot be used. 
+
 - key: Private key to use for SSL. Default `null`.
 - cert: Public x509 certificate to use. Default `null`.
 - ca: An authority certificate or array of authority certificates to check
   the remote host against.
+
+In order to specify these options, use a custom `Agent`.
+
+Example:
 
 -->
 - `host`: リクエストするホストのIPまたはドメイン。デフォルトは `'localhost'` です。
 - `port`: リクエストするホストのポート。デフォルトは 443 です。
 - `path`: リクエストのパス。デフォルトは `'/'` です。
 - `method`: HTTP りくえすとのメソッド。デフォルトは `'GET'` です。
+
+以下のオプションを指定することもできますが、
+グローバル [エージェント](http.html#http.Agent) を使うことはできません。
+
 - `key`: SSLで使用する秘密鍵。デフォルトは `null` です。
 - `cert`: x509公開証明書。デフォルトは `null` です。
 - `ca`: リモートホストをチェックする信頼できる認証局または認証局の配列。
+
+これらのオプションを指定するには、カスタムエージェントを使用します。
+
+例:
+
+    var options = {
+      host: 'encrypted.google.com',
+      port: 443,
+      path: '/',
+      method: 'GET',
+      key: fs.readFileSync('test/fixtures/keys/agent2-key.pem'),
+      cert: fs.readFileSync('test/fixtures/keys/agent2-cert.pem')
+    };
+    options.agent = new https.Agent(options);
+
+    var req = https.request(options, function(res) {
+      ...
+    }
+
+<!--
+
+Or does not use an `Agent`.
+
+Example:
+
+-->
+あるいは、エージェントを使用しません。
+
+    var options = {
+      host: 'encrypted.google.com',
+      port: 443,
+      path: '/',
+      method: 'GET',
+      key: fs.readFileSync('test/fixtures/keys/agent2-key.pem'),
+      cert: fs.readFileSync('test/fixtures/keys/agent2-cert.pem'),
+      agent: false
+    };
+
+    var req = https.request(options, function(res) {
+      ...
+    }
+
 
 ## https.get(options, callback)
 
