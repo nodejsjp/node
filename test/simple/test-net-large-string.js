@@ -19,38 +19,37 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+var common = require('../common');
+var assert = require('assert');
+var net = require('net');
 
-#include "node_config.h"
+var kPoolSize = 40 * 1024;
+var data = '';
+for (var i = 0; i < kPoolSize; ++i) {
+  data += 'あ'; // 3bytes
+}
+var receivedSize = 0;
+var encoding = 'UTF-8';
 
-#ifndef NODE_VERSION_H
-#define NODE_VERSION_H
+var server = net.createServer(function(socket) {
+  socket.setEncoding(encoding);
+  socket.on('data', function(data) {
+    receivedSize += data.length;
+  });
+  socket.on('end', function() {
+    socket.end();
+  });
+});
 
-#define NODE_MAJOR_VERSION 0
-#define NODE_MINOR_VERSION 4
-#define NODE_PATCH_VERSION 12
-#define NODE_VERSION_IS_RELEASE 1
+server.listen(common.PORT, function() {
+  var client = net.createConnection(common.PORT);
+  client.on('end', function() {
+    server.close();
+  });
+  client.write(data, encoding);
+  client.end();
+});
 
-#ifndef NODE_STRINGIFY
-#define NODE_STRINGIFY(n) NODE_STRINGIFY_HELPER(n)
-#define NODE_STRINGIFY_HELPER(n) #n
-#endif
-
-#if NODE_VERSION_IS_RELEASE
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION)
-#else
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION) "-pre"
-#endif
-
-#define NODE_VERSION "v" NODE_VERSION_STRING
-
-
-#define NODE_VERSION_AT_LEAST(major, minor, patch) \
-  (( (major) < NODE_MAJOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) < NODE_MINOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) == NODE_MINOR_VERSION && (patch) <= NODE_PATCH_VERSION))
-
-#endif /* NODE_VERSION_H */
+process.on('exit', function() {
+  assert.equal(receivedSize, kPoolSize);
+});
