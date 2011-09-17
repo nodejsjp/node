@@ -85,6 +85,88 @@ private to `circle.js`.
 モジュールのローカル変数はプライベートです。
 この例の場合、変数 `PI` は `circle.js` のプライベート変数です。
 
+### Cycles
+
+<!--
+
+When there are circular `require()` calls, a module might not be
+done being executed when it is returned.
+
+Consider this situation:
+
+-->
+`require()` が循環的に呼び出される場合、実行が完了していないモジュールが
+返されることがあります。
+
+次の状況を考えてください:
+
+`a.js`:
+
+    console.log('a starting');
+    exports.done = false;
+    var b = require('./b.js');
+    console.log('in a, b.done = %j', b.done);
+    exports.done = true;
+    console.log('a done');
+
+`b.js`:
+
+    console.log('b starting');
+    exports.done = false;
+    var a = require('./a.js');
+    console.log('in b, a.done = %j', a.done);
+    exports.done = true;
+    console.log('b done');
+
+`main.js`:
+
+    console.log('main starting');
+    var a = require('./a.js');
+    var b = require('./b.js');
+    console.log('in main, a.done=%j, b.done=%j', a.done, b.done);
+
+<!--
+
+When `main.js` loads `a.js`, then `a.js` in turn loads `b.js`.  At that
+point, `b.js` tries to load `a.js`.  In order to prevent an infinite
+loop an **unfinished copy** of the `a.js` exports object is returned to the
+`b.js` module.  `b.js` then finishes loading, and its exports object is
+provided to the `a.js` module.
+
+By the time `main.js` has loaded both modules, they're both finished.
+The output of this program would thus be:
+
+-->
+
+`main.js` が `a.js` をロードすると、`a.js` は `b.js` をロードします。
+ポイントは、`b.js` は `a.js` のロードを試みることです。
+無限ループを避けるため、`a.js` がエクスポートしたオブジェクトの
+**未完了のコピー** が `b.js` モジュールに返されます。
+`b.js` のロードが完了すると、エクスポートされたオブジェクトが `a.js`
+モジュールに提供されます。
+
+`main.js` が両方のモジュールをロードするまでには、どちらも完了します。
+このプログラムの出力はこのようになります:
+
+    $ node main.js
+    main starting
+    a starting
+    b starting
+    in b, a.done = false
+    b done
+    in a, b.done = true
+    a done
+    in main, a.done=true, b.done=true
+
+<!--
+
+If you have cyclic module dependencies in your program, make sure to
+plan accordingly.
+
+-->
+プログラムが循環参照するモジュールを持つ場合は、計画が適切か確認してください。
+
+
 ### Core Modules
 
 <!--
