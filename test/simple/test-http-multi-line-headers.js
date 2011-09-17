@@ -19,38 +19,41 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+var common = require('../common');
+var assert = require('assert');
 
-#include "node_config.h"
+var http = require('http');
+var net = require('net');
 
-#ifndef NODE_VERSION_H
-#define NODE_VERSION_H
+var gotResponse = false;
 
-#define NODE_MAJOR_VERSION 0
-#define NODE_MINOR_VERSION 4
-#define NODE_PATCH_VERSION 12
-#define NODE_VERSION_IS_RELEASE 1
+var server = net.createServer(function(conn) {
+  var body = "Yet another node.js server.";
 
-#ifndef NODE_STRINGIFY
-#define NODE_STRINGIFY(n) NODE_STRINGIFY_HELPER(n)
-#define NODE_STRINGIFY_HELPER(n) #n
-#endif
+  var response =
+    "HTTP/1.1 200 OK\r\n" +
+    "Connection: close\r\n" +
+    "Content-Length: " + body.length + "\r\n" +
+    "Content-Type: text/plain;\r\n" +
+    " x-unix-mode=0600;\r\n" +
+    " name=\"hello.txt\"\r\n" +
+    "\r\n" +
+    body;
 
-#if NODE_VERSION_IS_RELEASE
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION)
-#else
-# define NODE_VERSION_STRING  NODE_STRINGIFY(NODE_MAJOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_MINOR_VERSION) "." \
-                              NODE_STRINGIFY(NODE_PATCH_VERSION) "-pre"
-#endif
+  conn.write(response, function() {
+    conn.destroy();
+    server.close();
+  });
+});
 
-#define NODE_VERSION "v" NODE_VERSION_STRING
+server.listen(common.PORT, function() {
+  http.get({host:'127.0.0.1', port:common.PORT}, function(res) {
+    assert.equal(res.headers['content-type'],
+                 'text/plain;x-unix-mode=0600;name="hello.txt"');
+    gotResponse = true;
+  });
+});
 
-
-#define NODE_VERSION_AT_LEAST(major, minor, patch) \
-  (( (major) < NODE_MAJOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) < NODE_MINOR_VERSION) \
-  || ((major) == NODE_MAJOR_VERSION && (minor) == NODE_MINOR_VERSION && (patch) <= NODE_PATCH_VERSION))
-
-#endif /* NODE_VERSION_H */
+process.on('exit', function() {
+  assert.ok(gotResponse);
+});

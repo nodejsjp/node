@@ -17,11 +17,50 @@ Prints to stdout with newline. This function can take multiple arguments in a
     console.log('count: %d', count);
 
 <!--
-If formating elements are not found in the first string then `util.inspect`
-is used on each argument.
+The first argument is a string that contains zero or more *placeholders*.
+Each placeholder is replaced with the converted value from its corresponding
+argument. Supported placeholders are:
 -->
-最初の引数文字列からフォーマット要素が見つからなかった場合は、
-`util.inspect` が各引数に使われます。
+第一引数は文字列で、0 個以上の *プレースホルダ* を含みます。
+それぞれのプレースホルダは対応する引数を変換した値で置換されます。
+サポートするプレースホルダは:
+
+<!--
+* `%s` - String.
+* `%d` - Number (both integer and float).
+* `%j` - JSON.
+-->
+* `%s` - 文字列。
+* `%d` - 数値 (整数と浮動小数点数の両方)。
+* `%j` - JSON。
+
+<!--
+If the placeholder does not have a corresponding argument, `undefined` is used.
+-->
+プレースホルダに対応する引数が無い場合は、`undefined` が使われます
+
+    console.log('%s:%s', 'foo'); // 'foo:undefined'
+
+<!--
+If there are more arguments than placeholders, the extra arguments are
+converted to strings with `util.inspect()` and these strings are concatenated,
+delimited by a space.
+-->
+プレースホルダより多くの引数がある場合、余った引数は `util.inspect()` によって
+文字列化され、それらはスペース区切りで連結されます。
+
+    console.log('%s:%s', 'foo', 'bar', 'baz'); // 'foo:bar baz'
+
+<!--
+If the first argument is not a format string then `console.log()` prints
+a string that is the concatenation of all its arguments separated by spaces.
+Each argument is converted to a string with `util.inspect()`.
+-->
+第一引数がフォーマット文字列ではない場合、`console.log()` は全ての引数を
+スペース区切りで連結して出力します。
+個々の引数は `util.inspect()` で文字列に変換されます。
+
+    console.log(1, 2, 3); // '1 2 3'
 
 ### console.info()
 
