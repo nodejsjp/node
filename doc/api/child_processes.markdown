@@ -251,11 +251,10 @@ See also: `child_process.exec()`
 
 <!--
 
-High-level way to execute a command as a child process, buffer the
-output, and return it all in a callback.
+Runs a command in a shell and buffers the output.
 
 -->
-コマンドを子プロセスとして実行し、その出力を蓄えて、その全てをコールバックに渡す高水準の方法です。
+コマンドをシェルで実行し、その出力をバッファに格納します。
 
     var util = require('util'),
         exec = require('child_process').exec,
@@ -312,6 +311,20 @@ the child process is killed.
 子プロセスは実行時間が `timeout` ミリ秒よりも長くなると kill されます。
 子プロセスは `killSignal` で kill されます (デフォルト: `'SIGTERM'`)。
 `maxBuffer` は標準出力と標準エラーの最大のデータ量を指定します － この値を超えると子プロセスは kill されます。
+
+
+### child_process.execFile(file, args, options, callback)
+
+<!--
+
+This is similar to `child_process.exec()` except it does not execute a
+subshell but rather the specified file directly. This makes it slightly
+leaner than `child_process.exec`. It has the same options.
+
+-->
+子シェルで実行する代わりに指定されたファイルを直接実行することを除いて
+`child_process.exec()` と同様です。
+これは `child_process.exec` より若干効率的で、同じオプションを持ちます。
 
 
 ### child_process.fork(modulePath, arguments, options)

@@ -425,7 +425,7 @@
             '../../src/serialize.cc',
             '../../src/serialize.h',
             '../../src/small-pointer-list.h',
-            '../../src/smart-pointer.h',
+            '../../src/smart-array-pointer.h',
             '../../src/snapshot-common.cc',
             '../../src/snapshot.h',
             '../../src/spaces-inl.h',
@@ -637,6 +637,13 @@
                 ]},
                 'sources': [
                   '../../src/platform-openbsd.cc',
+                  '../../src/platform-posix.cc'
+                ],
+              }
+            ],
+            ['OS=="solaris"', {
+                'sources': [
+                  '../../src/platform-solaris.cc',
                   '../../src/platform-posix.cc'
                 ],
               }
