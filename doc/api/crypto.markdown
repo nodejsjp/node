@@ -515,3 +515,24 @@ The callback gets two arguments `(err, derivedKey)`.
 (ランダムなバイト値)、および繰り返しから、指定された長さの鍵を生成する、
 非同期の PBKDF2 です。
 コールバック関数は二つの引数を受け取る `(err, derivedKey)` です。
+
+### randomBytes(size, [callback])
+
+<!--
+Generates cryptographically strong pseudo-random data. Usage:
+-->
+暗号学的に強い疑似乱数データを生成します。使用法:
+
+    // async
+    crypto.randomBytes(256, function(ex, buf) {
+      if (ex) throw ex;
+      console.log('Have %d bytes of random data: %s', buf.length, buf);
+    });
+
+    // sync
+    try {
+      var buf = crypto.randomBytes(256);
+      console.log('Have %d bytes of random data: %s', buf.length, buf);
+    } catch (ex) {
+      // handle error
+    }

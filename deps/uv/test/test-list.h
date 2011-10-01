@@ -19,8 +19,11 @@
  * IN THE SOFTWARE.
  */
 
+TEST_DECLARE   (tty)
 TEST_DECLARE   (tcp_ping_pong)
 TEST_DECLARE   (tcp_ping_pong_v6)
+TEST_DECLARE   (tcp_ref)
+TEST_DECLARE   (tcp_ref2)
 TEST_DECLARE   (pipe_ping_pong)
 TEST_DECLARE   (delayed_accept)
 TEST_DECLARE   (tcp_writealot)
@@ -51,6 +54,8 @@ TEST_DECLARE   (connection_fail_doesnt_auto_close)
 TEST_DECLARE   (shutdown_eof)
 TEST_DECLARE   (callback_stack)
 TEST_DECLARE   (timer)
+TEST_DECLARE   (timer_ref)
+TEST_DECLARE   (timer_ref2)
 TEST_DECLARE   (timer_again)
 TEST_DECLARE   (idle_starvation)
 TEST_DECLARE   (loop_handles)
@@ -86,6 +91,10 @@ TEST_DECLARE   (fs_link)
 TEST_DECLARE   (fs_symlink)
 TEST_DECLARE   (fs_utime)
 TEST_DECLARE   (fs_futime)
+TEST_DECLARE   (fs_stat_missing_path)
+TEST_DECLARE   (fs_event_watch_dir)
+TEST_DECLARE   (fs_event_watch_file)
+TEST_DECLARE   (fs_event_watch_file_current_dir)
 TEST_DECLARE   (threadpool_queue_work_simple)
 #ifdef _WIN32
 TEST_DECLARE   (spawn_detect_pipe_name_collisions_on_windows)
@@ -98,6 +107,14 @@ HELPER_DECLARE (pipe_echo_server)
 
 
 TASK_LIST_START
+  TEST_ENTRY  (tty)
+
+
+  TEST_ENTRY  (tcp_ref)
+
+  TEST_ENTRY  (tcp_ref2)
+  TEST_HELPER (tcp_ref2, tcp4_echo_server)
+
   TEST_ENTRY  (tcp_ping_pong)
   TEST_HELPER (tcp_ping_pong, tcp4_echo_server)
 
@@ -148,6 +165,8 @@ TASK_LIST_START
   TEST_HELPER (callback_stack, tcp4_echo_server)
 
   TEST_ENTRY  (timer)
+  TEST_ENTRY  (timer_ref)
+  TEST_ENTRY  (timer_ref2)
 
   TEST_ENTRY  (timer_again)
 
@@ -198,6 +217,10 @@ TASK_LIST_START
   TEST_ENTRY  (fs_utime)
   TEST_ENTRY  (fs_futime)
   TEST_ENTRY  (fs_symlink)
+  TEST_ENTRY  (fs_stat_missing_path)
+  TEST_ENTRY  (fs_event_watch_dir)
+  TEST_ENTRY  (fs_event_watch_file)
+  TEST_ENTRY  (fs_event_watch_file_current_dir)
 
   TEST_ENTRY  (threadpool_queue_work_simple)
 

@@ -45,7 +45,7 @@ typedef struct env_var {
     uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");          \
   }                                                       \
   if (!uv_utf8_to_utf16(s, t, size / sizeof(wchar_t))) {  \
-    uv_set_sys_error(loop, GetLastError());                     \
+    uv__set_sys_error(loop, GetLastError());                     \
     err = -1;                                             \
     goto done;                                            \
   }
@@ -746,7 +746,7 @@ static int uv_create_stdio_pipe_pair(uv_loop_t* loop, uv_pipe_t* server_pipe,
   DWORD mode = PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT;
 
   if (server_pipe->type != UV_NAMED_PIPE) {
-    uv_set_error(loop, UV_EINVAL, 0);
+    uv__set_artificial_error(loop, UV_EINVAL);
     err = -1;
     goto done;
   }
@@ -771,13 +771,13 @@ static int uv_create_stdio_pipe_pair(uv_loop_t* loop, uv_pipe_t* server_pipe,
                             NULL);
 
   if (*child_pipe == INVALID_HANDLE_VALUE) {
-    uv_set_sys_error(loop, GetLastError());
+    uv__set_sys_error(loop, GetLastError());
     err = -1;
     goto done;
   }
 
   if (!SetNamedPipeHandleState(*child_pipe, &mode, NULL, NULL)) {
-    uv_set_sys_error(loop, GetLastError());
+    uv__set_sys_error(loop, GetLastError());
     err = -1;
     goto done;
   }
@@ -787,7 +787,7 @@ static int uv_create_stdio_pipe_pair(uv_loop_t* loop, uv_pipe_t* server_pipe,
    */
   if (!ConnectNamedPipe(server_pipe->handle, NULL)) {
     if (GetLastError() != ERROR_PIPE_CONNECTED) {
-      uv_set_sys_error(loop, GetLastError());
+      uv__set_sys_error(loop, GetLastError());
       err = -1;
       goto done;
     }
@@ -822,7 +822,7 @@ static int duplicate_std_handle(uv_loop_t* loop, DWORD id, HANDLE* dup) {
     return 0;
   } else if (handle == INVALID_HANDLE_VALUE) {
     *dup = INVALID_HANDLE_VALUE;
-    uv_set_sys_error(loop, GetLastError());
+    uv__set_sys_error(loop, GetLastError());
     return -1;
   }
 
@@ -834,7 +834,7 @@ static int duplicate_std_handle(uv_loop_t* loop, DWORD id, HANDLE* dup) {
                        TRUE,
                        DUPLICATE_SAME_ACCESS)) {
     *dup = INVALID_HANDLE_VALUE;
-    uv_set_sys_error(loop, GetLastError());
+    uv__set_sys_error(loop, GetLastError());
     return -1;
   }
 
@@ -845,13 +845,18 @@ static int duplicate_std_handle(uv_loop_t* loop, DWORD id, HANDLE* dup) {
 int uv_spawn(uv_loop_t* loop, uv_process_t* process,
     uv_process_options_t options) {
   int err = 0, keep_child_stdio_open = 0;
-  wchar_t* path;
+  wchar_t* path = NULL;
   int size;
   BOOL result;
-  wchar_t* application_path, *application, *arguments, *env, *cwd;
+  wchar_t* application_path = NULL, *application = NULL, *arguments = NULL, *env = NULL, *cwd = NULL;
   HANDLE* child_stdio = process->child_stdio;
   STARTUPINFOW startup;
   PROCESS_INFORMATION info;
+
+  if (!options.file) {
+    uv__set_artificial_error(loop, UV_EINVAL);
+    return -1;
+  }
 
   uv_process_init(loop, process);
 
@@ -872,7 +877,7 @@ int uv_spawn(uv_loop_t* loop, uv_process_t* process,
       }
       GetCurrentDirectoryW(size, cwd);
     } else {
-      uv_set_sys_error(loop, GetLastError());
+      uv__set_sys_error(loop, GetLastError());
       err = -1;
       goto done;
     }

@@ -67,6 +67,7 @@
 * [子プロセス](child_processes.html)
 * [表明とテスティング](assert.html)
 * [TTY](tty.html)
+* [ZLIB](zlib.html)
 * [OS](os.html)
 * [デバッガ](debugger.html)
 * 付録
