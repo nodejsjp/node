@@ -334,14 +334,14 @@ leaner than `child_process.exec`. It has the same options.
 This is a special case of the `spawn()` functionality for spawning Node
 processes. In addition to having all the methods in a normal ChildProcess
 instance, the returned object has a communication channel built-in. The
-channel is written to with `child.send(message)` and messages are recieved
-by a `'message'` event on the child.
+channel is written to with `child.send(message, [sendHandle])` and messages
+are recieved by a `'message'` event on the child.
 
 -->
 これは `spawn()` の特別版で、Node プロセスを起動します。
 返されるオブジェクトは通常の ChildProcess の全てのメソッドに加えて、
 組み込みの通信チャネルを持ちます。
-チャネルは `child.send(message)` によって書き込まれ、
+チャネルは `child.send(message, [sendHandle])` によって書き込まれ、
 メッセージを受信すると `child` 上で `'message'` イベントが生成されます。
 
 <!--
@@ -390,7 +390,7 @@ associated with the parent's. This can be overridden by using the
 `customFds` option.
 
 -->
-デフォルトでは，起動された Node プロセスは親プロセスに関連づけられた標準入力、
+デフォルトでは、起動された Node プロセスは親プロセスに関連づけられた標準入力、
 標準出力、標準エラー出力を持ちます。
 これは `customFds` オプションによって上書きすることが出来ます。
 
@@ -405,6 +405,41 @@ thousands of them.
 新しい Node ごとに少なくとも 30 ミリ秒の起動時間と 
 10MB のメモリを前提としてください。
 つまり、数千の子プロセスを作ることは出来ません。
+
+<!--
+
+The `sendHandle` option to `child.send()` is for sending a handle object to
+another process. Child will receive the handle as as second argument to the
+`message` event. Here is an example of sending a handle:
+
+-->
+`child.send()` の `sendHandle` オプションはハンドルオブジェクトを別プロセスに
+送ります。
+子プロセスはそのハンドルを `message` イベントの第2引数として受け取ります。
+これはハンドルを送信するサンプルです。
+
+
+    var server = require('net').createServer();
+    var child = require('child_process').fork(__dirname + '/child.js');
+    // Open up the server object and send the handle.
+    child.send({ server: true }, server._handle);
+
+<!--
+
+Here is an example of receiving the server handle and sharing it between
+processes:
+
+-->
+これはサーバのハンドルを受信してプロセス間で共有するサンプルです。
+
+
+    process.on('message', function(m, serverHandle) {
+      if (serverHandle) {
+        var server = require('net').createServer();
+        server.listen(serverHandle);
+      }
+    });
+
 
 ### child.kill(signal='SIGTERM')
 

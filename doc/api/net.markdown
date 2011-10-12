@@ -4,7 +4,7 @@
 
 The `net` module provides you with an asynchronous network wrapper. It contains
 methods for creating both servers and clients (called streams). You can include
-this module with `require("net");`
+this module with `require('net');`
 
 -->
 `net` モジュールは非同期なネットワークのラッパーを提供します。
@@ -16,13 +16,16 @@ this module with `require("net");`
 <!--
 
 Creates a new TCP server. The `connectionListener` argument is
-automatically set as a listener for the `'connection'` event.
+automatically set as a listener for the ['connection'](#event_connection_)
+event.
+
 `options` is an object with the following defaults:
 
 -->
 新しい TCP サーバを作成します。
-`connectionListener` 引数は `'connection'`
+`connectionListener` 引数は ['connection'](#event_connection_)
 イベントに対するリスナーとして自動的に加えられます。
+
 `options` は以下のデフォルト値を持つオブジェクトです:
 
     { allowHalfOpen: false
@@ -32,61 +35,144 @@ automatically set as a listener for the `'connection'` event.
 
 If `allowHalfOpen` is `true`, then the socket won't automatically send FIN
 packet when the other end of the socket sends a FIN packet. The socket becomes
-non-readable, but still writable. You should call the end() method explicitly.
-See `'end'` event for more information.
+non-readable, but still writable. You should call the `end()` method explicitly.
+See ['end'](#event_end_) event for more information.
 
 -->
 `allowHalfOpen` が `true` だと、反対側のソケットが FIN パケットを送信してきても自動的に FIN を送信しなくなります。
 ソケットは読み込み可能ではなくなりますが、書き込み可能のままです。
 明示的に `end()` を呼び出す必要があります。
-`'end'` イベントにより多くの情報があります。
+['end'](#event_end_) イベントにより多くの情報があります。
 
+<!--
+
+Here is an example of a echo server which listens for connections
+on port 8124:
+
+-->
+8124 番のポートへの接続を待ち受けるエコーサーバの例:
+
+    var net = require('net');
+    var server = net.createServer(function(c) { //'connection' listener
+      console.log('server connected');
+      c.on('end', function() {
+        console.log('server disconnected');
+      });
+      c.write('hello\r\n');
+      c.pipe(c);
+    });
+    server.listen(8124, function() { //'listening' listener
+      console.log('server bound');
+    });
+
+<!--
+
+Test this by using `telnet`:
+
+-->
+`telnet` を使ってテストします:
+
+    telnet localhost 8124
+
+<!--
+
+To listen on the socket `/tmp/echo.sock` the third line from the last would
+just be changed to
+
+-->
+`'/tmp/echo.sock'` へのソケットを待ち受けるには、最後から三行目をこのように変更します。
+
+    server.listen('/tmp/echo.sock', function() { //'listening' listener
+
+<!--
+
+Use `nc` to connect to a UNIX domain socket server:
+
+-->
+`nc` を使って UNIX ドメインソケットサーバへ接続します:
+
+    nc -U /tmp/echo.sock
+
+### net.connect(arguments...)
 ### net.createConnection(arguments...)
 
 <!--
 
 Construct a new socket object and opens a socket to the given location. When
-the socket is established the `'connect'` event will be emitted.
+the socket is established the ['connect'](#event_connect_) event will be
+emitted.
 
 -->
 新しいソケットオブジェクトを構築し、与えられたロケーションへのソケットをオープンします。
-ソケットが確立されると、`'connect'` イベントが生成されます。
+ソケットが確立されると、['connect'](#event_connect_) イベントが生成されます。
 
 <!--
 
-The arguments for this method change the type of connection:
+The arguments for these methods change the type of connection:
 
 -->
 このメソッドの引数はコネクションの種類によって変わります。
 
-* `net.createConnection(port, [host], [callback])`
+* `net.connect(port, [host], [connectListener])`
+* `net.createConnection(port, [host], [connectListener])`
 
 <!--
 
   Creates a TCP connection to `port` on `host`. If `host` is omitted,
-  `localhost` will be assumed.
+  `'localhost'` will be assumed.
 
 -->
-
   `host` 上の `port` に対する TCP コネクションを作成します。
   `host` が省略されると `localhost` が仮定されます。
 
-* `net.createConnection(path, [callback])`
+* `net.connect(path, [connectListener])`
+* `net.createConnection(path, [connectListener])`
 
 <!--
 
-  Creates unix socket connection to `path`
+  Creates unix socket connection to `path`.
 
 -->
-
   `path` に対する UNIX ドメインソケットを作成します。
 
 <!--
 
-The `callback` parameter will be added as an listener for the `'connect'` event.
+The `connectListener` parameter will be added as an listener for the
+['connect'](#event_connect_) event.
 
 -->
-`callback` 引数は `'connect'` イベントのリスナとして追加されます。
+`connectListener` 引数は ['connect'](#event_connect_)
+イベントのリスナとして追加されます。
+
+<!--
+
+Here is an example of a client of echo server as described previously:
+
+-->
+前述のエコーサーバに接続するクライアントの例:
+
+    var net = require('net');
+    var client = net.connect(8124, function() { //'connect' listener
+      console.log('client connected');
+      client.write('world!\r\n');
+    });
+    client.on('data', function(data) {
+      console.log(data.toString());
+      client.end();
+    });
+    client.on('end', function() {
+      console.log('client disconnected');
+    });
+
+<!--
+
+To connect on the socket `/tmp/echo.sock` the second line would just be
+changed to
+
+-->
+`'/tmp/echo.sock'` へのソケットに接続するには、2 行目をこのように変更します。
+
+    var client = net.connect('/tmp/echo.sock', function() { //'connect' listener
 
 ---
 
@@ -101,50 +187,7 @@ A server is a `net.Socket` that can listen for new incoming connections.
 このクラスは TCP または UNIX ドメインのサーバを作成するために使われます。
 サーバは `net.Scoket` であり、新たに到着する接続を待ち受けることができます。
 
-<!--
-
-Here is an example of a echo server which listens for connections
-on port 8124:
-
--->
-8124 番のポートへの接続を待ち受けるエコーサーバの例:
-
-    var net = require('net');
-    var server = net.createServer(function (c) {
-      c.write('hello\r\n');
-      c.pipe(c);
-    });
-    server.listen(8124, 'localhost');
-
-<!--
-
-Test this by using `telnet`:
-
--->
-`telnet` を使ってテストします:
-
-    telnet localhost 8124
-
-<!--
-
-To listen on the socket `/tmp/echo.sock` the last line would just be
-changed to
-
--->
-`'/tmp/echo.sock'` へのソケットを待ち受けるには、最後の行をこのように変更します。
-
-    server.listen('/tmp/echo.sock');
-
-<!--
-
-Use `nc` to connect to a UNIX domain socket server:
-
--->
-`nc` を使って UNIX ドメインソケットサーバへ接続します:
-
-    nc -U /tmp/echo.sock
-
-#### server.listen(port, [host], [callback])
+#### server.listen(port, [host], [listeningListener])
 
 <!--
 
@@ -160,11 +203,17 @@ IPv4 address (`INADDR_ANY`). A port value of zero will assign a random port.
 
 <!--
 
-This function is asynchronous. The last parameter `callback` will be called
-when the server has been bound.
+This function is asynchronous.  When the server has been bound,
+['listening'](#event_listening_) event will be emitted.
+the last parameter `listeningListener` will be added as an listener for the
+['listening'](#event_listening_) event.
 
 -->
-この関数は非同期です。最後の引数の `callback` はサーバがバインドすると呼び出されます。
+この関数は非同期です。
+サーバがバインドされると、['listening'](#event_listening_)
+イベントが生成されます。
+最後の引数 `listeningListener` は ['listening'](#event_listening_)
+のリスナとして加えられます。
 
 <!--
 
@@ -190,13 +239,13 @@ would be to wait a second and then try again. This can be done with
 
 <!--
 
-(Note: All sockets in Node are set SO_REUSEADDR already)
+(Note: All sockets in Node set `SO_REUSEADDR` already)
 
 -->
-注意: Node の全てのソケットは SO_REUSEADDR が設定されます)
+注意: Node の全てのソケットは `SO_REUSEADDR` が設定されます)
 
 
-#### server.listen(path, [callback])
+#### server.listen(path, [listeningListener])
 
 <!--
 
@@ -207,33 +256,15 @@ Start a UNIX socket server listening for connections on the given `path`.
 
 <!--
 
-This function is asynchronous. The last parameter `callback` will be called
-when the server has been bound.
+This function is asynchronous. The last parameter `listeningListener` will be
+called when the server has been bound.
+See also ['listening'](#event_listening_) event.
 
 -->
 この関数は非同期です。
-最後の引数の `callback` はサーバがバインドすると呼び出されます。
+最後の引数 `listeningListener` はサーバがバインドすると呼び出されます。
+['listening'](#event_listening_) イベントも参照してください。
 
-#### server.listenFD(fd)
-
-<!--
-
-Start a server listening for connections on the given file descriptor.
-
--->
-与えられたファイル記述子上のコネクションを待ち受けるサーバを開始します。
-
-<!--
-
-This file descriptor must have already had the `bind(2)` and `listen(2)` system
-calls invoked on it.  Additionally, it must be set non-blocking; try
-`fcntl(fd, F_SETFL, O_NONBLOCK)`.
-
--->
-このファイル記述子は既に `bind(2)` および
-`listen(2)` システムコールが呼び出されていなければなりません。
-加えて、ノンブロッキングに設定されていなければなりません。
-`fcntl(fd, F_SETFL, O_NONBLOCK)` を試してください。
 
 #### server.pause(msecs)
 
@@ -297,7 +328,8 @@ Example:
 
 <!--
 
-Set this property to reject connections when the server's connection count gets high.
+Set this property to reject connections when the server's connection count gets
+high.
 
 -->
 サーバの接続数が大きくなった時に接続を拒否するためにこのプロパティを設定します。
@@ -418,8 +450,8 @@ About `allowHalfOpen`, refer to `createServer()` and `'end'` event.
 指定できるのは `'tcp4'`、`'tcp6'` または `'unix'` のいずれかです。
 `allowHalfOpen` については `createServer()` および `'end'` イベントを参照してください。
 
-#### socket.connect(port, [host], [callback])
-#### socket.connect(path, [callback])
+#### socket.connect(port, [host], [connectListener])
+#### socket.connect(path, [connectListener])
 
 <!--
 
@@ -449,23 +481,25 @@ Socket is closed and you want to reuse it to connect to another server.
 
 <!--
 
-This function is asynchronous. When the `'connect'` event is emitted the
-socket is established. If there is a problem connecting, the `'connect'`
-event will not be emitted, the `'error'` event will be emitted with
+This function is asynchronous. When the ['connect'](#event_connect_) event is
+emitted the socket is established. If there is a problem connecting, the
+`'connect'` event will not be emitted, the `'error'` event will be emitted with
 the exception.
 
 -->
-この関数は非同期です。ソケットが確立されると `'connect'` イベントが生成されます。
+この関数は非同期です。ソケットが確立されると ['connect'](#event_connect_)
+イベントが生成されます。
 接続で問題があった場合は `'connect'` イベントは生成されず、
 例外とともに `'error'` イベントが生成されます。
 
 <!--
 
-The `callback` parameter will be added as an listener for the 'connect'
-event.
+The `connectListener` parameter will be added as an listener for the
+['connect'](#event_connect_) event.
 
 -->
-`callback` 引数は 'connect' イベントのリスナに加えられます。
+`connectListener` 引数は ['connect'](#event_connect_)
+イベントのリスナに加えられます。
 
 
 #### socket.bufferSize
@@ -474,10 +508,10 @@ event.
 
 `net.Socket` has the property that `socket.write()` always works. This is to
 help users get up and running quickly. The computer cannot always keep up
-with the amount of data that is written to a socket - the network connection simply
-might be too slow. Node will internally queue up the data written to a socket and
-send it out over the wire when it is possible. (Internally it is polling on
-the socket's file descriptor for being writable).
+with the amount of data that is written to a socket - the network connection
+simply might be too slow. Node will internally queue up the data written to a
+socket and send it out over the wire when it is possible. (Internally it is
+polling on the socket's file descriptor for being writable).
 
 The consequence of this internal buffering is that memory may grow. This
 property shows the number of characters currently buffered to be written.
@@ -555,18 +589,16 @@ written out - this may not be immediately.
 オプションの `callback` 引数はデータが最終的に出力された時に実行されます
 － これはすぐには起きないでしょう。
 
-#### socket.write(data, [encoding], [fileDescriptor], [callback])
+#### socket.write(data, [encoding], [callback])
 
 <!--
 
-For UNIX sockets, it is possible to send a file descriptor through the
-socket. Simply add the `fileDescriptor` argument and listen for the `'fd'`
-event on the other end.
+Write data with the optional encoding. The callback will be made when the
+data is flushed to the kernel.
 
 -->
-UNIX ソケットの場合、ファイル記述子をソケットに送信することができます。
-単純に `fileDescriptor` 引数を加えることで、相手側には `'fd'` イベントが生成されます。
-
+データを出力します。オプションのエンコーディングを指定することができます。
+コールバックはデータがカーネルにフラッシュされると呼び出されます。
 
 #### socket.end([data], [encoding])
 
@@ -581,8 +613,8 @@ server will still send some data.
 
 <!--
 
-If `data` is specified, it is equivalent to calling `socket.write(data, encoding)`
-followed by `socket.end()`.
+If `data` is specified, it is equivalent to calling
+`socket.write(data, encoding)` followed by `socket.end()`.
 
 -->
 `data` が指定された場合は、
@@ -648,7 +680,8 @@ If `timeout` is 0, then the existing idle timeout is disabled.
 
 <!--
 
-The optional `callback` parameter will be added as a one time listener for the `'timeout'` event.
+The optional `callback` parameter will be added as a one time listener for the
+`'timeout'` event.
 
 -->
 オプションの `callback` 引数は、`timeouot` イベントの一回限りのリスナを追加します。
@@ -688,8 +721,9 @@ initialDelay will leave the value unchanged from the default
 
 <!--
 
-Returns the bound address and port of the socket as reported by the operating system.
-Returns an object with two properties, e.g. `{"address":"192.168.57.1", "port":62053}`
+Returns the bound address and port of the socket as reported by the operating
+system. Returns an object with two properties, e.g.
+`{"address":"192.168.57.1", "port":62053}`
 
 -->
 オペレーティングシステムから報告された、ソケットにバインドされたアドレスとポートを返します。
@@ -774,7 +808,8 @@ See `connect()`.
 
 Emitted when data is received.  The argument `data` will be a `Buffer` or
 `String`.  Encoding of data is set by `socket.setEncoding()`.
-(See the [Readable Stream](streams.html#readable_Stream) section for more information.)
+(See the [Readable Stream](streams.html#readable_Stream) section for more
+information.)
 
 -->
 データを受信した場合に生成されます。

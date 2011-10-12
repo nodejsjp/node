@@ -19,7 +19,7 @@ Throws an exception that displays the values for `actual` and `expected` separat
 `actual` と `expected` を `operator` で区切ったメッセージを持つ例外を
 スローします。
 
-### assert.ok(value, [message])
+### assert(value, message), assert.ok(value, [message])
 
 <!--
 
