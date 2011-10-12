@@ -75,20 +75,6 @@ will emit this.  (For example, an incoming HTTP request will not emit
 全てのストリームがこのイベントを発生するわけではありません。
 (例えば、インカミングの HTTP リクエストは `'close'` イベントを生成しません。)
 
-### Event: 'fd'
-
-`function (fd) { }`
-
-<!--
-
-Emitted when a file descriptor is received on the stream. Only UNIX streams
-support this functionality; all others will simply never emit this event.
-
--->
-ストリームに関するファイル記述子を受け取った時に生成されます。
-UNIX ストリームだけがこの機能をサポートしています;
-その他の全てのストリームはこのイベントを生成しません。
-
 ### stream.readable
 
 <!--
