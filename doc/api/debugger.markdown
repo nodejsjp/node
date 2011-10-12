@@ -91,13 +91,103 @@ Then once the debugger is run, it will break on line 4.
 <!--
 The `repl` command allows you to evaluate code remotely. The `next` command
 steps over to the next line. There are a few other commands available and more
-to come type `help` to see others.
+to come. Type `help` to see others.
 -->
 ``repl`` コマンドはコードをリモートで評価します。
 ``next`` コマンドは次の行にステップオーバーします。
 他にもいくつかのコマンドを利用することができます。
-それらについては ``help`` をタイプしてください。
+その他については ``help`` をタイプしてください。
 
+### Watchers
+
+<!--
+You can watch expression and variable values while debugging your code.
+On every breakpoint each expression from the watchers list will be evaluated
+in the current context and displayed just before the breakpoint's source code
+listing.
+-->
+デバッグ中に式や変数の値をウォッチすることができます。
+全てのブレークポイントにおいて、ウォッチリストのそれぞれの式は
+現在のコンテキストで評価され、ブレークポイントのソースコードの前に
+表示されます。
+
+<!--
+To start watching an expression, type `watch("my_expression")`. `watchers`
+prints the active watchers. To remove a watcher, type
+`unwatch("my_expression")`.
+-->
+式のウォッチを開始するには、`watch("my_expression")` をタイプします。
+`watchers` はアクティブなウォッチの一覧を表示します。
+ウォッチを解除するには、`unwatch("my_expression")` とタイプします。
+
+### Commands reference
+
+#### Stepping
+
+<!--
+* `cont`, `c` - Continue execution
+* `next`, `n` - Step next
+* `step`, `s` - Step in
+* `out`, `o` - Step out
+-->
+* `cont`, `c` - 実行を継続します。
+* `next`, `n` - 次の行へステップオーバーします。
+* `step`, `s` - ステップインします。
+* `out`, `o` - ステップアウトします。
+
+#### Breakpoints
+
+<!--
+* `setBreakpoint()`, `sb()` - Set breakpoint on current line
+* `setBreakpoint('fn()')`, `sb(...)` - Set breakpoint on a first statement in
+functions body
+* `setBreakpoint('script.js', 1)`, `sb(...)` - Set breakpoint on first line of
+script.js
+* `clearBreakpoint`, `cb(...)` - Clear breakpoint
+-->
+* `setBreakpoint()`, `sb()` - 現在行にブレークポイントを設定します。
+* `setBreakpoint('fn()')`, `sb(...)` - 指定した関数の先頭行にブレークポイントを設定します
+* `setBreakpoint('script.js', 1)`, `sb(...)` - 指定したスクリプトファイルの指定した行にブレークポイントを設定します。
+* `clearBreakpoint`, `cb(...)` - ブレークポイントを削除します。
+
+#### Info
+
+<!--
+* `backtrace`, `bt` - Print backtrace of current execution frame
+* `list(5)` - List scripts source code with 5 line context (5 lines before and
+after)
+* `watch(expr)` - Add expression to watch list
+* `unwatch(expr)` - Remove expression from watch list
+* `watchers` - List all watchers and their values (automatically listed on each
+breakpoint)
+* `repl` - Open debugger's repl for evaluation in debugging script's context
+-->
+* `backtrace`, `bt` - 現在の実行フレームのバックトレースを表示します。
+* `list(5)` - 現在の行の前後のソースコードを表示します (例では前後とも 5 行が表示されます)。
+* `watch(expr)` - 式をウォッチリストに追加します。
+* `unwatch(expr)` - 式をウォッチリストから削除します。
+* `watchers` - ウォッチしている全ての式とその値を表示します (各ブレークポイントで自動的に表示されます)。
+* `repl` - デバッグしているスクリプトをコンテキストとする REPL を開きます。
+
+#### Execution control
+
+<!--
+* `run` - Run script (automatically runs on debugger's start)
+* `restart` - Restart script
+* `kill` - Kill script
+-->
+* `run` - スクリプトを実行します (デバッガを開始すると自動的に実行します)。
+* `restart` - スクリプトを再実行します。
+* `kill` - スクリプトを終了します。
+
+#### Various
+
+<!--
+* `scripts` - List all loaded scripts
+* `version` - Display v8's version
+-->
+* `scripts` - ロードされている全スクリプトの一覧を表示します。
+* `version` - v8 のバージョンを表示します。
 
 ### Advanced Usage
 
