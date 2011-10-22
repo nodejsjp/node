@@ -58,12 +58,6 @@ typedef int mode_t;
 
 #if defined(__MINGW32__) || defined(_MSC_VER)
 # include <platform_win32.h> /* winapi_perror() */
-# ifdef PTW32_STATIC_LIB
-extern "C" {
-  BOOL __cdecl pthread_win32_process_attach_np (void);
-  BOOL __cdecl pthread_win32_process_detach_np (void);
-}
-# endif
 #endif
 
 #ifdef __POSIX__
@@ -77,20 +71,13 @@ extern "C" {
 #ifdef __POSIX__
 # include <node_io_watcher.h>
 #endif
-#include <node_net.h>
-#include <node_cares.h>
 #include <node_file.h>
 #include <node_http_parser.h>
 #ifdef __POSIX__
 # include <node_signal_watcher.h>
 # include <node_stat_watcher.h>
-# include <node_timer.h>
-#endif
-#if !defined(_MSC_VER)
-#include <node_child_process.h>
 #endif
 #include <node_constants.h>
-#include <node_stdio.h>
 #include <node_javascript.h>
 #include <node_version.h>
 #include <node_string.h>
@@ -119,7 +106,6 @@ static Persistent<String> errpath_symbol;
 static Persistent<String> code_symbol;
 
 static Persistent<String> rss_symbol;
-static Persistent<String> vsize_symbol;
 static Persistent<String> heap_total_symbol;
 static Persistent<String> heap_used_symbol;
 
@@ -141,8 +127,6 @@ static uv_idle_t tick_spinner;
 static bool need_tick_cb;
 static Persistent<String> tick_callback_sym;
 
-
-static bool use_uv = true;
 
 #ifdef OPENSSL_NPN_NEGOTIATED
 static bool use_npn = true;
@@ -184,7 +168,7 @@ static void CheckStatus(uv_timer_t* watcher, int status);
 
 static void StartGCTimer () {
   if (!uv_is_active((uv_handle_t*) &gc_timer)) {
-    uv_timer_start(&node::gc_timer, node::CheckStatus, 5000., 5000.);
+    uv_timer_start(&node::gc_timer, node::CheckStatus, 5000, 5000);
   }
 }
 
@@ -1020,7 +1004,7 @@ Local<Value> ErrnoException(int errorno,
   Local<String> cons1 = String::Concat(estring, String::NewSymbol(", "));
   Local<String> cons2 = String::Concat(cons1, message);
 
-  if (errno_symbol.IsEmpty()) {
+  if (syscall_symbol.IsEmpty()) {
     syscall_symbol = NODE_PSYMBOL("syscall");
     errno_symbol = NODE_PSYMBOL("errno");
     errpath_symbol = NODE_PSYMBOL("path");
@@ -1096,11 +1080,21 @@ void MakeCallback(Handle<Object> object,
 }
 
 
-void SetErrno(uv_err_code code) {
-  uv_err_t err;
-  err.code = code;
-  Context::GetCurrent()->Global()->Set(String::NewSymbol("errno"),
-                                       String::NewSymbol(uv_err_name(err)));
+void SetErrno(uv_err_t err) {
+  HandleScope scope;
+
+  if (errno_symbol.IsEmpty()) {
+    errno_symbol = NODE_PSYMBOL("errno");
+  }
+
+  if (err.code == UV_UNKNOWN) {
+    char errno_buf[100];
+    snprintf(errno_buf, 100, "Unknown system errno %d", err.sys_errno_);
+    Context::GetCurrent()->Global()->Set(errno_symbol, String::New(errno_buf));
+  } else {
+    Context::GetCurrent()->Global()->Set(errno_symbol,
+                                         String::NewSymbol(uv_err_name(err)));
+  }
 }
 
 
@@ -1242,7 +1236,8 @@ void DisplayExceptionLine (TryCatch &try_catch) {
 
   Handle<Message> message = try_catch.Message();
 
-  node::Stdio::DisableRawMode(STDIN_FILENO);
+  uv_tty_reset_mode();
+
   fprintf(stderr, "\n");
 
   if (!message.IsEmpty()) {
@@ -1596,9 +1591,9 @@ v8::Handle<v8::Value> MemoryUsage(const v8::Arguments& args) {
   HandleScope scope;
   assert(args.Length() == 0);
 
-  size_t rss, vsize;
+  size_t rss;
 
-  int r = Platform::GetMemory(&rss, &vsize);
+  int r = Platform::GetMemory(&rss);
 
   if (r != 0) {
     return ThrowException(Exception::Error(String::New(strerror(errno))));
@@ -1608,13 +1603,11 @@ v8::Handle<v8::Value> MemoryUsage(const v8::Arguments& args) {
 
   if (rss_symbol.IsEmpty()) {
     rss_symbol = NODE_PSYMBOL("rss");
-    vsize_symbol = NODE_PSYMBOL("vsize");
     heap_total_symbol = NODE_PSYMBOL("heapTotal");
     heap_used_symbol = NODE_PSYMBOL("heapUsed");
   }
 
   info->Set(rss_symbol, Integer::NewFromUnsigned(rss));
-  info->Set(vsize_symbol, Integer::NewFromUnsigned(vsize));
 
   // V8 memory usage
   HeapStatistics v8_heap_stats;
@@ -1902,13 +1895,6 @@ static Handle<Value> Binding(const Arguments& args) {
     binding_cache->Set(module, exports);
 #endif
 
-  } else if (!strcmp(*module_v, "timer")) {
-#ifdef __POSIX__
-    exports = Object::New();
-    Timer::Initialize(exports);
-    binding_cache->Set(module, exports);
-
-#endif
   } else if (!strcmp(*module_v, "natives")) {
     exports = Object::New();
     DefineJavaScript(exports);
@@ -1950,17 +1936,6 @@ static Handle<Value> EnvGetter(Local<String> property,
     return scope.Close(String::New(val));
   }
   return Undefined();
-}
-
-
-static bool ENV_warning = false;
-static Handle<Value> EnvGetterWarn(Local<String> property,
-                                   const AccessorInfo& info) {
-  if (!ENV_warning) {
-    ENV_warning = true;
-    fprintf(stderr, "(node) Use process.env instead of process.ENV\r\n");
-  }
-  return EnvGetter(property, info);
 }
 
 
@@ -2056,7 +2031,7 @@ static Handle<Object> GetFeatures() {
 #endif
   );
 
-  obj->Set(String::NewSymbol("uv"), Boolean::New(use_uv));
+  obj->Set(String::NewSymbol("uv"), True());
   obj->Set(String::NewSymbol("ipv6"), True()); // TODO ping libuv
   obj->Set(String::NewSymbol("tls_npn"), Boolean::New(use_npn));
   obj->Set(String::NewSymbol("tls_sni"), Boolean::New(use_sni));
@@ -2105,7 +2080,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 #if HAVE_OPENSSL
   // Stupid code to slice out the version string.
   int c, l = strlen(OPENSSL_VERSION_TEXT);
-  for (i = 0; i < l; i++) {
+  for (i = j = 0; i < l; i++) {
     c = OPENSSL_VERSION_TEXT[i];
     if ('0' <= c && c <= '9') {
       for (j = i + 1; j < l; j++) {
@@ -2135,7 +2110,6 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
     arguments->Set(Integer::New(j), arg);
   }
   // assign it
-  process->Set(String::NewSymbol("ARGV"), arguments);
   process->Set(String::NewSymbol("argv"), arguments);
 
   // create process.env
@@ -2148,18 +2122,6 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
                                        Undefined());
   Local<Object> env = envTemplate->NewInstance();
   process->Set(String::NewSymbol("env"), env);
-
-  // create process.ENV
-  // TODO: remove me at some point.
-  Local<ObjectTemplate> ENVTemplate = ObjectTemplate::New();
-  ENVTemplate->SetNamedPropertyHandler(EnvGetterWarn,
-                                       EnvSetter,
-                                       EnvQuery,
-                                       EnvDeleter,
-                                       EnvEnumerator,
-                                       Undefined());
-  Local<Object> ENV = ENVTemplate->NewInstance();
-  process->Set(String::NewSymbol("ENV"), ENV);
 
   process->Set(String::NewSymbol("pid"), Integer::New(getpid()));
   process->Set(String::NewSymbol("features"), GetFeatures());
@@ -2211,7 +2173,6 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 
 
 static void AtExit() {
-  node::Stdio::Flush();
   uv_tty_reset_mode();
 }
 
@@ -2297,7 +2258,8 @@ static void ParseDebugOpt(const char* arg) {
 
 static void PrintHelp() {
   printf("Usage: node [options] [ -e script | script.js ] [arguments] \n"
-         "       node debug [ -e script | script.js ] [arguments] \n"
+         "       node debug script.js [arguments] \n"
+         "       node cluster script.js [arguments] \n"
          "\n"
          "Options:\n"
          "  -v, --version        print node's version\n"
@@ -2305,7 +2267,6 @@ static void PrintHelp() {
          "  --v8-options         print v8 command line options\n"
          "  --vars               print various compiled-in variables\n"
          "  --max-stack-size=val set max v8 stack size (bytes)\n"
-         "  --use-legacy         use the legacy backend (default: libuv)\n"
          "\n"
          "Enviromental variables:\n"
          "NODE_PATH              ':'-separated list of directories\n"
@@ -2326,9 +2287,6 @@ static void ParseArgs(int argc, char **argv) {
     const char *arg = argv[i];
     if (strstr(arg, "--debug") == arg) {
       ParseDebugOpt(arg);
-      argv[i] = const_cast<char*>("");
-    } else if (!strcmp(arg, "--use-legacy")) {
-      use_uv = false;
       argv[i] = const_cast<char*>("");
     } else if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
       printf("%s\n", NODE_VERSION);
@@ -2548,11 +2506,6 @@ void EmitExit(v8::Handle<v8::Object> process) {
 
 
 int Start(int argc, char *argv[]) {
-
-#if (defined(__MINGW32__) || defined(_MSC_VER)) && defined(PTW32_STATIC_LIB)
-  pthread_win32_process_attach_np();
-#endif
-
   // This needs to run *before* V8::Initialize()
   argv = Init(argc, argv);
 
@@ -2584,10 +2537,6 @@ int Start(int argc, char *argv[]) {
   context.Dispose();
   V8::Dispose();
 #endif  // NDEBUG
-
-#if (defined(__MINGW32__) || defined(_MSC_VER)) && defined(PTW32_STATIC_LIB)
-  pthread_win32_process_detach_np();
-#endif
 
   return 0;
 }

@@ -396,6 +396,31 @@ A compiled-in property that exposes `NODE_VERSION`.
 
     console.log('Version: ' + process.version);
 
+### process.versions
+
+<!--
+
+A property exposing version strings of node and its dependencies.
+
+-->
+node と依存ライブラリのバージョン文字列を提示します。
+
+    console.log(process.versions);
+
+<!--
+
+Will output:
+
+-->
+は以下を出力します。
+
+    { node: '0.4.12',
+      v8: '3.1.8.26',
+      ares: '1.7.4',
+      ev: '4.4',
+      openssl: '1.0.0e-fips' }
+
+
 ### process.installPrefix
 
 <!--
@@ -521,7 +546,6 @@ This will generate:
 このように生成されます:
 
     { rss: 4935680,
-      vsize: 41893888,
       heapTotal: 1826816,
       heapUsed: 650472 }
 

@@ -263,6 +263,19 @@ static void open_cb(uv_fs_t* req) {
 }
 
 
+static void open_cb_simple(uv_fs_t* req) {
+  ASSERT(req->fs_type == UV_FS_OPEN);
+  if (req->result < 0) {
+    /* TODO get error with uv_last_error() */
+    fprintf(stderr, "async open error: %d\n", req->errorno);
+    ASSERT(0);
+  }
+  open_cb_count++;
+  ASSERT(req->path);
+  uv_fs_req_cleanup(req);
+}
+
+
 static void fsync_cb(uv_fs_t* req) {
   int r;
   ASSERT(req == &fsync_req);
@@ -359,6 +372,17 @@ static void empty_readdir_cb(uv_fs_t* req) {
   ASSERT(req->fs_type == UV_FS_READDIR);
   ASSERT(req->result == 0);
   ASSERT(req->ptr == NULL);
+  uv_fs_req_cleanup(req);
+  readdir_cb_count++;
+}
+
+
+static void file_readdir_cb(uv_fs_t* req) {
+  ASSERT(req == &readdir_req);
+  ASSERT(req->fs_type == UV_FS_READDIR);
+  ASSERT(req->result == -1);
+  ASSERT(req->ptr == NULL);
+  ASSERT(uv_last_error(req->loop).code == UV_ENOTDIR);
   uv_fs_req_cleanup(req);
   readdir_cb_count++;
 }
@@ -1330,6 +1354,57 @@ TEST_IMPL(fs_readdir_empty_dir) {
 
   uv_fs_rmdir(loop, &req, path, NULL);
   uv_fs_req_cleanup(&req);
+
+  return 0;
+}
+
+
+TEST_IMPL(fs_readdir_file) {
+  const char* path;
+  int r;
+
+  path = "test/fixtures/empty_file";
+  loop = uv_default_loop();
+
+  r = uv_fs_readdir(loop, &readdir_req, path, 0, NULL);
+  ASSERT(r == -1);
+  ASSERT(uv_last_error(loop).code == UV_ENOTDIR);
+
+  r = uv_fs_readdir(loop, &readdir_req, path, 0, file_readdir_cb);
+  ASSERT(r == 0);
+
+  ASSERT(readdir_cb_count == 0);
+  uv_run(loop);
+  ASSERT(readdir_cb_count == 1);
+
+  return 0;
+}
+
+
+TEST_IMPL(fs_open_dir) {
+  const char* path;
+  uv_fs_t req;
+  int r, file;
+
+  path = ".";
+  loop = uv_default_loop();
+
+  r = uv_fs_open(loop, &req, path, O_RDONLY, 0, NULL);
+  ASSERT(r != -1);
+  ASSERT(req.result != -1);
+  ASSERT(req.ptr == NULL);
+  file = r;
+  uv_fs_req_cleanup(&req);
+
+  r = uv_fs_close(loop, &req, file, NULL);
+  ASSERT(r == 0);
+
+  r = uv_fs_open(loop, &req, path, O_RDONLY, 0, open_cb_simple);
+  ASSERT(r == 0);
+
+  ASSERT(open_cb_count == 0);
+  uv_run(loop);
+  ASSERT(open_cb_count == 1);
 
   return 0;
 }

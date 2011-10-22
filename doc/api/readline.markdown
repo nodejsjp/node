@@ -43,6 +43,15 @@ substr2, ...], originalsubstring]`.
 を返します。
 
 <!--
+Also `completer` can be run in async mode if it accepts two arguments:
+-->
+`completer` が二つの引数を持つなら、それは非同期モードで実行されます。
+
+  function completer(linePartial, callback) {
+    callback(null, [['123'], linePartial]);
+  }
+
+<!--
 `createInterface` is commonly used with `process.stdin` and
 `process.stdout` in order to accept user input:
 -->

@@ -25,33 +25,18 @@ API はいくつかのライブラリの知識が必要で、(現時点では) �
 
 <!--
 
- - libev, C event loop library. Anytime one needs to wait for a file
-   descriptor to become readable, wait for a timer, or wait for a signal to
-   received one will need to interface with libev.  That is, if you perform
-   any I/O, libev will need to be used.  Node uses the `EV_DEFAULT` event
-   loop.  Documentation can be found [here](http://cvs.schmorp.de/libev/ev.html).
+ - [libuv](https://github.com/joyent/libuv), C event loop library. Anytime one
+   needs to wait for a file descriptor to become readable, wait for a timer, or
+   wait for a signal to received one will need to interface with libuv. That is,
+   if you perform any I/O, libuv will need to be used.
 
 -->
- - libev は C の event loop ライブラリです。
-   ファイル記述子が読み取り可能になるのを待つとき、タイマーを待つとき、シグナルを受信するのを待つときはいつでも、
+ - [libuv](https://github.com/joyent/libuv) は
+   C のイベントループライブラリです。
+   ファイル記述子が読み取り可能になるのを待つとき、タイマーを待つとき、
+   シグナルを受信するのを待つときはいつでも、
    libv のインタフェースが必要になります。
-   つまり、何らかの I/O 処理をすると必ず libev を使う必要があるということです。
-   Node は `EV_DEFAULT` というイベントループを使います。
-   ドキュメントは、[こちら](http:/cvs.schmorp.de/libev/ev.html) にあります。
-
-<!--
-
- - libeio, C thread pool library. Used to execute blocking POSIX system
-   calls asynchronously. Mostly wrappers already exist for such calls, in
-   `src/file.cc` so you will probably not need to use it. If you do need it,
-   look at the header file `deps/libeio/eio.h`.
-
--->
- - libeio は C のスレッドプールライブラリです。
-   ブロックする POSIX システムコールを非同期に実行するために使用されます。
-   こういった呼び出しのための大抵のラッパーは、既に `src/file.cc` に用意されているので、
-   おそらくこれを使う必要はないでしょう。
-   必要になったら、`deps/libeio/eio.h` のヘッダファイルを参照して下さい。
+   つまり、何らかの I/O 処理をすると必ず libuv を使う必要があるということです。
 
 <!--
 
@@ -88,7 +73,7 @@ C++:
 -->
 では、 C++ で以下の様に動作する小さなアドオンを作成してみましょう。
 
-    exports.hello = 'world';
+    exports.hello = function() { return 'world'; };
 
 <!--
 
@@ -102,12 +87,15 @@ To get started we create a file `hello.cc`:
 
     using namespace v8;
 
-    extern "C" void
-    init (Handle<Object> target)
-    {
+    Handle<Value> Method(const Arguments &args) {
       HandleScope scope;
-      target->Set(String::New("hello"), String::New("world"));
+      return String::New("world");
     }
+
+    void init (Handle<Object> target) {
+      NODE_SET_METHOD(target, Method);
+    }
+    NODE_MODULE(hello, init)
 
 <!--
 
@@ -154,12 +142,13 @@ provided for the ease of users.
 
 <!--
 
-All Node addons must export a function called `init` with this signature:
+All Node addons must export an initialization function:
 
 -->
-全ての Node アドオンは次のシグネチャを持つ `init` という関数をエクスポートする必要が有ります:
+全ての Node アドオンは初期化関数をエクスポートする必要が有ります:
 
-    extern 'C' void init (Handle<Object> target)
+    void Initialize (Handle<Object> target);
+    NODE_MODULE(hello, Initialize)
 
 <!--
 

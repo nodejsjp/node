@@ -316,6 +316,7 @@ static void uv_tcp_queue_accept(uv_tcp_t* handle, uv_tcp_accept_t* req) {
           INFINITE, WT_EXECUTEINWAITTHREAD)) {
       SET_REQ_ERROR(req, GetLastError());
       uv_insert_pending_req(loop, (uv_req_t*)req);
+      handle->reqs_pending++;
       return;
     }
   } else {
@@ -335,7 +336,7 @@ static void uv_tcp_queue_accept(uv_tcp_t* handle, uv_tcp_accept_t* req) {
 
 
 static void uv_tcp_queue_read(uv_loop_t* loop, uv_tcp_t* handle) {
-  uv_req_t* req;
+  uv_read_t* req;
   uv_buf_t buf;
   int result;
   DWORD bytes, flags;
@@ -375,7 +376,7 @@ static void uv_tcp_queue_read(uv_loop_t* loop, uv_tcp_t* handle) {
     handle->flags |= UV_HANDLE_READ_PENDING;
     req->overlapped.InternalHigh = bytes;
     handle->reqs_pending++;
-    uv_insert_pending_req(loop, req);
+    uv_insert_pending_req(loop, (uv_req_t*)req);
   } else if (UV_SUCCEEDED_WITH_IOCP(result == 0)) {
     /* The req will be processed with IOCP. */
     handle->flags |= UV_HANDLE_READ_PENDING;
@@ -383,7 +384,7 @@ static void uv_tcp_queue_read(uv_loop_t* loop, uv_tcp_t* handle) {
   } else {
     /* Make this req pending reporting an error. */
     SET_REQ_ERROR(req, WSAGetLastError());
-    uv_insert_pending_req(loop, req);
+    uv_insert_pending_req(loop, (uv_req_t*)req);
     handle->reqs_pending++;
   }
 }
@@ -846,6 +847,7 @@ void uv_process_tcp_write_req(uv_loop_t* loop, uv_tcp_t* handle,
     uv_write_t* req) {
   assert(handle->type == UV_TCP);
 
+  assert(handle->write_queue_size >= req->queued_bytes);
   handle->write_queue_size -= req->queued_bytes;
 
   if (req->cb) {
@@ -953,4 +955,16 @@ int uv_tcp_import(uv_tcp_t* tcp, WSAPROTOCOL_INFOW* socket_protocol_info) {
   tcp->flags |= UV_HANDLE_BOUND;
 
   return uv_tcp_set_socket(tcp->loop, tcp, socket, 1);
+}
+
+
+int uv_tcp_nodelay(uv_tcp_t* handle, int enable) {
+  uv__set_artificial_error(handle->loop, UV_ENOSYS);
+  return -1;
+}
+
+
+int uv_tcp_keepalive(uv_tcp_t* handle, int enable, unsigned int delay) {
+  uv__set_artificial_error(handle->loop, UV_ENOSYS);
+  return -1;
 }

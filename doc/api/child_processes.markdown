@@ -137,7 +137,6 @@ The third argument is used to specify additional options, which defaults to:
 
     { cwd: undefined,
       env: process.env,
-      customFds: [-1, -1, -1],
       setsid: false
     }
 
@@ -145,15 +144,25 @@ The third argument is used to specify additional options, which defaults to:
 
 `cwd` allows you to specify the working directory from which the process is spawned.
 Use `env` to specify environment variables that will be visible to the new process.
-With `customFds` it is possible to hook up the new process' [stdin, stdout, stderr] to
-existing streams; `-1` means that a new stream should be created. `setsid`,
-if set true, will cause the subprocess to be run in a new session.
+
+There is a deprecated option called `customFds` which allows one to specify
+specific file descriptors for the stdio of the child process. This API is
+was not portable to all platforms and therefore removed. 
+With `customFds` it was possible to hook up the new process' [stdin, stdout,
+stderr] to existing streams; `-1` meant that a new stream should be created.
+
+`setsid`, if set true, will cause the subprocess to be run in a new session.
 
 -->
 `cwd` で起動されたプロセスのワーキングディレクトリを指定することができます。
 `env` は新しいプロセスに見える環境変数を指定するために使います。
-`customFds` は新しいプロセスの [stdin, stdout, stderr] を既存のストリームに接続することを可能にします;
-`-1` は新しいストリームが作られなければならないことを意味します。
+
+特定のファイル記述子を子プロセスの標準入出力に指定することを可能にする、
+`customFds` と呼ばれる廃止されたオプションがありました。
+この API は全てのプラットフォームに移植可能ではないために削除されました。
+`customFds` は新しいプロセスの [stdin, stdout, stderr] を既存のストリームに接続することを可能にしました;
+`-1` は新しいストリームが作られなければならないことを意味していました。
+
 `setsid` に true が設定されると、サブプロセスは新しいセッションで実行されます。
 
 <!--
@@ -239,6 +248,17 @@ exec の失敗をチェックする例:
       }
     });
 
+<!--
+
+Note that if spawn receives an empty options object, it will result in
+spawning the process with an empty environment rather than using
+`process.env`. This due to backwards compatibility issues with a deprecated
+API.
+
+-->
+`spawn()` は空の `options` オブジェクトを受け取ると、
+`process.env` を使うのではなく，空の環境変数で子プロセスを起動します。
+これは廃止された API との互換性のためです。
 
 <!--
 
@@ -386,13 +406,11 @@ will emit objects each time it receives a message on its channel.
 <!--
 
 By default the spawned Node process will have the stdin, stdout, stderr
-associated with the parent's. This can be overridden by using the
-`customFds` option.
+associated with the parent's.
 
 -->
 デフォルトでは、起動された Node プロセスは親プロセスに関連づけられた標準入力、
 標準出力、標準エラー出力を持ちます。
-これは `customFds` オプションによって上書きすることが出来ます。
 
 <!--
 
@@ -422,7 +440,9 @@ another process. Child will receive the handle as as second argument to the
     var server = require('net').createServer();
     var child = require('child_process').fork(__dirname + '/child.js');
     // Open up the server object and send the handle.
-    child.send({ server: true }, server._handle);
+    server.listen(1337, function() {
+      child.send({ server: true }, server._handle);
+    });
 
 <!--
 

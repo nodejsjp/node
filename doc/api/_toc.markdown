@@ -34,6 +34,7 @@
 * [ZLIB](zlib.html)
 * [OS](os.html)
 * [Debugger](debugger.html)
+* [Cluster](cluster.html)
 * Appendixes
   * [Appendix 1: Recommended Third-party Modules](appendix_1.html)
   * [Appendix 2: Deprecated API's](appendix_2.html)
@@ -71,6 +72,7 @@
 * [ZLIB](zlib.html)
 * [OS](os.html)
 * [デバッガ](debugger.html)
+* [クラスタ](cluster.html)
 * 付録
   * [付録 1: 推奨されるサードパーティ製のモジュール](appendix_1.html)
   * [付録 2: 廃止された API](appendix_2.html)
