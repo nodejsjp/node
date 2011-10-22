@@ -86,12 +86,24 @@ int uv__stream_open(uv_stream_t* stream, int fd, int flags) {
 
   stream->flags |= flags;
 
-  /* Reuse the port address if applicable. */
-  yes = 1;
-  if (stream->type == UV_TCP
-      && setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1) {
-    uv__set_sys_error(stream->loop, errno);
-    return -1;
+  if (stream->type == UV_TCP) {
+    /* Reuse the port address if applicable. */
+    yes = 1;
+    if (setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof yes) == -1) {
+      uv__set_sys_error(stream->loop, errno);
+      return -1;
+    }
+
+    if ((stream->flags & UV_TCP_NODELAY) &&
+        uv__tcp_nodelay((uv_tcp_t*)stream, 1)) {
+      return -1;
+    }
+
+    /* TODO Use delay the user passed in. */
+    if ((stream->flags & UV_TCP_KEEPALIVE) &&
+        uv__tcp_keepalive((uv_tcp_t*)stream, 1, 60)) {
+      return -1;
+    }
   }
 
   /* Associate the fd with each ev_io watcher. */
@@ -209,8 +221,8 @@ int uv_accept(uv_stream_t* server, uv_stream_t* client) {
   if (uv__stream_open(streamClient, streamServer->accepted_fd,
         UV_READABLE | UV_WRITABLE)) {
     /* TODO handle error */
-    streamServer->accepted_fd = -1;
     uv__close(streamServer->accepted_fd);
+    streamServer->accepted_fd = -1;
     goto out;
   }
 
@@ -482,7 +494,6 @@ static void uv__read(uv_stream_t* stream) {
   struct msghdr msg;
   struct cmsghdr* cmsg;
   char cmsg_space[64];
-  int received_fd = -1;
   struct ev_loop* ev = stream->loop->ev;
 
   /* XXX: Maybe instead of having UV_READING we just test if
@@ -564,7 +575,7 @@ static void uv__read(uv_stream_t* stream) {
       return;
     } else {
       /* Successful read */
-      size_t buflen = buf.len;
+      ssize_t buflen = buf.len;
 
       if (stream->read_cb) {
         stream->read_cb(stream, nread, buf);

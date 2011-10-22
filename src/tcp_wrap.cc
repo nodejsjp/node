@@ -5,6 +5,8 @@
 #include <stream_wrap.h>
 #include <tcp_wrap.h>
 
+#include <stdlib.h>
+
 // Temporary hack: libuv should provide uv_inet_pton and uv_inet_ntop.
 #if defined(__MINGW32__) || defined(_MSC_VER)
   extern "C" {
@@ -26,7 +28,9 @@
   TCPWrap* wrap =  \
       static_cast<TCPWrap*>(args.Holder()->GetPointerFromInternalField(0)); \
   if (!wrap) { \
-    SetErrno(UV_EBADF); \
+    uv_err_t err; \
+    err.code = UV_EBADF; \
+    SetErrno(err); \
     return scope.Close(Integer::New(-1)); \
   }
 
@@ -45,6 +49,7 @@ using v8::TryCatch;
 using v8::Context;
 using v8::Arguments;
 using v8::Integer;
+using v8::Undefined;
 
 static Persistent<Function> tcpConstructor;
 static Persistent<String> family_symbol;
@@ -92,6 +97,8 @@ void TCPWrap::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "connect6", Connect6);
   NODE_SET_PROTOTYPE_METHOD(t, "getsockname", GetSockName);
   NODE_SET_PROTOTYPE_METHOD(t, "getpeername", GetPeerName);
+  NODE_SET_PROTOTYPE_METHOD(t, "setNoDelay", SetNoDelay);
+  NODE_SET_PROTOTYPE_METHOD(t, "setKeepAlive", SetKeepAlive);
 
   tcpConstructor = Persistent<Function>::New(t->GetFunction());
 
@@ -147,9 +154,10 @@ Handle<Value> TCPWrap::GetSockName(const Arguments& args) {
 
   Local<Object> sockname = Object::New();
   if (r != 0) {
-    SetErrno(uv_last_error(uv_default_loop()).code);
+    SetErrno(uv_last_error(uv_default_loop()));
   } else {
     family = address.ss_family;
+
     if (family == AF_INET) {
       struct sockaddr_in* addrin = (struct sockaddr_in*)&address;
       uv_inet_ntop(AF_INET, &(addrin->sin_addr), ip, INET6_ADDRSTRLEN);
@@ -158,6 +166,9 @@ Handle<Value> TCPWrap::GetSockName(const Arguments& args) {
       struct sockaddr_in6* addrin6 = (struct sockaddr_in6*)&address;
       uv_inet_ntop(AF_INET6, &(addrin6->sin6_addr), ip, INET6_ADDRSTRLEN);
       port = ntohs(addrin6->sin6_port);
+    } else {
+      assert(0 && "bad address family");
+      abort();
     }
 
     sockname->Set(port_symbol, Integer::New(port));
@@ -185,9 +196,10 @@ Handle<Value> TCPWrap::GetPeerName(const Arguments& args) {
 
   Local<Object> sockname = Object::New();
   if (r != 0) {
-    SetErrno(uv_last_error(uv_default_loop()).code);
+    SetErrno(uv_last_error(uv_default_loop()));
   } else {
     family = address.ss_family;
+
     if (family == AF_INET) {
       struct sockaddr_in* addrin = (struct sockaddr_in*)&address;
       uv_inet_ntop(AF_INET, &(addrin->sin_addr), ip, INET6_ADDRSTRLEN);
@@ -196,6 +208,9 @@ Handle<Value> TCPWrap::GetPeerName(const Arguments& args) {
       struct sockaddr_in6* addrin6 = (struct sockaddr_in6*)&address;
       uv_inet_ntop(AF_INET6, &(addrin6->sin6_addr), ip, INET6_ADDRSTRLEN);
       port = ntohs(addrin6->sin6_port);
+    } else {
+      assert(0 && "bad address family");
+      abort();
     }
 
     sockname->Set(port_symbol, Integer::New(port));
@@ -204,6 +219,35 @@ Handle<Value> TCPWrap::GetPeerName(const Arguments& args) {
   }
 
   return scope.Close(sockname);
+}
+
+
+Handle<Value> TCPWrap::SetNoDelay(const Arguments& args) {
+  HandleScope scope;
+
+  UNWRAP
+
+  int r = uv_tcp_nodelay(&wrap->handle_, 1);
+  if (r)
+    SetErrno(uv_last_error(uv_default_loop()));
+
+  return Undefined();
+}
+
+
+Handle<Value> TCPWrap::SetKeepAlive(const Arguments& args) {
+  HandleScope scope;
+
+  UNWRAP
+
+  int enable = args[0]->Int32Value();
+  unsigned int delay = args[1]->Uint32Value();
+
+  int r = uv_tcp_keepalive(&wrap->handle_, enable, delay);
+  if (r)
+    SetErrno(uv_last_error(uv_default_loop()));
+
+  return Undefined();
 }
 
 
@@ -219,7 +263,7 @@ Handle<Value> TCPWrap::Bind(const Arguments& args) {
   int r = uv_tcp_bind(&wrap->handle_, address);
 
   // Error starting the tcp.
-  if (r) SetErrno(uv_last_error(uv_default_loop()).code);
+  if (r) SetErrno(uv_last_error(uv_default_loop()));
 
   return scope.Close(Integer::New(r));
 }
@@ -237,7 +281,7 @@ Handle<Value> TCPWrap::Bind6(const Arguments& args) {
   int r = uv_tcp_bind6(&wrap->handle_, address);
 
   // Error starting the tcp.
-  if (r) SetErrno(uv_last_error(uv_default_loop()).code);
+  if (r) SetErrno(uv_last_error(uv_default_loop()));
 
   return scope.Close(Integer::New(r));
 }
@@ -253,7 +297,7 @@ Handle<Value> TCPWrap::Listen(const Arguments& args) {
   int r = uv_listen((uv_stream_t*)&wrap->handle_, backlog, OnConnection);
 
   // Error starting the tcp.
-  if (r) SetErrno(uv_last_error(uv_default_loop()).code);
+  if (r) SetErrno(uv_last_error(uv_default_loop()));
 
   return scope.Close(Integer::New(r));
 }
@@ -288,7 +332,7 @@ void TCPWrap::OnConnection(uv_stream_t* handle, int status) {
     // Successful accept. Call the onconnection callback in JavaScript land.
     argv[0] = client_obj;
   } else {
-    SetErrno(uv_last_error(uv_default_loop()).code);
+    SetErrno(uv_last_error(uv_default_loop()));
     argv[0] = v8::Null();
   }
 
@@ -307,7 +351,7 @@ void TCPWrap::AfterConnect(uv_connect_t* req, int status) {
   assert(wrap->object_.IsEmpty() == false);
 
   if (status) {
-    SetErrno(uv_last_error(uv_default_loop()).code);
+    SetErrno(uv_last_error(uv_default_loop()));
   }
 
   Local<Value> argv[3] = {
@@ -343,7 +387,7 @@ Handle<Value> TCPWrap::Connect(const Arguments& args) {
   req_wrap->Dispatched();
 
   if (r) {
-    SetErrno(uv_last_error(uv_default_loop()).code);
+    SetErrno(uv_last_error(uv_default_loop()));
     delete req_wrap;
     return scope.Close(v8::Null());
   } else {
@@ -370,7 +414,7 @@ Handle<Value> TCPWrap::Connect6(const Arguments& args) {
   req_wrap->Dispatched();
 
   if (r) {
-    SetErrno(uv_last_error(uv_default_loop()).code);
+    SetErrno(uv_last_error(uv_default_loop()));
     delete req_wrap;
     return scope.Close(v8::Null());
   } else {

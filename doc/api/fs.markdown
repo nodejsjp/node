@@ -263,25 +263,13 @@ Synchronous lchmod(2).
 <!--
 
 Asynchronous stat(2). The callback gets two arguments `(err, stats)` where
-`stats` is a [`fs.Stats`](#fs.Stats) object. It looks like this:
+`stats` is a [`fs.Stats`](#fs.Stats) object.  See the [fs.Stats](#fs.Stats)
+section below for more information.
 
 -->
 非同期の stat(2)。コールバックは 2 つの引数を受け取る `(err, stats)`で、
-`stats` は `fs.Stats` オブジェクトです。次のようになります。
-
-    { dev: 2049,
-      ino: 305352,
-      mode: 16877,
-      nlink: 12,
-      uid: 1000,
-      gid: 1000,
-      rdev: 0,
-      size: 4096,
-      blksize: 4096,
-      blocks: 8,
-      atime: '2009-06-29T11:11:55Z',
-      mtime: '2009-06-29T11:11:40Z',
-      ctime: '2009-06-29T11:11:40Z' }
+`stats` は [fs.Stats](#fs.Stats) オブジェクトです。
+詳細は [fs.Stats](#fs.Stats) の節を参照してください。
 
 <!--
 
@@ -531,7 +519,7 @@ Asynchronous file open. See open(2). `flags` can be:
 * `'r'` - Open file for reading.
 An exception occurs if the file does not exist.
 
-* `'r+'` - Open file for reading and writing. 
+* `'r+'` - Open file for reading and writing.
 An exception occurs if the file does not exist.
 
 * `'w'` - Open file for writing.
@@ -861,7 +849,8 @@ value in milliseconds. The default is `{ persistent: true, interval: 0 }`.
 
 -->
 第 2 引数はオプションです．
-`options` が与えられる場合、それは `persistent` とポーリング間隔をミリ秒で表す `interval` の二つの boolean メンバを含むオブジェクトです。
+`options` が与えられる場合、それは boolean の `persistent` と、
+ポーリング間隔をミリ秒で表す `interval` の二つのメンバを含むオブジェクトです。
 デフォルトは `{ persistent: true, interval: 0}` です。
 
 <!--
@@ -899,14 +888,68 @@ Stop watching for changes on `filename`.
 -->
 `filename` の変更に対する監視を終了します。
 
+### fs.watch(filename, [options], listener)
+
+<!--
+
+Watch for changes on `filename`, where `filename` is either a file or a
+directory.  The returned object is [fs.FSWatcher](#fs.FSWatcher).
+
+The second argument is optional. The `options` if provided should be an object
+containing a boolean member `persistent`.  The default is `{ persistent: true }`.
+
+The listener callback gets two arguments `(event, filename)`.  `event` is either
+'rename' or 'change', and `filename` is the name of the file which triggered
+the event.
+
+***Warning:***
+Providing `filename` argument in the callback is not supported
+on every platform (currently it's only supported on Linux and Windows).  Even
+on supported platforms `filename` is not always guaranteed to be provided.
+Therefore, don't assume that `filename` argument is always provided in the
+callback, and have some fallback logic if it is null.
+
+-->
+`filename` の変更を監視します。
+`filename` はファイルまたはディレクトリのどちらかです。
+戻り値のオブジェクトは [fs.FSWatcher](#fs.FSWatcher) です。
+
+第 2 引数はオプションです。
+もし指定されるなら、`options` は boolean の `persistent` プロパティを
+持つオブジェクトであるべきです。デフォルトは `{ persistent: true }` です。
+
+リスナーコールバックは二つの引数 `(event, filename)` を与えられます。
+`event` は `'rename'` または `'change'`、そして `filename` はイベントを
+引き起こしたファイルの名前です。
+
+***警告:***
+コールバックに提供される `filename` 引数は、
+全てのプラットフォームでサポートされるわけではありません
+(現時点では Linux と Windows でのみサポートされます)。
+サポートされるプラットフォームであっても、`filename` が常に提供されることが
+保証されているわけではありません。
+そのため、コールバックは `filename` 引数が常に提供されると仮定せず、
+それが `null` だったときの代替手段を持つべきです。
+
+    fs.watch('somedir', function (event, filename) {
+      console.log('event is: ' + event);
+	  if (filename) {
+        console.log('filename provided: ' + filename);
+	  } else {
+	    console.log('filename not provided');
+	  }
+    });
+
 ## fs.Stats
 
 <!--
 
-Objects returned from `fs.stat()` and `fs.lstat()` are of this type.
+Objects returned from `fs.stat()`, `fs.lstat()` and `fs.fstat()` and their
+synchronous counterparts are of this type.
 
 -->
-`fs.stat()` と `fs.lstat()` から返されるオブジェクトはこの型です。
+`fs.stat()`、`fs.lstat()`、`fs.fstat()`、そしてそれらの同期版 から返される
+オブジェクトはこの型です。
 
 <!--
 
@@ -919,22 +962,68 @@ Objects returned from `fs.stat()` and `fs.lstat()` are of this type.
  - `stats.isSocket()`
 
 -->
+
  - `stats.isFile()`
  - `stats.isDirectory()`
  - `stats.isBlockDevice()`
  - `stats.isCharacterDevice()`
- - `stats.isSymbolicLink()` (`fs.lstat()`でのみ有効)
+ - `stats.isSymbolicLink()` (`fs.lstat()` でのみ有効)
  - `stats.isFIFO()`
  - `stats.isSocket()`
+
+<!--
+
+For a regular file `util.inspect(stats)` would return a string very
+similar to this:
+
+-->
+`util.inspect(stats)` は通常のファイルに対して次のような文字列を返します。
+
+    { dev: 2114,
+      ino: 48064969,
+      mode: 33188,
+      nlink: 1,
+      uid: 85,
+      gid: 100,
+      rdev: 0,
+      size: 527,
+      blksize: 4096,
+      blocks: 8,
+      atime: Mon, 10 Oct 2011 23:24:11 GMT,
+      mtime: Mon, 10 Oct 2011 23:24:11 GMT,
+      ctime: Mon, 10 Oct 2011 23:24:11 GMT }
+
+<!--
+
+Please note that `atime`, `mtime` and `ctime` are instances
+of [`Date`][MDN-Date] object and to compare the values of
+these objects you should use appropriate methods. For most
+general uses [`getTime()`][MDN-Date-getTime] will return
+the number of milliseconds elapsed since _1 January 1970
+00:00:00 UTC_ and this integer should be sufficient for
+any comparison, however there additional methods which can
+be used for displaying fuzzy information. More details can
+be found in the [MDN JavaScript Reference][MDN-Date] page.
+
+-->
+`atime`、`mtime`、そして `ctime` は [`Date`][MDN-Date] オブジェクトであり、
+その値を比較するには適切な方法があるということに注意してください。
+もっとも一般的に使われる [`getTime()`][MDN-Date-getTime] は _1970 年 1 月
+1 日_からの経過時間をミリ秒単位で返します。
+それは比較には十分ですが、曖昧な情報を表示するには別の方法を使ってください。
+より詳しい情報は [MDN JavaScript Reference][MDN-Date] で探すことができます。
+
+[MDN-Date]: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Date
+[MDN-Date-getTime]: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Date/getTime
 
 ## fs.ReadStream
 
 <!--
 
-`ReadStream` is a `Readable Stream`.
+`ReadStream` is a [Readable Stream](streams.html#readable_Stream).
 
 -->
-`ReadStream` は `Readable Stream` です。
+`ReadStream` は [Readable Stream](streams.html#readable_Stream) です。
 
 ### Event: 'open'
 
@@ -995,10 +1084,10 @@ An example to read the last 10 bytes of a file which is 100 bytes long:
 
 <!--
 
-`WriteStream` is a `Writable Stream`.
+`WriteStream` is a [Writable Stream](streams.html#writable_Stream).
 
 -->
-`WriteStream` は `Writable Stream` です。
+`WriteStream` は [Writable Stream](streams.html#writable_Stream) です。
 
 ### Event: 'open'
 
@@ -1054,3 +1143,45 @@ default mode `w`.
 `start` を含めることができます。
 ファイルを置換するのではなく変更する場合は、 `flags` にデフォルトの
 `w` ではなく `r+` が必要となります。
+
+## fs.FSWatcher
+
+<!--
+
+Objects returned from `fs.watch()` are of this type.
+
+-->
+`fs.watch()` が返すオブジェクトはこの型です。
+
+#### watcher.close()
+
+<!--
+
+Stop watching for changes on the given `fs.FSWatcher`.
+
+-->
+`fs.FSWatcher` に与えられたファイルの監視を終了します。
+
+#### Event: 'change'
+
+`function (event, filename) {}`
+
+<!--
+
+Emitted when something changes in a watched directory or file.
+See more details in [fs.watch](#fs.watch).
+
+-->
+監視しているファイルまたはディレクトリに変更があると生成されます。
+詳しくは [fs.watch](#fs.watch) を参照してください。
+
+#### Event: 'error'
+
+`function (exception) {}`
+
+<!--
+
+Emitted when an error occurs.
+
+-->
+エラーが発生すると生成されます。

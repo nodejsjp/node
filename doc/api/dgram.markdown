@@ -110,12 +110,70 @@ Example of sending a UDP packet to a random port on `localhost`;
     client.send(message, 0, message.length, 41234, "localhost");
     client.close();
 
+<!--
+
+**A Note about UDP datagram size**
+
+The maximum size of an `IPv4/v6` datagram depends on the `MTU` (_Maximum Transmission Unit_)
+and on the `Payload Length` field size.
+
+- The `Payload Length` field is `16 bits` wide, which means that a normal payload
+  cannot be larger than 64K octets including internet header and data
+  (65,507 bytes = 65,535 − 8 bytes UDP header − 20 bytes IP header);
+  this is generally true for loopback interfaces, but such long datagrams
+  are impractical for most hosts and networks.
+
+- The `MTU` is the largest size a given link layer technology can support for datagrams.
+  For any link, `IPv4` mandates a minimum `MTU` of `68` octets, while the recommended `MTU`
+  for IPv4 is `576` (typically recommended as the `MTU` for dial-up type applications),
+  whether they arrive whole or in fragments.
+
+  For `IPv6`, the minimum `MTU` is `1280` octets, however, the mandatory minimum
+  fragment reassembly buffer size is `1500` octets.
+  The value of `68` octets is very small, since most current link layer technologies have
+  a minimum `MTU` of `1500` (like Ethernet).
+
+Note that it's impossible to know in advance the MTU of each link through which
+a packet might travel, and that generally sending a datagram greater than
+the (receiver) `MTU` won't work (the packet gets silently dropped, without
+informing the source that the data did not reach its intended recipient).
+
+-->
+**UDP データグラムのサイズについて**
+
+`IPv4/v6` データグラムの最大のサイズは `MTU` (_Maximum Transmission Unit_) と、
+`Payload Length` フィールドサイズに依存します。
+
+- `Payload Length` フィールドサイズは 16bit 長で、これは通常のペイロードが
+  IP ヘッダとデータ含めて 64K オクテットより長くなれないことを意味します
+  (65,507 バイト = 65,535 − 8 バイトの UDP ヘッダ − 20 バイトの IP ヘッダ);
+  これは一般的にループバックインタフェースでは正しいものの、
+  ほとんどのホストとネットワークにとって長大なデータグラムは
+  現実的ではありません。
+
+- `MTU` はリンク層により大きなサイズを与える技術で、
+データグラムもサポートできます。
+  どんなリンクでも、それらが全体として到着するか断片化されるかに関わらず、
+  `IPv4` は最低 `69` オクテット必要で、推奨される `IPv4` の `MTU` は `576` です
+  (典型的なダイヤルアップ型アプリケーションの `MUT` 推奨値)。
+
+  `IPv6` では最小の `MTU` は `1280` オクテットですが、フラグメントを再構築する
+  バッファサイズは最低 `1500` オクテットが必要です。
+  `68` オクテットはとても小さいので、もっとも現代的なリンク層技術では、
+  最小の `MTU` は `1500` です (イーサネットと同じです)。
+
+パケットが通過する各リンクの MTU をあらかじめ知ることは
+できないこと、(受信側の) `MTU` より大きなデータグラムを送信しても
+通常は動作しないことに注意してください
+(パケットは送り主に知らされることなく黙って捨てられ、
+意図した受信者に到達することはありません)。
+
 
 ### dgram.bind(port, [address])
 
 <!--
 
-For UDP sockets, listen for datagrams on a named `port` and optional `address`.  If
+For UDP sockets, listen for datagrams on a named `port` and optional `address`. If
 `address` is not specified, the OS will try to listen on all addresses.
 
 -->

@@ -6,6 +6,25 @@ You can access this module with:
 このモジュールは次のようにアクセスできます。
 
     var zlib = require('zlib');
+
+<!--
+This provides bindings to Gzip/Gunzip, Deflate/Inflate, and
+DeflateRaw/InflateRaw classes.  Each class takes the same options, and
+is a readable/writable Stream.
+-->
+これは Gzip/Gunzip、Deflate/Inflate、そして DeflateRaw/InflateRaw
+へバインディングするクラスを提供します。
+どのクラスも同じオプションを持つ、読み込みと書き込みが可能なストリームです。
+
+### Examples
+
+<!--
+Compressing or decompressing a file can be done by piping an
+fs.ReadStream into a zlib stream, then into an fs.WriteStream.
+-->
+ファイルを圧縮および解凍するには、fs.ReadStream から zlib へ、
+そして fs.WriteStream へパイプをつなぐだけです。
+
     var gzip = zlib.createGzip();
     var fs = require('fs');
     var inp = fs.createReadStream('input.txt');
@@ -14,11 +33,75 @@ You can access this module with:
     inp.pipe(gzip).pipe(out);
 
 <!--
-This provides bindings to Gzip/Gunzip, Deflate/Inflate, and
-DeflateRaw/InflateRaw classes.  Each class takes the same options, and
-is a readable/writable Stream.
+To use this module in an HTTP client or server, use the
+[accept-encoding](http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.3)
+on requests, and the
+[content-encoding](http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11)
+header on responses.
+
+**Note: these examples are drastically simplified to show
+the basic concept.**  Zlib encoding can be expensive, and the results
+ought to be cached.  See <a href="#memory_Usage_Tuning">Memory Usage
+Tuning</a> below for more information on the speed/memory/compression
+tradeoffs involved in zlib usage.
 -->
-これは Gzip/Gunzip、Deflate/Inflate、そしてDeflateRaw/InflateRaw へバインディングするクラスを提供します。各クラスは同じオプションを持ち、読み込みと書き込みが可能なストリームです。
+このモジュールを HTTP クライアントとサーバで使うには、リクエストに
+[accept-encoding](http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.3)
+ヘッダ、レスポンスに
+[content-encoding](http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11)
+ヘッダを使用します。
+
+    // client request example
+    var zlib = require('zlib');
+    var http = require('http');
+    var fs = require('fs');
+    var request = http.get({ host: 'izs.me',
+                             path: '/',
+                             port: 80,
+                             headers: { 'accept-encoding': 'gzip,deflate' } });
+    request.on('response', function(response) {
+      var output = fs.createWriteStream('izs.me_index.html');
+
+      switch (response.headers['content-encoding']) {
+        // or, just use zlib.createUnzip() to handle both cases
+        case 'gzip':
+          response.pipe(zlib.createGunzip()).pipe(output);
+          break;
+        case 'deflate':
+          response.pipe(zlib.createInflate()).pipe(output);
+          break;
+        default:
+          response.pipe(output);
+          break;
+      }
+    });
+
+    // server example
+    // Running a gzip operation on every request is quite expensive.
+    // It would be much more efficient to cache the compressed buffer.
+    var zlib = require('zlib');
+    var http = require('http');
+    var fs = require('fs');
+    http.createServer(function(request, response) {
+      var raw = fs.createReadStream('index.html');
+      var acceptEncoding = request.headers['accept-encoding'];
+      if (!acceptEncoding) {
+        acceptEncoding = '';
+      }
+
+      // Note: this is not a conformant accept-encoding parser.
+      // See http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.3
+      if (acceptEncoding.match(/\bdeflate\b/)) {
+        response.writeHead(200, { 'content-encoding': 'deflate' });
+        raw.pipe(zlib.createDeflate()).pipe(response);
+      } else if (acceptEncoding.match(/\bgzip\b/)) {
+        response.writeHead(200, { 'content-encoding': 'gzip' });
+        raw.pipe(zlib.createGzip()).pipe(response);
+      } else {
+        response.writeHead(200, {});
+        raw.pipe(response);
+      }
+    }).listen(1337);
 
 ### Constants
 
@@ -157,8 +240,27 @@ for small objects.
 
 This is in addition to a single internal output slab buffer of size
 `chunkSize`, which defaults to 16K.
+
+The speed of zlib compression is affected most dramatically by the
+`level` setting.  A higher level will result in better compression, but
+will take longer to complete.  A lower level will result in less
+compression, but will be much faster.
+
+In general, greater memory usage options will mean that node has to make
+fewer calls to zlib, since it'll be able to process more data in a
+single `write` operation.  So, this is another factor that affects the
+speed, at the cost of memory usage.
 -->
 この場合、windowBits=15 (デフォルト値) の場合 32K に加えて数キロバイトが
 小さなオブジェクトのために使われます。
 
 これは、デフォルト値 16K の `chunkSize` で指定されたサイズの内部バッファに加えられます。
+
+zlib の圧縮速度は `level` の設定で劇的に変化します
+高レベルにするとより圧縮できますが、完了までの時間が長くなります。
+低レベルにするとあまり圧縮されませんが、高速になります。
+
+一般的に、メモリをより多く使うオプションにすると node が zlib を呼び出す回数が
+少なくなることを意味し、
+一回の `write` 操作でより多くのデータを処理できることになります。
+これはあスピードに影響するもう一つのファクタで、メモリ使用量を犠牲にします。

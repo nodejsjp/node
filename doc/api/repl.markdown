@@ -51,18 +51,33 @@ For example, you could add this to your bashrc file:
     alias node="env NODE_NO_READLINE=1 rlwrap node"
 
 
-### repl.start(prompt='> ', stream=process.stdin)
+### repl.start(prompt='> ', stream=process.stdin, eval=eval, useGlobal=false)
 
 <!--
 
 Starts a REPL with `prompt` as the prompt and `stream` for all I/O.  `prompt`
 is optional and defaults to `> `.  `stream` is optional and defaults to
-`process.stdin`.
+`process.stdin`. `eval` is optional too and defaults to async wrapper for `eval`.
+
+If `useGlobal` is set to true, then the repl will use the global object,
+instead of running scripts in a separate context.
+
+You can use your own `eval` function if it has following signature:
 
 -->
 `prompt` でプロンプト記号を、 `stream` で I/O を引数に取って REPL を起動します。
 `prompt` は省略可能で、 デフォルトは `> ` です。
 `stream` は省略可能で、 デフォルトは `process.stdin` です。
+`eval` も省略可能で、デフォルトは `eval()` の非同期ラッパーです。
+
+`useGlobal` を `true` に指定した場合、REPL は別のコンテキストでスクリプトを
+実行するのではなく、グローバルオブジェクトを使用します。
+
+独自の `eval()` 関数は以下のシグネチャを持ちます。
+
+    function eval(cmd, callback) {
+      callback(null, result);
+    }
 
 <!--
 
