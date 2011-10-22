@@ -194,10 +194,11 @@ Node にはバイナリにコンパイル済みのいくつかのモジュール
 <!--
 
 If the exact filename is not found, then node will attempt to load the
-required filename with the added extension of `.js`, and then `.node`.
+required filename with the added extension of `.js`, `.json`, and then `.node`.
 
-`.js` files are interpreted as JavaScript text files, and `.node` files
-are interpreted as compiled addon modules loaded with `dlopen`.
+`.js` files are interpreted as JavaScript text files, and `.json` files are
+parsed as JSON text files. `.node` files are interpreted as compiled addon
+modules loaded with `dlopen`.
 
 A module prefixed with `'/'` is an absolute path to the file.  For
 example, `require('/home/marco/foo.js')` will load the file at
@@ -211,10 +212,13 @@ Without a leading '/' or './' to indicate a file, the module is either a
 "core module" or is loaded from a `node_modules` folder.
 
 -->
-指定された名前のファイルが見つからなかったら、 Node は指定されたファイル名に `.js` を付けたものと `.node` を付けたものを読み込もうとします。
+指定された名前のファイルが見つからなかったら、 Node は指定されたファイル名に
+`.js`、`.json`、または `.node` を付けたものを読み込もうとします。
 
-`.js` ファイルは JavaScript ファイルとして解釈されます。
-一方 `.node` ファイルはコンパイル済みのアドオンモジュールとして解釈され、 `dlopen` を使って読み込まれます。
+`.js` ファイルは JavaScript ファイルとして解釈され、
+`.json` ファイルは JSON ファイルとして解釈されます。
+一方 `.node` ファイルはコンパイル済みのアドオンモジュールとして解釈され、
+`dlopen` を使って読み込まれます。
 
 `'/'` から始まるモジュールは、ファイルへの絶対パスと見なされます。
 例えば、 `require('/home/marco/foo.js')` は `/home/macro/foo.js` を読み込みます。

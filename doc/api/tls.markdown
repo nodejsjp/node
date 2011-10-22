@@ -69,7 +69,164 @@ Alternatively you can send the CSR to a Certificate Authority for signing.
 `test/fixtures/keys/Makefile` を見る必要がある)
 
 
-### s = tls.connect(port, [host], [options], callback)
+#### tls.createServer(options, secureConnectionListener)
+
+<!--
+
+Creates a new [tls.Server](#tls.Server).
+The `connectionListener` argument is automatically set as a listener for the
+[secureConnection](#event_secureConnection_) event.
+The `options` object has these possibilities:
+
+-->
+新しい [tls.Server](#tls.Server) を作成します。
+`connectionListener` は [secureConnection](#event_secureConnection_)
+イベントのリスナとして自動的に登録されます。
+`options` は以下を持つことができます:
+
+
+<!--
+
+  - `key`: A string or `Buffer` containing the private key of the server in
+    PEM format. (Required)
+
+  - `cert`: A string or `Buffer` containing the certificate key of the server in
+    PEM format. (Required)
+
+  - `ca`: An array of strings or `Buffer`s of trusted certificates. If this is
+    omitted several well known "root" CAs will be used, like VeriSign.
+    These are used to authorize connections.
+
+  - `requestCert`: If `true` the server will request a certificate from
+    clients that connect and attempt to verify that certificate. Default:
+    `false`.
+
+  - `rejectUnauthorized`: If `true` the server will reject any connection
+    which is not authorized with the list of supplied CAs. This option only
+    has an effect if `requestCert` is `true`. Default: `false`.
+
+  - `NPNProtocols`: An array or `Buffer` of possible NPN protocols. (Protocols
+    should be ordered by their priority).
+
+  - `SNICallback`: A function that will be called if client supports SNI TLS
+    extension. Only one argument will be passed to it: `servername`. And
+    `SNICallback` should return SecureContext instance.
+    (You can use `crypto.createCredentials(...).context` to get proper
+    SecureContext). If `SNICallback` wasn't provided - default callback with
+    high-level API will be used (see below).
+
+  - `sessionIdContext`: A string containing a opaque identifier for session
+    resumption. If `requestCert` is `true`, the default is MD5 hash value
+    generated from command-line. Otherwise, the default is not provided.
+
+-->
+  - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です
+    (必須)。
+
+  - `cert`: PEM フォーマットによる証明書の鍵を持つ文字列または `Buffer` です
+    (必須)。
+
+  - `ca`: 信頼できる証明書の文字列または `Buffer` の配列です。
+    省略された場合、ベリサインなどのよく知られた「ルート」認証局が使われます。
+    これらはコネクションの認証に使われます。
+
+  - `requestCert`: `true` の場合、サーバは接続しようとするクライアントからの
+    証明書を要求します。デフォルトは `false` です。
+
+  - `rejectUnauthorized`: `true` の場合、サーバは提供された認証局の
+    リストによって認証されていないコネクションを破棄します．
+    このオプションは `requestCert` が `true` の場合だけ効果があります。
+    デフォルトは `false` です。
+
+  - `NPNProtocols`: NPN プロトコルで使用可能な文字列または `Buffer` の配列
+    (プロトコルはその優先度に応じて並んでいる必要があります)。
+
+  - `SNICallback`: クライアントが TLS 拡張の SNI をサポートしている場合に
+    呼び出される関数です。
+    `servername` が唯一の引数として渡されます。
+    `SNICallback` は SecureContext のインスタンスを返す必要があります
+    (SecureContext を取得するために `crypto.createCredentials(...).context`
+    を使用することができます)。
+    `SNICallback` が渡されなかった場合は、デフォルトのコールバックとして
+    後述する高水準 API が使用されます。
+
+  - `sessionIdContext`: セッション再開のための識別子となる文字列です。
+    `requestCedrt` が `true` の場合、デフォルトはコマンドライン引数から
+    生成された MD5 ハッシュ値となります。
+    そうでない場合はデフォルトは提供されません。
+
+<!--
+
+Here is a simple example echo server:
+
+
+    var tls = require('tls');
+    var fs = require('fs');
+
+    var options = {
+      key: fs.readFileSync('server-key.pem'),
+      cert: fs.readFileSync('server-cert.pem'),
+
+      // This is necessary only if using the client certificate authentication.
+      requestCert: true,
+
+      // This is necessary only if the client uses the self-signed certificate.
+      ca: [ fs.readFileSync('client-cert.pem') ]
+    };
+
+    var server = tls.createServer(options, function(cleartextStream) {
+      console.log('server connected',
+                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
+      cleartextStream.write("welcome!\n");
+      cleartextStream.setEncoding('utf8');
+      cleartextStream.pipe(cleartextStream);
+    });
+    server.listen(8000, function() {
+      console.log('server bound');
+    });
+
+-->
+これはシンプルはエコーサーバの例です:
+
+
+    var tls = require('tls');
+    var fs = require('fs');
+
+    var options = {
+      key: fs.readFileSync('server-key.pem'),
+      cert: fs.readFileSync('server-cert.pem'),
+
+      // これはクライアント証明書を用いた認証を行う場合だけ必要です
+      requestCert: true,
+
+      // これは自己署名のクライアント証明書を認証する場合だけ必要です
+      ca: [ fs.readFileSync('client-cert.pem') ]
+    };
+
+    var server = tls.createServer(options, function(cleartextStream) {
+      console.log('server connected',
+                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
+      cleartextStream.write("welcome!\n");
+      cleartextStream.setEncoding('utf8');
+      cleartextStream.pipe(cleartextStream);
+    });
+    server.listen(8000, function() {
+      console.log('server bound');
+    });
+
+
+<!--
+
+You can test this server by connecting to it with `openssl s_client`:
+
+-->
+`openssl s_client` を使用してこのサーバに接続するテストを行うことができます。
+
+
+    openssl s_client -connect 127.0.0.1:8000
+
+
+#### tls.connect(port, [host], [options], secureConnectListener)
 
 <!--
 
@@ -81,13 +238,12 @@ defaults to `localhost`.) `options` should be an object which specifies
 (`host` のデフォルトは `localhost` です)。
 `options` は以下を指定したオブジェクトです。
 
-
 <!--
 
-  - `key`: A string or `Buffer` containing the private key of the server in
+  - `key`: A string or `Buffer` containing the private key of the client in
     PEM format. (Required)
 
-  - `cert`: A string or `Buffer` containing the certificate key of the server in
+  - `cert`: A string or `Buffer` containing the certificate key of the client in
     PEM format.
 
   - `ca`: An array of strings or `Buffer`s of trusted certificates. If this is
@@ -95,14 +251,15 @@ defaults to `localhost`.) `options` should be an object which specifies
     These are used to authorize connections.
 
   - `NPNProtocols`: An array of string or `Buffer` containing supported NPN
-    protocols. `Buffer` should have following format: `0x05hello0x05world`, where
-    first byte is next protocol name's length. (Passing array should usually be
-    much simplier: `['hello', 'world']`.)
+    protocols. `Buffer` should have following format: `0x05hello0x05world`,
+    where first byte is next protocol name's length. (Passing array should
+    usually be much simplier: `['hello', 'world']`.)
 
   - `servername`: Servername for SNI (Server Name Indication) TLS extension.
 
 -->
-  - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です (必須)。
+  - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です
+    (必須)。
 
   - `cert`: PEM フォーマットによる証明書の鍵を持つ文字列または `Buffer` です。
 
@@ -122,27 +279,77 @@ defaults to `localhost`.) `options` should be an object which specifies
 
 `tls.connect()` returns a [CleartextStream](#tls.CleartextStream) object.
 
+The `secureConnectListener` parameter will be added as a listener for the
+['secureConnect'](#event_secureConnect_) event.
+
+`tls.connect()` returns a [CleartextStream](#tls.CleartextStream) object.
+
+Here is an example of a client of echo server as described previously:
+
+    var tls = require('tls');
+    var fs = require('fs');
+
+    var options = {
+      // These are necessary only if using the client certificate authentication
+      key: fs.readFileSync('client-key.pem'),
+      cert: fs.readFileSync('client-cert.pem'),
+    
+      // This is necessary only if the server uses the self-signed certificate
+      ca: [ fs.readFileSync('server-cert.pem') ]
+    };
+
+    var cleartextStream = tls.connect(8000, options, function() {
+      console.log('client connected',
+                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
+      process.stdin.pipe(cleartextStream);
+      process.stdin.resume();
+    });
+    cleartextStream.setEncoding('utf8');
+    cleartextStream.on('data', function(data) {
+      console.log(data);
+    });
+    cleartextStream.on('end', function() {
+      server.close();
+    });
+
 -->
 `tls.connect()` は [CleartextStream](#tls.CleartextStream) 
 オブジェクトを返します。
 
-<!--
+`secureConnectLister` 引数は ['secureConnect'](#event_secureConnect_)
+イベントのリスナとして加えられます。
 
-After the TLS/SSL handshake the `callback` is called. The `callback` will be
-called no matter if the server's certificate was authorized or not. It is up
-to the user to test `s.authorized` to see if the server certificate was signed
-by one of the specified CAs. If `s.authorized === false` then the error
-can be found in `s.authorizationError`. Also if NPN was used - you can check
-`s.npnProtocol` for negotiated protocol.
+`tls.connect()` は [CleartextStream](#tls.CleartextStream)
+オブジェクトを返します。
 
--->
-TLS/SSL ハンドシェークの後で `callback` が呼び出されます。
-`callback` は証明書がサーバに認証されたかどうかに関わらず呼び出されます。
-サーバ証明書が指定した認証局に承認されたかチェックするために
-`s.authorized` を確認するかはユーザ次第です。
-`s.authorized === false`の場合、`s.authorizationError` からエラーを見つけることができます。
-同様に NPN が使われている場合は `s.npnProtocol` から合意されたプロトコルを
-チェックすることが出来ます。
+これは前述のエコーサーバに接続するクライアントの例です:
+
+    var tls = require('tls');
+    var fs = require('fs');
+
+    var options = {
+      // これらはクライアント証明書による認証を行う場合だけ必要ですn
+      key: fs.readFileSync('client-key.pem'),
+      cert: fs.readFileSync('client-cert.pem'),
+    
+      // これはサーバが自己署名証明書を使う場合だけ必要です
+      ca: [ fs.readFileSync('server-cert.pem') ]
+    };
+
+    var cleartextStream = tls.connect(8000, options, function() {
+      console.log('client connected',
+                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
+      process.stdin.pipe(cleartextStream);
+      process.stdin.resume();
+    });
+    cleartextStream.setEncoding('utf8');
+    cleartextStream.on('data', function(data) {
+      console.log(data);
+    });
+    cleartextStream.on('end', function() {
+      server.close();
+    });
+
 
 ### STARTTLS
 
@@ -257,107 +464,6 @@ connections using TLS or SSL.
 生の TCP コネクションを受け入れる代わりに、
 TLS または SSL を使った暗号化されたコネクションを受け付けます。
 
-<!--
-
-Here is a simple example echo server:
-
--->
-これはシンプルなエコーサーバの例です。
-
-    var tls = require('tls');
-    var fs = require('fs');
-
-    var options = {
-      key: fs.readFileSync('server-key.pem'),
-      cert: fs.readFileSync('server-cert.pem')
-    };
-
-    tls.createServer(options, function (s) {
-      s.write("welcome!\n");
-      s.pipe(s);
-    }).listen(8000);
-
-
-<!--
-
-You can test this server by connecting to it with `openssl s_client`:
-
--->
-このサーバをテストするために `openssl s_client` で接続することができます。
-
-
-    openssl s_client -connect 127.0.0.1:8000
-
-
-#### tls.createServer(options, secureConnectionListener)
-
-<!--
-
-This is a constructor for the `tls.Server` class. The options object
-has these possibilities:
-
--->
-`tls.Server` クラスのコンストラクタです。
-オプションのオブジェクトは以下を持つことができます。
-
-<!--
-
-  - `key`: A string or `Buffer` containing the private key of the server in
-    PEM format. (Required)
-
-  - `cert`: A string or `Buffer` containing the certificate key of the server in
-    PEM format. (Required)
-
-  - `ca`: An array of strings or `Buffer`s of trusted certificates. If this is
-    omitted several well known "root" CAs will be used, like VeriSign.
-    These are used to authorize connections.
-
-  - `requestCert`: If `true` the server will request a certificate from
-    clients that connect and attempt to verify that certificate. Default:
-    `false`.
-
-  - `rejectUnauthorized`: If `true` the server will reject any connection
-    which is not authorized with the list of supplied CAs. This option only
-    has an effect if `requestCert` is `true`. Default: `false`.
-
-  - `NPNProtocols`: An array or `Buffer` of possible NPN protocols. (Protocols
-    should be ordered by their priority).
-
-  - `SNICallback`: A function that will be called if client supports SNI TLS
-    extension. Only one argument will be passed to it: `servername`. And
-    `SNICallback` should return SecureContext instance.
-    (You can use `crypto.createCredentials(...).context` to get proper
-    SecureContext). If `SNICallback` wasn't provided - default callback with
-    high-level API will be used (see below).
-
--->
-  - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です (必須)。
-
-  - `cert`: PEM フォーマットによる証明書の鍵を持つ文字列または `Buffer` です (必須)。
-
-  - `ca`: 信頼できる証明書の文字列または `Buffer` の配列です。
-    省略された場合、ベリサインなどのよく知られた「ルート」認証局が使われます。
-    これらはコネクションの認証に使われます。
-
-  - `requestCert`: `true` の場合、サーバは接続しようとするクライアントからの証明書を要求します
-    デフォルトは `false` です。
-
-  - `rejectUnauthorized`: `true` の場合、
-    サーバは提供された認証局のリストによって認証されていないコネクションを破棄します．
-    このオプションは `requestCert` が `true` の場合だけ効果があります。
-    デフォルトは `false` です。
-
-  - `NPNProtocols`: NPN プロトコルで使用可能な文字列または `Buffer` の配列
-    (プロトコルはその優先度に応じて並んでいる必要があります)。
-
-  - `SNICallback`: クライアントが TLS 拡張の SNI をサポートしている場合に
-    呼び出される関数です。
-    `servername` が唯一の引数として渡されます。
-    `SNICallback` は SecureContext のインスタンスを返す必要があります
-    (SecureContext を取得するために `crypto.createCredentials(...).context`
-    を使用することができます)。
-    `SNICallback` が渡されなかった場合は、デフォルトのコールバックとして
-    後述する高水準 API が使用されます。
 
 #### Event: 'secureConnection'
 
@@ -485,6 +591,31 @@ It has all the common stream methods and events.
 このインスタンスは双方向の [Stream](streams.html#streams) インタフェースを
 実装します。
 ストリームに共通な全てのメソッドとイベントを持ちます。
+
+#### Event: 'secureConnect'
+
+`function () {}`
+
+<!--
+
+This event is emitted after a new connection has been successfully handshaked. 
+The listener will be called no matter if the server's certificate was
+authorized or not. It is up to the user to test `cleartextStream.authorized`
+to see if the server certificate was signed by one of the specified CAs.
+If `cleartextStream.authorized === false` then the error can be found in
+`cleartextStream.authorizationError`. Also if NPN was used - you can check
+`cleartextStream.npnProtocol` for negotiated protocol.
+
+-->
+新しいコネクションの TLS/SSL ハンドシェークが成功すると生成されます。
+リスナはサーバの証明書が認証されたかどうかに関わらず呼び出されます。
+サーバ証明書が指定した認証局に承認されたかチェックするために
+`cleartextStream.authorized` を確認するかはユーザ次第です。
+`cleartextStream.authorized === false`の場合、
+`cleartextStream.authorizationError` からエラーを見つけることができます。
+同様に NPN が使われている場合は `cleartextStream.npnProtocol`
+から合意されたプロトコルをチェックすることが出来ます。
+
 
 #### cleartextStream.authorized
 

@@ -27,38 +27,40 @@ var assert = require('assert');
 
 var spawn = require('child_process').spawn;
 
+var is_windows = process.platform === 'win32';
+
 var exitCode;
 var termSignal;
 var gotStdoutEOF = false;
 var gotStderrEOF = false;
 
-var cat = spawn('cat');
+var cat = spawn(is_windows ? 'cmd' : 'cat');
 
 
-cat.stdout.addListener('data', function(chunk) {
+cat.stdout.on('data', function(chunk) {
   assert.ok(false);
 });
 
-cat.stdout.addListener('end', function() {
+cat.stdout.on('end', function() {
   gotStdoutEOF = true;
 });
 
-cat.stderr.addListener('data', function(chunk) {
+cat.stderr.on('data', function(chunk) {
   assert.ok(false);
 });
 
-cat.stderr.addListener('end', function() {
+cat.stderr.on('end', function() {
   gotStderrEOF = true;
 });
 
-cat.addListener('exit', function(code, signal) {
+cat.on('exit', function(code, signal) {
   exitCode = code;
   termSignal = signal;
 });
 
 cat.kill();
 
-process.addListener('exit', function() {
+process.on('exit', function() {
   assert.strictEqual(exitCode, null);
   assert.strictEqual(termSignal, 'SIGTERM');
   assert.ok(gotStdoutEOF);

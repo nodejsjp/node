@@ -30,18 +30,6 @@
   var EventEmitter;
 
   function startup() {
-
-    if ('NODE_USE_UV' in process.env) {
-      process.features.uv = process.env.NODE_USE_UV != '0';
-    }
-
-    // make sure --use-uv is propagated to child processes
-    if (process.features.uv) {
-      process.env.NODE_USE_UV = '1';
-    } else {
-      delete process.env.NODE_USE_UV;
-    }
-
     EventEmitter = NativeModule.require('events').EventEmitter;
     process.__proto__ = EventEmitter.prototype;
     process.EventEmitter = EventEmitter; // process.EventEmitter is deprecated
@@ -80,6 +68,10 @@
       var d = NativeModule.require('_debugger');
       d.start();
 
+    } else if (process.argv[1] == 'cluster') {
+      var cluster = NativeModule.require('cluster');
+      cluster.start();
+
     } else if (process._eval != null) {
       // User passed '-e' or '--eval' arguments to Node.
       var Module = NativeModule.require('module');
@@ -96,6 +88,13 @@
       var path = NativeModule.require('path');
       process.argv[1] = path.resolve(process.argv[1]);
 
+      // If this is a worker in cluster mode, start up the communiction
+      // channel.
+      if (process.env.NODE_WORKER_ID) {
+        var cluster = NativeModule.require('cluster');
+        cluster.startWorker();
+      }
+
       var Module = NativeModule.require('module');
       // REMOVEME: nextTick should not be necessary. This hack to get
       // test/simple/test-exception-handler2.js working.
@@ -108,7 +107,7 @@
       // If stdin is a TTY.
       if (NativeModule.require('tty').isatty(0)) {
         // REPL
-        Module.requireRepl().start();
+        var repl = Module.requireRepl().start('> ', null, null, true);
 
       } else {
         // Read all of stdin - execute it.
@@ -322,24 +321,34 @@
   };
 
   startup.processKillAndExit = function() {
+    var isWindows = process.platform === 'win32';
+
     process.exit = function(code) {
       process.emit('exit', code || 0);
       process.reallyExit(code || 0);
     };
 
-    process.kill = function(pid, sig) {
-      // preserve null signal
-      if (0 === sig) {
-        process._kill(pid, 0);
-      } else {
-        sig = sig || 'SIGTERM';
-        if (startup.lazyConstants()[sig]) {
-          process._kill(pid, startup.lazyConstants()[sig]);
-        } else {
-          throw new Error('Unknown signal: ' + sig);
-        }
+    if (isWindows) {
+      process.kill = function(pid, sig) {
+        console.warn('process.kill() is not supported on Windows.  Use ' +
+                     'child.kill() to kill a process that was started '  +
+                     'with child_process.spawn().');
       }
-    };
+    } else {
+      process.kill = function(pid, sig) {
+        // preserve null signal
+        if (0 === sig) {
+          process._kill(pid, 0);
+        } else {
+          sig = sig || 'SIGTERM';
+          if (startup.lazyConstants()[sig]) {
+            process._kill(pid, startup.lazyConstants()[sig]);
+          } else {
+            throw new Error('Unknown signal: ' + sig);
+          }
+        }
+      };
+    }
   };
 
   startup.processSignalHandlers = function() {
@@ -413,7 +422,7 @@
     'unwatchFile': 'process.unwatchFile() has moved to fs.unwatchFile()',
     'mixin': 'process.mixin() has been removed.',
     'createChildProcess': 'childProcess API has changed. See doc/api.txt.',
-    'inherits': 'process.inherits() has moved to sys.inherits.',
+    'inherits': 'process.inherits() has moved to util.inherits()',
     '_byteLength': 'process._byteLength() has moved to Buffer.byteLength'
   };
 
@@ -453,37 +462,7 @@
   var Script = process.binding('evals').NodeScript;
   var runInThisContext = Script.runInThisContext;
 
-  // A special hook to test the new platform layer. Use the command-line
-  // flag --use-uv to enable the libuv backend instead of the legacy
-  // backend.
-  function translateId(id) {
-    switch (id) {
-      case 'net':
-        return process.features.uv ? 'net_uv' : 'net_legacy';
-
-      case 'tty':
-        return process.features.uv ? 'tty_uv' : 'tty_legacy';
-
-      case 'child_process':
-        return process.features.uv ? 'child_process_uv' :
-                                     'child_process_legacy';
-
-      case 'timers':
-        return process.features.uv ? 'timers_uv' : 'timers_legacy';
-
-      case 'dgram':
-        return process.features.uv ? 'dgram_uv' : 'dgram_legacy';
-
-      case 'dns':
-        return process.features.uv ? 'dns_uv' : 'dns_legacy';
-
-      default:
-        return id;
-    }
-  }
-
   function NativeModule(id) {
-    id = translateId(id);
     this.filename = id + '.js';
     this.id = id;
     this.exports = {};
@@ -494,8 +473,6 @@
   NativeModule._cache = {};
 
   NativeModule.require = function(id) {
-    id = translateId(id);
-
     if (id == 'native_module') {
       return NativeModule;
     }
@@ -520,17 +497,14 @@
   };
 
   NativeModule.getCached = function(id) {
-    id = translateId(id);
     return NativeModule._cache[id];
   }
 
   NativeModule.exists = function(id) {
-    id = translateId(id);
     return (id in NativeModule._source);
   }
 
   NativeModule.getSource = function(id) {
-    id = translateId(id);
     return NativeModule._source[id];
   }
 

@@ -44,27 +44,30 @@ void uv_process_timers(uv_loop_t* loop);
  */
 
 /* Private uv_handle flags */
-#define UV_HANDLE_CLOSING                 0x0001
-#define UV_HANDLE_CLOSED                  0x0002
-#define UV_HANDLE_BOUND                   0x0004
-#define UV_HANDLE_LISTENING               0x0008
-#define UV_HANDLE_CONNECTION              0x0010
-#define UV_HANDLE_CONNECTED               0x0020
-#define UV_HANDLE_READING                 0x0040
-#define UV_HANDLE_ACTIVE                  0x0040
-#define UV_HANDLE_EOF                     0x0080
-#define UV_HANDLE_SHUTTING                0x0100
-#define UV_HANDLE_SHUT                    0x0200
-#define UV_HANDLE_ENDGAME_QUEUED          0x0400
-#define UV_HANDLE_BIND_ERROR              0x1000
-#define UV_HANDLE_IPV6                    0x2000
-#define UV_HANDLE_PIPESERVER              0x4000
-#define UV_HANDLE_READ_PENDING            0x8000
-#define UV_HANDLE_UV_ALLOCED              0x10000
-#define UV_HANDLE_SYNC_BYPASS_IOCP        0x20000
-#define UV_HANDLE_ZERO_READ               0x40000
-#define UV_HANDLE_TTY_RAW                 0x80000
+#define UV_HANDLE_CLOSING                 0x000001
+#define UV_HANDLE_CLOSED                  0x000002
+#define UV_HANDLE_BOUND                   0x000004
+#define UV_HANDLE_LISTENING               0x000008
+#define UV_HANDLE_CONNECTION              0x000010
+#define UV_HANDLE_CONNECTED               0x000020
+#define UV_HANDLE_READING                 0x000040
+#define UV_HANDLE_ACTIVE                  0x000040
+#define UV_HANDLE_EOF                     0x000080
+#define UV_HANDLE_SHUTTING                0x000100
+#define UV_HANDLE_SHUT                    0x000200
+#define UV_HANDLE_ENDGAME_QUEUED          0x000400
+#define UV_HANDLE_BIND_ERROR              0x001000
+#define UV_HANDLE_IPV6                    0x002000
+#define UV_HANDLE_PIPESERVER              0x004000
+#define UV_HANDLE_READ_PENDING            0x008000
+#define UV_HANDLE_UV_ALLOCED              0x010000
+#define UV_HANDLE_SYNC_BYPASS_IOCP        0x020000
+#define UV_HANDLE_ZERO_READ               0x040000
+#define UV_HANDLE_TTY_RAW                 0x080000
 #define UV_HANDLE_EMULATE_IOCP            0x100000
+#define UV_HANDLE_NON_OVERLAPPED_PIPE     0x200000
+#define UV_HANDLE_TTY_SAVED_POSITION      0x400000
+#define UV_HANDLE_TTY_SAVED_ATTRIBUTES    0x800000
 
 void uv_want_endgame(uv_loop_t* loop, uv_handle_t* handle);
 void uv_process_endgames(uv_loop_t* loop);
@@ -307,14 +310,40 @@ uv_err_code uv_translate_sys_error(int sys_errno);
 
 
 /*
- * Initialization for the windows and winsock api
+ * Winapi and ntapi utility functions
  */
 void uv_winapi_init();
+
+
+/*
+ * Winsock utility functions
+ */
 void uv_winsock_init();
+
 int uv_ntstatus_to_winsock_error(NTSTATUS status);
 
+BOOL uv_get_acceptex_function(SOCKET socket, LPFN_ACCEPTEX* target);
+BOOL uv_get_connectex_function(SOCKET socket, LPFN_CONNECTEX* target);
 
-/* Threads and synchronization */
+int WSAAPI uv_wsarecv_workaround(SOCKET socket, WSABUF* buffers,
+    DWORD buffer_count, DWORD* bytes, DWORD* flags, WSAOVERLAPPED *overlapped,
+    LPWSAOVERLAPPED_COMPLETION_ROUTINE completion_routine);
+int WSAAPI uv_wsarecvfrom_workaround(SOCKET socket, WSABUF* buffers,
+    DWORD buffer_count, DWORD* bytes, DWORD* flags, struct sockaddr* addr,
+    int* addr_len, WSAOVERLAPPED *overlapped,
+    LPWSAOVERLAPPED_COMPLETION_ROUTINE completion_routine);
+
+/* Whether ipv6 is supported */
+extern int uv_allow_ipv6;
+
+/* Ip address used to bind to any port at any interface */
+extern struct sockaddr_in uv_addr_ip4_any_;
+extern struct sockaddr_in6 uv_addr_ip6_any_;
+
+
+/*
+ * Threads and synchronization
+ */
 typedef struct uv_once_s {
   unsigned char ran;
   /* The actual event handle must be aligned to sizeof(HANDLE), so in */
