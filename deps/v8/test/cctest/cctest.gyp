@@ -26,18 +26,22 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 {
-  'includes': [ '../../build/v8-features.gypi' ],
+  'includes': ['../../build/common.gypi'],
+  'variables': {
+    'generated_file': '<(SHARED_INTERMEDIATE_DIR)/resources.cc',
+  },
   'targets': [
     {
       'target_name': 'cctest',
       'type': 'executable',
       'dependencies': [
-        '../../tools/gyp/v8.gyp:v8',
+        'resources',
       ],
       'include_dirs': [
         '../../src',
       ],
       'sources': [
+        '<(generated_file)',
         'cctest.cc',
         'gay-fixed.cc',
         'gay-precision.cc',
@@ -56,6 +60,7 @@
         'test-debug.cc',
         'test-decls.cc',
         'test-deoptimization.cc',
+        'test-dictionary.cc',
         'test-diy-fp.cc',
         'test-double.cc',
         'test-dtoa.cc',
@@ -71,9 +76,9 @@
         'test-lock.cc',
         'test-lockers.cc',
         'test-log.cc',
-        'test-log-utils.cc',
         'test-mark-compact.cc',
         'test-parsing.cc',
+        'test-platform-tls.cc',
         'test-profile-generator.cc',
         'test-regexp.cc',
         'test-reloc-info.cc',
@@ -130,6 +135,56 @@
             'test-platform-win32.cc',
           ],
         }],
+        ['component=="shared_library"', {
+          # cctest can't be built against a shared library, so we need to
+          # depend on the underlying static target in that case.
+          'conditions': [
+            ['v8_use_snapshot=="true"', {
+              'dependencies': ['../../tools/gyp/v8.gyp:v8_snapshot'],
+            },
+            {
+              'dependencies': ['../../tools/gyp/v8.gyp:v8_nosnapshot'],
+            }],
+          ],
+        }, {
+          'dependencies': ['../../tools/gyp/v8.gyp:v8'],
+        }],
+      ],
+    },
+    {
+      'target_name': 'resources',
+      'type': 'none',
+      'variables': {
+        'file_list': [
+           '../../tools/splaytree.js',
+           '../../tools/codemap.js',
+           '../../tools/csvparser.js',
+           '../../tools/consarray.js',
+           '../../tools/profile.js',
+           '../../tools/profile_view.js',
+           '../../tools/logreader.js',
+           'log-eq-of-logging-and-traversal.js',
+        ],
+      },
+      'actions': [
+        {
+          'action_name': 'js2c',
+          'inputs': [
+            '../../tools/js2c.py',
+            '<@(file_list)',
+          ],
+          'outputs': [
+            '<(generated_file)',
+          ],
+          'action': [
+            'python',
+            '../../tools/js2c.py',
+            '<@(_outputs)',
+            'TEST',  # type
+            'off',  # compression
+            '<@(file_list)',
+          ],
+        }
       ],
     },
   ],

@@ -166,21 +166,16 @@ void OS::Free(void* address, const size_t size) {
 }
 
 
-#ifdef ENABLE_HEAP_PROTECTION
-
-void OS::Protect(void* address, size_t size) {
-  // TODO(1240712): mprotect has a return value which is ignored here.
-  mprotect(address, size, PROT_READ);
+void OS::ProtectCode(void* address, const size_t size) {
+  DWORD old_protect;
+  VirtualProtect(address, size, PAGE_EXECUTE_READ, &old_protect);
 }
 
 
-void OS::Unprotect(void* address, size_t size, bool is_executable) {
-  // TODO(1240712): mprotect has a return value which is ignored here.
-  int prot = PROT_READ | PROT_WRITE | (is_executable ? PROT_EXEC : 0);
-  mprotect(address, size, prot);
+void OS::Guard(void* address, const size_t size) {
+  DWORD oldprotect;
+  VirtualProtect(address, size, PAGE_READONLY | PAGE_GUARD, &oldprotect);
 }
-
-#endif
 
 
 void OS::Sleep(int milliseconds) {
@@ -249,7 +244,6 @@ PosixMemoryMappedFile::~PosixMemoryMappedFile() {
 
 
 void OS::LogSharedLibraryAddresses() {
-#ifdef ENABLE_LOGGING_AND_PROFILING
   // This function assumes that the layout of the file is as follows:
   // hex_start_addr-hex_end_addr rwxp <unused data> [binary_file_name]
   // If we encounter an unexpected situation we abort scanning further entries.
@@ -306,7 +300,6 @@ void OS::LogSharedLibraryAddresses() {
   }
   free(lib_name);
   fclose(fp);
-#endif
 }
 
 
@@ -481,7 +474,6 @@ void Thread::YieldCPU() {
 
 class CygwinMutex : public Mutex {
  public:
-
   CygwinMutex() {
     pthread_mutexattr_t attrs;
     memset(&attrs, 0, sizeof(attrs));
@@ -590,8 +582,6 @@ Semaphore* OS::CreateSemaphore(int count) {
   return new CygwinSemaphore(count);
 }
 
-
-#ifdef ENABLE_LOGGING_AND_PROFILING
 
 // ----------------------------------------------------------------------------
 // Cygwin profiler support.
@@ -769,7 +759,5 @@ void Sampler::Stop() {
   SetActive(false);
 }
 
-#endif  // ENABLE_LOGGING_AND_PROFILING
 
 } }  // namespace v8::internal
-

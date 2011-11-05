@@ -79,10 +79,9 @@ const char* Platform::GetProcessTitle(int *len) {
 }
 
 
-int Platform::GetMemory(size_t *rss, size_t *vsize) {
+int Platform::GetMemory(size_t *rss) {
   pid_t pid = getpid();
 
-  size_t page_size = getpagesize();
   char pidpath[1024];
   sprintf(pidpath, "/proc/%d/psinfo", pid);
 
@@ -97,30 +96,10 @@ int Platform::GetMemory(size_t *rss, size_t *vsize) {
 
   /* XXX correct? */
 
-  *vsize = (size_t) psinfo.pr_size * page_size;
   *rss = (size_t) psinfo.pr_rssize * 1024;
 
   fclose (f);
 
-  return 0;
-}
-
-
-int Platform::GetExecutablePath(char* buffer, size_t* size) {
-  const char *execname = getexecname();
-  if (!execname) return -1;
-  if (execname[0] == '/') {
-    char *result = strncpy(buffer, execname, *size);
-    *size = strlen(result);
-  } else {
-    char *result = getcwd(buffer, *size);
-    if (!result) return -1;
-    result = strncat(buffer, "/", *size);
-    if (!result) return -1;
-    result = strncat(buffer, execname, *size);
-    if (!result) return -1;
-    *size = strlen(result);
-  }
   return 0;
 }
 
@@ -148,7 +127,7 @@ static Handle<Value> data_named(kstat_named_t *knp) {
     val = String::New(KSTAT_NAMED_STR_PTR(knp));
     break;
   default:
-    throw (String::New("unrecognized data type"));
+    val = String::New("unrecognized data type");
   }
 
   return (val);
@@ -166,7 +145,7 @@ int Platform::GetCPUInfo(Local<Array> *cpus) {
   kstat_named_t *knp;
 
   if ((kc = kstat_open()) == NULL)
-    throw "could not open kstat";
+    return -1;
 
   *cpus = Array::New();
 
@@ -226,75 +205,29 @@ int Platform::GetCPUInfo(Local<Array> *cpus) {
 }
 
 
-double Platform::GetFreeMemory() {
-  kstat_ctl_t   *kc;
-  kstat_t       *ksp;
-  kstat_named_t *knp;
-
-  double pagesize = static_cast<double>(sysconf(_SC_PAGESIZE));
-  ulong_t freemem;
-
-  if((kc = kstat_open()) == NULL)
-    throw "could not open kstat";
-
-  ksp = kstat_lookup(kc, (char *)"unix", 0, (char *)"system_pages");
-
-  if(kstat_read(kc, ksp, NULL) == -1){
-    throw "could not read kstat";
-  }
-  else {
-    knp = (kstat_named_t *) kstat_data_lookup(ksp, (char *)"freemem");
-    freemem = knp->value.ul;
-  }
-
-  kstat_close(kc);
-
-  return static_cast<double>(freemem)*pagesize;
-}
-
-
-double Platform::GetTotalMemory() {
-  double pagesize = static_cast<double>(sysconf(_SC_PAGESIZE));
-  double pages = static_cast<double>(sysconf(_SC_PHYS_PAGES));
-
-  return pagesize*pages;
-}
-
 double Platform::GetUptimeImpl() {
   kstat_ctl_t   *kc;
   kstat_t       *ksp;
   kstat_named_t *knp;
 
   long hz = sysconf(_SC_CLK_TCK);
-  ulong_t clk_intr;
+  double clk_intr;
 
   if ((kc = kstat_open()) == NULL)
-    throw "could not open kstat";
+    return -1;
 
   ksp = kstat_lookup(kc, (char *)"unix", 0, (char *)"system_misc");
 
   if (kstat_read(kc, ksp, NULL) == -1) {
-    throw "unable to read kstat";
+    clk_intr = -1;
   } else {
     knp = (kstat_named_t *) kstat_data_lookup(ksp, (char *)"clk_intr");
-    clk_intr = knp->value.ul;
+    clk_intr = knp->value.ul / hz;
   }
 
   kstat_close(kc);
 
-  return static_cast<double>( clk_intr / hz );
-}
-
-int Platform::GetLoadAvg(Local<Array> *loads) {
-  HandleScope scope;
-  double loadavg[3];
-
-  (void) getloadavg(loadavg, 3);
-  (*loads)->Set(0, Number::New(loadavg[LOADAVG_1MIN]));
-  (*loads)->Set(1, Number::New(loadavg[LOADAVG_5MIN]));
-  (*loads)->Set(2, Number::New(loadavg[LOADAVG_15MIN]));
-
-  return 0;
+  return clk_intr;
 }
 
 

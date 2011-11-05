@@ -145,7 +145,7 @@ static void GenerateDictionaryLoad(MacroAssembler* masm,
   const int kDetailsOffset = kElementsStartOffset + 2 * kPointerSize;
   __ Test(Operand(elements, r1, times_pointer_size,
                   kDetailsOffset - kHeapObjectTag),
-          Smi::FromInt(PropertyDetails::TypeField::mask()));
+          Smi::FromInt(PropertyDetails::TypeField::kMask));
   __ j(not_zero, miss_label);
 
   // Get the value at the masked, scaled index.
@@ -201,9 +201,9 @@ static void GenerateDictionaryStore(MacroAssembler* masm,
       StringDictionary::kHeaderSize +
       StringDictionary::kElementsStartIndex * kPointerSize;
   const int kDetailsOffset = kElementsStartOffset + 2 * kPointerSize;
-  const int kTypeAndReadOnlyMask
-      = (PropertyDetails::TypeField::mask() |
-         PropertyDetails::AttributesField::encode(READ_ONLY)) << kSmiTagSize;
+  const int kTypeAndReadOnlyMask =
+      (PropertyDetails::TypeField::kMask |
+       PropertyDetails::AttributesField::encode(READ_ONLY)) << kSmiTagSize;
   __ Test(Operand(elements,
                   scratch1,
                   times_pointer_size,
@@ -222,110 +222,6 @@ static void GenerateDictionaryStore(MacroAssembler* masm,
   // Update write barrier. Make sure not to clobber the value.
   __ movq(scratch0, value);
   __ RecordWrite(elements, scratch1, scratch0);
-}
-
-
-static void GenerateNumberDictionaryLoad(MacroAssembler* masm,
-                                         Label* miss,
-                                         Register elements,
-                                         Register key,
-                                         Register r0,
-                                         Register r1,
-                                         Register r2,
-                                         Register result) {
-  // Register use:
-  //
-  // elements - holds the slow-case elements of the receiver on entry.
-  //            Unchanged unless 'result' is the same register.
-  //
-  // key      - holds the smi key on entry.
-  //            Unchanged unless 'result' is the same register.
-  //
-  // Scratch registers:
-  //
-  // r0 - holds the untagged key on entry and holds the hash once computed.
-  //
-  // r1 - used to hold the capacity mask of the dictionary
-  //
-  // r2 - used for the index into the dictionary.
-  //
-  // result - holds the result on exit if the load succeeded.
-  //          Allowed to be the same as 'key' or 'result'.
-  //          Unchanged on bailout so 'key' or 'result' can be used
-  //          in further computation.
-
-  Label done;
-
-  // Compute the hash code from the untagged key.  This must be kept in sync
-  // with ComputeIntegerHash in utils.h.
-  //
-  // hash = ~hash + (hash << 15);
-  __ movl(r1, r0);
-  __ notl(r0);
-  __ shll(r1, Immediate(15));
-  __ addl(r0, r1);
-  // hash = hash ^ (hash >> 12);
-  __ movl(r1, r0);
-  __ shrl(r1, Immediate(12));
-  __ xorl(r0, r1);
-  // hash = hash + (hash << 2);
-  __ leal(r0, Operand(r0, r0, times_4, 0));
-  // hash = hash ^ (hash >> 4);
-  __ movl(r1, r0);
-  __ shrl(r1, Immediate(4));
-  __ xorl(r0, r1);
-  // hash = hash * 2057;
-  __ imull(r0, r0, Immediate(2057));
-  // hash = hash ^ (hash >> 16);
-  __ movl(r1, r0);
-  __ shrl(r1, Immediate(16));
-  __ xorl(r0, r1);
-
-  // Compute capacity mask.
-  __ SmiToInteger32(r1,
-                    FieldOperand(elements, NumberDictionary::kCapacityOffset));
-  __ decl(r1);
-
-  // Generate an unrolled loop that performs a few probes before giving up.
-  const int kProbes = 4;
-  for (int i = 0; i < kProbes; i++) {
-    // Use r2 for index calculations and keep the hash intact in r0.
-    __ movq(r2, r0);
-    // Compute the masked index: (hash + i + i * i) & mask.
-    if (i > 0) {
-      __ addl(r2, Immediate(NumberDictionary::GetProbeOffset(i)));
-    }
-    __ and_(r2, r1);
-
-    // Scale the index by multiplying by the entry size.
-    ASSERT(NumberDictionary::kEntrySize == 3);
-    __ lea(r2, Operand(r2, r2, times_2, 0));  // r2 = r2 * 3
-
-    // Check if the key matches.
-    __ cmpq(key, FieldOperand(elements,
-                              r2,
-                              times_pointer_size,
-                              NumberDictionary::kElementsStartOffset));
-    if (i != (kProbes - 1)) {
-      __ j(equal, &done);
-    } else {
-      __ j(not_equal, miss);
-    }
-  }
-
-  __ bind(&done);
-  // Check that the value is a normal propety.
-  const int kDetailsOffset =
-      NumberDictionary::kElementsStartOffset + 2 * kPointerSize;
-  ASSERT_EQ(NORMAL, 0);
-  __ Test(FieldOperand(elements, r2, times_pointer_size, kDetailsOffset),
-          Smi::FromInt(PropertyDetails::TypeField::mask()));
-  __ j(not_zero, miss);
-
-  // Get the value at the masked, scaled index.
-  const int kValueOffset =
-      NumberDictionary::kElementsStartOffset + kPointerSize;
-  __ movq(result, FieldOperand(elements, r2, times_pointer_size, kValueOffset));
 }
 
 
@@ -482,7 +378,7 @@ static void GenerateKeyStringCheck(MacroAssembler* masm,
   __ j(zero, index_string);  // The value in hash is used at jump target.
 
   // Is the string a symbol?
-  ASSERT(kSymbolTag != 0);
+  STATIC_ASSERT(kSymbolTag != 0);
   __ testb(FieldOperand(map, Map::kInstanceTypeOffset),
            Immediate(kIsSymbolMask));
   __ j(zero, not_symbol);
@@ -535,7 +431,7 @@ void KeyedLoadIC::GenerateGeneric(MacroAssembler* masm) {
   __ CompareRoot(FieldOperand(rcx, HeapObject::kMapOffset),
                  Heap::kHashTableMapRootIndex);
   __ j(not_equal, &slow);
-  GenerateNumberDictionaryLoad(masm, &slow, rcx, rax, rbx, r9, rdi, rax);
+  __ LoadFromNumberDictionary(&slow, rcx, rax, rbx, r9, rdi, rax);
   __ ret(0);
 
   __ bind(&slow);
@@ -824,7 +720,6 @@ static void GenerateMonomorphicCacheProbe(MacroAssembler* masm,
 
   // Probe the stub cache.
   Code::Flags flags = Code::ComputeFlags(kind,
-                                         NOT_IN_LOOP,
                                          MONOMORPHIC,
                                          extra_ic_state,
                                          NORMAL,
@@ -1099,7 +994,7 @@ void KeyedCallIC::GenerateMegamorphic(MacroAssembler* masm, int argc) {
   __ j(not_equal, &slow_load);
   __ SmiToInteger32(rbx, rcx);
   // ebx: untagged index
-  GenerateNumberDictionaryLoad(masm, &slow_load, rax, rcx, rbx, r9, rdi, rdi);
+  __ LoadFromNumberDictionary(&slow_load, rax, rcx, rbx, r9, rdi, rdi);
   __ IncrementCounter(counters->keyed_call_generic_smi_dict(), 1);
   __ jmp(&do_call);
 
@@ -1371,9 +1266,7 @@ void LoadIC::GenerateMegamorphic(MacroAssembler* masm) {
   // -----------------------------------
 
   // Probe the stub cache.
-  Code::Flags flags = Code::ComputeFlags(Code::LOAD_IC,
-                                         NOT_IN_LOOP,
-                                         MONOMORPHIC);
+  Code::Flags flags = Code::ComputeFlags(Code::LOAD_IC, MONOMORPHIC);
   Isolate::Current()->stub_cache()->GenerateProbe(masm, flags, rax, rcx, rbx,
                                                   rdx);
 
@@ -1476,10 +1369,8 @@ void StoreIC::GenerateMegamorphic(MacroAssembler* masm,
   // -----------------------------------
 
   // Get the receiver from the stack and probe the stub cache.
-  Code::Flags flags = Code::ComputeFlags(Code::STORE_IC,
-                                         NOT_IN_LOOP,
-                                         MONOMORPHIC,
-                                         strict_mode);
+  Code::Flags flags =
+      Code::ComputeFlags(Code::STORE_IC, MONOMORPHIC, strict_mode);
   Isolate::Current()->stub_cache()->GenerateProbe(masm, flags, rdx, rcx, rbx,
                                                   no_reg);
 

@@ -65,6 +65,7 @@ inline Heap* _inline_get_heap_();
   V(Map, heap_number_map, HeapNumberMap)                                       \
   V(Map, global_context_map, GlobalContextMap)                                 \
   V(Map, fixed_array_map, FixedArrayMap)                                       \
+  V(Map, serialized_scope_info_map, SerializedScopeInfoMap)                    \
   V(Map, fixed_cow_array_map, FixedCOWArrayMap)                                \
   V(Map, fixed_double_array_map, FixedDoubleArrayMap)                          \
   V(Object, no_interceptor_result_sentinel, NoInterceptorResultSentinel)       \
@@ -76,6 +77,7 @@ inline Heap* _inline_get_heap_();
   V(Object, instanceof_cache_map, InstanceofCacheMap)                          \
   V(Object, instanceof_cache_answer, InstanceofCacheAnswer)                    \
   V(FixedArray, single_character_string_cache, SingleCharacterStringCache)     \
+  V(FixedArray, string_split_cache, StringSplitCache)                          \
   V(Object, termination_exception, TerminationException)                       \
   V(FixedArray, empty_fixed_array, EmptyFixedArray)                            \
   V(ByteArray, empty_byte_array, EmptyByteArray)                               \
@@ -87,6 +89,8 @@ inline Heap* _inline_get_heap_();
   V(Map, symbol_map, SymbolMap)                                                \
   V(Map, cons_string_map, ConsStringMap)                                       \
   V(Map, cons_ascii_string_map, ConsAsciiStringMap)                            \
+  V(Map, sliced_string_map, SlicedStringMap)                                   \
+  V(Map, sliced_ascii_string_map, SlicedAsciiStringMap)                        \
   V(Map, ascii_symbol_map, AsciiSymbolMap)                                     \
   V(Map, cons_symbol_map, ConsSymbolMap)                                       \
   V(Map, cons_ascii_symbol_map, ConsAsciiSymbolMap)                            \
@@ -111,6 +115,7 @@ inline Heap* _inline_get_heap_();
   V(Map, function_context_map, FunctionContextMap)                             \
   V(Map, catch_context_map, CatchContextMap)                                   \
   V(Map, with_context_map, WithContextMap)                                     \
+  V(Map, block_context_map, BlockContextMap)                                   \
   V(Map, code_map, CodeMap)                                                    \
   V(Map, oddball_map, OddballMap)                                              \
   V(Map, global_property_cell_map, GlobalPropertyCellMap)                      \
@@ -160,6 +165,7 @@ inline Heap* _inline_get_heap_();
   V(length_symbol, "length")                                             \
   V(name_symbol, "name")                                                 \
   V(native_symbol, "native")                                             \
+  V(null_symbol, "null")                                                 \
   V(number_symbol, "number")                                             \
   V(Number_symbol, "Number")                                             \
   V(nan_symbol, "NaN")                                                   \
@@ -409,12 +415,6 @@ class Heap {
   // Uncommit unused semi space.
   bool UncommitFromSpace() { return new_space_.UncommitFromSpace(); }
 
-#ifdef ENABLE_HEAP_PROTECTION
-  // Protect/unprotect the heap by marking all spaces read-only/writable.
-  void Protect();
-  void Unprotect();
-#endif
-
   // Allocates and initializes a new JavaScript object based on a
   // constructor.
   // Returns Failure::RetryAfterGC(requested_bytes, space) if the allocation
@@ -440,12 +440,25 @@ class Heap {
   // Please note this does not perform a garbage collection.
   MUST_USE_RESULT MaybeObject* AllocateFunctionPrototype(JSFunction* function);
 
-  // Allocates a Harmony Proxy.
+  // Allocates a Harmony proxy or function proxy.
   // Returns Failure::RetryAfterGC(requested_bytes, space) if the allocation
   // failed.
   // Please note this does not perform a garbage collection.
   MUST_USE_RESULT MaybeObject* AllocateJSProxy(Object* handler,
                                                Object* prototype);
+
+  MUST_USE_RESULT MaybeObject* AllocateJSFunctionProxy(Object* handler,
+                                                       Object* call_trap,
+                                                       Object* construct_trap,
+                                                       Object* prototype);
+
+  // Reinitialize a JSReceiver into an (empty) JS object of respective type and
+  // size, but keeping the original prototype.  The receiver must have at least
+  // the size of the new object.  The object is reinitialized and behaves as an
+  // object that has been freshly allocated.
+  MUST_USE_RESULT MaybeObject* ReinitializeJSReceiver(JSReceiver* object,
+                                                      InstanceType type,
+                                                      int size);
 
   // Reinitialize an JSGlobalProxy based on a constructor.  The object
   // must have the same size as objects allocated using the
@@ -483,6 +496,9 @@ class Heap {
 
   // Allocates an empty code cache.
   MUST_USE_RESULT MaybeObject* AllocateCodeCache();
+
+  // Allocates a serialized scope info.
+  MUST_USE_RESULT MaybeObject* AllocateSerializedScopeInfo(int length);
 
   // Allocates an empty PolymorphicCodeCache.
   MUST_USE_RESULT MaybeObject* AllocatePolymorphicCodeCache();
@@ -618,6 +634,16 @@ class Heap {
   // Failure::RetryAfterGC(requested_bytes, space) if the allocation failed.
   MUST_USE_RESULT MaybeObject* CopyFixedArrayWithMap(FixedArray* src, Map* map);
 
+  // Make a copy of src and return it. Returns
+  // Failure::RetryAfterGC(requested_bytes, space) if the allocation failed.
+  MUST_USE_RESULT inline MaybeObject* CopyFixedDoubleArray(
+      FixedDoubleArray* src);
+
+  // Make a copy of src, set the map, and return the copy. Returns
+  // Failure::RetryAfterGC(requested_bytes, space) if the allocation failed.
+  MUST_USE_RESULT MaybeObject* CopyFixedDoubleArrayWithMap(
+      FixedDoubleArray* src, Map* map);
+
   // Allocates a fixed array initialized with the hole values.
   // Returns Failure::RetryAfterGC(requested_bytes, space) if the allocation
   // failed.
@@ -658,6 +684,11 @@ class Heap {
   MUST_USE_RESULT MaybeObject* AllocateWithContext(JSFunction* function,
                                                    Context* previous,
                                                    JSObject* extension);
+
+  // Allocate a block context.
+  MUST_USE_RESULT MaybeObject* AllocateBlockContext(JSFunction* function,
+                                                    Context* previous,
+                                                    SerializedScopeInfo* info);
 
   // Allocates a new utility object in the old generation.
   MUST_USE_RESULT MaybeObject* AllocateStruct(InstanceType type);
@@ -1052,10 +1083,8 @@ class Heap {
   void ZapFromSpace();
 #endif
 
-#if defined(ENABLE_LOGGING_AND_PROFILING)
   // Print short heap statistics.
   void PrintShortHeapStatistics();
-#endif
 
   // Makes a new symbol object
   // Returns Failure::RetryAfterGC(requested_bytes, space) if the allocation
@@ -1514,11 +1543,9 @@ class Heap {
   // around a GC).
   inline void CompletelyClearInstanceofCache();
 
-#if defined(DEBUG) || defined(ENABLE_LOGGING_AND_PROFILING)
   // Record statistics before and after garbage collection.
   void ReportStatisticsBeforeGC();
   void ReportStatisticsAfterGC();
-#endif
 
   // Slow part of scavenge object.
   static void ScavengeObjectSlow(HeapObject** p, HeapObject* object);
@@ -1641,6 +1668,7 @@ class Heap {
   friend class Page;
   friend class Isolate;
   friend class MarkCompactCollector;
+  friend class StaticMarkingVisitor;
   friend class MapCompact;
 
   DISALLOW_COPY_AND_ASSIGN(Heap);
@@ -2154,6 +2182,27 @@ class GCTracer BASE_EMBEDDED {
   intptr_t promoted_objects_size_;
 
   Heap* heap_;
+};
+
+
+class StringSplitCache {
+ public:
+  static Object* Lookup(FixedArray* cache, String* string, String* pattern);
+  static void Enter(Heap* heap,
+                    FixedArray* cache,
+                    String* string,
+                    String* pattern,
+                    FixedArray* array);
+  static void Clear(FixedArray* cache);
+  static const int kStringSplitCacheSize = 0x100;
+
+ private:
+  static const int kArrayEntriesPerCacheEntry = 4;
+  static const int kStringOffset = 0;
+  static const int kPatternOffset = 1;
+  static const int kArrayOffset = 2;
+
+  static MaybeObject* WrapFixedArrayInJSArray(Object* fixed_array);
 };
 
 

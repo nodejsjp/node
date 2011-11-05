@@ -29,6 +29,12 @@
 #ifndef V8_MIPS_REGEXP_MACRO_ASSEMBLER_MIPS_H_
 #define V8_MIPS_REGEXP_MACRO_ASSEMBLER_MIPS_H_
 
+#include "mips/assembler-mips.h"
+#include "mips/assembler-mips-inl.h"
+#include "macro-assembler.h"
+#include "code.h"
+#include "mips/macro-assembler-mips.h"
+
 namespace v8 {
 namespace internal {
 
@@ -112,6 +118,7 @@ class RegExpMacroAssemblerMIPS: public NativeRegExpMacroAssembler {
   static int CheckStackGuardState(Address* return_address,
                                   Code* re_code,
                                   Address re_frame);
+
  private:
   // Offsets from frame_pointer() of function parameters and stored registers.
   static const int kFramePointer = 0;
@@ -249,4 +256,3 @@ class RegExpMacroAssemblerMIPS: public NativeRegExpMacroAssembler {
 }}  // namespace v8::internal
 
 #endif  // V8_MIPS_REGEXP_MACRO_ASSEMBLER_MIPS_H_
-

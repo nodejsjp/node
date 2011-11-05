@@ -10,6 +10,64 @@ them.
 `require('util')` を使うことでこれらにアクセスします。
 
 
+### util.format()
+
+<!--
+Returns a formatted string using the first argument as a `printf`-like format.
+-->
+最初の引数を `printf` のようなフォーマットとして使用して、フォーマット化された
+文字列を返します。
+
+<!--
+The first argument is a string that contains zero or more *placeholders*.
+Each placeholder is replaced with the converted value from its corresponding
+argument. Supported placeholders are:
+-->
+第一引数は文字列で、0 個以上の *プレースホルダ* を含みます。
+それぞれのプレースホルダは対応する引数を変換した値で置換されます。
+サポートするプレースホルダは:
+
+<!--
+* `%s` - String.
+* `%d` - Number (both integer and float).
+* `%j` - JSON.
+* `%%` - single percent sign (`'%'`). This does not consume an argument.
+-->
+* `%s` - 文字列。
+* `%d` - 数値 (整数と浮動小数点数の両方)。
+* `%j` - JSON。
+* `%%` - 一つのパーセント記号 (`'%'`)。これは引数を消費しません。
+
+<!--
+If the placeholder does not have a corresponding argument, the placeholder is
+not replaced.
+-->
+プレースホルダに対応する引数が無い場合、そのプレースホルダは置換されません。
+
+    util.format('%s:%s', 'foo'); // 'foo:%s'
+
+<!--
+If there are more arguments than placeholders, the extra arguments are
+converted to strings with `util.inspect()` and these strings are concatenated,
+delimited by a space.
+-->
+プレースホルダより多くの引数がある場合、余った引数は `util.inspect()` によって
+文字列化され、それらはスペース区切りで連結されます。
+
+    util.format('%s:%s', 'foo', 'bar', 'baz'); // 'foo:bar baz'
+
+<!--
+If the first argument is not a format string then `util.format()` returns
+a string that is the concatenation of all its arguments separated by spaces.
+Each argument is converted to a string with `util.inspect()`.
+-->
+第一引数がフォーマット文字列ではない場合、`util.format()` は全ての引数を
+スペース区切りで連結して返します。
+ここの引数は `util.inspect()` で文字列に変換されます。
+
+    util.format(1, 2, 3); // '1 2 3'
+
+
 ### util.debug(string)
 
 <!--
@@ -83,6 +141,76 @@ Example of inspecting all properties of the `util` object:
     var util = require('util');
 
     console.log(util.inspect(util, true, null));
+
+
+### util.isArray(object)
+
+<!--
+
+Returns `true` if the given "object" is an `Array`. `false` otherwise.
+
+-->
+`object` が配列なら `true` を、それ以外は `false` を返します。
+
+    var util = require('util');
+
+    util.isArray([])
+      // true
+    util.isArray(new Array)
+      // true
+    util.isArray({})
+      // false
+
+
+### util.isRegExp(object)
+
+<!--
+Returns `true` if the given "object" is a `RegExp`. `false` otherwise.
+-->
+`object` が `RegExp` なら `true` を、それ以外なら `false` を返します。
+
+    var util = require('util');
+
+    util.isRegExp(/some regexp/)
+      // true
+    util.isRegExp(new RegExp('another regexp'))
+      // true
+    util.isRegExp({})
+      // false
+
+
+### util.isDate(object)
+
+<!--
+Returns `true` if the given "object" is a `Date`. `false` otherwise.
+-->
+`object` が `Date` なら `true` を、それ以外なら `false` を返します。
+
+    var util = require('util');
+
+    util.isDate(new Date())
+      // true
+    util.isDate(Date())
+      // false (without 'new' returns a String)
+    util.isDate({})
+      // false
+
+
+### util.isError(object)
+
+<!--
+Returns `true` if the given "object" is an `Error`. `false` otherwise.
+-->
+`object` が `Error` なら `true` を、それ以外なら `false` を返します。
+
+    var util = require('util');
+
+    util.isError(new Error())
+      // true
+    util.isError(new TypeError())
+      // true
+    util.isError({ name: 'Error', message: 'an error occurred' })
+      // false
 
 
 ### util.pump(readableStream, writableStream, [callback])

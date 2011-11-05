@@ -192,13 +192,13 @@ void MacroAssembler::Call(Handle<Code> code,
   bind(&start);
   ASSERT(RelocInfo::IsCodeTarget(rmode));
   if (rmode == RelocInfo::CODE_TARGET && ast_id != kNoASTId) {
-    ASSERT(ast_id_for_reloc_info_ == kNoASTId);
-    ast_id_for_reloc_info_ = ast_id;
+    SetRecordedAstId(ast_id);
     rmode = RelocInfo::CODE_TARGET_WITH_ID;
   }
   // 'code' is always generated ARM code, never THUMB code
   Call(reinterpret_cast<Address>(code.location()), rmode, cond);
-  ASSERT_EQ(CallSize(code, rmode, cond), SizeOfCodeGeneratedSince(&start));
+  ASSERT_EQ(CallSize(code, rmode, ast_id, cond),
+            SizeOfCodeGeneratedSince(&start));
 }
 
 
@@ -760,9 +760,9 @@ void MacroAssembler::EnterExitFrame(bool save_doubles, int stack_space) {
   str(ip, MemOperand(fp, ExitFrameConstants::kCodeOffset));
 
   // Save the frame pointer and the context in top.
-  mov(ip, Operand(ExternalReference(Isolate::k_c_entry_fp_address, isolate())));
+  mov(ip, Operand(ExternalReference(Isolate::kCEntryFPAddress, isolate())));
   str(fp, MemOperand(ip));
-  mov(ip, Operand(ExternalReference(Isolate::k_context_address, isolate())));
+  mov(ip, Operand(ExternalReference(Isolate::kContextAddress, isolate())));
   str(cp, MemOperand(ip));
 
   // Optionally save all double registers.
@@ -838,11 +838,11 @@ void MacroAssembler::LeaveExitFrame(bool save_doubles,
 
   // Clear top frame.
   mov(r3, Operand(0, RelocInfo::NONE));
-  mov(ip, Operand(ExternalReference(Isolate::k_c_entry_fp_address, isolate())));
+  mov(ip, Operand(ExternalReference(Isolate::kCEntryFPAddress, isolate())));
   str(r3, MemOperand(ip));
 
   // Restore current context from top and clear it in debug mode.
-  mov(ip, Operand(ExternalReference(Isolate::k_context_address, isolate())));
+  mov(ip, Operand(ExternalReference(Isolate::kContextAddress, isolate())));
   ldr(cp, MemOperand(ip));
 #ifdef DEBUG
   str(r3, MemOperand(ip));
@@ -1102,7 +1102,13 @@ void MacroAssembler::DebugBreak() {
 void MacroAssembler::PushTryHandler(CodeLocation try_location,
                                     HandlerType type) {
   // Adjust this code if not the case.
-  ASSERT(StackHandlerConstants::kSize == 4 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kSize == 5 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kNextOffset == 0 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kStateOffset == 1 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kContextOffset == 2 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kFPOffset == 3 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kPCOffset == 4 * kPointerSize);
+
   // The pc (return address) is passed in register lr.
   if (try_location == IN_JAVASCRIPT) {
     if (type == TRY_CATCH_HANDLER) {
@@ -1110,14 +1116,10 @@ void MacroAssembler::PushTryHandler(CodeLocation try_location,
     } else {
       mov(r3, Operand(StackHandler::TRY_FINALLY));
     }
-    ASSERT(StackHandlerConstants::kStateOffset == 1 * kPointerSize
-           && StackHandlerConstants::kFPOffset == 2 * kPointerSize
-           && StackHandlerConstants::kPCOffset == 3 * kPointerSize);
-    stm(db_w, sp, r3.bit() | fp.bit() | lr.bit());
+    stm(db_w, sp, r3.bit() | cp.bit() | fp.bit() | lr.bit());
     // Save the current handler as the next handler.
-    mov(r3, Operand(ExternalReference(Isolate::k_handler_address, isolate())));
+    mov(r3, Operand(ExternalReference(Isolate::kHandlerAddress, isolate())));
     ldr(r1, MemOperand(r3));
-    ASSERT(StackHandlerConstants::kNextOffset == 0);
     push(r1);
     // Link this handler as the new current one.
     str(sp, MemOperand(r3));
@@ -1127,16 +1129,13 @@ void MacroAssembler::PushTryHandler(CodeLocation try_location,
     // The frame pointer does not point to a JS frame so we save NULL
     // for fp. We expect the code throwing an exception to check fp
     // before dereferencing it to restore the context.
-    mov(ip, Operand(0, RelocInfo::NONE));  // To save a NULL frame pointer.
-    mov(r6, Operand(StackHandler::ENTRY));
-    ASSERT(StackHandlerConstants::kStateOffset == 1 * kPointerSize
-           && StackHandlerConstants::kFPOffset == 2 * kPointerSize
-           && StackHandlerConstants::kPCOffset == 3 * kPointerSize);
-    stm(db_w, sp, r6.bit() | ip.bit() | lr.bit());
+    mov(r5, Operand(StackHandler::ENTRY));  // State.
+    mov(r6, Operand(Smi::FromInt(0)));  // Indicates no context.
+    mov(r7, Operand(0, RelocInfo::NONE));  // NULL frame pointer.
+    stm(db_w, sp, r5.bit() | r6.bit() | r7.bit() | lr.bit());
     // Save the current handler as the next handler.
-    mov(r7, Operand(ExternalReference(Isolate::k_handler_address, isolate())));
+    mov(r7, Operand(ExternalReference(Isolate::kHandlerAddress, isolate())));
     ldr(r6, MemOperand(r7));
-    ASSERT(StackHandlerConstants::kNextOffset == 0);
     push(r6);
     // Link this handler as the new current one.
     str(sp, MemOperand(r7));
@@ -1145,48 +1144,49 @@ void MacroAssembler::PushTryHandler(CodeLocation try_location,
 
 
 void MacroAssembler::PopTryHandler() {
-  ASSERT_EQ(0, StackHandlerConstants::kNextOffset);
+  STATIC_ASSERT(StackHandlerConstants::kNextOffset == 0);
   pop(r1);
-  mov(ip, Operand(ExternalReference(Isolate::k_handler_address, isolate())));
+  mov(ip, Operand(ExternalReference(Isolate::kHandlerAddress, isolate())));
   add(sp, sp, Operand(StackHandlerConstants::kSize - kPointerSize));
   str(r1, MemOperand(ip));
 }
 
 
 void MacroAssembler::Throw(Register value) {
+  // Adjust this code if not the case.
+  STATIC_ASSERT(StackHandlerConstants::kSize == 5 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kNextOffset == 0 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kStateOffset == 1 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kContextOffset == 2 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kFPOffset == 3 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kPCOffset == 4 * kPointerSize);
   // r0 is expected to hold the exception.
   if (!value.is(r0)) {
     mov(r0, value);
   }
 
-  // Adjust this code if not the case.
-  STATIC_ASSERT(StackHandlerConstants::kSize == 4 * kPointerSize);
-
   // Drop the sp to the top of the handler.
-  mov(r3, Operand(ExternalReference(Isolate::k_handler_address, isolate())));
+  mov(r3, Operand(ExternalReference(Isolate::kHandlerAddress, isolate())));
   ldr(sp, MemOperand(r3));
 
-  // Restore the next handler and frame pointer, discard handler state.
-  STATIC_ASSERT(StackHandlerConstants::kNextOffset == 0);
+  // Restore the next handler.
   pop(r2);
   str(r2, MemOperand(r3));
-  STATIC_ASSERT(StackHandlerConstants::kFPOffset == 2 * kPointerSize);
-  ldm(ia_w, sp, r3.bit() | fp.bit());  // r3: discarded state.
 
-  // Before returning we restore the context from the frame pointer if
-  // not NULL.  The frame pointer is NULL in the exception handler of a
-  // JS entry frame.
-  cmp(fp, Operand(0, RelocInfo::NONE));
-  // Set cp to NULL if fp is NULL.
-  mov(cp, Operand(0, RelocInfo::NONE), LeaveCC, eq);
-  // Restore cp otherwise.
-  ldr(cp, MemOperand(fp, StandardFrameConstants::kContextOffset), ne);
+  // Restore context and frame pointer, discard state (r3).
+  ldm(ia_w, sp, r3.bit() | cp.bit() | fp.bit());
+
+  // If the handler is a JS frame, restore the context to the frame.
+  // (r3 == ENTRY) == (fp == 0) == (cp == 0), so we could test any
+  // of them.
+  cmp(r3, Operand(StackHandler::ENTRY));
+  str(cp, MemOperand(fp, StandardFrameConstants::kContextOffset), ne);
+
 #ifdef DEBUG
   if (emit_debug_code()) {
     mov(lr, Operand(pc));
   }
 #endif
-  STATIC_ASSERT(StackHandlerConstants::kPCOffset == 3 * kPointerSize);
   pop(pc);
 }
 
@@ -1194,15 +1194,19 @@ void MacroAssembler::Throw(Register value) {
 void MacroAssembler::ThrowUncatchable(UncatchableExceptionType type,
                                       Register value) {
   // Adjust this code if not the case.
-  STATIC_ASSERT(StackHandlerConstants::kSize == 4 * kPointerSize);
-
+  STATIC_ASSERT(StackHandlerConstants::kSize == 5 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kNextOffset == 0 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kStateOffset == 1 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kContextOffset == 2 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kFPOffset == 3 * kPointerSize);
+  STATIC_ASSERT(StackHandlerConstants::kPCOffset == 4 * kPointerSize);
   // r0 is expected to hold the exception.
   if (!value.is(r0)) {
     mov(r0, value);
   }
 
   // Drop sp to the top stack handler.
-  mov(r3, Operand(ExternalReference(Isolate::k_handler_address, isolate())));
+  mov(r3, Operand(ExternalReference(Isolate::kHandlerAddress, isolate())));
   ldr(sp, MemOperand(r3));
 
   // Unwind the handlers until the ENTRY handler is found.
@@ -1220,14 +1224,13 @@ void MacroAssembler::ThrowUncatchable(UncatchableExceptionType type,
   bind(&done);
 
   // Set the top handler address to next handler past the current ENTRY handler.
-  STATIC_ASSERT(StackHandlerConstants::kNextOffset == 0);
   pop(r2);
   str(r2, MemOperand(r3));
 
   if (type == OUT_OF_MEMORY) {
     // Set external caught exception to false.
     ExternalReference external_caught(
-        Isolate::k_external_caught_exception_address, isolate());
+        Isolate::kExternalCaughtExceptionAddress, isolate());
     mov(r0, Operand(false, RelocInfo::NONE));
     mov(r2, Operand(external_caught));
     str(r0, MemOperand(r2));
@@ -1235,33 +1238,24 @@ void MacroAssembler::ThrowUncatchable(UncatchableExceptionType type,
     // Set pending exception and r0 to out of memory exception.
     Failure* out_of_memory = Failure::OutOfMemoryException();
     mov(r0, Operand(reinterpret_cast<int32_t>(out_of_memory)));
-    mov(r2, Operand(ExternalReference(Isolate::k_pending_exception_address,
+    mov(r2, Operand(ExternalReference(Isolate::kPendingExceptionAddress,
                                       isolate())));
     str(r0, MemOperand(r2));
   }
 
   // Stack layout at this point. See also StackHandlerConstants.
   // sp ->   state (ENTRY)
+  //         cp
   //         fp
   //         lr
 
-  // Discard handler state (r2 is not used) and restore frame pointer.
-  STATIC_ASSERT(StackHandlerConstants::kFPOffset == 2 * kPointerSize);
-  ldm(ia_w, sp, r2.bit() | fp.bit());  // r2: discarded state.
-  // Before returning we restore the context from the frame pointer if
-  // not NULL.  The frame pointer is NULL in the exception handler of a
-  // JS entry frame.
-  cmp(fp, Operand(0, RelocInfo::NONE));
-  // Set cp to NULL if fp is NULL.
-  mov(cp, Operand(0, RelocInfo::NONE), LeaveCC, eq);
-  // Restore cp otherwise.
-  ldr(cp, MemOperand(fp, StandardFrameConstants::kContextOffset), ne);
+  // Restore context and frame pointer, discard state (r2).
+  ldm(ia_w, sp, r2.bit() | cp.bit() | fp.bit());
 #ifdef DEBUG
   if (emit_debug_code()) {
     mov(lr, Operand(pc));
   }
 #endif
-  STATIC_ASSERT(StackHandlerConstants::kPCOffset == 3 * kPointerSize);
   pop(pc);
 }
 
@@ -1340,6 +1334,100 @@ void MacroAssembler::CheckAccessGlobalProxy(Register holder_reg,
   b(ne, miss);
 
   bind(&same_contexts);
+}
+
+
+void MacroAssembler::LoadFromNumberDictionary(Label* miss,
+                                              Register elements,
+                                              Register key,
+                                              Register result,
+                                              Register t0,
+                                              Register t1,
+                                              Register t2) {
+  // Register use:
+  //
+  // elements - holds the slow-case elements of the receiver on entry.
+  //            Unchanged unless 'result' is the same register.
+  //
+  // key      - holds the smi key on entry.
+  //            Unchanged unless 'result' is the same register.
+  //
+  // result   - holds the result on exit if the load succeeded.
+  //            Allowed to be the same as 'key' or 'result'.
+  //            Unchanged on bailout so 'key' or 'result' can be used
+  //            in further computation.
+  //
+  // Scratch registers:
+  //
+  // t0 - holds the untagged key on entry and holds the hash once computed.
+  //
+  // t1 - used to hold the capacity mask of the dictionary
+  //
+  // t2 - used for the index into the dictionary.
+  Label done;
+
+  // Compute the hash code from the untagged key.  This must be kept in sync
+  // with ComputeIntegerHash in utils.h.
+  //
+  // hash = ~hash + (hash << 15);
+  mvn(t1, Operand(t0));
+  add(t0, t1, Operand(t0, LSL, 15));
+  // hash = hash ^ (hash >> 12);
+  eor(t0, t0, Operand(t0, LSR, 12));
+  // hash = hash + (hash << 2);
+  add(t0, t0, Operand(t0, LSL, 2));
+  // hash = hash ^ (hash >> 4);
+  eor(t0, t0, Operand(t0, LSR, 4));
+  // hash = hash * 2057;
+  mov(t1, Operand(2057));
+  mul(t0, t0, t1);
+  // hash = hash ^ (hash >> 16);
+  eor(t0, t0, Operand(t0, LSR, 16));
+
+  // Compute the capacity mask.
+  ldr(t1, FieldMemOperand(elements, NumberDictionary::kCapacityOffset));
+  mov(t1, Operand(t1, ASR, kSmiTagSize));  // convert smi to int
+  sub(t1, t1, Operand(1));
+
+  // Generate an unrolled loop that performs a few probes before giving up.
+  static const int kProbes = 4;
+  for (int i = 0; i < kProbes; i++) {
+    // Use t2 for index calculations and keep the hash intact in t0.
+    mov(t2, t0);
+    // Compute the masked index: (hash + i + i * i) & mask.
+    if (i > 0) {
+      add(t2, t2, Operand(NumberDictionary::GetProbeOffset(i)));
+    }
+    and_(t2, t2, Operand(t1));
+
+    // Scale the index by multiplying by the element size.
+    ASSERT(NumberDictionary::kEntrySize == 3);
+    add(t2, t2, Operand(t2, LSL, 1));  // t2 = t2 * 3
+
+    // Check if the key is identical to the name.
+    add(t2, elements, Operand(t2, LSL, kPointerSizeLog2));
+    ldr(ip, FieldMemOperand(t2, NumberDictionary::kElementsStartOffset));
+    cmp(key, Operand(ip));
+    if (i != kProbes - 1) {
+      b(eq, &done);
+    } else {
+      b(ne, miss);
+    }
+  }
+
+  bind(&done);
+  // Check that the value is a normal property.
+  // t2: elements + (index * kPointerSize)
+  const int kDetailsOffset =
+      NumberDictionary::kElementsStartOffset + 2 * kPointerSize;
+  ldr(t1, FieldMemOperand(t2, kDetailsOffset));
+  tst(t1, Operand(Smi::FromInt(PropertyDetails::TypeField::kMask)));
+  b(ne, miss);
+
+  // Get the value at the masked, scaled index and return.
+  const int kValueOffset =
+      NumberDictionary::kElementsStartOffset + kPointerSize;
+  ldr(result, FieldMemOperand(t2, kValueOffset));
 }
 
 
@@ -1637,6 +1725,46 @@ void MacroAssembler::AllocateAsciiConsString(Register result,
 }
 
 
+void MacroAssembler::AllocateTwoByteSlicedString(Register result,
+                                                 Register length,
+                                                 Register scratch1,
+                                                 Register scratch2,
+                                                 Label* gc_required) {
+  AllocateInNewSpace(SlicedString::kSize,
+                     result,
+                     scratch1,
+                     scratch2,
+                     gc_required,
+                     TAG_OBJECT);
+
+  InitializeNewString(result,
+                      length,
+                      Heap::kSlicedStringMapRootIndex,
+                      scratch1,
+                      scratch2);
+}
+
+
+void MacroAssembler::AllocateAsciiSlicedString(Register result,
+                                               Register length,
+                                               Register scratch1,
+                                               Register scratch2,
+                                               Label* gc_required) {
+  AllocateInNewSpace(SlicedString::kSize,
+                     result,
+                     scratch1,
+                     scratch2,
+                     gc_required,
+                     TAG_OBJECT);
+
+  InitializeNewString(result,
+                      length,
+                      Heap::kSlicedAsciiStringMapRootIndex,
+                      scratch1,
+                      scratch2);
+}
+
+
 void MacroAssembler::CompareObjectType(Register object,
                                        Register map,
                                        Register type_reg,
@@ -1665,7 +1793,7 @@ void MacroAssembler::CompareRoot(Register obj,
 void MacroAssembler::CheckFastElements(Register map,
                                        Register scratch,
                                        Label* fail) {
-  STATIC_ASSERT(JSObject::FAST_ELEMENTS == 0);
+  STATIC_ASSERT(FAST_ELEMENTS == 0);
   ldrb(scratch, FieldMemOperand(map, Map::kBitField2Offset));
   cmp(scratch, Operand(Map::kMaximumBitField2FastElementValue));
   b(hi, fail);
@@ -1768,7 +1896,7 @@ void MacroAssembler::TryGetFunctionPrototype(Register function,
 
 void MacroAssembler::CallStub(CodeStub* stub, Condition cond) {
   ASSERT(allow_stub_calls());  // Stub calls are not allowed in some stubs.
-  Call(stub->GetCode(), RelocInfo::CODE_TARGET, cond);
+  Call(stub->GetCode(), RelocInfo::CODE_TARGET, kNoASTId, cond);
 }
 
 
@@ -1778,7 +1906,8 @@ MaybeObject* MacroAssembler::TryCallStub(CodeStub* stub, Condition cond) {
   { MaybeObject* maybe_result = stub->TryGetCode();
     if (!maybe_result->ToObject(&result)) return maybe_result;
   }
-  Call(Handle<Code>(Code::cast(result)), RelocInfo::CODE_TARGET, cond);
+  Handle<Code> code(Code::cast(result));
+  Call(code, RelocInfo::CODE_TARGET, kNoASTId, cond);
   return result;
 }
 
@@ -2452,6 +2581,9 @@ void MacroAssembler::AssertFastElements(Register elements) {
     push(elements);
     ldr(elements, FieldMemOperand(elements, HeapObject::kMapOffset));
     LoadRoot(ip, Heap::kFixedArrayMapRootIndex);
+    cmp(elements, ip);
+    b(eq, &ok);
+    LoadRoot(ip, Heap::kFixedDoubleArrayMapRootIndex);
     cmp(elements, ip);
     b(eq, &ok);
     LoadRoot(ip, Heap::kFixedCOWArrayMapRootIndex);

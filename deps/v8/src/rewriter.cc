@@ -66,9 +66,13 @@ class Processor: public AstVisitor {
 
   Expression* SetResult(Expression* value) {
     result_assigned_ = true;
-    VariableProxy* result_proxy = new VariableProxy(result_);
-    return new Assignment(Token::ASSIGN, result_proxy, value,
-                          RelocInfo::kNoPosition);
+    Zone* zone = isolate()->zone();
+    VariableProxy* result_proxy = new(zone) VariableProxy(isolate(), result_);
+    return new(zone) Assignment(isolate(),
+                                Token::ASSIGN,
+                                result_proxy,
+                                value,
+                                RelocInfo::kNoPosition);
   }
 
   // Node visitors.
@@ -193,14 +197,17 @@ void Processor::VisitBreakStatement(BreakStatement* node) {
 }
 
 
+void Processor::VisitWithStatement(WithStatement* node) {
+  bool set_after_body = is_set_;
+  Visit(node->statement());
+  is_set_ = is_set_ && set_after_body;
+}
+
+
 // Do nothing:
 void Processor::VisitDeclaration(Declaration* node) {}
 void Processor::VisitEmptyStatement(EmptyStatement* node) {}
 void Processor::VisitReturnStatement(ReturnStatement* node) {}
-void Processor::VisitEnterWithContextStatement(
-    EnterWithContextStatement* node) {
-}
-void Processor::VisitExitContextStatement(ExitContextStatement* node) {}
 void Processor::VisitDebuggerStatement(DebuggerStatement* node) {}
 
 
@@ -229,8 +236,10 @@ bool Rewriter::Rewrite(CompilationInfo* info) {
     if (processor.HasStackOverflow()) return false;
 
     if (processor.result_assigned()) {
-      VariableProxy* result_proxy = new VariableProxy(result);
-      body->Add(new ReturnStatement(result_proxy));
+      Isolate* isolate = info->isolate();
+      Zone* zone = isolate->zone();
+      VariableProxy* result_proxy = new(zone) VariableProxy(isolate, result);
+      body->Add(new(zone) ReturnStatement(result_proxy));
     }
   }
 

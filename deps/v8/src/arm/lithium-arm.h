@@ -92,8 +92,7 @@ class LCodeGen;
   V(DivI)                                       \
   V(DoubleToI)                                  \
   V(ElementsKind)                               \
-  V(ExternalArrayLength)                        \
-  V(FixedArrayLength)                           \
+  V(FixedArrayBaseLength)                       \
   V(FunctionLiteral)                            \
   V(GetCachedArrayIndex)                        \
   V(GlobalObject)                               \
@@ -121,6 +120,7 @@ class LCodeGen;
   V(LoadFunctionPrototype)                      \
   V(LoadGlobalCell)                             \
   V(LoadGlobalGeneric)                          \
+  V(LoadKeyedFastDoubleElement)                 \
   V(LoadKeyedFastElement)                       \
   V(LoadKeyedGeneric)                           \
   V(LoadKeyedSpecializedArrayElement)           \
@@ -147,6 +147,7 @@ class LCodeGen;
   V(StoreContextSlot)                           \
   V(StoreGlobalCell)                            \
   V(StoreGlobalGeneric)                         \
+  V(StoreKeyedFastDoubleElement)                \
   V(StoreKeyedFastElement)                      \
   V(StoreKeyedGeneric)                          \
   V(StoreKeyedSpecializedArrayElement)          \
@@ -913,25 +914,15 @@ class LJSArrayLength: public LTemplateInstruction<1, 1, 0> {
 };
 
 
-class LExternalArrayLength: public LTemplateInstruction<1, 1, 0> {
+class LFixedArrayBaseLength: public LTemplateInstruction<1, 1, 0> {
  public:
-  explicit LExternalArrayLength(LOperand* value) {
+  explicit LFixedArrayBaseLength(LOperand* value) {
     inputs_[0] = value;
   }
 
-  DECLARE_CONCRETE_INSTRUCTION(ExternalArrayLength, "external-array-length")
-  DECLARE_HYDROGEN_ACCESSOR(ExternalArrayLength)
-};
-
-
-class LFixedArrayLength: public LTemplateInstruction<1, 1, 0> {
- public:
-  explicit LFixedArrayLength(LOperand* value) {
-    inputs_[0] = value;
-  }
-
-  DECLARE_CONCRETE_INSTRUCTION(FixedArrayLength, "fixed-array-length")
-  DECLARE_HYDROGEN_ACCESSOR(FixedArrayLength)
+  DECLARE_CONCRETE_INSTRUCTION(FixedArrayBaseLength,
+                               "fixed-array-base-length")
+  DECLARE_HYDROGEN_ACCESSOR(FixedArrayBaseLength)
 };
 
 
@@ -1137,6 +1128,22 @@ class LLoadKeyedFastElement: public LTemplateInstruction<1, 2, 0> {
 };
 
 
+class LLoadKeyedFastDoubleElement: public LTemplateInstruction<1, 2, 0> {
+ public:
+  LLoadKeyedFastDoubleElement(LOperand* elements, LOperand* key) {
+    inputs_[0] = elements;
+    inputs_[1] = key;
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(LoadKeyedFastDoubleElement,
+                               "load-keyed-fast-double-element")
+  DECLARE_HYDROGEN_ACCESSOR(LoadKeyedFastDoubleElement)
+
+  LOperand* elements() { return inputs_[0]; }
+  LOperand* key() { return inputs_[1]; }
+};
+
+
 class LLoadKeyedSpecializedArrayElement: public LTemplateInstruction<1, 2, 0> {
  public:
   LLoadKeyedSpecializedArrayElement(LOperand* external_pointer,
@@ -1151,7 +1158,7 @@ class LLoadKeyedSpecializedArrayElement: public LTemplateInstruction<1, 2, 0> {
 
   LOperand* external_pointer() { return inputs_[0]; }
   LOperand* key() { return inputs_[1]; }
-  JSObject::ElementsKind elements_kind() const {
+  ElementsKind elements_kind() const {
     return hydrogen()->elements_kind();
   }
 };
@@ -1597,6 +1604,28 @@ class LStoreKeyedFastElement: public LTemplateInstruction<0, 3, 0> {
 };
 
 
+class LStoreKeyedFastDoubleElement: public LTemplateInstruction<0, 3, 0> {
+ public:
+  LStoreKeyedFastDoubleElement(LOperand* elements,
+                               LOperand* key,
+                               LOperand* val) {
+    inputs_[0] = elements;
+    inputs_[1] = key;
+    inputs_[2] = val;
+  }
+
+  DECLARE_CONCRETE_INSTRUCTION(StoreKeyedFastDoubleElement,
+                               "store-keyed-fast-double-element")
+  DECLARE_HYDROGEN_ACCESSOR(StoreKeyedFastDoubleElement)
+
+  virtual void PrintDataTo(StringStream* stream);
+
+  LOperand* elements() { return inputs_[0]; }
+  LOperand* key() { return inputs_[1]; }
+  LOperand* value() { return inputs_[2]; }
+};
+
+
 class LStoreKeyedGeneric: public LTemplateInstruction<0, 3, 0> {
  public:
   LStoreKeyedGeneric(LOperand* obj, LOperand* key, LOperand* val) {
@@ -1633,7 +1662,7 @@ class LStoreKeyedSpecializedArrayElement: public LTemplateInstruction<0, 3, 0> {
   LOperand* external_pointer() { return inputs_[0]; }
   LOperand* key() { return inputs_[1]; }
   LOperand* value() { return inputs_[2]; }
-  JSObject::ElementsKind elements_kind() const {
+  ElementsKind elements_kind() const {
     return hydrogen()->elements_kind();
   }
 };

@@ -99,44 +99,11 @@ class MacroAssembler: public Assembler {
   // macro assembler.
   MacroAssembler(Isolate* isolate, void* buffer, int size);
 
-// Arguments macros.
+  // Arguments macros.
 #define COND_TYPED_ARGS Condition cond, Register r1, const Operand& r2
 #define COND_ARGS cond, r1, r2
 
-// Prototypes.
-
-// Prototypes for functions with no target (eg Ret()).
-#define DECLARE_NOTARGET_PROTOTYPE(Name) \
-  void Name(BranchDelaySlot bd = PROTECT); \
-  void Name(COND_TYPED_ARGS, BranchDelaySlot bd = PROTECT); \
-  inline void Name(BranchDelaySlot bd, COND_TYPED_ARGS) { \
-    Name(COND_ARGS, bd); \
-  }
-
-// Prototypes for functions with a target.
-
-// Cases when relocation may be needed.
-#define DECLARE_RELOC_PROTOTYPE(Name, target_type) \
-  void Name(target_type target, \
-            RelocInfo::Mode rmode, \
-            BranchDelaySlot bd = PROTECT); \
-  inline void Name(BranchDelaySlot bd, \
-                   target_type target, \
-                   RelocInfo::Mode rmode) { \
-    Name(target, rmode, bd); \
-  } \
-  void Name(target_type target, \
-            RelocInfo::Mode rmode, \
-            COND_TYPED_ARGS, \
-            BranchDelaySlot bd = PROTECT); \
-  inline void Name(BranchDelaySlot bd, \
-                   target_type target, \
-                   RelocInfo::Mode rmode, \
-                   COND_TYPED_ARGS) { \
-    Name(target, rmode, COND_ARGS, bd); \
-  }
-
-// Cases when relocation is not needed.
+  // Cases when relocation is not needed.
 #define DECLARE_NORELOC_PROTOTYPE(Name, target_type) \
   void Name(target_type target, BranchDelaySlot bd = PROTECT); \
   inline void Name(BranchDelaySlot bd, target_type target) { \
@@ -151,44 +118,44 @@ class MacroAssembler: public Assembler {
     Name(target, COND_ARGS, bd); \
   }
 
-// Target prototypes.
-
-#define DECLARE_JUMP_CALL_PROTOTYPES(Name) \
-  DECLARE_NORELOC_PROTOTYPE(Name, Register) \
-  DECLARE_NORELOC_PROTOTYPE(Name, const Operand&) \
-  DECLARE_RELOC_PROTOTYPE(Name, byte*) \
-  DECLARE_RELOC_PROTOTYPE(Name, Handle<Code>)
-
 #define DECLARE_BRANCH_PROTOTYPES(Name) \
   DECLARE_NORELOC_PROTOTYPE(Name, Label*) \
   DECLARE_NORELOC_PROTOTYPE(Name, int16_t)
 
+  DECLARE_BRANCH_PROTOTYPES(Branch)
+  DECLARE_BRANCH_PROTOTYPES(BranchAndLink)
 
-DECLARE_JUMP_CALL_PROTOTYPES(Jump)
-DECLARE_JUMP_CALL_PROTOTYPES(Call)
-
-DECLARE_BRANCH_PROTOTYPES(Branch)
-DECLARE_BRANCH_PROTOTYPES(BranchAndLink)
-
-DECLARE_NOTARGET_PROTOTYPE(Ret)
-
+#undef DECLARE_BRANCH_PROTOTYPES
 #undef COND_TYPED_ARGS
 #undef COND_ARGS
-#undef DECLARE_NOTARGET_PROTOTYPE
-#undef DECLARE_NORELOC_PROTOTYPE
-#undef DECLARE_RELOC_PROTOTYPE
-#undef DECLARE_JUMP_CALL_PROTOTYPES
-#undef DECLARE_BRANCH_PROTOTYPES
 
-  void CallWithAstId(Handle<Code> code,
-                     RelocInfo::Mode rmode = RelocInfo::CODE_TARGET,
-                     unsigned ast_id = kNoASTId,
-                     Condition cond = al,
-                     Register r1 = zero_reg,
-                     const Operand& r2 = Operand(zero_reg));
 
-  int CallSize(Register reg);
-  int CallSize(Handle<Code> code, RelocInfo::Mode rmode);
+  // Jump, Call, and Ret pseudo instructions implementing inter-working.
+#define COND_ARGS Condition cond = al, Register rs = zero_reg, \
+  const Operand& rt = Operand(zero_reg), BranchDelaySlot bd = PROTECT
+
+  void Jump(Register target, COND_ARGS);
+  void Jump(intptr_t target, RelocInfo::Mode rmode, COND_ARGS);
+  void Jump(Address target, RelocInfo::Mode rmode, COND_ARGS);
+  void Jump(Handle<Code> code, RelocInfo::Mode rmode, COND_ARGS);
+  int CallSize(Register target, COND_ARGS);
+  void Call(Register target, COND_ARGS);
+  int CallSize(Address target, RelocInfo::Mode rmode, COND_ARGS);
+  void Call(Address target, RelocInfo::Mode rmode, COND_ARGS);
+  int CallSize(Handle<Code> code,
+               RelocInfo::Mode rmode = RelocInfo::CODE_TARGET,
+               unsigned ast_id = kNoASTId,
+               COND_ARGS);
+  void Call(Handle<Code> code,
+            RelocInfo::Mode rmode = RelocInfo::CODE_TARGET,
+            unsigned ast_id = kNoASTId,
+            COND_ARGS);
+  void Ret(COND_ARGS);
+  inline void Ret(BranchDelaySlot bd) {
+    Ret(al, zero_reg, Operand(zero_reg), bd);
+  }
+
+#undef COND_ARGS
 
   // Emit code to discard a non-negative number of pointer-sized elements
   // from the stack, clobbering only the sp register.
@@ -299,6 +266,16 @@ DECLARE_NOTARGET_PROTOTYPE(Ret)
                               Register scratch,
                               Label* miss);
 
+
+  void LoadFromNumberDictionary(Label* miss,
+                                Register elements,
+                                Register key,
+                                Register result,
+                                Register reg0,
+                                Register reg1,
+                                Register reg2);
+
+
   inline void MarkCode(NopMarkerTypes type) {
     nop(type);
   }
@@ -385,6 +362,16 @@ DECLARE_NOTARGET_PROTOTYPE(Ret)
                                Register scratch1,
                                Register scratch2,
                                Label* gc_required);
+  void AllocateTwoByteSlicedString(Register result,
+                                   Register length,
+                                   Register scratch1,
+                                   Register scratch2,
+                                   Label* gc_required);
+  void AllocateAsciiSlicedString(Register result,
+                                 Register length,
+                                 Register scratch1,
+                                 Register scratch2,
+                                 Label* gc_required);
 
   // Allocates a heap number or jumps to the gc_required label if the young
   // space is full and a scavenge is needed. All registers are clobbered also
@@ -465,6 +452,9 @@ DECLARE_NOTARGET_PROTOTYPE(Ret)
   void MultiPush(RegList regs);
   void MultiPushReversed(RegList regs);
 
+  void MultiPushFPU(RegList regs);
+  void MultiPushReversedFPU(RegList regs);
+
   // Lower case push() for compatibility with arch-independent code.
   void push(Register src) {
     Addu(sp, sp, Operand(-kPointerSize));
@@ -510,6 +500,9 @@ DECLARE_NOTARGET_PROTOTYPE(Ret)
   void MultiPop(RegList regs);
   void MultiPopReversed(RegList regs);
 
+  void MultiPopFPU(RegList regs);
+  void MultiPopReversedFPU(RegList regs);
+
   // Lower case pop() for compatibility with arch-independent code.
   void pop(Register dst) {
     lw(dst, MemOperand(sp, 0));
@@ -547,12 +540,12 @@ DECLARE_NOTARGET_PROTOTYPE(Ret)
   void Ext(Register rt, Register rs, uint16_t pos, uint16_t size);
 
   // Convert unsigned word to double.
-  void Cvt_d_uw(FPURegister fd, FPURegister fs);
-  void Cvt_d_uw(FPURegister fd, Register rs);
+  void Cvt_d_uw(FPURegister fd, FPURegister fs, FPURegister scratch);
+  void Cvt_d_uw(FPURegister fd, Register rs, FPURegister scratch);
 
   // Convert double to unsigned word.
-  void Trunc_uw_d(FPURegister fd, FPURegister fs);
-  void Trunc_uw_d(FPURegister fd, Register rs);
+  void Trunc_uw_d(FPURegister fd, FPURegister fs, FPURegister scratch);
+  void Trunc_uw_d(FPURegister fd, Register rs, FPURegister scratch);
 
   // Convert the HeapNumber pointed to by source to a 32bits signed integer
   // dest. If the HeapNumber does not fit into a 32bits signed integer branch
@@ -1125,17 +1118,6 @@ DECLARE_NOTARGET_PROTOTYPE(Ret)
   void Jr(Label* L, BranchDelaySlot bdslot);
   void Jalr(Label* L, BranchDelaySlot bdslot);
 
-  void Jump(intptr_t target, RelocInfo::Mode rmode,
-            BranchDelaySlot bd = PROTECT);
-  void Jump(intptr_t target, RelocInfo::Mode rmode, Condition cond = cc_always,
-            Register r1 = zero_reg, const Operand& r2 = Operand(zero_reg),
-            BranchDelaySlot bd = PROTECT);
-  void Call(intptr_t target, RelocInfo::Mode rmode,
-            BranchDelaySlot bd = PROTECT);
-  void Call(intptr_t target, RelocInfo::Mode rmode, Condition cond = cc_always,
-            Register r1 = zero_reg, const Operand& r2 = Operand(zero_reg),
-            BranchDelaySlot bd = PROTECT);
-
   // Helper functions for generating invokes.
   void InvokePrologue(const ParameterCount& expected,
                       const ParameterCount& actual,
@@ -1231,10 +1213,9 @@ static inline MemOperand FieldMemOperand(Register object, int offset) {
 // Generate a MemOperand for storing arguments 5..N on the stack
 // when calling CallCFunction().
 static inline MemOperand CFunctionArgumentOperand(int index) {
-  ASSERT(index > StandardFrameConstants::kCArgSlotCount);
+  ASSERT(index > kCArgSlotCount);
   // Argument 5 takes the slot just past the four Arg-slots.
-  int offset =
-      (index - 5) * kPointerSize + StandardFrameConstants::kCArgsSlotsSize;
+  int offset = (index - 5) * kPointerSize + kCArgsSlotsSize;
   return MemOperand(sp, offset);
 }
 

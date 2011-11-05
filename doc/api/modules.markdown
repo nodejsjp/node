@@ -85,6 +85,88 @@ private to `circle.js`.
 モジュールのローカル変数はプライベートです。
 この例の場合、変数 `PI` は `circle.js` のプライベート変数です。
 
+### Cycles
+
+<!--
+
+When there are circular `require()` calls, a module might not be
+done being executed when it is returned.
+
+Consider this situation:
+
+-->
+`require()` が循環的に呼び出される場合、実行が完了していないモジュールが
+返されることがあります。
+
+次の状況を考えてください:
+
+`a.js`:
+
+    console.log('a starting');
+    exports.done = false;
+    var b = require('./b.js');
+    console.log('in a, b.done = %j', b.done);
+    exports.done = true;
+    console.log('a done');
+
+`b.js`:
+
+    console.log('b starting');
+    exports.done = false;
+    var a = require('./a.js');
+    console.log('in b, a.done = %j', a.done);
+    exports.done = true;
+    console.log('b done');
+
+`main.js`:
+
+    console.log('main starting');
+    var a = require('./a.js');
+    var b = require('./b.js');
+    console.log('in main, a.done=%j, b.done=%j', a.done, b.done);
+
+<!--
+
+When `main.js` loads `a.js`, then `a.js` in turn loads `b.js`.  At that
+point, `b.js` tries to load `a.js`.  In order to prevent an infinite
+loop an **unfinished copy** of the `a.js` exports object is returned to the
+`b.js` module.  `b.js` then finishes loading, and its exports object is
+provided to the `a.js` module.
+
+By the time `main.js` has loaded both modules, they're both finished.
+The output of this program would thus be:
+
+-->
+
+`main.js` が `a.js` をロードすると、`a.js` は `b.js` をロードします。
+ポイントは、`b.js` は `a.js` のロードを試みることです。
+無限ループを避けるため、`a.js` がエクスポートしたオブジェクトの
+**未完了のコピー** が `b.js` モジュールに返されます。
+`b.js` のロードが完了すると、エクスポートされたオブジェクトが `a.js`
+モジュールに提供されます。
+
+`main.js` が両方のモジュールをロードするまでには、どちらも完了します。
+このプログラムの出力はこのようになります:
+
+    $ node main.js
+    main starting
+    a starting
+    b starting
+    in b, a.done = false
+    b done
+    in a, b.done = true
+    a done
+    in main, a.done=true, b.done=true
+
+<!--
+
+If you have cyclic module dependencies in your program, make sure to
+plan accordingly.
+
+-->
+プログラムが循環参照するモジュールを持つ場合は、計画が適切か確認してください。
+
+
 ### Core Modules
 
 <!--
@@ -112,10 +194,11 @@ Node にはバイナリにコンパイル済みのいくつかのモジュール
 <!--
 
 If the exact filename is not found, then node will attempt to load the
-required filename with the added extension of `.js`, and then `.node`.
+required filename with the added extension of `.js`, `.json`, and then `.node`.
 
-`.js` files are interpreted as JavaScript text files, and `.node` files
-are interpreted as compiled addon modules loaded with `dlopen`.
+`.js` files are interpreted as JavaScript text files, and `.json` files are
+parsed as JSON text files. `.node` files are interpreted as compiled addon
+modules loaded with `dlopen`.
 
 A module prefixed with `'/'` is an absolute path to the file.  For
 example, `require('/home/marco/foo.js')` will load the file at
@@ -129,10 +212,13 @@ Without a leading '/' or './' to indicate a file, the module is either a
 "core module" or is loaded from a `node_modules` folder.
 
 -->
-指定された名前のファイルが見つからなかったら、 Node は指定されたファイル名に `.js` を付けたものと `.node` を付けたものを読み込もうとします。
+指定された名前のファイルが見つからなかったら、 Node は指定されたファイル名に
+`.js`、`.json`、または `.node` を付けたものを読み込もうとします。
 
-`.js` ファイルは JavaScript ファイルとして解釈されます。
-一方 `.node` ファイルはコンパイル済みのアドオンモジュールとして解釈され、 `dlopen` を使って読み込まれます。
+`.js` ファイルは JavaScript ファイルとして解釈され、
+`.json` ファイルは JSON ファイルとして解釈されます。
+一方 `.node` ファイルはコンパイル済みのアドオンモジュールとして解釈され、
+`dlopen` を使って読み込まれます。
 
 `'/'` から始まるモジュールは、ファイルへの絶対パスと見なされます。
 例えば、 `require('/home/marco/foo.js')` は `/home/macro/foo.js` を読み込みます。
@@ -398,7 +484,8 @@ in pseudocode of what require.resolve does:
        a. Parse X/package.json, and look for "main" field.
        b. let M = X + (json main field)
        c. LOAD_AS_FILE(M)
-    2. LOAD_AS_FILE(X/index)
+    2. If X/index.js is a file, load X/index.js as JavaScript text.  STOP
+    3. If X/index.node is a file, load X/index.node as binary addon.  STOP
 
     LOAD_NODE_MODULES(X, START)
     1. let DIRS=NODE_MODULES_PATHS(START)
@@ -418,148 +505,44 @@ in pseudocode of what require.resolve does:
        c. let I = I - 1
     6. return DIRS
 
-### Loading from the `require.paths` Folders
+### Loading from the global folders
 
 <!--
 
-In node, `require.paths` is an array of strings that represent paths to
-be searched for modules when they are not prefixed with `'/'`, `'./'`, or
-`'../'`.  For example, if require.paths were set to:
+If the `NODE_PATH` environment variable is set to a colon-delimited list
+of absolute paths, then node will search those paths for modules if they
+are not found elsewhere.  (Note: On Windows, `NODE_PATH` is delimited by
+semicolons instead of colons.)
+
+Additionally, node will search in the following locations:
 
 -->
-`require.paths` は、指定されたモジュール名が `'/'` や `'./'` や `'../'` から始まっていないときにモジュールを探しにいくパスを文字列として保持している配列です。
-例えば、require.pathsが次のように設定されているとします: 
+`NODE_PATH` 環境変数に絶対パスをコロンで区切ったリストを設定すると、
+node は他で見つからなかったモジュールをそれらのパスから探します。
+(注意: Windows では、`NODE_PATH` はコロンではなくセミコロンで区切られます)
 
-    [ '/home/micheil/.node_modules',
-      '/usr/local/lib/node_modules' ]
+加えると、node は以下の場所から検索します。
+
+* 1: `$HOME/.node_modules`
+* 2: `$HOME/.node_libraries`
+* 3: `$PREFIX/lib/node`
 
 <!--
 
-Then calling `require('bar/baz.js')` would search the following
-locations:
+Where `$HOME` is the user's home directory, and `$PREFIX` is node's
+configured `installPrefix`.
+
+These are mostly for historic reasons.  You are highly encouraged to
+place your dependencies localy in `node_modules` folders.  They will be
+loaded faster, and more reliably.
 
 -->
-そして、 `require('baz/baz.js')` を呼ぶと次の場所を探しにいきます:
+`$HOME` はユーザのホームディレクトリ、`$PREFIX` は node を
+configure した時の `installPrefix` です。
 
-* 1: `'/home/micheil/.node_modules/bar/baz.js'`
-* 2: `'/usr/local/lib/node_modules/bar/baz.js'`
-
-<!--
-
-The `require.paths` array can be mutated at run time to alter this
-behavior.
-
-It is set initially from the `NODE_PATH` environment variable, which is
-a colon-delimited list of absolute paths.  In the previous example,
-the `NODE_PATH` environment variable might have been set to:
-
--->
-これらの動作を修正することができるよう、 `require.paths` 配列は実行時に変更することができます。
-
-`require.paths` は `NODE_PATH` という環境変数の値によって初期化されます。
-`NODE_PATH` にはコロンで区切った複数のパスを記述することができます。
-上の例では、 `NODE_PATH` には次のような値がセットされていたものと考えられます:
-
-    /home/micheil/.node_modules:/usr/local/lib/node_modules
-
-<!--
-
-Loading from the `require.paths` locations is only performed if the
-module could not be found using the `node_modules` algorithm above.
-Global modules are lower priority than bundled dependencies.
-
--->
-`require.paths` からロードされるのは、モジュールが前述の `node_modules` アルゴリズムで見つけられなかった場合だけです。
-グローバルモジュールはバンドルされた依存性よりも低プライオリティです。
-
-#### **Note:** Please Avoid Modifying `require.paths`
-
-<!--
-
-`require.paths` may disappear in a future release.
-
-While it seemed like a good idea at the time, and enabled a lot of
-useful experimentation, in practice a mutable `require.paths` list is
-often a troublesome source of confusion and headaches.
-
--->
-将来のバージョンでは `require.paths` は無くなる予定です。
-
-実装当時はよいアイデアだと思われ実験的に使う分にはとても有用でしたが、実際に使いだしてみると変更可能な `require.paths` のリストというものはやっかいな混乱と頭痛の種になることがしばしばあったのです。
-
-##### Setting `require.paths` to some other value does nothing.
-
-<!--
-
-This does not do what one might expect:
-
--->
-次のコードは、希望通りには動きません:
-
-    require.paths = [ '/usr/lib/node' ];
-
-<!--
-
-All that does is lose the reference to the *actual* node module lookup
-paths, and create a new reference to some other thing that isn't used
-for anything.
-
--->
-これは、 *実際の* Node モジュールへの参照パスを消滅させ、使われることのないパスに対する新たな参照を作り出しています。
-
-##### Putting relative paths in `require.paths` is... weird.
-
-<!--
-
-If you do this:
-
--->
-次のようにするとします:
-
-    require.paths.push('./lib');
-
-<!--
-
-then it does *not* add the full resolved path to where `./lib`
-is on the filesystem.  Instead, it literally adds `'./lib'`,
-meaning that if you do `require('y.js')` in `/a/b/x.js`, then it'll look
-in `/a/b/lib/y.js`.  If you then did `require('y.js')` in
-`/l/m/n/o/p.js`, then it'd look in `/l/m/n/o/lib/y.js`.
-
--->
-これは、ファイルシステム上の `./lib` のある場所への絶対パスを追加する *わけではありません* 。
-代わりに、文字通り `'./lib'` を追加します。
-すなわち、もし `/a/b/x.js` ファイル内で `require('y.js')` した場合、 `/a/b/lib/y.js` を探しにいきます。
-同様に `/l/m/n/o/p.js` ファイル内で `require('y.js')` した場合は、 `/l/m/n/o/lib/y.js` を探しにいきます。
-
-<!--
-
-In practice, people have used this as an ad hoc way to bundle
-dependencies, but this technique is brittle.
-
--->
-実際に、これらはアドホックな依存性をバンドルするために用いられています。
-しかしこれらのテクニックはとても不安定です。
-
-##### Zero Isolation
-
-<!--
-
-There is (by regrettable design), only one `require.paths` array used by
-all modules.
-
-As a result, if one node program comes to rely on this behavior, it may
-permanently and subtly alter the behavior of all other node programs in
-the same process.  As the application stack grows, we tend to assemble
-functionality, and those parts interact in ways that are difficult to
-predict.
-
--->
-（残念なことに）たった一つの `require.paths` 配列が全てのモジュールによって使われるという設計になっています。
-
-その結果、もしある Node プログラムが上記の挙動を行っていたら、同じプロセス上にいる他の全ての Node プログラムの動作も永遠にそして微妙に変化させてしまいます。
-アプリケーションが成長するにつれ、私たちは機能をまとめていきますが、
-それらがどのように影響するかを予測するのが難しくなります。
+これらは主に歴史的な理由によるものです。
+あなたが依存するものはローカルの `node_modules` フォルダに置くことが
+強く推奨されます。それは素早くロードされ、確実です。
 
 ### Accessing the main module
 
@@ -592,100 +575,6 @@ by checking `require.main.filename`.
 `module` は `filename` プロパティ (通常 `__filename` と同じです) 
 を提供するため、現在のアプリケーションのエントリポイントは
 `require.main.filename` をチェックすることで得ることができます。
-
-## AMD Compatibility
-
-<!--
-
-Node's modules have access to a function named `define`, which may be
-used to specify the module's return value.  This is not necessary in node
-programs, but is present in the node API in order to provide
-compatibility with module loaders that use the Asynchronous Module
-Definition pattern.
-
--->
-Node のモジュールは `define` という名前の関数にアクセスできます。
-それはモジュールの戻り値を指定するために使われます。
-これは node プログラムには必要ありませんが、Asynchronous Module Definition
-パターンを使用するモジュールローダとの互換性を提供するために
-node API に存在しています。
-
-<!--
-
-The example module above could be structured like so:
-
--->
-上記の例のモジュールは次のように構築することが出来ます。
-
-    define(function (require, exports, module) {
-      var PI = Math.PI;
-
-      exports.area = function (r) {
-        return PI * r * r;
-      };
-
-      exports.circumference = function (r) {
-        return 2 * PI * r;
-      };
-    });
-
-<!--
-
-* Only the last argument to `define()` matters.  Other module loaders
-  sometimes use a `define(id, [deps], cb)` pattern, but since this is
-  not relevant in node programs, the other arguments are ignored.
-* If the `define` callback returns a value other than `undefined`, then
-  that value is assigned to `module.exports`.
-* **Important**: Despite being called "AMD", the node module loader **is
-  in fact synchronous**, and using `define()` does not change this fact.
-  Node executes the callback immediately, so please plan your programs
-  accordingly.
-
--->
-* `define()` の最後の引数だけが重要です。他のモジュールローダによっては
-  `define(id, [deps], cb)` パターンを使用しますが、
-  node プログラムには関係がないので、その他の引数は無視されます。
-* `define` のコールバックが `undefined` 以外の値を返した場合、
-  その値は `module.exports` に割り当てられます。
-* **重要**: "AMD" と呼ばれるにも関わらず、node のモジュールローダは
-  **実際には同期的です**。`define()` を使用してもこの事実は変わりません。
-  Node はコールバックをすぐに実行します。
-  それに応じてプログラムを設計してください。
-
-### Accessing the main module
-
-<!--
-
-When a file is run directly from Node, `require.main` is set to its
-`module`. That means that you can determine whether a file has been run
-directly by testing
-
--->
-ファイルが Node によって直接実行される場合、そのファイルの `module` が
-`require.main` に設定されます。
-これは、ファイルが直接実行されているかテストできることを意味します。
-
-    require.main === module
-
-<!--
-
-For a file `foo.js`, this will be `true` if run via `node foo.js`, but
-`false` if run by `require('./foo')`.
-
--->
-`foo.js` ファイルでは、`node foo.js` と実行された場合これは `true`
-となりますが、`require('./foo')` の場合は `false` となります。
-
-<!--
-
-Because `module` provides a `filename` property (normally equivalent to
-`__filename`), the entry point of the current application can be obtained
-by checking `require.main.filename`.
-
--->
-`module` は `filename` プロパティ (通常 `__filename` と同じです)
-を提供するので、現在のアプリケーションのエントリポイントを
-`require.main.filename` で得ることが出来ます。
 
 ## Addenda: Package Manager Tips
 

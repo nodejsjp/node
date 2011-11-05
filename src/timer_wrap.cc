@@ -1,25 +1,26 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 #include <node.h>
-
-// Rules:
-//
-// - Do not throw from handle methods. Set errno.
-//
-// - MakeCallback may only be made directly off the event loop.
-//   That is there can be no JavaScript stack frames underneith it.
-//   (Is there anyway to assert that?)
-//
-// - No use of v8::WeakReferenceCallback. The close callback signifies that
-//   we're done with a handle - external resources can be freed.
-//
-// - Reusable?
-//
-// - The uv_close_cb is used to free the c++ object. The close callback
-//   is not made into javascript land.
-//
-// - uv_ref, uv_unref counts are managed at this layer to avoid needless
-//   js/c++ boundary crossing. At the javascript layer that should all be
-//   taken care of.
-
+#include <handle_wrap.h>
 
 #define UNWRAP \
   assert(!args.Holder().IsEmpty()); \
@@ -27,7 +28,9 @@
   TimerWrap* wrap =  \
       static_cast<TimerWrap*>(args.Holder()->GetPointerFromInternalField(0)); \
   if (!wrap) { \
-    SetErrno(UV_EBADF); \
+    uv_err_t err; \
+    err.code = UV_EBADF; \
+    SetErrno(err); \
     return scope.Close(Integer::New(-1)); \
   }
 
@@ -48,21 +51,24 @@ using v8::Arguments;
 using v8::Integer;
 
 
-class TimerWrap {
+class TimerWrap : public HandleWrap {
  public:
   static void Initialize(Handle<Object> target) {
     HandleScope scope;
 
+    HandleWrap::Initialize(target);
+
     Local<FunctionTemplate> constructor = FunctionTemplate::New(New);
     constructor->InstanceTemplate()->SetInternalFieldCount(1);
     constructor->SetClassName(String::NewSymbol("Timer"));
+
+    NODE_SET_PROTOTYPE_METHOD(constructor, "close", HandleWrap::Close);
 
     NODE_SET_PROTOTYPE_METHOD(constructor, "start", Start);
     NODE_SET_PROTOTYPE_METHOD(constructor, "stop", Stop);
     NODE_SET_PROTOTYPE_METHOD(constructor, "setRepeat", SetRepeat);
     NODE_SET_PROTOTYPE_METHOD(constructor, "getRepeat", GetRepeat);
     NODE_SET_PROTOTYPE_METHOD(constructor, "again", Again);
-    NODE_SET_PROTOTYPE_METHOD(constructor, "close", Close);
 
     target->Set(String::NewSymbol("Timer"), constructor->GetFunction());
   }
@@ -81,26 +87,23 @@ class TimerWrap {
     return scope.Close(args.This());
   }
 
-  TimerWrap(Handle<Object> object) {
+  TimerWrap(Handle<Object> object)
+      : HandleWrap(object, (uv_handle_t*) &handle_) {
     active_ = false;
-    int r = uv_timer_init(&handle_);
+
+    int r = uv_timer_init(uv_default_loop(), &handle_);
+    assert(r == 0);
+
     handle_.data = this;
-    assert(r == 0); // How do we proxy this error up to javascript?
-                    // Suggestion: uv_timer_init() returns void.
-    assert(object_.IsEmpty());
-    assert(object->InternalFieldCount() > 0);
-    object_ = v8::Persistent<v8::Object>::New(object);
-    object_->SetPointerInInternalField(0, this);
 
     // uv_timer_init adds a loop reference. (That is, it calls uv_ref.) This
     // is not the behavior we want in Node. Timers should not increase the
     // ref count of the loop except when active.
-    uv_unref();
+    uv_unref(uv_default_loop());
   }
 
   ~TimerWrap() {
-    if (!active_) uv_ref();
-    assert(object_.IsEmpty());
+    if (!active_) uv_ref(uv_default_loop());
   }
 
   void StateChange() {
@@ -110,18 +113,12 @@ class TimerWrap {
     if (!was_active && active_) {
       // If our state is changing from inactive to active, we
       // increase the loop's reference count.
-      uv_ref();
+      uv_ref(uv_default_loop());
     } else if (was_active && !active_) {
       // If our state is changing from active to inactive, we
       // decrease the loop's reference count.
-      uv_unref();
+      uv_unref(uv_default_loop());
     }
-  }
-
-  // Free the C++ object on the close callback.
-  static void OnClose(uv_handle_t* handle) {
-    TimerWrap* wrap = static_cast<TimerWrap*>(handle->data);
-    delete wrap;
   }
 
   static Handle<Value> Start(const Arguments& args) {
@@ -135,7 +132,7 @@ class TimerWrap {
     int r = uv_timer_start(&wrap->handle_, OnTimeout, timeout, repeat);
 
     // Error starting the timer.
-    if (r) SetErrno(uv_last_error().code);
+    if (r) SetErrno(uv_last_error(uv_default_loop()));
 
     wrap->StateChange();
 
@@ -149,7 +146,7 @@ class TimerWrap {
 
     int r = uv_timer_stop(&wrap->handle_);
 
-    if (r) SetErrno(uv_last_error().code);
+    if (r) SetErrno(uv_last_error(uv_default_loop()));
 
     wrap->StateChange();
 
@@ -163,7 +160,7 @@ class TimerWrap {
 
     int r = uv_timer_again(&wrap->handle_);
 
-    if (r) SetErrno(uv_last_error().code);
+    if (r) SetErrno(uv_last_error(uv_default_loop()));
 
     wrap->StateChange();
 
@@ -189,29 +186,9 @@ class TimerWrap {
 
     int64_t repeat = uv_timer_get_repeat(&wrap->handle_);
 
-    if (repeat < 0) SetErrno(uv_last_error().code);
+    if (repeat < 0) SetErrno(uv_last_error(uv_default_loop()));
 
     return scope.Close(Integer::New(repeat));
-  }
-
-  // TODO: share me?
-  static Handle<Value> Close(const Arguments& args) {
-    HandleScope scope;
-
-    UNWRAP
-
-    int r = uv_close((uv_handle_t*) &wrap->handle_, OnClose);
-
-    if (r) SetErrno(uv_last_error().code);
-
-    wrap->StateChange();
-
-    assert(!wrap->object_.IsEmpty());
-    wrap->object_->SetPointerInInternalField(0, NULL);
-    wrap->object_.Dispose();
-    wrap->object_.Clear();
-
-    return scope.Close(Integer::New(r));
   }
 
   static void OnTimeout(uv_timer_t* handle, int status) {
@@ -227,7 +204,6 @@ class TimerWrap {
   }
 
   uv_timer_t handle_;
-  Persistent<Object> object_;
   // This member is set false initially. When the timer is turned
   // on uv_ref is called. When the timer is turned off uv_unref is
   // called. Used to mirror libev semantics.

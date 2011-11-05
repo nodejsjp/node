@@ -19,13 +19,12 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-var assert = require('assert');
+var assert = require('assert'),
     dns = require('dns'),
-    net = require('net_uv');
+    net = require('net'),
     isIP = net.isIP,
     isIPv4 = net.isIPv4,
-    isIPv6 = net.isIPv6,
-    uv = process.useUV;
+    isIPv6 = net.isIPv6;
 
 var expected = 0,
     completed = 0,
@@ -58,17 +57,8 @@ function TEST(f) {
 }
 
 
-process.on('exit', function() {
-  console.log(completed + ' tests completed (using libuv: ' + (!!uv) + ')');
-  assert.equal(running, false);
-  assert.strictEqual(expected, completed);
-});
-
-
 function checkWrap(req) {
-  if (uv) {
-    assert.ok(typeof req === 'object');
-  }
+  assert.ok(typeof req === 'object');
 }
 
 
@@ -149,12 +139,12 @@ TEST(function test_reverse_bogus(done) {
     var req = dns.reverse('bogus ip', function() {
       assert.ok(false);
     });
-  } catch(e) {
+  } catch (e) {
     error = e;
   }
 
   assert.ok(error instanceof Error);
-  uv && assert.strictEqual(error.errno, 'ENOTIMP');
+  assert.strictEqual(error.errno, 'ENOTIMP');
 
   done();
 });
@@ -248,6 +238,18 @@ TEST(function test_resolveCname(done) {
 });
 
 
+TEST(function test_resolveTxt(done) {
+  var req = dns.resolveTxt('google.com', function(err, records) {
+    if (err) throw err;
+    assert.equal(records.length, 1);
+    assert.equal(records[0].indexOf('v=spf1'), 0);
+    done();
+  });
+
+  checkWrap(req);
+});
+
+
 TEST(function test_lookup_ipv4_explicit(done) {
   var req = dns.lookup('www.google.com', 4, function(err, ip, family) {
     if (err) throw err;
@@ -303,8 +305,8 @@ TEST(function test_lookup_ipv6_implicit(done) {
 TEST(function test_lookup_failure(done) {
   var req = dns.lookup('does.not.exist', 4, function(err, ip, family) {
     assert.ok(err instanceof Error);
-    assert.strictEqual(err.errno, dns.NOTFOUND)
-    uv && assert.strictEqual(err.errno, 'ENOTFOUND');
+    assert.strictEqual(err.errno, dns.NOTFOUND);
+    assert.strictEqual(err.errno, 'ENOTFOUND');
 
     done();
   });
@@ -377,3 +379,26 @@ TEST(function test_lookup_localhost_ipv4(done) {
 
   checkWrap(req);
 }); */
+
+
+var getaddrinfoCallbackCalled = false;
+
+console.log("looking up nodejs.org...");
+var req = process.binding('cares_wrap').getaddrinfo('nodejs.org');
+
+req.oncomplete = function(domains) {
+  console.log("nodejs.org = ", domains);
+  assert.ok(Array.isArray(domains));
+  assert.ok(domains.length >= 1);
+  assert.ok(typeof domains[0] == 'string');
+  getaddrinfoCallbackCalled = true;
+};
+
+
+
+process.on('exit', function() {
+  console.log(completed + ' tests completed');
+  assert.equal(running, false);
+  assert.strictEqual(expected, completed);
+  assert.ok(getaddrinfoCallbackCalled);
+});

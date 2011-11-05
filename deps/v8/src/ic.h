@@ -59,7 +59,8 @@ namespace internal {
   ICU(StoreInterceptorProperty)                       \
   ICU(UnaryOp_Patch)                                  \
   ICU(BinaryOp_Patch)                                 \
-  ICU(CompareIC_Miss)
+  ICU(CompareIC_Miss)                                 \
+  ICU(ToBoolean_Patch)
 //
 // IC is the base class for LoadIC, StoreIC, CallIC, KeyedLoadIC,
 // and KeyedStoreIC.
@@ -148,8 +149,7 @@ class IC {
   void TraceIC(const char* type,
                Handle<Object> name,
                State old_state,
-               Code* new_target,
-               const char* extra_info = "");
+               Code* new_target);
 #endif
 
   Failure* TypeError(const char* type,
@@ -345,11 +345,9 @@ class KeyedIC: public IC {
   explicit KeyedIC(Isolate* isolate) : IC(NO_EXTRA_FRAME, isolate) {}
   virtual ~KeyedIC() {}
 
-  virtual MaybeObject* GetFastElementStubWithoutMapCheck(
-      bool is_js_array) = 0;
-
-  virtual MaybeObject* GetExternalArrayStubWithoutMapCheck(
-      JSObject::ElementsKind elements_kind) = 0;
+  virtual MaybeObject* GetElementStubWithoutMapCheck(
+      bool is_js_array,
+      ElementsKind elements_kind) = 0;
 
  protected:
   virtual Code* string_stub() {
@@ -373,8 +371,7 @@ class KeyedIC: public IC {
 
   MaybeObject* ComputeMonomorphicStubWithoutMapCheck(
       Map* receiver_map,
-      StrictModeFlag strict_mode,
-      Code* generic_stub);
+      StrictModeFlag strict_mode);
 
   MaybeObject* ComputeMonomorphicStub(JSObject* receiver,
                                       bool is_store,
@@ -415,11 +412,9 @@ class KeyedLoadIC: public KeyedIC {
   static const int kSlowCaseBitFieldMask =
       (1 << Map::kIsAccessCheckNeeded) | (1 << Map::kHasIndexedInterceptor);
 
-  virtual MaybeObject* GetFastElementStubWithoutMapCheck(
-      bool is_js_array);
-
-  virtual MaybeObject* GetExternalArrayStubWithoutMapCheck(
-      JSObject::ElementsKind elements_kind);
+  virtual MaybeObject* GetElementStubWithoutMapCheck(
+      bool is_js_array,
+      ElementsKind elements_kind);
 
  protected:
   virtual Code::Kind kind() const { return Code::KEYED_LOAD_IC; }
@@ -568,11 +563,9 @@ class KeyedStoreIC: public KeyedIC {
   static void GenerateGeneric(MacroAssembler* masm, StrictModeFlag strict_mode);
   static void GenerateNonStrictArguments(MacroAssembler* masm);
 
-  virtual MaybeObject* GetFastElementStubWithoutMapCheck(
-      bool is_js_array);
-
-  virtual MaybeObject* GetExternalArrayStubWithoutMapCheck(
-      JSObject::ElementsKind elements_kind);
+  virtual MaybeObject* GetElementStubWithoutMapCheck(
+      bool is_js_array,
+      ElementsKind elements_kind);
 
  protected:
   virtual Code::Kind kind() const { return Code::KEYED_STORE_IC; }
@@ -726,6 +719,15 @@ class CompareIC: public IC {
 
   Token::Value op_;
 };
+
+
+class ToBooleanIC: public IC {
+ public:
+  explicit ToBooleanIC(Isolate* isolate) : IC(NO_EXTRA_FRAME, isolate) { }
+
+  void patch(Code* code);
+};
+
 
 // Helper for BinaryOpIC and CompareIC.
 void PatchInlinedSmiCode(Address address);

@@ -27,7 +27,6 @@
 #include <mach/task.h>
 #include <mach/mach.h>
 #include <mach/mach_host.h>
-#include <mach-o/dyld.h> /* _NSGetExecutablePath */
 #include <limits.h> /* PATH_MAX */
 
 #include <unistd.h>  // sysconf
@@ -72,7 +71,7 @@ const char* Platform::GetProcessTitle(int *len) {
 
 // Researched by Tim Becker and Michael Knight
 // http://blog.kuriositaet.de/?p=257
-int Platform::GetMemory(size_t *rss, size_t *vsize) {
+int Platform::GetMemory(size_t *rss) {
   struct task_basic_info t_info;
   mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
 
@@ -84,29 +83,10 @@ int Platform::GetMemory(size_t *rss, size_t *vsize) {
   if (r != KERN_SUCCESS) return -1;
 
   *rss = t_info.resident_size;
-  *vsize  = t_info.virtual_size;
 
   return 0;
 }
 
-
-int Platform::GetExecutablePath(char* buffer, size_t* size) {
-  uint32_t usize = *size;
-  int result = _NSGetExecutablePath(buffer, &usize);
-  if (result) return result;
-
-  char *path = new char[2*PATH_MAX];
-
-  char *fullpath = realpath(buffer, path);
-  if (fullpath == NULL) {
-    delete [] path;
-    return -1;
-  }
-  strncpy(buffer, fullpath, *size);
-  delete [] fullpath;
-  *size = strlen(buffer);
-  return 0;
-}
 
 int Platform::GetCPUInfo(Local<Array> *cpus) {
   Local<Object> cpuinfo;
@@ -159,31 +139,6 @@ int Platform::GetCPUInfo(Local<Array> *cpus) {
   return 0;
 }
 
-double Platform::GetFreeMemory() {
-  double pagesize = static_cast<double>(sysconf(_SC_PAGESIZE));
-  vm_statistics_data_t info;
-  mach_msg_type_number_t count = sizeof(info) / sizeof(integer_t);
-
-  if (host_statistics(mach_host_self(), HOST_VM_INFO,
-                      (host_info_t)&info, &count) != KERN_SUCCESS) {
-    return -1;
-  }
-
-  return (static_cast<double>(info.free_count)) * pagesize;
-}
-
-double Platform::GetTotalMemory() {
-  uint64_t info;
-  static int which[] = {CTL_HW, HW_MEMSIZE};
-  size_t size = sizeof(info);
-
-  if (sysctl(which, 2, &info, &size, NULL, 0) < 0) {
-    return -1;
-  }
-
-  return static_cast<double>(info);
-}
-
 double Platform::GetUptimeImpl() {
   time_t now;
   struct timeval info;
@@ -196,24 +151,6 @@ double Platform::GetUptimeImpl() {
   now = time(NULL);
 
   return static_cast<double>(now - info.tv_sec);
-}
-
-int Platform::GetLoadAvg(Local<Array> *loads) {
-  struct loadavg info;
-  size_t size = sizeof(info);
-  static int which[] = {CTL_VM, VM_LOADAVG};
-
-  if (sysctl(which, 2, &info, &size, NULL, 0) < 0) {
-    return -1;
-  }
-  (*loads)->Set(0, Number::New(static_cast<double>(info.ldavg[0])
-                               / static_cast<double>(info.fscale)));
-  (*loads)->Set(1, Number::New(static_cast<double>(info.ldavg[1])
-                               / static_cast<double>(info.fscale)));
-  (*loads)->Set(2, Number::New(static_cast<double>(info.ldavg[2])
-                               / static_cast<double>(info.fscale)));
-
-  return 0;
 }
 
 

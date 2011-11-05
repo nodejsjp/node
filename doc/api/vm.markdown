@@ -127,6 +127,73 @@ and throws an exception.
 `code` が文法エラーとなるケースでは、
 `vm.runInNewContext` は標準エラーに文法エラーを出力し、例外をスローします。
 
+### vm.runInContext(code, context, [filename])
+
+<!--
+`vm.runInContext` compiles `code` to run in context `context` as if it were loaded from `filename`,
+then runs it and returns the result. A (V8) context comprises a global object, together with a
+set of built-in objects and functions. Running code does not have access to local scope and
+the global object held within `context` will be used as the global object for `code`.
+`filename` is optional.
+
+Example: compile and execute code in a existing context.
+-->
+`vm.runInContext` は `code` をコンパイルして、
+`filename` としてロードされたかのように、`context` をコンテキストとして
+実行し、その結果を返します。
+(V8 の) コンテキストは組み込みのオブジェクトと関数と共に、
+グローバルオブジェクトを含みます。
+実行されるコードはローカルスコープにアクセスせず、
+`context` が `code` にとってのグローバルオブジェクトとして使われます。
+`filename` はオプションです。
+
+    var util = require('util'),
+        vm = require('vm'),
+        initSandbox = {
+          animal: 'cat',
+          count: 2
+        },
+        context = vm.createContext(initSandbox);
+
+    vm.runInContext('count += 1; name = "CATT"', context, 'myfile.vm');
+    console.log(util.inspect(context));
+
+    // { animal: 'cat', count: 3, name: 'CATT' }
+
+<!--
+Note that `createContext` will perform a shallow clone of the supplied sandbox object in order to
+initialise the global object of the freshly constructed context.
+
+Note that running untrusted code is a tricky business requiring great care.  To prevent accidental
+global variable leakage, `vm.runInContext` is quite useful, but safely running untrusted code
+requires a separate process.
+
+In case of syntax error in `code`, `vm.runInContext` emits the syntax error to stderr
+and throws an exception.
+-->
+`createContext` は、新たに構築されたコンテキストのグローバルオブジェクトを
+初期化するために、与えられた `context` オブジェクトの浅いクローンを
+作成することに注意してください。
+
+慎重を要するビジネスでは、信頼できないコードの実行は細心の注意が求められることに注意してください。
+偶然グローバル変数が漏れてしまうことを防ぐために、`vm.runInContext` はとても役立ちますが、
+信頼できないコードを安全に実行するために別のプロセスを要求します。
+
+
+### vm.createContext([initSandbox])
+
+<!--
+`vm.createContext` creates a new context which is suitable for use as the 2nd argument of a subsequent
+call to `vm.runInContext`. A (V8) context comprises a global object together with a set of
+build-in objects and functions. The optional argument `initSandbox` will be shallow-copied
+to seed the initial contents of the global object used by the context.
+-->
+`vm.createContext` は、続けて呼び出される `vm.runInContext` の第 2 引数として
+使用するのに適した新しいコンテキストを作成します。
+(V8 の) コンテキストは組み込みのオブジェクトと関数と共に、
+グローバルオブジェクトを含みます。
+オプションの引数 `initSandbox` は、このコンテキストで使用される
+グローバルオブジェクトの初期値としてシャローコピーされます。
 
 ### vm.createScript(code, [filename])
 

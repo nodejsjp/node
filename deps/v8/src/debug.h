@@ -1,4 +1,4 @@
-// Copyright 2006-2008 the V8 project authors. All rights reserved.
+// Copyright 2011 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -35,6 +35,7 @@
 #include "execution.h"
 #include "factory.h"
 #include "flags.h"
+#include "frames-inl.h"
 #include "hashmap.h"
 #include "platform.h"
 #include "string-stream.h"
@@ -245,6 +246,8 @@ class Debug {
                         JavaScriptFrame* frame);
   static Handle<DebugInfo> GetDebugInfo(Handle<SharedFunctionInfo> shared);
   static bool HasDebugInfo(Handle<SharedFunctionInfo> shared);
+
+  void PrepareForBreakPoints();
 
   // Returns whether the operation succeeded.
   bool EnsureDebugInfo(Handle<SharedFunctionInfo> shared);
@@ -504,6 +507,9 @@ class Debug {
 
     // Frame pointer from last step next action.
     Address last_fp_;
+
+    // Number of queued steps left to perform before debug event.
+    int queued_step_count_;
 
     // Frame pointer for frame from which step in was performed.
     Address step_into_fp_;
@@ -1025,6 +1031,7 @@ class Debug_Address {
         return NULL;
     }
   }
+
  private:
   Debug::AddressId id_;
 };

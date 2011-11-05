@@ -80,9 +80,11 @@ namespace v8 {
 
 class Context;
 class String;
+class StringObject;
 class Value;
 class Utils;
 class Number;
+class NumberObject;
 class Object;
 class Array;
 class Int32;
@@ -90,6 +92,7 @@ class Uint32;
 class External;
 class Primitive;
 class Boolean;
+class BooleanObject;
 class Integer;
 class Function;
 class Date;
@@ -168,12 +171,12 @@ template <class T> class Handle {
   /**
    * Creates an empty handle.
    */
-  inline Handle();
+  inline Handle() : val_(0) {}
 
   /**
    * Creates a new handle for the specified value.
    */
-  inline explicit Handle(T* val) : val_(val) { }
+  inline explicit Handle(T* val) : val_(val) {}
 
   /**
    * Creates a handle for the contents of the specified handle.  This
@@ -200,14 +203,14 @@ template <class T> class Handle {
    */
   inline bool IsEmpty() const { return val_ == 0; }
 
-  inline T* operator->() const { return val_; }
-
-  inline T* operator*() const { return val_; }
-
   /**
    * Sets the handle to be empty. IsEmpty() will then return true.
    */
-  inline void Clear() { this->val_ = 0; }
+  inline void Clear() { val_ = 0; }
+
+  inline T* operator->() const { return val_; }
+
+  inline T* operator*() const { return val_; }
 
   /**
    * Checks whether two handles are the same.
@@ -929,6 +932,26 @@ class Value : public Data {
   V8EXPORT bool IsDate() const;
 
   /**
+   * Returns true if this value is a Boolean object.
+   */
+  V8EXPORT bool IsBooleanObject() const;
+
+  /**
+   * Returns true if this value is a Number object.
+   */
+  V8EXPORT bool IsNumberObject() const;
+
+  /**
+   * Returns true if this value is a String object.
+   */
+  V8EXPORT bool IsStringObject() const;
+
+  /**
+   * Returns true if this value is a NativeError.
+   */
+  V8EXPORT bool IsNativeError() const;
+
+  /**
    * Returns true if this value is a RegExp.
    */
   V8EXPORT bool IsRegExp() const;
@@ -1016,29 +1039,33 @@ class String : public Primitive {
    * \param length The number of characters to copy from the string.  For
    *    WriteUtf8 the number of bytes in the buffer.
    * \param nchars_ref The number of characters written, can be NULL.
-   * \param hints Various hints that might affect performance of this or
+   * \param options Various options that might affect performance of this or
    *    subsequent operations.
    * \return The number of characters copied to the buffer excluding the null
    *    terminator.  For WriteUtf8: The number of bytes copied to the buffer
-   *    including the null terminator.
+   *    including the null terminator (if written).
    */
-  enum WriteHints {
-    NO_HINTS = 0,
-    HINT_MANY_WRITES_EXPECTED = 1
+  enum WriteOptions {
+    NO_OPTIONS = 0,
+    HINT_MANY_WRITES_EXPECTED = 1,
+    NO_NULL_TERMINATION = 2
   };
 
+  // 16-bit character codes.
   V8EXPORT int Write(uint16_t* buffer,
                      int start = 0,
                      int length = -1,
-                     WriteHints hints = NO_HINTS) const;  // UTF-16
+                     int options = NO_OPTIONS) const;
+  // ASCII characters.
   V8EXPORT int WriteAscii(char* buffer,
                           int start = 0,
                           int length = -1,
-                          WriteHints hints = NO_HINTS) const;  // ASCII
+                          int options = NO_OPTIONS) const;
+  // UTF-8 encoded characters.
   V8EXPORT int WriteUtf8(char* buffer,
                          int length = -1,
                          int* nchars_ref = NULL,
-                         WriteHints hints = NO_HINTS) const;  // UTF-8
+                         int options = NO_OPTIONS) const;
 
   /**
    * A zero length string.
@@ -1051,7 +1078,7 @@ class String : public Primitive {
   V8EXPORT bool IsExternal() const;
 
   /**
-   * Returns true if the string is both external and ascii
+   * Returns true if the string is both external and ASCII
    */
   V8EXPORT bool IsExternalAscii() const;
 
@@ -1108,11 +1135,11 @@ class String : public Primitive {
   };
 
   /**
-   * An ExternalAsciiStringResource is a wrapper around an ascii
+   * An ExternalAsciiStringResource is a wrapper around an ASCII
    * string buffer that resides outside V8's heap. Implement an
    * ExternalAsciiStringResource to manage the life cycle of the
    * underlying buffer.  Note that the string data must be immutable
-   * and that the data must be strict 7-bit ASCII, not Latin1 or
+   * and that the data must be strict (7-bit) ASCII, not Latin-1 or
    * UTF-8, which would require special treatment internally in the
    * engine and, in the case of UTF-8, do not allow efficient indexing.
    * Use String::New or convert to 16 bit data for non-ASCII.
@@ -1128,7 +1155,7 @@ class String : public Primitive {
     virtual ~ExternalAsciiStringResource() {}
     /** The string data from the underlying buffer.*/
     virtual const char* data() const = 0;
-    /** The number of ascii characters in the string.*/
+    /** The number of ASCII characters in the string.*/
     virtual size_t length() const = 0;
    protected:
     ExternalAsciiStringResource() {}
@@ -1141,7 +1168,7 @@ class String : public Primitive {
   inline ExternalStringResource* GetExternalStringResource() const;
 
   /**
-   * Get the ExternalAsciiStringResource for an external ascii string.
+   * Get the ExternalAsciiStringResource for an external ASCII string.
    * Returns NULL if IsExternalAscii() doesn't return true.
    */
   V8EXPORT ExternalAsciiStringResource* GetExternalAsciiStringResource() const;
@@ -1149,9 +1176,9 @@ class String : public Primitive {
   static inline String* Cast(v8::Value* obj);
 
   /**
-   * Allocates a new string from either utf-8 encoded or ascii data.
+   * Allocates a new string from either UTF-8 encoded or ASCII data.
    * The second parameter 'length' gives the buffer length.
-   * If the data is utf-8 encoded, the caller must
+   * If the data is UTF-8 encoded, the caller must
    * be careful to supply the length parameter.
    * If it is not given, the function calls
    * 'strlen' to determine the buffer length, it might be
@@ -1159,7 +1186,7 @@ class String : public Primitive {
    */
   V8EXPORT static Local<String> New(const char* data, int length = -1);
 
-  /** Allocates a new string from utf16 data.*/
+  /** Allocates a new string from 16-bit character codes.*/
   V8EXPORT static Local<String> New(const uint16_t* data, int length = -1);
 
   /** Creates a symbol. Returns one if it exists already.*/
@@ -1194,7 +1221,7 @@ class String : public Primitive {
   V8EXPORT bool MakeExternal(ExternalStringResource* resource);
 
   /**
-   * Creates a new external string using the ascii data defined in the given
+   * Creates a new external string using the ASCII data defined in the given
    * resource. When the external string is no longer live on V8's heap the
    * resource will be disposed by calling its Dispose method. The caller of
    * this function should not otherwise delete or modify the resource. Neither
@@ -1220,18 +1247,18 @@ class String : public Primitive {
    */
   V8EXPORT bool CanMakeExternal();
 
-  /** Creates an undetectable string from the supplied ascii or utf-8 data.*/
+  /** Creates an undetectable string from the supplied ASCII or UTF-8 data.*/
   V8EXPORT static Local<String> NewUndetectable(const char* data,
                                                 int length = -1);
 
-  /** Creates an undetectable string from the supplied utf-16 data.*/
+  /** Creates an undetectable string from the supplied 16-bit character codes.*/
   V8EXPORT static Local<String> NewUndetectable(const uint16_t* data,
                                                 int length = -1);
 
   /**
-   * Converts an object to a utf8-encoded character array.  Useful if
+   * Converts an object to a UTF-8-encoded character array.  Useful if
    * you want to print the object.  If conversion to a string fails
-   * (eg. due to an exception in the toString() method of the object)
+   * (e.g. due to an exception in the toString() method of the object)
    * then the length() method returns 0 and the * operator returns
    * NULL.
    */
@@ -1252,7 +1279,7 @@ class String : public Primitive {
   };
 
   /**
-   * Converts an object to an ascii string.
+   * Converts an object to an ASCII string.
    * Useful if you want to print the object.
    * If conversion to a string fails (eg. due to an exception in the toString()
    * method of the object) then the length() method returns 0 and the * operator
@@ -1312,7 +1339,7 @@ class Number : public Primitive {
   static inline Number* Cast(v8::Value* obj);
  private:
   V8EXPORT Number();
-  static void CheckCast(v8::Value* obj);
+  V8EXPORT static void CheckCast(v8::Value* obj);
 };
 
 
@@ -1434,6 +1461,13 @@ class Object : public Value {
   V8EXPORT Local<Value> Get(Handle<Value> key);
 
   V8EXPORT Local<Value> Get(uint32_t index);
+
+  /**
+   * Gets the property attributes of a property which can be None or
+   * any combination of ReadOnly, DontEnum and DontDelete. Returns
+   * None when the property doesn't exist.
+   */
+  V8EXPORT PropertyAttribute GetPropertyAttributes(Handle<Value> key);
 
   // TODO(1245389): Replace the type-specific versions of these
   // functions with generic ones that accept a Handle<Value> key.
@@ -1625,7 +1659,7 @@ class Object : public Value {
   V8EXPORT bool IsCallable();
 
   /**
-   * Call an Object as a function if a callback is set by the 
+   * Call an Object as a function if a callback is set by the
    * ObjectTemplate::SetCallAsFunctionHandler method.
    */
   V8EXPORT Local<Value> CallAsFunction(Handle<Object> recv,
@@ -1679,7 +1713,7 @@ class Array : public Object {
   static inline Array* Cast(Value* obj);
  private:
   V8EXPORT Array();
-  static void CheckCast(Value* obj);
+  V8EXPORT static void CheckCast(Value* obj);
 };
 
 
@@ -1738,6 +1772,63 @@ class Date : public Object {
    * negatively impact the performance of date operations.
    */
   V8EXPORT static void DateTimeConfigurationChangeNotification();
+
+ private:
+  V8EXPORT static void CheckCast(v8::Value* obj);
+};
+
+
+/**
+ * A Number object (ECMA-262, 4.3.21).
+ */
+class NumberObject : public Object {
+ public:
+  V8EXPORT static Local<Value> New(double value);
+
+  /**
+   * Returns the Number held by the object.
+   */
+  V8EXPORT double NumberValue() const;
+
+  static inline NumberObject* Cast(v8::Value* obj);
+
+ private:
+  V8EXPORT static void CheckCast(v8::Value* obj);
+};
+
+
+/**
+ * A Boolean object (ECMA-262, 4.3.15).
+ */
+class BooleanObject : public Object {
+ public:
+  V8EXPORT static Local<Value> New(bool value);
+
+  /**
+   * Returns the Boolean held by the object.
+   */
+  V8EXPORT bool BooleanValue() const;
+
+  static inline BooleanObject* Cast(v8::Value* obj);
+
+ private:
+  V8EXPORT static void CheckCast(v8::Value* obj);
+};
+
+
+/**
+ * A String object (ECMA-262, 4.3.18).
+ */
+class StringObject : public Object {
+ public:
+  V8EXPORT static Local<Value> New(Handle<String> value);
+
+  /**
+   * Returns the String held by the object.
+   */
+  V8EXPORT Local<String> StringValue() const;
+
+  static inline StringObject* Cast(v8::Value* obj);
 
  private:
   V8EXPORT static void CheckCast(v8::Value* obj);
@@ -2144,11 +2235,10 @@ class V8EXPORT FunctionTemplate : public Template {
   void SetHiddenPrototype(bool value);
 
   /**
-   * Sets the property attributes of the 'prototype' property of functions
-   * created from this FunctionTemplate. Can be any combination of ReadOnly,
-   * DontEnum and DontDelete.
+   * Sets the ReadOnly flag in the attributes of the 'prototype' property
+   * of functions created from this FunctionTemplate to true.
    */
-  void SetPrototypeAttributes(int attributes);
+  void ReadOnlyPrototype();
 
   /**
    * Returns true if the given object is an instance of this function
@@ -2721,6 +2811,13 @@ class V8EXPORT StartupDataDecompressor {  // NOLINT
   char** raw_data;
 };
 
+
+/**
+ * EntropySource is used as a callback function when v8 needs a source
+ * of entropy.
+ */
+typedef bool (*EntropySource)(unsigned char* buffer, size_t length);
+
 /**
  * Container class for static utility functions.
  */
@@ -2946,6 +3043,12 @@ class V8EXPORT V8 {
   static bool Initialize();
 
   /**
+   * Allows the host application to provide a callback which can be used
+   * as a source of entropy for random number generators.
+   */
+  static void SetEntropySource(EntropySource source);
+
+  /**
    * Adjusts the amount of registered external memory.  Used to give
    * V8 an indication of the amount of externally allocated memory
    * that is kept alive by JavaScript objects.  V8 uses this to decide
@@ -2982,31 +3085,6 @@ class V8EXPORT V8 {
    * Return whether profiler is currently paused.
    */
   static bool IsProfilerPaused();
-
-  /**
-   * If logging is performed into a memory buffer (via --logfile=*), allows to
-   * retrieve previously written messages. This can be used for retrieving
-   * profiler log data in the application. This function is thread-safe.
-   *
-   * Caller provides a destination buffer that must exist during GetLogLines
-   * call. Only whole log lines are copied into the buffer.
-   *
-   * \param from_pos specified a point in a buffer to read from, 0 is the
-   *   beginning of a buffer. It is assumed that caller updates its current
-   *   position using returned size value from the previous call.
-   * \param dest_buf destination buffer for log data.
-   * \param max_size size of the destination buffer.
-   * \returns actual size of log data copied into buffer.
-   */
-  static int GetLogLines(int from_pos, char* dest_buf, int max_size);
-
-  /**
-   * The minimum allowed size for a log lines buffer.  If the size of
-   * the buffer given will not be enough to hold a line of the maximum
-   * length, an attempt to find a log line end in GetLogLines will
-   * fail, and an empty result will be returned.
-   */
-  static const int kMinimumSizeForLogLinesBuffer = 2048;
 
   /**
    * Retrieve the V8 thread id of the calling thread.
@@ -3487,7 +3565,7 @@ class V8EXPORT Context {
  * // V8 Now no longer locked.
  * \endcode
  *
- * 
+ *
  */
 class V8EXPORT Unlocker {
  public:
@@ -3532,7 +3610,7 @@ class V8EXPORT Locker {
   /**
    * Returns whether v8::Locker is being used by this V8 instance.
    */
-  static bool IsActive() { return active_; }
+  static bool IsActive();
 
  private:
   bool has_lock_;
@@ -3750,10 +3828,6 @@ class Internals {
 };
 
 }  // namespace internal
-
-
-template <class T>
-Handle<T>::Handle() : val_(0) { }
 
 
 template <class T>
@@ -4032,6 +4106,30 @@ Date* Date::Cast(v8::Value* value) {
   CheckCast(value);
 #endif
   return static_cast<Date*>(value);
+}
+
+
+StringObject* StringObject::Cast(v8::Value* value) {
+#ifdef V8_ENABLE_CHECKS
+  CheckCast(value);
+#endif
+  return static_cast<StringObject*>(value);
+}
+
+
+NumberObject* NumberObject::Cast(v8::Value* value) {
+#ifdef V8_ENABLE_CHECKS
+  CheckCast(value);
+#endif
+  return static_cast<NumberObject*>(value);
+}
+
+
+BooleanObject* BooleanObject::Cast(v8::Value* value) {
+#ifdef V8_ENABLE_CHECKS
+  CheckCast(value);
+#endif
+  return static_cast<BooleanObject*>(value);
 }
 
 

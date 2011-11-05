@@ -18,11 +18,17 @@ The arguments passed to the completion callback depend on the method, but the
 first argument is always reserved for an exception. If the operation was
 completed successfully, then the first argument will be `null` or `undefined`.
 
+When using the synchronous form any exceptions are immediately thrown.
+You can use try/catch to handle exceptions or allow them to bubble up.
+
 -->
 非同期の形式は常に最後の引数として完了コールバックを受け取ります。
 引数として渡される完了コールバックはメソッドに依存しますが、
 最初の引数は常に例外のために予約されています。
 操作が成功で完了すると最初の引数は `null` または `undefined` となります
+
+同期の形式では、全ての例外はすぐにスローされます。
+例外は try/catch で捕まえることも、そのまま通過させることもできます。
 
 <!--
 
@@ -91,9 +97,15 @@ In busy processes, the programmer is _strongly encouraged_ to use the
 asynchronous versions of these calls. The synchronous versions will block
 the entire process until they complete--halting all connections.
 
+Relative path to filename can be used, remember however that this path will be relative
+to `process.cwd()`.
+
 -->
 忙しいプロセスでは、プログラマはこれらの非同期バージョンを使うことが*強く推奨*されます。
 同期バージョンはそれが完了するまでプロセス全体をブロックします － 全ての接続を停止します。
+
+ファイル名には相対パスを使うことが出来ます。しかし、このパスは
+`process.cwd()` からの相対パスであることを思い出してください。
 
 ### fs.rename(path1, path2, [callback])
 
@@ -133,17 +145,17 @@ Synchronous ftruncate(2).
 -->
 同期の ftruncate(2)。
 
-### fs.chown(path, mode, [callback])
+### fs.chown(path, uid, gid, [callback])
 
 <!--
 
-Asycnronous chown(2). No arguments other than a possible exception are given
+Asynchronous chown(2). No arguments other than a possible exception are given
 to the completion callback.
 
 -->
 非同期の chown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.chownSync(path, mode)
+### fs.chownSync(path, uid, gid)
 
 <!--
 
@@ -152,17 +164,17 @@ Synchronous chown(2).
 -->
 同期の chown(2)。
 
-### fs.fchown(path, mode, [callback])
+### fs.fchown(fd, uid, gid, [callback])
 
 <!--
 
-Asycnronous fchown(2). No arguments other than a possible exception are given
+Asynchronous fchown(2). No arguments other than a possible exception are given
 to the completion callback.
 
 -->
 非同期の fchown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.fchownSync(path, mode)
+### fs.fchownSync(fd, uid, gid)
 
 <!--
 
@@ -171,17 +183,17 @@ Synchronous fchown(2).
 -->
 同期の fchown(2)。
 
-### fs.lchown(path, mode, [callback])
+### fs.lchown(path, uid, gid, [callback])
 
 <!--
 
-Asycnronous lchown(2). No arguments other than a possible exception are given
+Asynchronous lchown(2). No arguments other than a possible exception are given
 to the completion callback.
 
 -->
 非同期の lchown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.lchownSync(path, mode)
+### fs.lchownSync(path, uid, gid)
 
 <!--
 
@@ -218,7 +230,7 @@ are given to the completion callback.
 -->
 非同期の fchmod(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.fchmodSync(path, mode)
+### fs.fchmodSync(fd, mode)
 
 <!--
 
@@ -227,7 +239,7 @@ Synchronous fchmod(2).
 -->
 同期の fchmod(2)。
 
-### fs.lchmod(fd, mode, [callback])
+### fs.lchmod(path, mode, [callback])
 
 <!--
 
@@ -251,25 +263,13 @@ Synchronous lchmod(2).
 <!--
 
 Asynchronous stat(2). The callback gets two arguments `(err, stats)` where
-`stats` is a [`fs.Stats`](#fs.Stats) object. It looks like this:
+`stats` is a [fs.Stats](#fs.Stats) object.  See the [fs.Stats](#fs.Stats)
+section below for more information.
 
 -->
 非同期の stat(2)。コールバックは 2 つの引数を受け取る `(err, stats)`で、
-`stats` は `fs.Stats` オブジェクトです。次のようになります。
-
-    { dev: 2049,
-      ino: 305352,
-      mode: 16877,
-      nlink: 12,
-      uid: 1000,
-      gid: 1000,
-      rdev: 0,
-      size: 4096,
-      blksize: 4096,
-      blocks: 8,
-      atime: '2009-06-29T11:11:55Z',
-      mtime: '2009-06-29T11:11:40Z',
-      ctime: '2009-06-29T11:11:40Z' }
+`stats` は [fs.Stats](#fs.Stats) オブジェクトです。
+詳細は [fs.Stats](#fs.Stats) の節を参照してください。
 
 <!--
 
@@ -377,29 +377,30 @@ Synchronous symlink(2).
 <!--
 
 Asynchronous readlink(2). The callback gets two arguments `(err,
-resolvedPath)`.
+linkString)`.
 
 -->
-非同期の readlink(2)。コールバックは 2 つの引数を受け取る `(err, resolvedPath)`です。
+非同期の readlink(2)。コールバックは 2 つの引数を受け取る `(err, linkString)`です。
 
 ### fs.readlinkSync(path)
 
 <!--
 
-Synchronous readlink(2). Returns the resolved path.
+Synchronous readlink(2). Returns the symbolic link's string value.
 
 -->
-同期の readlink(2)。解決されたパスを返します。
+同期の readlink(2)。シンボリックリンクの持つ文字列値を返します。
 
 ### fs.realpath(path, [callback])
 
 <!--
 
 Asynchronous realpath(2).  The callback gets two arguments `(err,
-resolvedPath)`.
+resolvedPath)`.  May use `process.cwd` to resolve relative paths.
 
 -->
 非同期の realpath(2)。コールバックは 2 つの引数を受け取る `(err, resolvedPath)`です。
+相対パスを解決するために `process.cwd` を使用することができます。
 
 ### fs.realpathSync(path)
 
@@ -448,17 +449,18 @@ Synchronous rmdir(2).
 -->
 同期の rmdir(2)。
 
-### fs.mkdir(path, mode, [callback])
+### fs.mkdir(path, [mode], [callback])
 
 <!--
 
 Asynchronous mkdir(2). No arguments other than a possible exception are given
-to the completion callback.
+to the completion callback. `mode` defaults to `0777`. 
 
 -->
 非同期の mkdir(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+`mode` のデフォルトは `0777` です。
 
-### fs.mkdirSync(path, mode)
+### fs.mkdirSync(path, [mode])
 
 <!--
 
@@ -518,7 +520,7 @@ Asynchronous file open. See open(2). `flags` can be:
 * `'r'` - Open file for reading.
 An exception occurs if the file does not exist.
 
-* `'r+'` - Open file for reading and writing. 
+* `'r+'` - Open file for reading and writing.
 An exception occurs if the file does not exist.
 
 * `'w'` - Open file for writing.
@@ -571,29 +573,29 @@ Synchronous open(2).
 -->
 同期の open(2)。
 
-### fs.utimes(path, atime, mtime, callback)
+### fs.utimes(path, atime, mtime, [callback])
 ### fs.utimesSync(path, atime, mtime)
 
 <!--
 
 Change file timestamps.
+Change file timestamps of the file referenced by the supplied path.
 
 -->
-ファイルのタイムスタンプを変更します。
+渡されたパスが参照するファイルのタイムスタンプを変更します。
 
-### fs.futimes(path, atime, mtime, callback)
-### fs.futimesSync(path, atime, mtime)
+### fs.futimes(fd, atime, mtime, [callback])
+### fs.futimesSync(fd, atime, mtime)
 
 <!--
 
-Change file timestamps with the difference that if filename refers to a
-symbolic link, then the link is not dereferenced.
+Change the file timestamps of a file referenced by the supplied file
+descriptor.
 
 -->
-ファイルのタイムスタンプを変更します。
-パスがシンボリックリンクだった場合、参照先のファイルを辿らない点が異なります。
+渡されたファイル記述子が参照するファイルのタイムスタンプを変更します。
 
-### fs.fsync(fd, callback)
+### fs.fsync(fd, [callback])
 
 <!--
 
@@ -644,7 +646,7 @@ pwrite(2) を参照してください。
 The callback will be given two arguments `(err, written)` where `written`
 specifies how many _bytes_ were written.
 The callback will be given three arguments `(err, written, buffer)` where `written`
-specifies how many _bytes_ were written into `buffer`.
+specifies how many _bytes_ were written from `buffer`.
 
 -->
 コールバックは 3 つの引数が与えられる `(err, written, buffer)` で、
@@ -674,7 +676,7 @@ written.
 
 <!--
 
-Synchronous version of string-based `fs.write()`. Returns the number of bytes
+Synchronous version of string-based `fs.write()`. Returns the number of _bytes_
 written.
 
 -->
@@ -848,7 +850,8 @@ value in milliseconds. The default is `{ persistent: true, interval: 0 }`.
 
 -->
 第 2 引数はオプションです．
-`options` が与えられる場合、それは `persistent` とポーリング間隔をミリ秒で表す `interval` の二つの boolean メンバを含むオブジェクトです。
+`options` が与えられる場合、それは boolean の `persistent` と、
+ポーリング間隔をミリ秒で表す `interval` の二つのメンバを含むオブジェクトです。
 デフォルトは `{ persistent: true, interval: 0}` です。
 
 <!--
@@ -859,7 +862,7 @@ stat object:
 -->
 `listener` は現在の状態オブジェクトと前の状態オブジェクトの 2 つの引数を受け取ります:
 
-    fs.watchFile(f, function (curr, prev) {
+    fs.watchFile('message.text', function (curr, prev) {
       console.log('the current mtime is: ' + curr.mtime);
       console.log('the previous mtime was: ' + prev.mtime);
     });
@@ -869,7 +872,8 @@ stat object:
 These stat objects are instances of `fs.Stat`.
 
 If you want to be notified when the file was modified, not just accessed
-you need to compare `curr.mtime` and `prev.mtime.
+you need to compare `curr.mtime` and `prev.mtime`.
+
 -->
 
 これらの状態オブジェクトは `fs.Stat` のインスタンスです。
@@ -885,14 +889,68 @@ Stop watching for changes on `filename`.
 -->
 `filename` の変更に対する監視を終了します。
 
+### fs.watch(filename, [options], listener)
+
+<!--
+
+Watch for changes on `filename`, where `filename` is either a file or a
+directory.  The returned object is [fs.FSWatcher](#fs.FSWatcher).
+
+The second argument is optional. The `options` if provided should be an object
+containing a boolean member `persistent`.  The default is `{ persistent: true }`.
+
+The listener callback gets two arguments `(event, filename)`.  `event` is either
+'rename' or 'change', and `filename` is the name of the file which triggered
+the event.
+
+***Warning:***
+Providing `filename` argument in the callback is not supported
+on every platform (currently it's only supported on Linux and Windows).  Even
+on supported platforms `filename` is not always guaranteed to be provided.
+Therefore, don't assume that `filename` argument is always provided in the
+callback, and have some fallback logic if it is null.
+
+-->
+`filename` の変更を監視します。
+`filename` はファイルまたはディレクトリのどちらかです。
+戻り値のオブジェクトは [fs.FSWatcher](#fs.FSWatcher) です。
+
+第 2 引数はオプションです。
+もし指定されるなら、`options` は boolean の `persistent` プロパティを
+持つオブジェクトであるべきです。デフォルトは `{ persistent: true }` です。
+
+リスナーコールバックは二つの引数 `(event, filename)` を与えられます。
+`event` は `'rename'` または `'change'`、そして `filename` はイベントを
+引き起こしたファイルの名前です。
+
+***警告:***
+コールバックに提供される `filename` 引数は、
+全てのプラットフォームでサポートされるわけではありません
+(現時点では Linux と Windows でのみサポートされます)。
+サポートされるプラットフォームであっても、`filename` が常に提供されることが
+保証されているわけではありません。
+そのため、コールバックは `filename` 引数が常に提供されると仮定せず、
+それが `null` だったときの代替手段を持つべきです。
+
+    fs.watch('somedir', function (event, filename) {
+      console.log('event is: ' + event);
+	  if (filename) {
+        console.log('filename provided: ' + filename);
+	  } else {
+	    console.log('filename not provided');
+	  }
+    });
+
 ## fs.Stats
 
 <!--
 
-Objects returned from `fs.stat()` and `fs.lstat()` are of this type.
+Objects returned from `fs.stat()`, `fs.lstat()` and `fs.fstat()` and their
+synchronous counterparts are of this type.
 
 -->
-`fs.stat()` と `fs.lstat()` から返されるオブジェクトはこの型です。
+`fs.stat()`、`fs.lstat()`、`fs.fstat()`、そしてそれらの同期版 から返される
+オブジェクトはこの型です。
 
 <!--
 
@@ -905,22 +963,68 @@ Objects returned from `fs.stat()` and `fs.lstat()` are of this type.
  - `stats.isSocket()`
 
 -->
+
  - `stats.isFile()`
  - `stats.isDirectory()`
  - `stats.isBlockDevice()`
  - `stats.isCharacterDevice()`
- - `stats.isSymbolicLink()` (`fs.lstat()`でのみ有効)
+ - `stats.isSymbolicLink()` (`fs.lstat()` でのみ有効)
  - `stats.isFIFO()`
  - `stats.isSocket()`
+
+<!--
+
+For a regular file `util.inspect(stats)` would return a string very
+similar to this:
+
+-->
+`util.inspect(stats)` は通常のファイルに対して次のような文字列を返します。
+
+    { dev: 2114,
+      ino: 48064969,
+      mode: 33188,
+      nlink: 1,
+      uid: 85,
+      gid: 100,
+      rdev: 0,
+      size: 527,
+      blksize: 4096,
+      blocks: 8,
+      atime: Mon, 10 Oct 2011 23:24:11 GMT,
+      mtime: Mon, 10 Oct 2011 23:24:11 GMT,
+      ctime: Mon, 10 Oct 2011 23:24:11 GMT }
+
+<!--
+
+Please note that `atime`, `mtime` and `ctime` are instances
+of [Date][MDN-Date] object and to compare the values of
+these objects you should use appropriate methods. For most
+general uses [getTime()][MDN-Date-getTime] will return
+the number of milliseconds elapsed since _1 January 1970
+00:00:00 UTC_ and this integer should be sufficient for
+any comparison, however there additional methods which can
+be used for displaying fuzzy information. More details can
+be found in the [MDN JavaScript Reference][MDN-Date] page.
+
+-->
+`atime`、`mtime`、そして `ctime` は [Date][MDN-Date] オブジェクトであり、
+その値を比較するには適切な方法があるということに注意してください。
+もっとも一般的に使われる [getTime()][MDN-Date-getTime] は _1970 年 1 月
+1 日_からの経過時間をミリ秒単位で返します。
+それは比較には十分ですが、曖昧な情報を表示するには別の方法を使ってください。
+より詳しい情報は [MDN JavaScript Reference][MDN-Date] で探すことができます。
+
+[MDN-Date]: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Date
+[MDN-Date-getTime]: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Date/getTime
 
 ## fs.ReadStream
 
 <!--
 
-`ReadStream` is a `Readable Stream`.
+`ReadStream` is a [Readable Stream](streams.html#readable_Stream).
 
 -->
-`ReadStream` は `Readable Stream` です。
+`ReadStream` は [Readable Stream](streams.html#readable_Stream) です。
 
 ### Event: 'open'
 
@@ -981,10 +1085,10 @@ An example to read the last 10 bytes of a file which is 100 bytes long:
 
 <!--
 
-`WriteStream` is a `Writable Stream`.
+`WriteStream` is a [Writable Stream](streams.html#writable_Stream).
 
 -->
-`WriteStream` は `Writable Stream` です。
+`WriteStream` は [Writable Stream](streams.html#writable_Stream) です。
 
 ### Event: 'open'
 
@@ -1027,3 +1131,58 @@ Returns a new WriteStream object (See `Writable Stream`).
     { flags: 'w',
       encoding: null,
       mode: 0666 }
+
+<!--
+
+`options` may also include a `start` option to allow writing data at
+some position past the beginning of the file.  Modifying a file rather
+than replacing it may require a `flags` mode of `r+` rather than the
+default mode `w`.
+
+-->
+`options` にはデータをファイルのどの位置に書き込むかを指定する
+`start` を含めることができます。
+ファイルを置換するのではなく変更する場合は、 `flags` にデフォルトの
+`w` ではなく `r+` が必要となります。
+
+## fs.FSWatcher
+
+<!--
+
+Objects returned from `fs.watch()` are of this type.
+
+-->
+`fs.watch()` が返すオブジェクトはこの型です。
+
+#### watcher.close()
+
+<!--
+
+Stop watching for changes on the given `fs.FSWatcher`.
+
+-->
+`fs.FSWatcher` に与えられたファイルの監視を終了します。
+
+#### Event: 'change'
+
+`function (event, filename) {}`
+
+<!--
+
+Emitted when something changes in a watched directory or file.
+See more details in [fs.watch](#fs.watch).
+
+-->
+監視しているファイルまたはディレクトリに変更があると生成されます。
+詳しくは [fs.watch](#fs.watch) を参照してください。
+
+#### Event: 'error'
+
+`function (exception) {}`
+
+<!--
+
+Emitted when an error occurs.
+
+-->
+エラーが発生すると生成されます。

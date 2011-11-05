@@ -377,6 +377,9 @@ class Operand BASE_EMBEDDED {
   // immediate
   INLINE(explicit Operand(int32_t immediate,
          RelocInfo::Mode rmode = RelocInfo::NONE));
+  INLINE(static Operand Zero()) {
+    return Operand(static_cast<int32_t>(0));
+  }
   INLINE(explicit Operand(const ExternalReference& f));
   explicit Operand(Handle<Object> handle);
   INLINE(explicit Operand(Smi* value));
@@ -1178,7 +1181,17 @@ class Assembler : public AssemblerBase {
 
   // Record the AST id of the CallIC being compiled, so that it can be placed
   // in the relocation information.
-  void RecordAstId(unsigned ast_id) { ast_id_for_reloc_info_ = ast_id; }
+  void SetRecordedAstId(unsigned ast_id) {
+    ASSERT(recorded_ast_id_ == kNoASTId);
+    recorded_ast_id_ = ast_id;
+  }
+
+  unsigned RecordedAstId() {
+    ASSERT(recorded_ast_id_ != kNoASTId);
+    return recorded_ast_id_;
+  }
+
+  void ClearRecordedAstId() { recorded_ast_id_ = kNoASTId; }
 
   // Record a comment relocation entry that can be used by a disassembler.
   // Use --code-comments to enable.
@@ -1244,7 +1257,7 @@ class Assembler : public AssemblerBase {
   // Relocation for a type-recording IC has the AST id added to it.  This
   // member variable is a way to pass the information from the call site to
   // the relocation info.
-  unsigned ast_id_for_reloc_info_;
+  unsigned recorded_ast_id_;
 
   bool emit_debug_code() const { return emit_debug_code_; }
 

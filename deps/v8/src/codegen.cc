@@ -169,9 +169,6 @@ void CodeGenerator::PrintCode(Handle<Code> code, CompilationInfo* info) {
 #endif  // ENABLE_DISASSEMBLER
 }
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
-
-static Vector<const char> kRegexp = CStrVector("regexp");
 
 bool CodeGenerator::ShouldGenerateLog(Expression* type) {
   ASSERT(type != NULL);
@@ -181,13 +178,11 @@ bool CodeGenerator::ShouldGenerateLog(Expression* type) {
   }
   Handle<String> name = Handle<String>::cast(type->AsLiteral()->handle());
   if (FLAG_log_regexp) {
-    if (name->IsEqualTo(kRegexp))
+    if (name->IsEqualTo(CStrVector("regexp")))
       return true;
   }
   return false;
 }
-
-#endif
 
 
 bool CodeGenerator::RecordPositions(MacroAssembler* masm,

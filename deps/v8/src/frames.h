@@ -1,4 +1,4 @@
-// Copyright 2006-2008 the V8 project authors. All rights reserved.
+// Copyright 2011 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -114,6 +114,7 @@ class StackHandler BASE_EMBEDDED {
   // Accessors.
   inline State state() const;
 
+  inline Object** context_address() const;
   inline Address* pc_address() const;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(StackHandler);
@@ -578,6 +579,7 @@ class ArgumentsAdaptorFrame: public JavaScriptFrame {
   virtual void Print(StringStream* accumulator,
                      PrintMode mode,
                      int index) const;
+
  protected:
   explicit ArgumentsAdaptorFrame(StackFrameIterator* iterator)
       : JavaScriptFrame(iterator) { }
@@ -843,7 +845,6 @@ class SafeStackFrameIterator BASE_EMBEDDED {
 };
 
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
 typedef JavaScriptFrameIteratorTemp<SafeStackFrameIterator>
     SafeJavaScriptFrameIterator;
 
@@ -855,7 +856,6 @@ class SafeStackTraceFrameIterator: public SafeJavaScriptFrameIterator {
                                        Address low_bound, Address high_bound);
   void Advance();
 };
-#endif
 
 
 class StackFrameLocator BASE_EMBEDDED {

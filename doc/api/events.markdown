@@ -81,13 +81,13 @@ Adds a listener to the end of the listeners array for the specified event.
 
 <!--
 
-Adds a **one time** listener for the event. The listener is
-invoked only the first time the event is fired, after which
+Adds a **one time** listener for the event. This listener is
+invoked only the next time the event is fired, after which
 it is removed.
 
 -->
 **一回限り**のリスナーをイベントに追加します。
-このリスナーはイベントが最初に発生した時に限り起動され、その後で削除されます。
+このリスナーは次にイベントが発生した時に限り起動され、その後で削除されます。
 
     server.once('connection', function (stream) {
       console.log('Ah, we have our first user!');
@@ -127,12 +127,12 @@ Removes all listeners, or those of the specified event.
 <!--
 
 By default EventEmitters will print a warning if more than 10 listeners are
-added to it. This is a useful default which helps finding memory leaks.
+added for a particular event. This is a useful default which helps finding memory leaks.
 Obviously not all Emitters should be limited to 10. This function allows
 that to be increased. Set to zero for unlimited.
 
 -->
-デフォルトでは、EventEmitter は 10 を越えるリスナが追加されると警告を出力します。
+デフォルトでは、EventEmitter は 10 を越えるリスナが特定のイベントに追加されると警告を出力します。
 これはメモリリークを見つけるために役に立つデフォルト値です。
 全ての EventEmitter が 10 に制限されなければならないわけではないことは明らかです。
 この関数は制限を増やすことを許可します。
@@ -152,7 +152,7 @@ manipulated, e.g. to remove listeners.
     server.on('connection', function (stream) {
       console.log('someone connected!');
     });
-    console.log(util.inspect(server.listeners('connection')); // [ [Function] ]
+    console.log(util.inspect(server.listeners('connection'))); // [ [Function] ]
 
 #### emitter.emit(event, [arg1], [arg2], [...])
 

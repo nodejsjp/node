@@ -21,25 +21,26 @@
 
 
 #include <node.h>
-#include <platform.h>
+#include "platform.h"
 
 #include <v8.h>
 
 #include <errno.h>
 #include <stdlib.h>
+#if defined(__MINGW32__)
 #include <sys/param.h> // for MAXPATHLEN
 #include <unistd.h> // getpagesize
+#endif
 
 #include <platform_win32.h>
-
-#include <platform_win32_winsock.cc>
+#include <psapi.h>
 
 namespace node {
 
 using namespace v8;
 
 static char *process_title = NULL;
-double Platform::prog_start_time = 0.0;
+double Platform::prog_start_time = Platform::GetUptime();
 
 
 // Does the about the same as strerror(),
@@ -94,14 +95,20 @@ char** Platform::SetupArgs(int argc, char *argv[]) {
 }
 
 
+// Max title length; the only thing MSDN tells us about the maximum length
+// of the console title is that it is smaller than 64K. However in practice
+// it is much smaller, and there is no way to figure out what the exact length
+// of the title is or can be, at least not on XP. To make it even more
+// annoying, GetConsoleTitle failes when the buffer to be read into is bigger
+// than the actual maximum length. So we make a conservative guess here;
+// just don't put the novel you're writing in the title, unless the plot
+// survives truncation.
+#define MAX_TITLE_LENGTH 8192
+
 void Platform::SetProcessTitle(char *title) {
   // We need to convert _title_ to UTF-16 first, because that's what windows uses internally.
   // It would be more efficient to use the UTF-16 value that we can obtain from v8,
   // but it's not accessible from here.
-
-  // Max title length; according to the specs it should be 64K but in practice it's a little over 30000,
-  // but who needs titles that long anyway?
-  const int MAX_TITLE_LENGTH = 30001;
 
   int length;
   WCHAR *title_w;
@@ -139,60 +146,36 @@ void Platform::SetProcessTitle(char *title) {
 
 
 static inline char* _getProcessTitle() {
-  WCHAR *title_w;
+  WCHAR title_w[MAX_TITLE_LENGTH];
   char *title;
-  int length, length_w;
+  int result, length;
 
-  length_w = GetConsoleTitleW((WCHAR*)L"\0", sizeof(WCHAR));
+  result = GetConsoleTitleW(title_w, sizeof(title_w) / sizeof(WCHAR));
 
-  // If length is zero, there may be an error or the title may be empty
-  if (!length_w) {
-    if (GetLastError()) {
-      winapi_perror("GetConsoleTitleW");
-      return NULL;
-    }
-    else {
-      // The title is empty, so return empty string
-      process_title = strdup("\0");
-      return process_title;
-    }
-  }
-
-  // Room for \0 terminator
-  length_w++;
-
-  title_w = new WCHAR[length_w];
-
-  if (!GetConsoleTitleW(title_w, length_w * sizeof(WCHAR))) {
+  if (result == 0) {
     winapi_perror("GetConsoleTitleW");
-    delete title_w;
     return NULL;
   }
 
   // Find out what the size of the buffer is that we need
-  length = WideCharToMultiByte(CP_UTF8, 0, title_w, length_w, NULL, 0, NULL, NULL);
+  length = WideCharToMultiByte(CP_UTF8, 0, title_w, -1, NULL, 0, NULL, NULL);
   if (!length) {
     winapi_perror("WideCharToMultiByte");
-    delete title_w;
     return NULL;
   }
 
   title = (char *) malloc(length);
   if (!title) {
     perror("malloc");
-    delete title_w;
     return NULL;
   }
 
   // Do utf16 -> utf8 conversion here
   if (!WideCharToMultiByte(CP_UTF8, 0, title_w, -1, title, length, NULL, NULL)) {
     winapi_perror("WideCharToMultiByte");
-    delete title_w;
     free(title);
     return NULL;
   }
-
-  delete title_w;
 
   return title;
 }
@@ -215,41 +198,88 @@ const char* Platform::GetProcessTitle(int *len) {
 }
 
 
-int Platform::GetMemory(size_t *rss, size_t *vsize) {
-  *rss = 0;
-  *vsize = 0;
+int Platform::GetMemory(size_t *rss) {
+
+  HANDLE current_process = GetCurrentProcess();
+  PROCESS_MEMORY_COUNTERS pmc;
+
+  if ( !GetProcessMemoryInfo( current_process, &pmc, sizeof(pmc)) )
+  {
+    winapi_perror("GetProcessMemoryInfo");
+  }
+
+  *rss = pmc.WorkingSetSize;
+
+  return 0;
+}
+
+int Platform::GetCPUInfo(Local<Array> *cpus) {
+
+  HandleScope scope;
+  *cpus = Array::New();
+
+  for (int i = 0; i < 32; i++) {
+
+    char key[128] = "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\";
+    char processor_number[32];
+    itoa(i, processor_number, 10);
+    strncat(key, processor_number, 2);
+
+    HKEY processor_key = NULL;
+
+    DWORD cpu_speed = 0;
+    DWORD cpu_speed_length = sizeof(cpu_speed);
+
+    char cpu_brand[256];
+    DWORD cpu_brand_length = sizeof(cpu_brand);
+
+    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, key, 0, KEY_QUERY_VALUE,
+        &processor_key) != ERROR_SUCCESS) {
+      if (i == 0) {
+        winapi_perror("RegOpenKeyEx");
+        return -1;
+      }
+
+      continue;
+    }
+
+    if (RegQueryValueEx(processor_key, "~MHz", NULL, NULL,
+                        (LPBYTE)&cpu_speed, &cpu_speed_length)
+                        != ERROR_SUCCESS) {
+      winapi_perror("RegQueryValueEx");
+      return -1;
+    }
+
+    if (RegQueryValueEx(processor_key, "ProcessorNameString", NULL, NULL,
+                        (LPBYTE)&cpu_brand, &cpu_brand_length)
+                        != ERROR_SUCCESS) {
+      winapi_perror("RegQueryValueEx");
+      return -1;
+    }
+
+    RegCloseKey(processor_key);
+
+    Local<Object> times_info = Object::New(); // FIXME - find times on windows
+    times_info->Set(String::New("user"), Integer::New(0));
+    times_info->Set(String::New("nice"), Integer::New(0));
+    times_info->Set(String::New("sys"), Integer::New(0));
+    times_info->Set(String::New("idle"), Integer::New(0));
+    times_info->Set(String::New("irq"), Integer::New(0));
+
+    Local<Object> cpu_info = Object::New();
+    cpu_info->Set(String::New("model"), String::New(cpu_brand));
+    cpu_info->Set(String::New("speed"), Integer::New(cpu_speed));
+    cpu_info->Set(String::New("times"), times_info);
+    (*cpus)->Set(i,cpu_info);
+  }
+
   return 0;
 }
 
 
-double Platform::GetFreeMemory() {
-  return -1;
-}
-
-double Platform::GetTotalMemory() {
-  return -1;
-}
-
-
-int Platform::GetExecutablePath(char* buffer, size_t* size) {
-  *size = 0;
-  return -1;
-}
-
-
-int Platform::GetCPUInfo(Local<Array> *cpus) {
-  return -1;
-}
-
-
 double Platform::GetUptimeImpl() {
-  return -1;
+  return (double)GetTickCount()/1000.0;
 }
-
-int Platform::GetLoadAvg(Local<Array> *loads) {
-  return -1;
-}
-
 
 Handle<Value> Platform::GetInterfaceAddresses() {
   HandleScope scope;

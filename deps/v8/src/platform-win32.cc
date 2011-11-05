@@ -1,4 +1,4 @@
-// Copyright 2006-2008 the V8 project authors. All rights reserved.
+// Copyright 2011 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -35,80 +35,7 @@
 #include "platform.h"
 #include "vm-state-inl.h"
 
-// Extra POSIX/ANSI routines for Win32 when when using Visual Studio C++. Please
-// refer to The Open Group Base Specification for specification of the correct
-// semantics for these functions.
-// (http://www.opengroup.org/onlinepubs/000095399/)
 #ifdef _MSC_VER
-
-namespace v8 {
-namespace internal {
-
-intptr_t OS::MaxVirtualMemory() {
-  return 0;
-}
-
-
-// Test for finite value - usually defined in math.h
-int isfinite(double x) {
-  return _finite(x);
-}
-
-}  // namespace v8
-}  // namespace internal
-
-// Test for a NaN (not a number) value - usually defined in math.h
-int isnan(double x) {
-  return _isnan(x);
-}
-
-
-// Test for infinity - usually defined in math.h
-int isinf(double x) {
-  return (_fpclass(x) & (_FPCLASS_PINF | _FPCLASS_NINF)) != 0;
-}
-
-
-// Test if x is less than y and both nominal - usually defined in math.h
-int isless(double x, double y) {
-  return isnan(x) || isnan(y) ? 0 : x < y;
-}
-
-
-// Test if x is greater than y and both nominal - usually defined in math.h
-int isgreater(double x, double y) {
-  return isnan(x) || isnan(y) ? 0 : x > y;
-}
-
-
-// Classify floating point number - usually defined in math.h
-int fpclassify(double x) {
-  // Use the MS-specific _fpclass() for classification.
-  int flags = _fpclass(x);
-
-  // Determine class. We cannot use a switch statement because
-  // the _FPCLASS_ constants are defined as flags.
-  if (flags & (_FPCLASS_PN | _FPCLASS_NN)) return FP_NORMAL;
-  if (flags & (_FPCLASS_PZ | _FPCLASS_NZ)) return FP_ZERO;
-  if (flags & (_FPCLASS_PD | _FPCLASS_ND)) return FP_SUBNORMAL;
-  if (flags & (_FPCLASS_PINF | _FPCLASS_NINF)) return FP_INFINITE;
-
-  // All cases should be covered by the code above.
-  ASSERT(flags & (_FPCLASS_SNAN | _FPCLASS_QNAN));
-  return FP_NAN;
-}
-
-
-// Test sign - usually defined in math.h
-int signbit(double x) {
-  // We need to take care of the special case of both positive
-  // and negative versions of zero.
-  if (x == 0)
-    return _fpclass(x) & _FPCLASS_NZ;
-  else
-    return x < 0;
-}
-
 
 // Case-insensitive bounded string comparisons. Use stricmp() on Win32. Usually
 // defined in strings.h.
@@ -122,15 +49,6 @@ int strncasecmp(const char* s1, const char* s2, int n) {
 // Extra functions for MinGW. Most of these are the _s functions which are in
 // the Microsoft Visual Studio C++ CRT.
 #ifdef __MINGW32__
-
-namespace v8 {
-namespace internal {
-
-intptr_t OS::MaxVirtualMemory() {
-  return 0;
-}
-}
-}
 
 int localtime_s(tm* out_tm, const time_t* time) {
   tm* posix_local_time_struct = localtime(time);
@@ -152,16 +70,39 @@ int fopen_s(FILE** pFile, const char* filename, const char* mode) {
 }
 
 
+#define _TRUNCATE 0
+#define STRUNCATE 80
+
 int _vsnprintf_s(char* buffer, size_t sizeOfBuffer, size_t count,
                  const char* format, va_list argptr) {
+  ASSERT(count == _TRUNCATE);
   return _vsnprintf(buffer, sizeOfBuffer, format, argptr);
 }
-#define _TRUNCATE 0
 
 
-int strncpy_s(char* strDest, size_t numberOfElements,
-              const char* strSource, size_t count) {
-  strncpy(strDest, strSource, count);
+int strncpy_s(char* dest, size_t dest_size, const char* source, size_t count) {
+  CHECK(source != NULL);
+  CHECK(dest != NULL);
+  CHECK_GT(dest_size, 0);
+
+  if (count == _TRUNCATE) {
+    while (dest_size > 0 && *source != 0) {
+      *(dest++) = *(source++);
+      --dest_size;
+    }
+    if (dest_size == 0) {
+      *(dest - 1) = 0;
+      return STRUNCATE;
+    }
+  } else {
+    while (dest_size > 0 && count > 0 && *source != 0) {
+      *(dest++) = *(source++);
+      --dest_size;
+      --count;
+    }
+  }
+  CHECK_GT(dest_size, 0);
+  *dest = 0;
   return 0;
 }
 
@@ -182,6 +123,11 @@ int random() {
 
 namespace v8 {
 namespace internal {
+
+intptr_t OS::MaxVirtualMemory() {
+  return 0;
+}
+
 
 double ceiling(double x) {
   return ceil(x);
@@ -726,6 +672,24 @@ bool OS::Remove(const char* path) {
 }
 
 
+FILE* OS::OpenTemporaryFile() {
+  // tmpfile_s tries to use the root dir, don't use it.
+  char tempPathBuffer[MAX_PATH];
+  DWORD path_result = 0;
+  path_result = GetTempPathA(MAX_PATH, tempPathBuffer);
+  if (path_result > MAX_PATH || path_result == 0) return NULL;
+  UINT name_result = 0;
+  char tempNameBuffer[MAX_PATH];
+  name_result = GetTempFileNameA(tempPathBuffer, "", 0, tempNameBuffer);
+  if (name_result == 0) return NULL;
+  FILE* result = FOpen(tempNameBuffer, "w+");  // Same mode as tmpfile uses.
+  if (result != NULL) {
+    Remove(tempNameBuffer);  // Delete on close.
+  }
+  return result;
+}
+
+
 // Open log file in binary mode to avoid /n -> /r/n conversion.
 const char* const OS::LogFileOpenMode = "wb";
 
@@ -925,23 +889,16 @@ void OS::Free(void* address, const size_t size) {
 }
 
 
-#ifdef ENABLE_HEAP_PROTECTION
-
-void OS::Protect(void* address, size_t size) {
-  // TODO(1240712): VirtualProtect has a return value which is ignored here.
+void OS::ProtectCode(void* address, const size_t size) {
   DWORD old_protect;
-  VirtualProtect(address, size, PAGE_READONLY, &old_protect);
+  VirtualProtect(address, size, PAGE_EXECUTE_READ, &old_protect);
 }
 
 
-void OS::Unprotect(void* address, size_t size, bool is_executable) {
-  // TODO(1240712): VirtualProtect has a return value which is ignored here.
-  DWORD new_protect = is_executable ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE;
-  DWORD old_protect;
-  VirtualProtect(address, size, new_protect, &old_protect);
+void OS::Guard(void* address, const size_t size) {
+  DWORD oldprotect;
+  VirtualProtect(address, size, PAGE_READONLY | PAGE_GUARD, &oldprotect);
 }
-
-#endif
 
 
 void OS::Sleep(int milliseconds) {
@@ -1342,7 +1299,7 @@ int OS::StackWalk(Vector<OS::StackFrame> frames) {
 
     // Try to locate a symbol for this frame.
     DWORD64 symbol_displacement;
-    SmartPointer<IMAGEHLP_SYMBOL64> symbol(
+    SmartArrayPointer<IMAGEHLP_SYMBOL64> symbol(
         NewArray<IMAGEHLP_SYMBOL64>(kStackWalkMaxNameLen));
     if (symbol.is_empty()) return kStackWalkError;  // Out of memory.
     memset(*symbol, 0, sizeof(IMAGEHLP_SYMBOL64) + kStackWalkMaxNameLen);
@@ -1844,8 +1801,6 @@ Socket* OS::CreateSocket() {
 }
 
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
-
 // ----------------------------------------------------------------------------
 // Win32 profiler support.
 
@@ -2020,6 +1975,5 @@ void Sampler::Stop() {
   SetActive(false);
 }
 
-#endif  // ENABLE_LOGGING_AND_PROFILING
 
 } }  // namespace v8::internal

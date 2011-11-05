@@ -41,7 +41,6 @@
 #include "natives.h"
 #include "objects-visiting.h"
 #include "runtime-profiler.h"
-#include "scanner-base.h"
 #include "scopeinfo.h"
 #include "snapshot.h"
 #include "v8threads.h"
@@ -81,14 +80,14 @@ Heap::Heap()
       reserved_semispace_size_(16*MB),
       max_semispace_size_(16*MB),
       initial_semispace_size_(1*MB),
-      max_old_generation_size_(1*GB),
+      max_old_generation_size_(1400*MB),
       max_executable_size_(256*MB),
       code_range_size_(512*MB),
 #else
       reserved_semispace_size_(8*MB),
       max_semispace_size_(8*MB),
       initial_semispace_size_(512*KB),
-      max_old_generation_size_(512*MB),
+      max_old_generation_size_(700*MB),
       max_executable_size_(128*MB),
       code_range_size_(0),
 #endif
@@ -293,12 +292,11 @@ GarbageCollector Heap::SelectGarbageCollector(AllocationSpace space) {
 
 // TODO(1238405): Combine the infrastructure for --heap-stats and
 // --log-gc to avoid the complicated preprocessor and flag testing.
-#if defined(DEBUG) || defined(ENABLE_LOGGING_AND_PROFILING)
 void Heap::ReportStatisticsBeforeGC() {
   // Heap::ReportHeapStatistics will also log NewSpace statistics when
-  // compiled with ENABLE_LOGGING_AND_PROFILING and --log-gc is set.  The
-  // following logic is used to avoid double logging.
-#if defined(DEBUG) && defined(ENABLE_LOGGING_AND_PROFILING)
+  // compiled --log-gc is set.  The following logic is used to avoid
+  // double logging.
+#ifdef DEBUG
   if (FLAG_heap_stats || FLAG_log_gc) new_space_.CollectStatistics();
   if (FLAG_heap_stats) {
     ReportHeapStatistics("Before GC");
@@ -306,23 +304,16 @@ void Heap::ReportStatisticsBeforeGC() {
     new_space_.ReportStatistics();
   }
   if (FLAG_heap_stats || FLAG_log_gc) new_space_.ClearHistograms();
-#elif defined(DEBUG)
-  if (FLAG_heap_stats) {
-    new_space_.CollectStatistics();
-    ReportHeapStatistics("Before GC");
-    new_space_.ClearHistograms();
-  }
-#elif defined(ENABLE_LOGGING_AND_PROFILING)
+#else
   if (FLAG_log_gc) {
     new_space_.CollectStatistics();
     new_space_.ReportStatistics();
     new_space_.ClearHistograms();
   }
-#endif
+#endif  // DEBUG
 }
 
 
-#if defined(ENABLE_LOGGING_AND_PROFILING)
 void Heap::PrintShortHeapStatistics() {
   if (!FLAG_trace_gc_verbose) return;
   PrintF("Memory allocator,   used: %8" V8_PTR_PREFIX "d"
@@ -368,7 +359,6 @@ void Heap::PrintShortHeapStatistics() {
          lo_space_->Size(),
          lo_space_->Available());
 }
-#endif
 
 
 // TODO(1238405): Combine the infrastructure for --heap-stats and
@@ -376,20 +366,17 @@ void Heap::PrintShortHeapStatistics() {
 void Heap::ReportStatisticsAfterGC() {
   // Similar to the before GC, we use some complicated logic to ensure that
   // NewSpace statistics are logged exactly once when --log-gc is turned on.
-#if defined(DEBUG) && defined(ENABLE_LOGGING_AND_PROFILING)
+#if defined(DEBUG)
   if (FLAG_heap_stats) {
     new_space_.CollectStatistics();
     ReportHeapStatistics("After GC");
   } else if (FLAG_log_gc) {
     new_space_.ReportStatistics();
   }
-#elif defined(DEBUG)
-  if (FLAG_heap_stats) ReportHeapStatistics("After GC");
-#elif defined(ENABLE_LOGGING_AND_PROFILING)
+#else
   if (FLAG_log_gc) new_space_.ReportStatistics();
-#endif
+#endif  // DEBUG
 }
-#endif  // defined(DEBUG) || defined(ENABLE_LOGGING_AND_PROFILING)
 
 
 void Heap::GarbageCollectionPrologue() {
@@ -406,11 +393,11 @@ void Heap::GarbageCollectionPrologue() {
   }
 
   if (FLAG_gc_verbose) Print();
-#endif
+#endif  // DEBUG
 
-#if defined(DEBUG) || defined(ENABLE_LOGGING_AND_PROFILING)
+#if defined(DEBUG)
   ReportStatisticsBeforeGC();
-#endif
+#endif  // DEBUG
 
   LiveObjectList::GCPrologue();
 }
@@ -447,12 +434,12 @@ void Heap::GarbageCollectionEpilogue() {
       symbol_table()->Capacity());
   isolate_->counters()->number_of_symbols()->Set(
       symbol_table()->NumberOfElements());
-#if defined(DEBUG) || defined(ENABLE_LOGGING_AND_PROFILING)
+#if defined(DEBUG)
   ReportStatisticsAfterGC();
-#endif
+#endif  // DEBUG
 #ifdef ENABLE_DEBUGGER_SUPPORT
   isolate_->debug()->AfterGarbageCollection();
-#endif
+#endif  // ENABLE_DEBUGGER_SUPPORT
 }
 
 
@@ -854,6 +841,7 @@ void Heap::MarkCompactPrologue(bool is_compacting) {
   isolate_->keyed_lookup_cache()->Clear();
   isolate_->context_slot_cache()->Clear();
   isolate_->descriptor_lookup_cache()->Clear();
+  StringSplitCache::Clear(string_split_cache());
 
   isolate_->compilation_cache()->MarkCompactPrologue();
 
@@ -1302,9 +1290,17 @@ class ScavengingVisitor : public StaticVisitorBase {
                     &ObjectEvacuationStrategy<POINTER_OBJECT>::
                         template VisitSpecialized<ConsString::kSize>);
 
+    table_.Register(kVisitSlicedString,
+                    &ObjectEvacuationStrategy<POINTER_OBJECT>::
+                        template VisitSpecialized<SlicedString::kSize>);
+
     table_.Register(kVisitSharedFunctionInfo,
                     &ObjectEvacuationStrategy<POINTER_OBJECT>::
                         template VisitSpecialized<SharedFunctionInfo::kSize>);
+
+    table_.Register(kVisitJSWeakMap,
+                    &ObjectEvacuationStrategy<POINTER_OBJECT>::
+                    Visit);
 
     table_.Register(kVisitJSRegExp,
                     &ObjectEvacuationStrategy<POINTER_OBJECT>::
@@ -1335,15 +1331,12 @@ class ScavengingVisitor : public StaticVisitorBase {
   enum ObjectContents  { DATA_OBJECT, POINTER_OBJECT };
   enum SizeRestriction { SMALL, UNKNOWN_SIZE };
 
-#if defined(DEBUG) || defined(ENABLE_LOGGING_AND_PROFILING)
   static void RecordCopiedObject(Heap* heap, HeapObject* obj) {
     bool should_record = false;
 #ifdef DEBUG
     should_record = FLAG_heap_stats;
 #endif
-#ifdef ENABLE_LOGGING_AND_PROFILING
     should_record = should_record || FLAG_log_gc;
-#endif
     if (should_record) {
       if (heap->new_space()->Contains(obj)) {
         heap->new_space()->RecordAllocation(obj);
@@ -1352,7 +1345,6 @@ class ScavengingVisitor : public StaticVisitorBase {
       }
     }
   }
-#endif  // defined(DEBUG) || defined(ENABLE_LOGGING_AND_PROFILING)
 
   // Helper function used by CopyObject to copy a source object to an
   // allocated target object and update the forwarding pointer in the source
@@ -1368,12 +1360,9 @@ class ScavengingVisitor : public StaticVisitorBase {
     source->set_map_word(MapWord::FromForwardingAddress(target));
 
     if (logging_and_profiling_mode == LOGGING_AND_PROFILING_ENABLED) {
-#if defined(DEBUG) || defined(ENABLE_LOGGING_AND_PROFILING)
       // Update NewSpace stats if necessary.
       RecordCopiedObject(heap, target);
-#endif
       HEAP_PROFILE(heap, ObjectMoveEvent(source->address(), target->address()));
-#if defined(ENABLE_LOGGING_AND_PROFILING)
       Isolate* isolate = heap->isolate();
       if (isolate->logger()->is_logging() ||
           CpuProfiler::is_profiling(isolate)) {
@@ -1382,7 +1371,6 @@ class ScavengingVisitor : public StaticVisitorBase {
               source->address(), target->address()));
         }
       }
-#endif
     }
 
     return target;
@@ -1558,7 +1546,6 @@ static void InitializeScavengingVisitorsTables() {
 
 
 void Heap::SwitchScavengingVisitorsTableIfProfilingWasEnabled() {
-#ifdef ENABLE_LOGGING_AND_PROFILING
   if (scavenging_visitors_table_mode_ == LOGGING_AND_PROFILING_ENABLED) {
     // Table was already updated by some isolate.
     return;
@@ -1584,7 +1571,6 @@ void Heap::SwitchScavengingVisitorsTableIfProfilingWasEnabled() {
     Release_Store(&scavenging_visitors_table_mode_,
                   LOGGING_AND_PROFILING_ENABLED);
   }
-#endif
 }
 
 
@@ -1641,7 +1627,7 @@ MaybeObject* Heap::AllocateMap(InstanceType instance_type, int instance_size) {
   map->set_unused_property_fields(0);
   map->set_bit_field(0);
   map->set_bit_field2(1 << Map::kIsExtensible);
-  map->set_elements_kind(JSObject::FAST_ELEMENTS);
+  map->set_elements_kind(FAST_ELEMENTS);
 
   // If the map object is aligned fill the padding area with Smi 0 objects.
   if (Map::kPadStart < Map::kSize) {
@@ -1762,6 +1748,12 @@ bool Heap::CreateInitialMaps() {
   }
   set_fixed_cow_array_map(Map::cast(obj));
   ASSERT(fixed_array_map() != fixed_cow_array_map());
+
+  { MaybeObject* maybe_obj =
+        AllocateMap(FIXED_ARRAY_TYPE, kVariableSizeSentinel);
+    if (!maybe_obj->ToObject(&obj)) return false;
+  }
+  set_serialized_scope_info_map(Map::cast(obj));
 
   { MaybeObject* maybe_obj = AllocateMap(HEAP_NUMBER_TYPE, HeapNumber::kSize);
     if (!maybe_obj->ToObject(&obj)) return false;
@@ -1923,6 +1915,12 @@ bool Heap::CreateInitialMaps() {
     if (!maybe_obj->ToObject(&obj)) return false;
   }
   set_with_context_map(Map::cast(obj));
+
+  { MaybeObject* maybe_obj =
+        AllocateMap(FIXED_ARRAY_TYPE, kVariableSizeSentinel);
+    if (!maybe_obj->ToObject(&obj)) return false;
+  }
+  set_block_context_map(Map::cast(obj));
 
   { MaybeObject* maybe_obj =
         AllocateMap(FIXED_ARRAY_TYPE, kVariableSizeSentinel);
@@ -2225,6 +2223,13 @@ bool Heap::CreateInitialObjects() {
   }
   set_single_character_string_cache(FixedArray::cast(obj));
 
+  // Allocate cache for string split.
+  { MaybeObject* maybe_obj =
+        AllocateFixedArray(StringSplitCache::kStringSplitCacheSize, TENURED);
+    if (!maybe_obj->ToObject(&obj)) return false;
+  }
+  set_string_split_cache(FixedArray::cast(obj));
+
   // Allocate cache for external strings pointing to native source code.
   { MaybeObject* maybe_obj = AllocateFixedArray(Natives::GetBuiltinsCount());
     if (!maybe_obj->ToObject(&obj)) return false;
@@ -2247,6 +2252,75 @@ bool Heap::CreateInitialObjects() {
   isolate_->compilation_cache()->Clear();
 
   return true;
+}
+
+
+Object* StringSplitCache::Lookup(
+    FixedArray* cache, String* string, String* pattern) {
+  if (!string->IsSymbol() || !pattern->IsSymbol()) return Smi::FromInt(0);
+  uint32_t hash = string->Hash();
+  uint32_t index = ((hash & (kStringSplitCacheSize - 1)) &
+      ~(kArrayEntriesPerCacheEntry - 1));
+  if (cache->get(index + kStringOffset) == string &&
+      cache->get(index + kPatternOffset) == pattern) {
+    return cache->get(index + kArrayOffset);
+  }
+  index = ((index + kArrayEntriesPerCacheEntry) & (kStringSplitCacheSize - 1));
+  if (cache->get(index + kStringOffset) == string &&
+      cache->get(index + kPatternOffset) == pattern) {
+    return cache->get(index + kArrayOffset);
+  }
+  return Smi::FromInt(0);
+}
+
+
+void StringSplitCache::Enter(Heap* heap,
+                             FixedArray* cache,
+                             String* string,
+                             String* pattern,
+                             FixedArray* array) {
+  if (!string->IsSymbol() || !pattern->IsSymbol()) return;
+  uint32_t hash = string->Hash();
+  uint32_t index = ((hash & (kStringSplitCacheSize - 1)) &
+      ~(kArrayEntriesPerCacheEntry - 1));
+  if (cache->get(index + kStringOffset) == Smi::FromInt(0)) {
+    cache->set(index + kStringOffset, string);
+    cache->set(index + kPatternOffset, pattern);
+    cache->set(index + kArrayOffset, array);
+  } else {
+    uint32_t index2 =
+        ((index + kArrayEntriesPerCacheEntry) & (kStringSplitCacheSize - 1));
+    if (cache->get(index2 + kStringOffset) == Smi::FromInt(0)) {
+      cache->set(index2 + kStringOffset, string);
+      cache->set(index2 + kPatternOffset, pattern);
+      cache->set(index2 + kArrayOffset, array);
+    } else {
+      cache->set(index2 + kStringOffset, Smi::FromInt(0));
+      cache->set(index2 + kPatternOffset, Smi::FromInt(0));
+      cache->set(index2 + kArrayOffset, Smi::FromInt(0));
+      cache->set(index + kStringOffset, string);
+      cache->set(index + kPatternOffset, pattern);
+      cache->set(index + kArrayOffset, array);
+    }
+  }
+  if (array->length() < 100) {  // Limit how many new symbols we want to make.
+    for (int i = 0; i < array->length(); i++) {
+      String* str = String::cast(array->get(i));
+      Object* symbol;
+      MaybeObject* maybe_symbol = heap->LookupSymbol(str);
+      if (maybe_symbol->ToObject(&symbol)) {
+        array->set(i, symbol);
+      }
+    }
+  }
+  array->set_map(heap->fixed_cow_array_map());
+}
+
+
+void StringSplitCache::Clear(FixedArray* cache) {
+  for (int i = 0; i < kStringSplitCacheSize; i++) {
+    cache->set(i, Smi::FromInt(0));
+  }
 }
 
 
@@ -2417,40 +2491,41 @@ MaybeObject* Heap::AllocateForeign(Address address, PretenureFlag pretenure) {
 
 
 MaybeObject* Heap::AllocateSharedFunctionInfo(Object* name) {
-  Object* result;
-  { MaybeObject* maybe_result =
-        Allocate(shared_function_info_map(), OLD_POINTER_SPACE);
-    if (!maybe_result->ToObject(&result)) return maybe_result;
-  }
+  SharedFunctionInfo* share;
+  MaybeObject* maybe = Allocate(shared_function_info_map(), OLD_POINTER_SPACE);
+  if (!maybe->To<SharedFunctionInfo>(&share)) return maybe;
 
-  SharedFunctionInfo* share = SharedFunctionInfo::cast(result);
+  // Set pointer fields.
   share->set_name(name);
   Code* illegal = isolate_->builtins()->builtin(Builtins::kIllegal);
   share->set_code(illegal);
   share->set_scope_info(SerializedScopeInfo::Empty());
-  Code* construct_stub = isolate_->builtins()->builtin(
-      Builtins::kJSConstructStubGeneric);
+  Code* construct_stub =
+      isolate_->builtins()->builtin(Builtins::kJSConstructStubGeneric);
   share->set_construct_stub(construct_stub);
-  share->set_expected_nof_properties(0);
-  share->set_length(0);
-  share->set_formal_parameter_count(0);
   share->set_instance_class_name(Object_symbol());
   share->set_function_data(undefined_value());
   share->set_script(undefined_value());
-  share->set_start_position_and_type(0);
   share->set_debug_info(undefined_value());
   share->set_inferred_name(empty_string());
-  share->set_compiler_hints(0);
-  share->set_deopt_counter(Smi::FromInt(FLAG_deopt_every_n_times));
   share->set_initial_map(undefined_value());
-  share->set_this_property_assignments_count(0);
   share->set_this_property_assignments(undefined_value());
-  share->set_opt_count(0);
+  share->set_deopt_counter(Smi::FromInt(FLAG_deopt_every_n_times));
+
+  // Set integer fields (smi or int, depending on the architecture).
+  share->set_length(0);
+  share->set_formal_parameter_count(0);
+  share->set_expected_nof_properties(0);
   share->set_num_literals(0);
+  share->set_start_position_and_type(0);
   share->set_end_position(0);
   share->set_function_token_position(0);
-  share->set_native(false);
-  return result;
+  // All compiler hints default to false or 0.
+  share->set_compiler_hints(0);
+  share->set_this_property_assignments_count(0);
+  share->set_opt_count(0);
+
+  return share;
 }
 
 
@@ -2569,6 +2644,8 @@ MaybeObject* Heap::AllocateConsString(String* first, String* second) {
 
   // If the resulting string is small make a flat string.
   if (length < String::kMinNonFlatLength) {
+    // Note that neither of the two inputs can be a slice because:
+    STATIC_ASSERT(String::kMinNonFlatLength <= SlicedString::kMinLength);
     ASSERT(first->IsFlat());
     ASSERT(second->IsFlat());
     if (is_ascii) {
@@ -2660,24 +2737,69 @@ MaybeObject* Heap::AllocateSubString(String* buffer,
   // Make an attempt to flatten the buffer to reduce access time.
   buffer = buffer->TryFlattenGetString();
 
-  Object* result;
-  { MaybeObject* maybe_result = buffer->IsAsciiRepresentation()
-                   ? AllocateRawAsciiString(length, pretenure )
-                   : AllocateRawTwoByteString(length, pretenure);
-    if (!maybe_result->ToObject(&result)) return maybe_result;
-  }
-  String* string_result = String::cast(result);
-  // Copy the characters into the new object.
-  if (buffer->IsAsciiRepresentation()) {
-    ASSERT(string_result->IsAsciiRepresentation());
-    char* dest = SeqAsciiString::cast(string_result)->GetChars();
-    String::WriteToFlat(buffer, dest, start, end);
-  } else {
-    ASSERT(string_result->IsTwoByteRepresentation());
-    uc16* dest = SeqTwoByteString::cast(string_result)->GetChars();
-    String::WriteToFlat(buffer, dest, start, end);
+  // TODO(1626): For now slicing external strings is not supported.  However,
+  // a flat cons string can have an external string as first part in some cases.
+  // Therefore we have to single out this case as well.
+  if (!FLAG_string_slices ||
+      (buffer->IsConsString() &&
+        (!buffer->IsFlat() ||
+         !ConsString::cast(buffer)->first()->IsSeqString())) ||
+      buffer->IsExternalString() ||
+      length < SlicedString::kMinLength ||
+      pretenure == TENURED) {
+    Object* result;
+    { MaybeObject* maybe_result = buffer->IsAsciiRepresentation()
+                     ? AllocateRawAsciiString(length, pretenure)
+                     : AllocateRawTwoByteString(length, pretenure);
+      if (!maybe_result->ToObject(&result)) return maybe_result;
+    }
+    String* string_result = String::cast(result);
+    // Copy the characters into the new object.
+    if (buffer->IsAsciiRepresentation()) {
+      ASSERT(string_result->IsAsciiRepresentation());
+      char* dest = SeqAsciiString::cast(string_result)->GetChars();
+      String::WriteToFlat(buffer, dest, start, end);
+    } else {
+      ASSERT(string_result->IsTwoByteRepresentation());
+      uc16* dest = SeqTwoByteString::cast(string_result)->GetChars();
+      String::WriteToFlat(buffer, dest, start, end);
+    }
+    return result;
   }
 
+  ASSERT(buffer->IsFlat());
+  ASSERT(!buffer->IsExternalString());
+#if DEBUG
+  buffer->StringVerify();
+#endif
+
+  Object* result;
+  { Map* map = buffer->IsAsciiRepresentation()
+                 ? sliced_ascii_string_map()
+                 : sliced_string_map();
+    MaybeObject* maybe_result = Allocate(map, NEW_SPACE);
+    if (!maybe_result->ToObject(&result)) return maybe_result;
+  }
+
+  AssertNoAllocation no_gc;
+  SlicedString* sliced_string = SlicedString::cast(result);
+  sliced_string->set_length(length);
+  sliced_string->set_hash_field(String::kEmptyHashField);
+  if (buffer->IsConsString()) {
+    ConsString* cons = ConsString::cast(buffer);
+    ASSERT(cons->second()->length() == 0);
+    sliced_string->set_parent(cons->first());
+    sliced_string->set_offset(start);
+  } else if (buffer->IsSlicedString()) {
+    // Prevent nesting sliced strings.
+    SlicedString* parent_slice = SlicedString::cast(buffer);
+    sliced_string->set_parent(parent_slice->parent());
+    sliced_string->set_offset(start + parent_slice->offset());
+  } else {
+    sliced_string->set_parent(buffer);
+    sliced_string->set_offset(start);
+  }
+  ASSERT(sliced_string->parent()->IsSeqString());
   return result;
 }
 
@@ -3291,14 +3413,38 @@ MaybeObject* Heap::AllocateJSProxy(Object* handler, Object* prototype) {
   MaybeObject* maybe_map_obj = AllocateMap(JS_PROXY_TYPE, JSProxy::kSize);
   if (!maybe_map_obj->To<Map>(&map)) return maybe_map_obj;
   map->set_prototype(prototype);
-  map->set_pre_allocated_property_fields(1);
-  map->set_inobject_properties(1);
 
   // Allocate the proxy object.
-  Object* result;
+  JSProxy* result;
   MaybeObject* maybe_result = Allocate(map, NEW_SPACE);
-  if (!maybe_result->ToObject(&result)) return maybe_result;
-  JSProxy::cast(result)->set_handler(handler);
+  if (!maybe_result->To<JSProxy>(&result)) return maybe_result;
+  result->InitializeBody(map->instance_size(), Smi::FromInt(0));
+  result->set_handler(handler);
+  return result;
+}
+
+
+MaybeObject* Heap::AllocateJSFunctionProxy(Object* handler,
+                                           Object* call_trap,
+                                           Object* construct_trap,
+                                           Object* prototype) {
+  // Allocate map.
+  // TODO(rossberg): Once we optimize proxies, think about a scheme to share
+  // maps. Will probably depend on the identity of the handler object, too.
+  Map* map;
+  MaybeObject* maybe_map_obj =
+      AllocateMap(JS_FUNCTION_PROXY_TYPE, JSFunctionProxy::kSize);
+  if (!maybe_map_obj->To<Map>(&map)) return maybe_map_obj;
+  map->set_prototype(prototype);
+
+  // Allocate the proxy object.
+  JSFunctionProxy* result;
+  MaybeObject* maybe_result = Allocate(map, NEW_SPACE);
+  if (!maybe_result->To<JSFunctionProxy>(&result)) return maybe_result;
+  result->InitializeBody(map->instance_size(), Smi::FromInt(0));
+  result->set_handler(handler);
+  result->set_call_trap(call_trap);
+  result->set_construct_trap(construct_trap);
   return result;
 }
 
@@ -3413,17 +3559,22 @@ MaybeObject* Heap::CopyJSObject(JSObject* source) {
               object_size);
   }
 
-  FixedArray* elements = FixedArray::cast(source->elements());
+  FixedArrayBase* elements = FixedArrayBase::cast(source->elements());
   FixedArray* properties = FixedArray::cast(source->properties());
   // Update elements if necessary.
   if (elements->length() > 0) {
     Object* elem;
-    { MaybeObject* maybe_elem =
-          (elements->map() == fixed_cow_array_map()) ?
-          elements : CopyFixedArray(elements);
+    { MaybeObject* maybe_elem;
+      if (elements->map() == fixed_cow_array_map()) {
+        maybe_elem = FixedArray::cast(elements);
+      } else if (source->HasFastDoubleElements()) {
+        maybe_elem = CopyFixedDoubleArray(FixedDoubleArray::cast(elements));
+      } else {
+        maybe_elem = CopyFixedArray(FixedArray::cast(elements));
+      }
       if (!maybe_elem->ToObject(&elem)) return maybe_elem;
     }
-    JSObject::cast(clone)->set_elements(FixedArray::cast(elem));
+    JSObject::cast(clone)->set_elements(FixedArrayBase::cast(elem));
   }
   // Update properties if necessary.
   if (properties->length() > 0) {
@@ -3435,6 +3586,61 @@ MaybeObject* Heap::CopyJSObject(JSObject* source) {
   }
   // Return the new clone.
   return clone;
+}
+
+
+MaybeObject* Heap::ReinitializeJSReceiver(
+    JSReceiver* object, InstanceType type, int size) {
+  ASSERT(type >= FIRST_JS_RECEIVER_TYPE);
+
+  // Allocate fresh map.
+  // TODO(rossberg): Once we optimize proxies, cache these maps.
+  Map* map;
+  MaybeObject* maybe_map_obj = AllocateMap(type, size);
+  if (!maybe_map_obj->To<Map>(&map)) return maybe_map_obj;
+
+  // Check that the receiver has at least the size of the fresh object.
+  int size_difference = object->map()->instance_size() - map->instance_size();
+  ASSERT(size_difference >= 0);
+
+  map->set_prototype(object->map()->prototype());
+
+  // Allocate the backing storage for the properties.
+  int prop_size = map->unused_property_fields() - map->inobject_properties();
+  Object* properties;
+  { MaybeObject* maybe_properties = AllocateFixedArray(prop_size, TENURED);
+    if (!maybe_properties->ToObject(&properties)) return maybe_properties;
+  }
+
+  // Reset the map for the object.
+  object->set_map(map);
+
+  // Reinitialize the object from the constructor map.
+  InitializeJSObjectFromMap(JSObject::cast(object),
+                            FixedArray::cast(properties), map);
+
+  // Functions require some minimal initialization.
+  if (type == JS_FUNCTION_TYPE) {
+    String* name;
+    MaybeObject* maybe_name = LookupAsciiSymbol("<freezing call trap>");
+    if (!maybe_name->To<String>(&name)) return maybe_name;
+    SharedFunctionInfo* shared;
+    MaybeObject* maybe_shared = AllocateSharedFunctionInfo(name);
+    if (!maybe_shared->To<SharedFunctionInfo>(&shared)) return maybe_shared;
+    JSFunction* func;
+    MaybeObject* maybe_func =
+        InitializeFunction(JSFunction::cast(object), shared, the_hole_value());
+    if (!maybe_func->To<JSFunction>(&func)) return maybe_func;
+    func->set_context(isolate()->context()->global_context());
+  }
+
+  // Put in filler if the new object is smaller than the old.
+  if (size_difference > 0) {
+    CreateFillerObjectAt(
+        object->address() + map->instance_size(), size_difference);
+  }
+
+  return object;
 }
 
 
@@ -3466,6 +3672,9 @@ MaybeObject* Heap::ReinitializeJSGlobalProxy(JSFunction* constructor,
 
 MaybeObject* Heap::AllocateStringFromAscii(Vector<const char> string,
                                            PretenureFlag pretenure) {
+  if (string.length() == 1) {
+    return Heap::LookupSingleCharacterStringFromCode(string[0]);
+  }
   Object* result;
   { MaybeObject* maybe_result =
         AllocateRawAsciiString(string.length(), pretenure);
@@ -3752,6 +3961,23 @@ MaybeObject* Heap::CopyFixedArrayWithMap(FixedArray* src, Map* map) {
 }
 
 
+MaybeObject* Heap::CopyFixedDoubleArrayWithMap(FixedDoubleArray* src,
+                                               Map* map) {
+  int len = src->length();
+  Object* obj;
+  { MaybeObject* maybe_obj = AllocateRawFixedDoubleArray(len, NOT_TENURED);
+    if (!maybe_obj->ToObject(&obj)) return maybe_obj;
+  }
+  HeapObject* dst = HeapObject::cast(obj);
+  dst->set_map(map);
+  CopyBlock(
+      dst->address() + FixedDoubleArray::kLengthOffset,
+      src->address() + FixedDoubleArray::kLengthOffset,
+      FixedDoubleArray::SizeFor(len) - FixedDoubleArray::kLengthOffset);
+  return obj;
+}
+
+
 MaybeObject* Heap::AllocateFixedArray(int length) {
   ASSERT(length >= 0);
   if (length == 0) return empty_fixed_array();
@@ -3980,6 +4206,36 @@ MaybeObject* Heap::AllocateWithContext(JSFunction* function,
   context->set_extension(extension);
   context->set_global(previous->global());
   return context;
+}
+
+
+MaybeObject* Heap::AllocateBlockContext(JSFunction* function,
+                                        Context* previous,
+                                        SerializedScopeInfo* scope_info) {
+  Object* result;
+  { MaybeObject* maybe_result =
+        AllocateFixedArrayWithHoles(scope_info->NumberOfContextSlots());
+    if (!maybe_result->ToObject(&result)) return maybe_result;
+  }
+  Context* context = reinterpret_cast<Context*>(result);
+  context->set_map(block_context_map());
+  context->set_closure(function);
+  context->set_previous(previous);
+  context->set_extension(scope_info);
+  context->set_global(previous->global());
+  return context;
+}
+
+
+MaybeObject* Heap::AllocateSerializedScopeInfo(int length) {
+  Object* result;
+  { MaybeObject* maybe_result = AllocateFixedArray(length, TENURED);
+    if (!maybe_result->ToObject(&result)) return maybe_result;
+  }
+  SerializedScopeInfo* scope_info =
+      reinterpret_cast<SerializedScopeInfo*>(result);
+  scope_info->set_map(serialized_scope_info_map());
+  return scope_info;
 }
 
 
@@ -5213,28 +5469,6 @@ void Heap::Shrink() {
 }
 
 
-#ifdef ENABLE_HEAP_PROTECTION
-
-void Heap::Protect() {
-  if (HasBeenSetup()) {
-    AllSpaces spaces;
-    for (Space* space = spaces.next(); space != NULL; space = spaces.next())
-      space->Protect();
-  }
-}
-
-
-void Heap::Unprotect() {
-  if (HasBeenSetup()) {
-    AllSpaces spaces;
-    for (Space* space = spaces.next(); space != NULL; space = spaces.next())
-      space->Unprotect();
-  }
-}
-
-#endif
-
-
 void Heap::AddGCPrologueCallback(GCPrologueCallback callback, GCType gc_type) {
   ASSERT(callback != NULL);
   GCPrologueCallbackPair pair(callback, gc_type);
@@ -5930,9 +6164,7 @@ GCTracer::~GCTracer() {
     PrintF("\n");
   }
 
-#if defined(ENABLE_LOGGING_AND_PROFILING)
   heap_->PrintShortHeapStatistics();
-#endif
 }
 
 

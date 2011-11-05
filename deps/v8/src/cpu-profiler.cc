@@ -29,8 +29,6 @@
 
 #include "cpu-profiler-inl.h"
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
-
 #include "frames-inl.h"
 #include "hashmap.h"
 #include "log-inl.h"
@@ -135,16 +133,6 @@ void ProfilerEventsProcessor::CodeMoveEvent(Address from, Address to) {
   rec->order = ++enqueue_order_;
   rec->from = from;
   rec->to = to;
-  events_buffer_.Enqueue(evt_rec);
-}
-
-
-void ProfilerEventsProcessor::CodeDeleteEvent(Address from) {
-  CodeEventsContainer evt_rec;
-  CodeDeleteEventRecord* rec = &evt_rec.CodeDeleteEventRecord_;
-  rec->type = CodeEventRecord::CODE_DELETE;
-  rec->order = ++enqueue_order_;
-  rec->start = from;
   events_buffer_.Enqueue(evt_rec);
 }
 
@@ -427,7 +415,6 @@ void CpuProfiler::CodeMoveEvent(Address from, Address to) {
 
 
 void CpuProfiler::CodeDeleteEvent(Address from) {
-  Isolate::Current()->cpu_profiler()->processor_->CodeDeleteEvent(from);
 }
 
 
@@ -564,41 +551,31 @@ void CpuProfiler::StopProcessor() {
     sampler->Stop();
     need_to_stop_sampler_ = false;
   }
+  NoBarrier_Store(&is_profiling_, false);
   processor_->Stop();
   processor_->Join();
   delete processor_;
   delete generator_;
   processor_ = NULL;
-  NoBarrier_Store(&is_profiling_, false);
   generator_ = NULL;
   logger->logging_nesting_ = saved_logging_nesting_;
 }
 
-} }  // namespace v8::internal
-
-#endif  // ENABLE_LOGGING_AND_PROFILING
-
-namespace v8 {
-namespace internal {
 
 void CpuProfiler::Setup() {
-#ifdef ENABLE_LOGGING_AND_PROFILING
   Isolate* isolate = Isolate::Current();
   if (isolate->cpu_profiler() == NULL) {
     isolate->set_cpu_profiler(new CpuProfiler());
   }
-#endif
 }
 
 
 void CpuProfiler::TearDown() {
-#ifdef ENABLE_LOGGING_AND_PROFILING
   Isolate* isolate = Isolate::Current();
   if (isolate->cpu_profiler() != NULL) {
     delete isolate->cpu_profiler();
   }
   isolate->set_cpu_profiler(NULL);
-#endif
 }
 
 } }  // namespace v8::internal

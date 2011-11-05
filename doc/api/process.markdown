@@ -145,16 +145,40 @@ Example: the definition of `console.log`
       process.stdout.write(d + '\n');
     };
 
+<!--
+
+`process.stderr` and `process.stdout` are unlike other streams in Node in
+that writes to them are usually blocking.  They are blocking in the case
+that they refer to regular files or TTY file descriptors. In the case they
+refer to pipes, they are non-blocking like other streams.
+
+-->
+`process.stderr` と `process.stdout` は他のストリームと異なり、
+書き込みは通常ブロックします。
+それらが通常ファイルや TTY のファイル記述子を参照しているケースでは、
+それらはブロックします。
+パイプを参照しているケースでは、他のストリームと同様にブロックしません。
+
 
 ### process.stderr
 
 <!--
 
-A writable stream to stderr. Writes on this stream are blocking.
+A writable stream to stderr.
+
+`process.stderr` and `process.stdout` are unlike other streams in Node in
+that writes to them are usually blocking.  They are blocking in the case
+that they refer to regular files or TTY file descriptors. In the case they
+refer to pipes, they are non-blocking like other streams.
 
 -->
 `stderr` に対する `Writable Stream` です。
-このストリームへの書き込みはブロックします。
+
+`process.stderr` と `process.stdout` は他のストリームと異なり、
+書き込みは通常ブロックします。
+それらが通常ファイルや TTY のファイル記述子を参照しているケースでは、
+それらはブロックします。
+パイプを参照しているケースでは、他のストリームと同様にブロックしません。
 
 
 ### process.stdin
@@ -396,6 +420,31 @@ A compiled-in property that exposes `NODE_VERSION`.
 
     console.log('Version: ' + process.version);
 
+### process.versions
+
+<!--
+
+A property exposing version strings of node and its dependencies.
+
+-->
+node と依存ライブラリのバージョン文字列を提示します。
+
+    console.log(process.versions);
+
+<!--
+
+Will output:
+
+-->
+は以下を出力します。
+
+    { node: '0.4.12',
+      v8: '3.1.8.26',
+      ares: '1.7.4',
+      ev: '4.4',
+      openssl: '1.0.0e-fips' }
+
+
 ### process.installPrefix
 
 <!--
@@ -503,10 +552,11 @@ What platform you're running on. `'linux2'`, `'darwin'`, etc.
 
 <!--
 
-Returns an object describing the memory usage of the Node process.
+Returns an object describing the memory usage of the Node process
+measured in bytes.
 
 -->
-Node プロセスのメモリ使用状況を記述したオブジェクトを返します。
+Node プロセスのメモリ使用状況をバイト単位で記述したオブジェクトを返します。
 
     var util = require('util');
 
@@ -520,7 +570,6 @@ This will generate:
 このように生成されます:
 
     { rss: 4935680,
-      vsize: 41893888,
       heapTotal: 1826816,
       heapUsed: 650472 }
 

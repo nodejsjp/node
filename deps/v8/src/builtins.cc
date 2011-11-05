@@ -1202,10 +1202,10 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallAsFunctionOrConstructor(
   ASSERT(!CalledAsConstructor(isolate));
   Heap* heap = isolate->heap();
 
-  Handle<Object> receiver = args.at<Object>(0);
+  Handle<Object> receiver = args.receiver();
 
   // Get the object called.
-  JSObject* obj = JSObject::cast(*args.receiver());
+  JSObject* obj = JSObject::cast(*receiver);
 
   // Get the invocation callback from the function descriptor that was
   // used to create the called object.
@@ -1583,7 +1583,6 @@ void Builtins::InitBuiltinFunctionTable() {
     functions->s_name = #aname;                                             \
     functions->name = k##aname;                                             \
     functions->flags = Code::ComputeFlags(Code::kind,                       \
-                                          NOT_IN_LOOP,                      \
                                           state,                            \
                                           extra);                           \
     functions->extra_args = NO_EXTRA_ARGUMENTS;                             \

@@ -1183,9 +1183,8 @@ void StubCompiler::GenerateLoadConstant(JSObject* object,
   __ JumpIfSmi(receiver, miss);
 
   // Check that the maps haven't changed.
-  Register reg =
-      CheckPrototypes(object, receiver, holder,
-                      scratch1, scratch2, scratch3, name, miss);
+  CheckPrototypes(object, receiver, holder, scratch1, scratch2, scratch3, name,
+                  miss);
 
   // Return the constant value.
   __ mov(r0, Operand(Handle<Object>(value)));
@@ -3100,7 +3099,8 @@ MaybeObject* KeyedLoadStubCompiler::CompileLoadElement(Map* receiver_map) {
   //  -- r1    : receiver
   // -----------------------------------
   Code* stub;
-  MaybeObject* maybe_stub = ComputeSharedKeyedLoadElementStub(receiver_map);
+  ElementsKind elements_kind = receiver_map->elements_kind();
+  MaybeObject* maybe_stub = KeyedLoadElementStub(elements_kind).TryGetCode();
   if (!maybe_stub->To(&stub)) return maybe_stub;
   __ DispatchMap(r1,
                  r2,
@@ -3193,7 +3193,10 @@ MaybeObject* KeyedStoreStubCompiler::CompileStoreElement(Map* receiver_map) {
   //  -- r3    : scratch
   // -----------------------------------
   Code* stub;
-  MaybeObject* maybe_stub = ComputeSharedKeyedStoreElementStub(receiver_map);
+  ElementsKind elements_kind = receiver_map->elements_kind();
+  bool is_js_array = receiver_map->instance_type() == JS_ARRAY_TYPE;
+  MaybeObject* maybe_stub =
+      KeyedStoreElementStub(is_js_array, elements_kind).TryGetCode();
   if (!maybe_stub->To(&stub)) return maybe_stub;
   __ DispatchMap(r2,
                  r3,
@@ -3388,25 +3391,72 @@ MaybeObject* ConstructStubCompiler::CompileConstructStub(JSFunction* function) {
 #define __ ACCESS_MASM(masm)
 
 
-static bool IsElementTypeSigned(JSObject::ElementsKind elements_kind) {
+void KeyedLoadStubCompiler::GenerateLoadDictionaryElement(
+    MacroAssembler* masm) {
+  // ---------- S t a t e --------------
+  //  -- lr     : return address
+  //  -- r0     : key
+  //  -- r1     : receiver
+  // -----------------------------------
+  Label slow, miss_force_generic;
+
+  Register key = r0;
+  Register receiver = r1;
+
+  __ JumpIfNotSmi(key, &miss_force_generic);
+  __ mov(r2, Operand(key, ASR, kSmiTagSize));
+  __ ldr(r4, FieldMemOperand(receiver, JSObject::kElementsOffset));
+  __ LoadFromNumberDictionary(&slow, r4, key, r0, r2, r3, r5);
+  __ Ret();
+
+  __ bind(&slow);
+  __ IncrementCounter(
+      masm->isolate()->counters()->keyed_load_external_array_slow(),
+      1, r2, r3);
+
+  // ---------- S t a t e --------------
+  //  -- lr     : return address
+  //  -- r0     : key
+  //  -- r1     : receiver
+  // -----------------------------------
+  Handle<Code> slow_ic =
+      masm->isolate()->builtins()->KeyedLoadIC_Slow();
+  __ Jump(slow_ic, RelocInfo::CODE_TARGET);
+
+  // Miss case, call the runtime.
+  __ bind(&miss_force_generic);
+
+  // ---------- S t a t e --------------
+  //  -- lr     : return address
+  //  -- r0     : key
+  //  -- r1     : receiver
+  // -----------------------------------
+
+  Handle<Code> miss_ic =
+      masm->isolate()->builtins()->KeyedLoadIC_MissForceGeneric();
+  __ Jump(miss_ic, RelocInfo::CODE_TARGET);
+}
+
+
+static bool IsElementTypeSigned(ElementsKind elements_kind) {
   switch (elements_kind) {
-    case JSObject::EXTERNAL_BYTE_ELEMENTS:
-    case JSObject::EXTERNAL_SHORT_ELEMENTS:
-    case JSObject::EXTERNAL_INT_ELEMENTS:
+    case EXTERNAL_BYTE_ELEMENTS:
+    case EXTERNAL_SHORT_ELEMENTS:
+    case EXTERNAL_INT_ELEMENTS:
       return true;
 
-    case JSObject::EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
-    case JSObject::EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
-    case JSObject::EXTERNAL_UNSIGNED_INT_ELEMENTS:
-    case JSObject::EXTERNAL_PIXEL_ELEMENTS:
+    case EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
+    case EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
+    case EXTERNAL_UNSIGNED_INT_ELEMENTS:
+    case EXTERNAL_PIXEL_ELEMENTS:
       return false;
 
-    case JSObject::EXTERNAL_FLOAT_ELEMENTS:
-    case JSObject::EXTERNAL_DOUBLE_ELEMENTS:
-    case JSObject::FAST_ELEMENTS:
-    case JSObject::FAST_DOUBLE_ELEMENTS:
-    case JSObject::DICTIONARY_ELEMENTS:
-    case JSObject::NON_STRICT_ARGUMENTS_ELEMENTS:
+    case EXTERNAL_FLOAT_ELEMENTS:
+    case EXTERNAL_DOUBLE_ELEMENTS:
+    case FAST_ELEMENTS:
+    case FAST_DOUBLE_ELEMENTS:
+    case DICTIONARY_ELEMENTS:
+    case NON_STRICT_ARGUMENTS_ELEMENTS:
       UNREACHABLE();
       return false;
   }
@@ -3416,7 +3466,7 @@ static bool IsElementTypeSigned(JSObject::ElementsKind elements_kind) {
 
 void KeyedLoadStubCompiler::GenerateLoadExternalArray(
     MacroAssembler* masm,
-    JSObject::ElementsKind elements_kind) {
+    ElementsKind elements_kind) {
   // ---------- S t a t e --------------
   //  -- lr     : return address
   //  -- r0     : key
@@ -3438,37 +3488,37 @@ void KeyedLoadStubCompiler::GenerateLoadExternalArray(
 
   // Check that the index is in range.
   __ ldr(ip, FieldMemOperand(r3, ExternalArray::kLengthOffset));
-  __ cmp(ip, Operand(key, ASR, kSmiTagSize));
+  __ cmp(key, ip);
   // Unsigned comparison catches both negative and too-large values.
-  __ b(lo, &miss_force_generic);
+  __ b(hs, &miss_force_generic);
 
   __ ldr(r3, FieldMemOperand(r3, ExternalArray::kExternalPointerOffset));
   // r3: base pointer of external storage
 
   // We are not untagging smi key and instead work with it
   // as if it was premultiplied by 2.
-  ASSERT((kSmiTag == 0) && (kSmiTagSize == 1));
+  STATIC_ASSERT((kSmiTag == 0) && (kSmiTagSize == 1));
 
   Register value = r2;
   switch (elements_kind) {
-    case JSObject::EXTERNAL_BYTE_ELEMENTS:
+    case EXTERNAL_BYTE_ELEMENTS:
       __ ldrsb(value, MemOperand(r3, key, LSR, 1));
       break;
-    case JSObject::EXTERNAL_PIXEL_ELEMENTS:
-    case JSObject::EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
+    case EXTERNAL_PIXEL_ELEMENTS:
+    case EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
       __ ldrb(value, MemOperand(r3, key, LSR, 1));
       break;
-    case JSObject::EXTERNAL_SHORT_ELEMENTS:
+    case EXTERNAL_SHORT_ELEMENTS:
       __ ldrsh(value, MemOperand(r3, key, LSL, 0));
       break;
-    case JSObject::EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
+    case EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
       __ ldrh(value, MemOperand(r3, key, LSL, 0));
       break;
-    case JSObject::EXTERNAL_INT_ELEMENTS:
-    case JSObject::EXTERNAL_UNSIGNED_INT_ELEMENTS:
+    case EXTERNAL_INT_ELEMENTS:
+    case EXTERNAL_UNSIGNED_INT_ELEMENTS:
       __ ldr(value, MemOperand(r3, key, LSL, 1));
       break;
-    case JSObject::EXTERNAL_FLOAT_ELEMENTS:
+    case EXTERNAL_FLOAT_ELEMENTS:
       if (CpuFeatures::IsSupported(VFP3)) {
         CpuFeatures::Scope scope(VFP3);
         __ add(r2, r3, Operand(key, LSL, 1));
@@ -3477,7 +3527,7 @@ void KeyedLoadStubCompiler::GenerateLoadExternalArray(
         __ ldr(value, MemOperand(r3, key, LSL, 1));
       }
       break;
-    case JSObject::EXTERNAL_DOUBLE_ELEMENTS:
+    case EXTERNAL_DOUBLE_ELEMENTS:
       if (CpuFeatures::IsSupported(VFP3)) {
         CpuFeatures::Scope scope(VFP3);
         __ add(r2, r3, Operand(key, LSL, 2));
@@ -3489,10 +3539,10 @@ void KeyedLoadStubCompiler::GenerateLoadExternalArray(
         __ ldr(r3, MemOperand(r4, Register::kSizeInBytes));
       }
       break;
-    case JSObject::FAST_ELEMENTS:
-    case JSObject::FAST_DOUBLE_ELEMENTS:
-    case JSObject::DICTIONARY_ELEMENTS:
-    case JSObject::NON_STRICT_ARGUMENTS_ELEMENTS:
+    case FAST_ELEMENTS:
+    case FAST_DOUBLE_ELEMENTS:
+    case DICTIONARY_ELEMENTS:
+    case NON_STRICT_ARGUMENTS_ELEMENTS:
       UNREACHABLE();
       break;
   }
@@ -3506,7 +3556,7 @@ void KeyedLoadStubCompiler::GenerateLoadExternalArray(
   // d0: value (if VFP3 is supported)
   // r2/r3: value (if VFP3 is not supported)
 
-  if (elements_kind == JSObject::EXTERNAL_INT_ELEMENTS) {
+  if (elements_kind == EXTERNAL_INT_ELEMENTS) {
     // For the Int and UnsignedInt array types, we need to see whether
     // the value can be represented in a Smi. If not, we need to convert
     // it to a HeapNumber.
@@ -3550,7 +3600,7 @@ void KeyedLoadStubCompiler::GenerateLoadExternalArray(
       __ str(dst2, FieldMemOperand(r0, HeapNumber::kExponentOffset));
       __ Ret();
     }
-  } else if (elements_kind == JSObject::EXTERNAL_UNSIGNED_INT_ELEMENTS) {
+  } else if (elements_kind == EXTERNAL_UNSIGNED_INT_ELEMENTS) {
     // The test is different for unsigned int values. Since we need
     // the value to be in the range of a positive smi, we can't
     // handle either of the top two bits being set in the value.
@@ -3615,7 +3665,7 @@ void KeyedLoadStubCompiler::GenerateLoadExternalArray(
       __ mov(r0, r4);
       __ Ret();
     }
-  } else if (elements_kind == JSObject::EXTERNAL_FLOAT_ELEMENTS) {
+  } else if (elements_kind == EXTERNAL_FLOAT_ELEMENTS) {
     // For the floating-point array type, we need to always allocate a
     // HeapNumber.
     if (CpuFeatures::IsSupported(VFP3)) {
@@ -3685,7 +3735,7 @@ void KeyedLoadStubCompiler::GenerateLoadExternalArray(
       __ mov(r0, r3);
       __ Ret();
     }
-  } else if (elements_kind == JSObject::EXTERNAL_DOUBLE_ELEMENTS) {
+  } else if (elements_kind == EXTERNAL_DOUBLE_ELEMENTS) {
     if (CpuFeatures::IsSupported(VFP3)) {
       CpuFeatures::Scope scope(VFP3);
       // Allocate a HeapNumber for the result. Don't use r0 and r1 as
@@ -3742,7 +3792,7 @@ void KeyedLoadStubCompiler::GenerateLoadExternalArray(
 
 void KeyedStoreStubCompiler::GenerateStoreExternalArray(
     MacroAssembler* masm,
-    JSObject::ElementsKind elements_kind) {
+    ElementsKind elements_kind) {
   // ---------- S t a t e --------------
   //  -- r0     : value
   //  -- r1     : key
@@ -3760,23 +3810,21 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
   // This stub is meant to be tail-jumped to, the receiver must already
   // have been verified by the caller to not be a smi.
 
-  __ ldr(r3, FieldMemOperand(receiver, JSObject::kElementsOffset));
-
   // Check that the key is a smi.
   __ JumpIfNotSmi(key, &miss_force_generic);
 
+  __ ldr(r3, FieldMemOperand(receiver, JSObject::kElementsOffset));
+
   // Check that the index is in range
-  __ SmiUntag(r4, key);
   __ ldr(ip, FieldMemOperand(r3, ExternalArray::kLengthOffset));
-  __ cmp(r4, ip);
+  __ cmp(key, ip);
   // Unsigned comparison catches both negative and too-large values.
   __ b(hs, &miss_force_generic);
 
   // Handle both smis and HeapNumbers in the fast path. Go to the
   // runtime for all other kinds of values.
   // r3: external array.
-  // r4: key (integer).
-  if (elements_kind == JSObject::EXTERNAL_PIXEL_ELEMENTS) {
+  if (elements_kind == EXTERNAL_PIXEL_ELEMENTS) {
     // Double to pixel conversion is only implemented in the runtime for now.
     __ JumpIfNotSmi(value, &slow);
   } else {
@@ -3786,32 +3834,32 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
   __ ldr(r3, FieldMemOperand(r3, ExternalArray::kExternalPointerOffset));
 
   // r3: base pointer of external storage.
-  // r4: key (integer).
   // r5: value (integer).
   switch (elements_kind) {
-    case JSObject::EXTERNAL_PIXEL_ELEMENTS:
+    case EXTERNAL_PIXEL_ELEMENTS:
       // Clamp the value to [0..255].
       __ Usat(r5, 8, Operand(r5));
-      __ strb(r5, MemOperand(r3, r4, LSL, 0));
+      __ strb(r5, MemOperand(r3, key, LSR, 1));
       break;
-    case JSObject::EXTERNAL_BYTE_ELEMENTS:
-    case JSObject::EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
-      __ strb(r5, MemOperand(r3, r4, LSL, 0));
+    case EXTERNAL_BYTE_ELEMENTS:
+    case EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
+      __ strb(r5, MemOperand(r3, key, LSR, 1));
       break;
-    case JSObject::EXTERNAL_SHORT_ELEMENTS:
-    case JSObject::EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
-      __ strh(r5, MemOperand(r3, r4, LSL, 1));
+    case EXTERNAL_SHORT_ELEMENTS:
+    case EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
+      __ strh(r5, MemOperand(r3, key, LSL, 0));
       break;
-    case JSObject::EXTERNAL_INT_ELEMENTS:
-    case JSObject::EXTERNAL_UNSIGNED_INT_ELEMENTS:
-      __ str(r5, MemOperand(r3, r4, LSL, 2));
+    case EXTERNAL_INT_ELEMENTS:
+    case EXTERNAL_UNSIGNED_INT_ELEMENTS:
+      __ str(r5, MemOperand(r3, key, LSL, 1));
       break;
-    case JSObject::EXTERNAL_FLOAT_ELEMENTS:
+    case EXTERNAL_FLOAT_ELEMENTS:
       // Perform int-to-float conversion and store to memory.
+      __ SmiUntag(r4, key);
       StoreIntAsFloat(masm, r3, r4, r5, r6, r7, r9);
       break;
-    case JSObject::EXTERNAL_DOUBLE_ELEMENTS:
-      __ add(r3, r3, Operand(r4, LSL, 3));
+    case EXTERNAL_DOUBLE_ELEMENTS:
+      __ add(r3, r3, Operand(key, LSL, 2));
       // r3: effective address of the double element
       FloatingPointHelper::Destination destination;
       if (CpuFeatures::IsSupported(VFP3)) {
@@ -3831,10 +3879,10 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
         __ str(r7, MemOperand(r3, Register::kSizeInBytes));
       }
       break;
-    case JSObject::FAST_ELEMENTS:
-    case JSObject::FAST_DOUBLE_ELEMENTS:
-    case JSObject::DICTIONARY_ELEMENTS:
-    case JSObject::NON_STRICT_ARGUMENTS_ELEMENTS:
+    case FAST_ELEMENTS:
+    case FAST_DOUBLE_ELEMENTS:
+    case DICTIONARY_ELEMENTS:
+    case NON_STRICT_ARGUMENTS_ELEMENTS:
       UNREACHABLE();
       break;
   }
@@ -3842,9 +3890,8 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
   // Entry registers are intact, r0 holds the value which is the return value.
   __ Ret();
 
-  if (elements_kind != JSObject::EXTERNAL_PIXEL_ELEMENTS) {
+  if (elements_kind != EXTERNAL_PIXEL_ELEMENTS) {
     // r3: external array.
-    // r4: index (integer).
     __ bind(&check_heap_number);
     __ CompareObjectType(value, r5, r6, HEAP_NUMBER_TYPE);
     __ b(ne, &slow);
@@ -3852,7 +3899,6 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
     __ ldr(r3, FieldMemOperand(r3, ExternalArray::kExternalPointerOffset));
 
     // r3: base pointer of external storage.
-    // r4: key (integer).
 
     // The WebGL specification leaves the behavior of storing NaN and
     // +/-Infinity into integer arrays basically undefined. For more
@@ -3860,18 +3906,18 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
     if (CpuFeatures::IsSupported(VFP3)) {
       CpuFeatures::Scope scope(VFP3);
 
-      if (elements_kind == JSObject::EXTERNAL_FLOAT_ELEMENTS) {
+      if (elements_kind == EXTERNAL_FLOAT_ELEMENTS) {
         // vldr requires offset to be a multiple of 4 so we can not
         // include -kHeapObjectTag into it.
         __ sub(r5, r0, Operand(kHeapObjectTag));
         __ vldr(d0, r5, HeapNumber::kValueOffset);
-        __ add(r5, r3, Operand(r4, LSL, 2));
+        __ add(r5, r3, Operand(key, LSL, 1));
         __ vcvt_f32_f64(s0, d0);
         __ vstr(s0, r5, 0);
-      } else if (elements_kind == JSObject::EXTERNAL_DOUBLE_ELEMENTS) {
+      } else if (elements_kind == EXTERNAL_DOUBLE_ELEMENTS) {
         __ sub(r5, r0, Operand(kHeapObjectTag));
         __ vldr(d0, r5, HeapNumber::kValueOffset);
-        __ add(r5, r3, Operand(r4, LSL, 3));
+        __ add(r5, r3, Operand(key, LSL, 2));
         __ vstr(d0, r5, 0);
       } else {
         // Hoisted load.  vldr requires offset to be a multiple of 4 so we can
@@ -3881,25 +3927,25 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
         __ EmitECMATruncate(r5, d0, s2, r6, r7, r9);
 
         switch (elements_kind) {
-          case JSObject::EXTERNAL_BYTE_ELEMENTS:
-          case JSObject::EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
-            __ strb(r5, MemOperand(r3, r4, LSL, 0));
+          case EXTERNAL_BYTE_ELEMENTS:
+          case EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
+            __ strb(r5, MemOperand(r3, key, LSR, 1));
             break;
-          case JSObject::EXTERNAL_SHORT_ELEMENTS:
-          case JSObject::EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
-            __ strh(r5, MemOperand(r3, r4, LSL, 1));
+          case EXTERNAL_SHORT_ELEMENTS:
+          case EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
+            __ strh(r5, MemOperand(r3, key, LSL, 0));
             break;
-          case JSObject::EXTERNAL_INT_ELEMENTS:
-          case JSObject::EXTERNAL_UNSIGNED_INT_ELEMENTS:
-            __ str(r5, MemOperand(r3, r4, LSL, 2));
+          case EXTERNAL_INT_ELEMENTS:
+          case EXTERNAL_UNSIGNED_INT_ELEMENTS:
+            __ str(r5, MemOperand(r3, key, LSL, 1));
             break;
-          case JSObject::EXTERNAL_PIXEL_ELEMENTS:
-          case JSObject::EXTERNAL_FLOAT_ELEMENTS:
-          case JSObject::EXTERNAL_DOUBLE_ELEMENTS:
-          case JSObject::FAST_ELEMENTS:
-          case JSObject::FAST_DOUBLE_ELEMENTS:
-          case JSObject::DICTIONARY_ELEMENTS:
-          case JSObject::NON_STRICT_ARGUMENTS_ELEMENTS:
+          case EXTERNAL_PIXEL_ELEMENTS:
+          case EXTERNAL_FLOAT_ELEMENTS:
+          case EXTERNAL_DOUBLE_ELEMENTS:
+          case FAST_ELEMENTS:
+          case FAST_DOUBLE_ELEMENTS:
+          case DICTIONARY_ELEMENTS:
+          case NON_STRICT_ARGUMENTS_ELEMENTS:
             UNREACHABLE();
             break;
         }
@@ -3913,7 +3959,7 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
       __ ldr(r5, FieldMemOperand(value, HeapNumber::kExponentOffset));
       __ ldr(r6, FieldMemOperand(value, HeapNumber::kMantissaOffset));
 
-      if (elements_kind == JSObject::EXTERNAL_FLOAT_ELEMENTS) {
+      if (elements_kind == EXTERNAL_FLOAT_ELEMENTS) {
         Label done, nan_or_infinity_or_zero;
         static const int kMantissaInHiWordShift =
             kBinary32MantissaBits - HeapNumber::kMantissaBitsInTopWord;
@@ -3953,7 +3999,7 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
         __ orr(r5, r7, Operand(r9, LSL, kBinary32ExponentShift));
 
         __ bind(&done);
-        __ str(r5, MemOperand(r3, r4, LSL, 2));
+        __ str(r5, MemOperand(r3, key, LSL, 1));
         // Entry registers are intact, r0 holds the value which is the return
         // value.
         __ Ret();
@@ -3965,8 +4011,8 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
         __ orr(r9, r9, Operand(r5, LSL, kMantissaInHiWordShift));
         __ orr(r5, r9, Operand(r6, LSR, kMantissaInLoWordShift));
         __ b(&done);
-      } else if (elements_kind == JSObject::EXTERNAL_DOUBLE_ELEMENTS) {
-        __ add(r7, r3, Operand(r4, LSL, 3));
+      } else if (elements_kind == EXTERNAL_DOUBLE_ELEMENTS) {
+        __ add(r7, r3, Operand(key, LSL, 2));
         // r7: effective address of destination element.
         __ str(r6, MemOperand(r7, 0));
         __ str(r5, MemOperand(r7, Register::kSizeInBytes));
@@ -4020,25 +4066,25 @@ void KeyedStoreStubCompiler::GenerateStoreExternalArray(
 
         __ bind(&done);
         switch (elements_kind) {
-          case JSObject::EXTERNAL_BYTE_ELEMENTS:
-          case JSObject::EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
-            __ strb(r5, MemOperand(r3, r4, LSL, 0));
+          case EXTERNAL_BYTE_ELEMENTS:
+          case EXTERNAL_UNSIGNED_BYTE_ELEMENTS:
+            __ strb(r5, MemOperand(r3, key, LSR, 1));
             break;
-          case JSObject::EXTERNAL_SHORT_ELEMENTS:
-          case JSObject::EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
-            __ strh(r5, MemOperand(r3, r4, LSL, 1));
+          case EXTERNAL_SHORT_ELEMENTS:
+          case EXTERNAL_UNSIGNED_SHORT_ELEMENTS:
+            __ strh(r5, MemOperand(r3, key, LSL, 0));
             break;
-          case JSObject::EXTERNAL_INT_ELEMENTS:
-          case JSObject::EXTERNAL_UNSIGNED_INT_ELEMENTS:
-            __ str(r5, MemOperand(r3, r4, LSL, 2));
+          case EXTERNAL_INT_ELEMENTS:
+          case EXTERNAL_UNSIGNED_INT_ELEMENTS:
+            __ str(r5, MemOperand(r3, key, LSL, 1));
             break;
-          case JSObject::EXTERNAL_PIXEL_ELEMENTS:
-          case JSObject::EXTERNAL_FLOAT_ELEMENTS:
-          case JSObject::EXTERNAL_DOUBLE_ELEMENTS:
-          case JSObject::FAST_ELEMENTS:
-          case JSObject::FAST_DOUBLE_ELEMENTS:
-          case JSObject::DICTIONARY_ELEMENTS:
-          case JSObject::NON_STRICT_ARGUMENTS_ELEMENTS:
+          case EXTERNAL_PIXEL_ELEMENTS:
+          case EXTERNAL_FLOAT_ELEMENTS:
+          case EXTERNAL_DOUBLE_ELEMENTS:
+          case FAST_ELEMENTS:
+          case FAST_DOUBLE_ELEMENTS:
+          case DICTIONARY_ELEMENTS:
+          case NON_STRICT_ARGUMENTS_ELEMENTS:
             UNREACHABLE();
             break;
         }
@@ -4101,7 +4147,7 @@ void KeyedLoadStubCompiler::GenerateLoadFastElement(MacroAssembler* masm) {
 
   // Load the result and make sure it's not the hole.
   __ add(r3, r2, Operand(FixedArray::kHeaderSize - kHeapObjectTag));
-  ASSERT(kSmiTag == 0 && kSmiTagSize < kPointerSizeLog2);
+  STATIC_ASSERT(kSmiTag == 0 && kSmiTagSize < kPointerSizeLog2);
   __ ldr(r4,
          MemOperand(r3, r0, LSL, kPointerSizeLog2 - kSmiTagSize));
   __ LoadRoot(ip, Heap::kTheHoleValueRootIndex);
@@ -4114,6 +4160,77 @@ void KeyedLoadStubCompiler::GenerateLoadFastElement(MacroAssembler* masm) {
   Code* stub = masm->isolate()->builtins()->builtin(
       Builtins::kKeyedLoadIC_MissForceGeneric);
   __ Jump(Handle<Code>(stub), RelocInfo::CODE_TARGET);
+}
+
+
+void KeyedLoadStubCompiler::GenerateLoadFastDoubleElement(
+    MacroAssembler* masm) {
+  // ----------- S t a t e -------------
+  //  -- lr    : return address
+  //  -- r0    : key
+  //  -- r1    : receiver
+  // -----------------------------------
+  Label miss_force_generic, slow_allocate_heapnumber;
+
+  Register key_reg = r0;
+  Register receiver_reg = r1;
+  Register elements_reg = r2;
+  Register heap_number_reg = r2;
+  Register indexed_double_offset = r3;
+  Register scratch = r4;
+  Register scratch2 = r5;
+  Register scratch3 = r6;
+  Register heap_number_map = r7;
+
+  // This stub is meant to be tail-jumped to, the receiver must already
+  // have been verified by the caller to not be a smi.
+
+  // Check that the key is a smi.
+  __ JumpIfNotSmi(key_reg, &miss_force_generic);
+
+  // Get the elements array.
+  __ ldr(elements_reg,
+         FieldMemOperand(receiver_reg, JSObject::kElementsOffset));
+
+  // Check that the key is within bounds.
+  __ ldr(scratch, FieldMemOperand(elements_reg, FixedArray::kLengthOffset));
+  __ cmp(key_reg, Operand(scratch));
+  __ b(hs, &miss_force_generic);
+
+  // Load the upper word of the double in the fixed array and test for NaN.
+  __ add(indexed_double_offset, elements_reg,
+         Operand(key_reg, LSL, kDoubleSizeLog2 - kSmiTagSize));
+  uint32_t upper_32_offset = FixedArray::kHeaderSize + sizeof(kHoleNanLower32);
+  __ ldr(scratch, FieldMemOperand(indexed_double_offset, upper_32_offset));
+  __ cmp(scratch, Operand(kHoleNanUpper32));
+  __ b(&miss_force_generic, eq);
+
+  // Non-NaN. Allocate a new heap number and copy the double value into it.
+  __ LoadRoot(heap_number_map, Heap::kHeapNumberMapRootIndex);
+  __ AllocateHeapNumber(heap_number_reg, scratch2, scratch3,
+                        heap_number_map, &slow_allocate_heapnumber);
+
+  // Don't need to reload the upper 32 bits of the double, it's already in
+  // scratch.
+  __ str(scratch, FieldMemOperand(heap_number_reg,
+                                  HeapNumber::kExponentOffset));
+  __ ldr(scratch, FieldMemOperand(indexed_double_offset,
+                                  FixedArray::kHeaderSize));
+  __ str(scratch, FieldMemOperand(heap_number_reg,
+                                  HeapNumber::kMantissaOffset));
+
+  __ mov(r0, heap_number_reg);
+  __ Ret();
+
+  __ bind(&slow_allocate_heapnumber);
+  Handle<Code> slow_ic =
+      masm->isolate()->builtins()->KeyedLoadIC_Slow();
+  __ Jump(slow_ic, RelocInfo::CODE_TARGET);
+
+  __ bind(&miss_force_generic);
+  Handle<Code> miss_ic =
+      masm->isolate()->builtins()->KeyedLoadIC_MissForceGeneric();
+  __ Jump(miss_ic, RelocInfo::CODE_TARGET);
 }
 
 
@@ -4162,7 +4279,7 @@ void KeyedStoreStubCompiler::GenerateStoreFastElement(MacroAssembler* masm,
 
   __ add(scratch,
          elements_reg, Operand(FixedArray::kHeaderSize - kHeapObjectTag));
-  ASSERT(kSmiTag == 0 && kSmiTagSize < kPointerSizeLog2);
+  STATIC_ASSERT(kSmiTag == 0 && kSmiTagSize < kPointerSizeLog2);
   __ str(value_reg,
          MemOperand(scratch, key_reg, LSL, kPointerSizeLog2 - kSmiTagSize));
   __ RecordWrite(scratch,
@@ -4173,6 +4290,132 @@ void KeyedStoreStubCompiler::GenerateStoreFastElement(MacroAssembler* masm,
   // Done.
   __ Ret();
 
+  __ bind(&miss_force_generic);
+  Handle<Code> ic =
+      masm->isolate()->builtins()->KeyedStoreIC_MissForceGeneric();
+  __ Jump(ic, RelocInfo::CODE_TARGET);
+}
+
+
+void KeyedStoreStubCompiler::GenerateStoreFastDoubleElement(
+    MacroAssembler* masm,
+    bool is_js_array) {
+  // ----------- S t a t e -------------
+  //  -- r0    : value
+  //  -- r1    : key
+  //  -- r2    : receiver
+  //  -- lr    : return address
+  //  -- r3    : scratch
+  //  -- r4    : scratch
+  //  -- r5    : scratch
+  // -----------------------------------
+  Label miss_force_generic, smi_value, is_nan, maybe_nan, have_double_value;
+
+  Register value_reg = r0;
+  Register key_reg = r1;
+  Register receiver_reg = r2;
+  Register scratch = r3;
+  Register elements_reg = r4;
+  Register mantissa_reg = r5;
+  Register exponent_reg = r6;
+  Register scratch4 = r7;
+
+  // This stub is meant to be tail-jumped to, the receiver must already
+  // have been verified by the caller to not be a smi.
+  __ JumpIfNotSmi(key_reg, &miss_force_generic);
+
+  __ ldr(elements_reg,
+         FieldMemOperand(receiver_reg, JSObject::kElementsOffset));
+
+  // Check that the key is within bounds.
+  if (is_js_array) {
+    __ ldr(scratch, FieldMemOperand(receiver_reg, JSArray::kLengthOffset));
+  } else {
+    __ ldr(scratch,
+           FieldMemOperand(elements_reg, FixedArray::kLengthOffset));
+  }
+  // Compare smis, unsigned compare catches both negative and out-of-bound
+  // indexes.
+  __ cmp(key_reg, scratch);
+  __ b(hs, &miss_force_generic);
+
+  // Handle smi values specially.
+  __ JumpIfSmi(value_reg, &smi_value);
+
+  // Ensure that the object is a heap number
+  __ CheckMap(value_reg,
+              scratch,
+              masm->isolate()->factory()->heap_number_map(),
+              &miss_force_generic,
+              DONT_DO_SMI_CHECK);
+
+  // Check for nan: all NaN values have a value greater (signed) than 0x7ff00000
+  // in the exponent.
+  __ mov(scratch, Operand(kNaNOrInfinityLowerBoundUpper32));
+  __ ldr(exponent_reg, FieldMemOperand(value_reg, HeapNumber::kExponentOffset));
+  __ cmp(exponent_reg, scratch);
+  __ b(ge, &maybe_nan);
+
+  __ ldr(mantissa_reg, FieldMemOperand(value_reg, HeapNumber::kMantissaOffset));
+
+  __ bind(&have_double_value);
+  __ add(scratch, elements_reg,
+         Operand(key_reg, LSL, kDoubleSizeLog2 - kSmiTagSize));
+  __ str(mantissa_reg, FieldMemOperand(scratch, FixedDoubleArray::kHeaderSize));
+  uint32_t offset = FixedDoubleArray::kHeaderSize + sizeof(kHoleNanLower32);
+  __ str(exponent_reg, FieldMemOperand(scratch, offset));
+  __ Ret();
+
+  __ bind(&maybe_nan);
+  // Could be NaN or Infinity. If fraction is not zero, it's NaN, otherwise
+  // it's an Infinity, and the non-NaN code path applies.
+  __ b(gt, &is_nan);
+  __ ldr(mantissa_reg, FieldMemOperand(value_reg, HeapNumber::kMantissaOffset));
+  __ cmp(mantissa_reg, Operand(0));
+  __ b(eq, &have_double_value);
+  __ bind(&is_nan);
+  // Load canonical NaN for storing into the double array.
+  uint64_t nan_int64 = BitCast<uint64_t>(
+      FixedDoubleArray::canonical_not_the_hole_nan_as_double());
+  __ mov(mantissa_reg, Operand(static_cast<uint32_t>(nan_int64)));
+  __ mov(exponent_reg, Operand(static_cast<uint32_t>(nan_int64 >> 32)));
+  __ jmp(&have_double_value);
+
+  __ bind(&smi_value);
+  __ add(scratch, elements_reg,
+         Operand(FixedDoubleArray::kHeaderSize - kHeapObjectTag));
+  __ add(scratch, scratch,
+         Operand(key_reg, LSL, kDoubleSizeLog2 - kSmiTagSize));
+  // scratch is now effective address of the double element
+
+  FloatingPointHelper::Destination destination;
+  if (CpuFeatures::IsSupported(VFP3)) {
+    destination = FloatingPointHelper::kVFPRegisters;
+  } else {
+    destination = FloatingPointHelper::kCoreRegisters;
+  }
+
+  Register untagged_value = receiver_reg;
+  __ SmiUntag(untagged_value, value_reg);
+  FloatingPointHelper::ConvertIntToDouble(
+      masm,
+      untagged_value,
+      destination,
+      d0,
+      mantissa_reg,
+      exponent_reg,
+      scratch4,
+      s2);
+  if (destination == FloatingPointHelper::kVFPRegisters) {
+    CpuFeatures::Scope scope(VFP3);
+    __ vstr(d0, scratch, 0);
+  } else {
+    __ str(mantissa_reg, MemOperand(scratch, 0));
+    __ str(exponent_reg, MemOperand(scratch, Register::kSizeInBytes));
+  }
+  __ Ret();
+
+  // Handle store cache miss, replacing the ic with the generic stub.
   __ bind(&miss_force_generic);
   Handle<Code> ic =
       masm->isolate()->builtins()->KeyedStoreIC_MissForceGeneric();

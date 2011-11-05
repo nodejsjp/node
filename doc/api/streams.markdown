@@ -75,20 +75,6 @@ will emit this.  (For example, an incoming HTTP request will not emit
 全てのストリームがこのイベントを発生するわけではありません。
 (例えば、インカミングの HTTP リクエストは `'close'` イベントを生成しません。)
 
-### Event: 'fd'
-
-`function (fd) { }`
-
-<!--
-
-Emitted when a file descriptor is received on the stream. Only UNIX streams
-support this functionality; all others will simply never emit this event.
-
--->
-ストリームに関するファイル記述子を受け取った時に生成されます。
-UNIX ストリームだけがこの機能をサポートしています;
-その他の全てのストリームはこのイベントを生成しません。
-
 ### stream.readable
 
 <!--
@@ -212,15 +198,6 @@ This keeps `process.stdout` open so that "Goodbye" can be written at the end.
       process.stdout.write("Goodbye\n");
     });
 
-<!--
-
-NOTE: If the source stream does not support `pause()` and `resume()`, this function
-adds simple definitions which simply emit `'pause'` and `'resume'` events on
-the source stream.
-
--->
-注意: もし接続元ストリームが `pauses()` と `resume()` をサポートしない場合、
-この関数は単に `'pause'` と `'resume'` イベントを接続もとストリームで生成します。
 
 ## Writable Stream
 
@@ -237,12 +214,13 @@ A `Writable Stream` has the following methods, members, and events.
 
 <!--
 
-Emitted after a `write()` method was called that returned `false` to
+After a `write()` method returned `false`, this event is emitted to
 indicate that it is safe to write again.
 
 -->
-呼び出された `write()` メソッドが `false` で戻った後に生成され、
-再び安全に書き込むことができるようになったことを示します。
+`write()` メソッドが `false` でリターンした後、
+再び安全に書き込むことができるようになったことを示すために、
+このイベントは生成されます。
 
 ### Event: 'error'
 
@@ -335,9 +313,12 @@ Same as the above except with a raw buffer.
 <!--
 
 Terminates the stream with EOF or FIN.
+This call will allow queued write data to be sent before closing the stream.
 
 -->
 ストリームを EOF または FIN で終了します。
+この呼び出しは、ストリームがクローズされる前にキューイングされたデータが
+送信されることを許します。
 
 ### stream.end(string, encoding)
 
@@ -364,9 +345,11 @@ Same as above but with a `buffer`.
 <!--
 
 Closes the underlying file descriptor. Stream will not emit any more events.
+Any queued write data will not be sent.
 
 -->
 下層のファイル記述子をクローズします。ストリームはそれ以上イベントを生成しなくなります。
+キューイングされたデータは送信されません。
 
 ### stream.destroySoon()
 

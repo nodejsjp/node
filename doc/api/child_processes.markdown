@@ -137,7 +137,6 @@ The third argument is used to specify additional options, which defaults to:
 
     { cwd: undefined,
       env: process.env,
-      customFds: [-1, -1, -1],
       setsid: false
     }
 
@@ -145,15 +144,13 @@ The third argument is used to specify additional options, which defaults to:
 
 `cwd` allows you to specify the working directory from which the process is spawned.
 Use `env` to specify environment variables that will be visible to the new process.
-With `customFds` it is possible to hook up the new process' [stdin, stdout, stderr] to
-existing streams; `-1` means that a new stream should be created. `setsid`,
-if set true, will cause the subprocess to be run in a new session.
+
+`setsid`, if set true, will cause the subprocess to be run in a new session.
 
 -->
 `cwd` で起動されたプロセスのワーキングディレクトリを指定することができます。
 `env` は新しいプロセスに見える環境変数を指定するために使います。
-`customFds` は新しいプロセスの [stdin, stdout, stderr] を既存のストリームに接続することを可能にします;
-`-1` は新しいストリームが作られなければならないことを意味します。
+
 `setsid` に true が設定されると、サブプロセスは新しいセッションで実行されます。
 
 <!--
@@ -239,23 +236,57 @@ exec の失敗をチェックする例:
       }
     });
 
+<!--
+
+Note that if spawn receives an empty options object, it will result in
+spawning the process with an empty environment rather than using
+`process.env`. This due to backwards compatibility issues with a deprecated
+API.
+
+-->
+`spawn()` は空の `options` オブジェクトを受け取ると、
+`process.env` を使うのではなく，空の環境変数で子プロセスを起動します。
+これは廃止された API との互換性のためです。
 
 <!--
+
+There is a deprecated option called `customFds` which allows one to specify
+specific file descriptors for the stdio of the child process. This API was
+not portable to all platforms and therefore removed.
+With `customFds` it was possible to hook up the new process' [stdin, stdout,
+stderr] to existing streams; `-1` meant that a new stream should be created.
+Use at your own risk.
+
+There are several internal options. In particular `stdinStream`,
+`stdoutStream`, `stderrStream`. They are for INTERNAL USE ONLY. As with all
+undocumented APIs in Node, they should not be used.
 
 See also: `child_process.exec()`
 
 -->
+特定のファイル記述子を子プロセスの標準入出力に指定することを可能にする、
+`customFds` と呼ばれる廃止されたオプションがありました。
+この API は全てのプラットフォームに移植可能ではないために削除されました。
+`customFds` は新しいプロセスの [stdin, stdout, stderr] を既存のストリームに接続することを可能にしました;
+`-1` は新しいストリームが作られなければならないことを意味していました。
+使用する場合は自己責任で。
+
+よく似た内部的なオプションがあります。
+具体的には `stdinStream`、`stdoutStream`、`stderrStream` です。
+これらは __内部用途__です。
+Node のドキュメント化されていない API と同様に、
+これらを使用すべきではありません。
+
 関連項目: `child_process.exec()`
 
 ### child_process.exec(command, [options], callback)
 
 <!--
 
-High-level way to execute a command as a child process, buffer the
-output, and return it all in a callback.
+Runs a command in a shell and buffers the output.
 
 -->
-コマンドを子プロセスとして実行し、その出力を蓄えて、その全てをコールバックに渡す高水準の方法です。
+コマンドをシェルで実行し、その出力をバッファに格納します。
 
     var util = require('util'),
         exec = require('child_process').exec,
@@ -314,6 +345,20 @@ the child process is killed.
 `maxBuffer` は標準出力と標準エラーの最大のデータ量を指定します － この値を超えると子プロセスは kill されます。
 
 
+### child_process.execFile(file, args, options, callback)
+
+<!--
+
+This is similar to `child_process.exec()` except it does not execute a
+subshell but rather the specified file directly. This makes it slightly
+leaner than `child_process.exec`. It has the same options.
+
+-->
+子シェルで実行する代わりに指定されたファイルを直接実行することを除いて
+`child_process.exec()` と同様です。
+これは `child_process.exec` より若干効率的で、同じオプションを持ちます。
+
+
 ### child_process.fork(modulePath, arguments, options)
 
 <!--
@@ -321,14 +366,14 @@ the child process is killed.
 This is a special case of the `spawn()` functionality for spawning Node
 processes. In addition to having all the methods in a normal ChildProcess
 instance, the returned object has a communication channel built-in. The
-channel is written to with `child.send(message)` and messages are recieved
-by a `'message'` event on the child.
+channel is written to with `child.send(message, [sendHandle])` and messages
+are recieved by a `'message'` event on the child.
 
 -->
 これは `spawn()` の特別版で、Node プロセスを起動します。
 返されるオブジェクトは通常の ChildProcess の全てのメソッドに加えて、
 組み込みの通信チャネルを持ちます。
-チャネルは `child.send(message)` によって書き込まれ、
+チャネルは `child.send(message, [sendHandle])` によって書き込まれ、
 メッセージを受信すると `child` 上で `'message'` イベントが生成されます。
 
 <!--
@@ -373,13 +418,11 @@ will emit objects each time it receives a message on its channel.
 <!--
 
 By default the spawned Node process will have the stdin, stdout, stderr
-associated with the parent's. This can be overridden by using the
-`customFds` option.
+associated with the parent's.
 
 -->
-デフォルトでは，起動された Node プロセスは親プロセスに関連づけられた標準入力、
+デフォルトでは、起動された Node プロセスは親プロセスに関連づけられた標準入力、
 標準出力、標準エラー出力を持ちます。
-これは `customFds` オプションによって上書きすることが出来ます。
 
 <!--
 
@@ -392,6 +435,43 @@ thousands of them.
 新しい Node ごとに少なくとも 30 ミリ秒の起動時間と 
 10MB のメモリを前提としてください。
 つまり、数千の子プロセスを作ることは出来ません。
+
+<!--
+
+The `sendHandle` option to `child.send()` is for sending a handle object to
+another process. Child will receive the handle as as second argument to the
+`message` event. Here is an example of sending a handle:
+
+-->
+`child.send()` の `sendHandle` オプションはハンドルオブジェクトを別プロセスに
+送ります。
+子プロセスはそのハンドルを `message` イベントの第2引数として受け取ります。
+これはハンドルを送信するサンプルです。
+
+
+    var server = require('net').createServer();
+    var child = require('child_process').fork(__dirname + '/child.js');
+    // Open up the server object and send the handle.
+    server.listen(1337, function() {
+      child.send({ server: true }, server._handle);
+    });
+
+<!--
+
+Here is an example of receiving the server handle and sharing it between
+processes:
+
+-->
+これはサーバのハンドルを受信してプロセス間で共有するサンプルです。
+
+
+    process.on('message', function(m, serverHandle) {
+      if (serverHandle) {
+        var server = require('net').createServer();
+        server.listen(serverHandle);
+      }
+    });
+
 
 ### child.kill(signal='SIGTERM')
 
