@@ -145,16 +145,40 @@ Example: the definition of `console.log`
       process.stdout.write(d + '\n');
     };
 
+<!--
+
+`process.stderr` and `process.stdout` are unlike other streams in Node in
+that writes to them are usually blocking.  They are blocking in the case
+that they refer to regular files or TTY file descriptors. In the case they
+refer to pipes, they are non-blocking like other streams.
+
+-->
+`process.stderr` と `process.stdout` は他のストリームと異なり、
+書き込みは通常ブロックします。
+それらが通常ファイルや TTY のファイル記述子を参照しているケースでは、
+それらはブロックします。
+パイプを参照しているケースでは、他のストリームと同様にブロックしません。
+
 
 ### process.stderr
 
 <!--
 
-A writable stream to stderr. Writes on this stream are blocking.
+A writable stream to stderr.
+
+`process.stderr` and `process.stdout` are unlike other streams in Node in
+that writes to them are usually blocking.  They are blocking in the case
+that they refer to regular files or TTY file descriptors. In the case they
+refer to pipes, they are non-blocking like other streams.
 
 -->
 `stderr` に対する `Writable Stream` です。
-このストリームへの書き込みはブロックします。
+
+`process.stderr` と `process.stdout` は他のストリームと異なり、
+書き込みは通常ブロックします。
+それらが通常ファイルや TTY のファイル記述子を参照しているケースでは、
+それらはブロックします。
+パイプを参照しているケースでは、他のストリームと同様にブロックしません。
 
 
 ### process.stdin

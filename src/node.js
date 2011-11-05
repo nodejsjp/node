@@ -68,10 +68,6 @@
       var d = NativeModule.require('_debugger');
       d.start();
 
-    } else if (process.argv[1] == 'cluster') {
-      var cluster = NativeModule.require('cluster');
-      cluster.start();
-
     } else if (process._eval != null) {
       // User passed '-e' or '--eval' arguments to Node.
       var Module = NativeModule.require('module');
@@ -92,7 +88,7 @@
       // channel.
       if (process.env.NODE_WORKER_ID) {
         var cluster = NativeModule.require('cluster');
-        cluster.startWorker();
+        cluster._startWorker();
       }
 
       var Module = NativeModule.require('module');
@@ -189,20 +185,21 @@
       var l = nextTickQueue.length;
       if (l === 0) return;
 
+      var q = nextTickQueue;
+      nextTickQueue = [];
+
       try {
-        for (var i = 0; i < l; i++) {
-          nextTickQueue[i]();
-        }
+        for (var i = 0; i < l; i++) q[i]();
       }
       catch (e) {
-        nextTickQueue.splice(0, i + 1);
         if (i + 1 < l) {
+          nextTickQueue = q.slice(i + 1).concat(nextTickQueue);
+        }
+        if (nextTickQueue.length) {
           process._needTickCallback();
         }
         throw e; // process.nextTick error, or 'error' event on first tick
       }
-
-      nextTickQueue.splice(0, l);
     };
 
     process.nextTick = function(callback) {
@@ -210,6 +207,16 @@
       process._needTickCallback();
     };
   };
+
+  function errnoException(errorno, syscall) {
+    // TODO make this more compatible with ErrnoException from src/node.cc
+    // Once all of Node is using this function the ErrnoException from
+    // src/node.cc should be removed.
+    var e = new Error(syscall + ' ' + errorno);
+    e.errno = e.code = errorno;
+    e.syscall = syscall;
+    return e;
+  }
 
   function createWritableStdioStream(fd) {
     var stream;
@@ -232,7 +239,7 @@
 
       case 'FILE':
         var fs = NativeModule.require('fs');
-        stream = new fs.WriteStream(null, { fd: fd });
+        stream = new fs.SyncWriteStream(fd);
         stream._type = 'fs';
         break;
 
@@ -321,34 +328,30 @@
   };
 
   startup.processKillAndExit = function() {
-    var isWindows = process.platform === 'win32';
-
     process.exit = function(code) {
       process.emit('exit', code || 0);
       process.reallyExit(code || 0);
     };
 
-    if (isWindows) {
-      process.kill = function(pid, sig) {
-        console.warn('process.kill() is not supported on Windows.  Use ' +
-                     'child.kill() to kill a process that was started '  +
-                     'with child_process.spawn().');
-      }
-    } else {
-      process.kill = function(pid, sig) {
-        // preserve null signal
-        if (0 === sig) {
-          process._kill(pid, 0);
+    process.kill = function(pid, sig) {
+      var r;
+
+      // preserve null signal
+      if (0 === sig) {
+        r = process._kill(pid, 0);
+      } else {
+        sig = sig || 'SIGTERM';
+        if (startup.lazyConstants()[sig]) {
+          r = process._kill(pid, startup.lazyConstants()[sig]);
         } else {
-          sig = sig || 'SIGTERM';
-          if (startup.lazyConstants()[sig]) {
-            process._kill(pid, startup.lazyConstants()[sig]);
-          } else {
-            throw new Error('Unknown signal: ' + sig);
-          }
+          throw new Error('Unknown signal: ' + sig);
         }
-      };
-    }
+      }
+
+      if (r) {
+        throw errnoException('kill', errno);
+      }
+    };
   };
 
   startup.processSignalHandlers = function() {

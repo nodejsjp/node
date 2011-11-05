@@ -171,7 +171,7 @@ os.cpus の例:
            idle: 1072572010,
            irq: 30 } } ]
 
-### os.getNetworkInterfaces()
+### os.networkInterfaces()
 
 <!--
 

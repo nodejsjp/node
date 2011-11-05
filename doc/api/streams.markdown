@@ -198,15 +198,6 @@ This keeps `process.stdout` open so that "Goodbye" can be written at the end.
       process.stdout.write("Goodbye\n");
     });
 
-<!--
-
-NOTE: If the source stream does not support `pause()` and `resume()`, this function
-adds simple definitions which simply emit `'pause'` and `'resume'` events on
-the source stream.
-
--->
-注意: もし接続元ストリームが `pauses()` と `resume()` をサポートしない場合、
-この関数は単に `'pause'` と `'resume'` イベントを接続もとストリームで生成します。
 
 ## Writable Stream
 

@@ -164,7 +164,7 @@ Synchronous chown(2).
 -->
 同期の chown(2)。
 
-### fs.fchown(path, uid, gid, [callback])
+### fs.fchown(fd, uid, gid, [callback])
 
 <!--
 
@@ -174,7 +174,7 @@ to the completion callback.
 -->
 非同期の fchown(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.fchownSync(path, uid, gid)
+### fs.fchownSync(fd, uid, gid)
 
 <!--
 
@@ -230,7 +230,7 @@ are given to the completion callback.
 -->
 非同期の fchmod(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-### fs.fchmodSync(path, mode)
+### fs.fchmodSync(fd, mode)
 
 <!--
 
@@ -239,7 +239,7 @@ Synchronous fchmod(2).
 -->
 同期の fchmod(2)。
 
-### fs.lchmod(fd, mode, [callback])
+### fs.lchmod(path, mode, [callback])
 
 <!--
 
@@ -263,7 +263,7 @@ Synchronous lchmod(2).
 <!--
 
 Asynchronous stat(2). The callback gets two arguments `(err, stats)` where
-`stats` is a [`fs.Stats`](#fs.Stats) object.  See the [fs.Stats](#fs.Stats)
+`stats` is a [fs.Stats](#fs.Stats) object.  See the [fs.Stats](#fs.Stats)
 section below for more information.
 
 -->
@@ -449,17 +449,18 @@ Synchronous rmdir(2).
 -->
 同期の rmdir(2)。
 
-### fs.mkdir(path, mode, [callback])
+### fs.mkdir(path, [mode], [callback])
 
 <!--
 
 Asynchronous mkdir(2). No arguments other than a possible exception are given
-to the completion callback.
+to the completion callback. `mode` defaults to `0777`. 
 
 -->
 非同期の mkdir(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+`mode` のデフォルトは `0777` です。
 
-### fs.mkdirSync(path, mode)
+### fs.mkdirSync(path, [mode])
 
 <!--
 
@@ -572,29 +573,29 @@ Synchronous open(2).
 -->
 同期の open(2)。
 
-### fs.utimes(path, atime, mtime, callback)
+### fs.utimes(path, atime, mtime, [callback])
 ### fs.utimesSync(path, atime, mtime)
 
 <!--
 
 Change file timestamps.
+Change file timestamps of the file referenced by the supplied path.
 
 -->
-ファイルのタイムスタンプを変更します。
+渡されたパスが参照するファイルのタイムスタンプを変更します。
 
-### fs.futimes(path, atime, mtime, callback)
-### fs.futimesSync(path, atime, mtime)
+### fs.futimes(fd, atime, mtime, [callback])
+### fs.futimesSync(fd, atime, mtime)
 
 <!--
 
-Change file timestamps with the difference that if filename refers to a
-symbolic link, then the link is not dereferenced.
+Change the file timestamps of a file referenced by the supplied file
+descriptor.
 
 -->
-ファイルのタイムスタンプを変更します。
-パスがシンボリックリンクだった場合、参照先のファイルを辿らない点が異なります。
+渡されたファイル記述子が参照するファイルのタイムスタンプを変更します。
 
-### fs.fsync(fd, callback)
+### fs.fsync(fd, [callback])
 
 <!--
 
@@ -996,9 +997,9 @@ similar to this:
 <!--
 
 Please note that `atime`, `mtime` and `ctime` are instances
-of [`Date`][MDN-Date] object and to compare the values of
+of [Date][MDN-Date] object and to compare the values of
 these objects you should use appropriate methods. For most
-general uses [`getTime()`][MDN-Date-getTime] will return
+general uses [getTime()][MDN-Date-getTime] will return
 the number of milliseconds elapsed since _1 January 1970
 00:00:00 UTC_ and this integer should be sufficient for
 any comparison, however there additional methods which can
@@ -1006,9 +1007,9 @@ be used for displaying fuzzy information. More details can
 be found in the [MDN JavaScript Reference][MDN-Date] page.
 
 -->
-`atime`、`mtime`、そして `ctime` は [`Date`][MDN-Date] オブジェクトであり、
+`atime`、`mtime`、そして `ctime` は [Date][MDN-Date] オブジェクトであり、
 その値を比較するには適切な方法があるということに注意してください。
-もっとも一般的に使われる [`getTime()`][MDN-Date-getTime] は _1970 年 1 月
+もっとも一般的に使われる [getTime()][MDN-Date-getTime] は _1970 年 1 月
 1 日_からの経過時間をミリ秒単位で返します。
 それは比較には十分ですが、曖昧な情報を表示するには別の方法を使ってください。
 より詳しい情報は [MDN JavaScript Reference][MDN-Date] で探すことができます。
