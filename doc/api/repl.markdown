@@ -51,7 +51,7 @@ For example, you could add this to your bashrc file:
     alias node="env NODE_NO_READLINE=1 rlwrap node"
 
 
-### repl.start(prompt='> ', stream=process.stdin, eval=eval, useGlobal=false)
+### repl.start(prompt='> ', stream=process.stdin, eval=eval, useGlobal=false, ignoreUndefined=false)
 
 <!--
 
@@ -61,6 +61,9 @@ is optional and defaults to `> `.  `stream` is optional and defaults to
 
 If `useGlobal` is set to true, then the repl will use the global object,
 instead of running scripts in a separate context.
+
+If `ignoreUndefined` is set to true, then the repl will not output return value
+of command if it's `undefined`.
 
 You can use your own `eval` function if it has following signature:
 
@@ -72,6 +75,8 @@ You can use your own `eval` function if it has following signature:
 
 `useGlobal` を `true` に指定した場合、REPL は別のコンテキストでスクリプトを
 実行するのではなく、グローバルオブジェクトを使用します。
+
+`ignoreUndefined` を `true` に指定した場合、REPL はコマンドの戻り値が `undefined` だった場合にそれを出力しません。
 
 独自の `eval()` 関数は以下のシグネチャを持ちます。
 

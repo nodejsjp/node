@@ -69,7 +69,7 @@ Alternatively you can send the CSR to a Certificate Authority for signing.
 `test/fixtures/keys/Makefile` を見る必要がある)
 
 
-#### tls.createServer(options, secureConnectionListener)
+#### tls.createServer(options, [secureConnectionListener])
 
 <!--
 
@@ -89,6 +89,8 @@ The `options` object has these possibilities:
 
   - `key`: A string or `Buffer` containing the private key of the server in
     PEM format. (Required)
+
+  - `passphrase`: A string of passphrase for the private key.
 
   - `cert`: A string or `Buffer` containing the certificate key of the server in
     PEM format. (Required)
@@ -122,6 +124,8 @@ The `options` object has these possibilities:
 -->
   - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です
     (必須)。
+
+  - `passphrase`: 秘密鍵のパスフレーズを表す文字列です。
 
   - `cert`: PEM フォーマットによる証明書の鍵を持つ文字列または `Buffer` です
     (必須)。
@@ -226,7 +230,7 @@ You can test this server by connecting to it with `openssl s_client`:
     openssl s_client -connect 127.0.0.1:8000
 
 
-#### tls.connect(port, [host], [options], secureConnectListener)
+#### tls.connect(port, [host], [options], [secureConnectListener])
 
 <!--
 
@@ -241,7 +245,9 @@ defaults to `localhost`.) `options` should be an object which specifies
 <!--
 
   - `key`: A string or `Buffer` containing the private key of the client in
-    PEM format. (Required)
+    PEM format.
+
+  - `passphrase`: A string of passphrase for the private key.
 
   - `cert`: A string or `Buffer` containing the certificate key of the client in
     PEM format.
@@ -258,8 +264,10 @@ defaults to `localhost`.) `options` should be an object which specifies
   - `servername`: Servername for SNI (Server Name Indication) TLS extension.
 
 -->
-  - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です
-    (必須)。
+  - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または
+    `Buffer` です。
+
+  - `passphrase`: 秘密鍵のパスフレーズを表す文字列です。
 
   - `cert`: PEM フォーマットによる証明書の鍵を持つ文字列または `Buffer` です。
 
@@ -544,6 +552,20 @@ event.
 サーバが新しい接続を受け入れることを終了します。
 この関数は非同期で、サーバが最終的にクローズされるとサーバは `'close'` イベントを生成します。
 
+#### server.address()
+
+<!--
+
+Returns the bound address and port of the server as reported by the operating
+system.
+See [net.Server.address()](net.html#server.address) for more information.
+
+-->
+オペレーティングシステムから報告された、
+サーバにバインドされたアドレスとポートを返します。 
+より詳しくは [net.Server.address()](net.html#server.address)
+を参照してください。
+
 #### server.addContext(hostname, credentials)
 
 <!--
@@ -674,3 +696,32 @@ object.
 -->
 接続相手が証明書を提供しなかった場合は、
 `null` または空のオブジェクトを返します。
+
+#### cleartextStream.address()
+
+<!--
+Returns the bound address and port of the underlying socket as reported by the
+operating system. Returns an object with two properties, e.g.
+`{"address":"192.168.57.1", "port":62053}`
+-->
+オペレーティングシステムから報告された、
+ソケットにバインドされたアドレスとポートを返します。
+返されるオブジェクトは二つのプロパティを持ちます。
+例えば、`{"address":"192.168.57.1", "port":62053}`
+
+#### cleartextStream.remoteAddress
+
+<!--
+The string representation of the remote IP address. For example,
+`'74.125.127.100'` or `'2001:4860:a005::68'`.
+-->
+リモートの IP アドレスを表現する文字列です。
+例えば、`'74.125.127.100'` あるいは `'2001:4860:a005::68'`。
+
+#### cleartextStream.remotePort
+
+<!--
+The numeric representation of the remote port. For example, `443`.
+-->
+リモートポートの数値表現です。
+例えば、`443`。

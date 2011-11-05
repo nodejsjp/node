@@ -143,6 +143,76 @@ Example of inspecting all properties of the `util` object:
     console.log(util.inspect(util, true, null));
 
 
+### util.isArray(object)
+
+<!--
+
+Returns `true` if the given "object" is an `Array`. `false` otherwise.
+
+-->
+`object` が配列なら `true` を、それ以外は `false` を返します。
+
+    var util = require('util');
+
+    util.isArray([])
+      // true
+    util.isArray(new Array)
+      // true
+    util.isArray({})
+      // false
+
+
+### util.isRegExp(object)
+
+<!--
+Returns `true` if the given "object" is a `RegExp`. `false` otherwise.
+-->
+`object` が `RegExp` なら `true` を、それ以外なら `false` を返します。
+
+    var util = require('util');
+
+    util.isRegExp(/some regexp/)
+      // true
+    util.isRegExp(new RegExp('another regexp'))
+      // true
+    util.isRegExp({})
+      // false
+
+
+### util.isDate(object)
+
+<!--
+Returns `true` if the given "object" is a `Date`. `false` otherwise.
+-->
+`object` が `Date` なら `true` を、それ以外なら `false` を返します。
+
+    var util = require('util');
+
+    util.isDate(new Date())
+      // true
+    util.isDate(Date())
+      // false (without 'new' returns a String)
+    util.isDate({})
+      // false
+
+
+### util.isError(object)
+
+<!--
+Returns `true` if the given "object" is an `Error`. `false` otherwise.
+-->
+`object` が `Error` なら `true` を、それ以外なら `false` を返します。
+
+    var util = require('util');
+
+    util.isError(new Error())
+      // true
+    util.isError(new TypeError())
+      // true
+    util.isError({ name: 'Error', message: 'an error occurred' })
+      // false
+
+
 ### util.pump(readableStream, writableStream, [callback])
 
 <!--

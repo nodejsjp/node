@@ -83,17 +83,18 @@ To get started we create a file `hello.cc`:
 まず `hello.cc` というファイルを作成します:
 
 
+    #include <node.h>
     #include <v8.h>
 
     using namespace v8;
 
-    Handle<Value> Method(const Arguments &args) {
+    Handle<Value> Method(const Arguments& args) {
       HandleScope scope;
-      return String::New("world");
+      return scope.Close(String::New("world"));
     }
 
-    void init (Handle<Object> target) {
-      NODE_SET_METHOD(target, Method);
+    void init(Handle<Object> target) {
+      NODE_SET_METHOD(target, "method", Method);
     }
     NODE_MODULE(hello, init)
 

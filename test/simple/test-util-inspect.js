@@ -19,7 +19,7 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// libuv-broken
+
 
 
 var common = require('../common');
@@ -53,9 +53,25 @@ try {
   assert.equal(util.inspect(e), '[ReferenceError: undef is not defined]');
 }
 var ex = util.inspect(new Error('FAIL'), true);
-console.log(ex);
 assert.ok(ex.indexOf('[Error: FAIL]') != -1);
 assert.ok(ex.indexOf('[stack]') != -1);
 assert.ok(ex.indexOf('[message]') != -1);
 assert.ok(ex.indexOf('[arguments]') != -1);
 assert.ok(ex.indexOf('[type]') != -1);
+
+// GH-1941
+// should not throw:
+assert.equal(util.inspect(Object.create(Date.prototype)), '{}')
+
+// GH-1944
+assert.doesNotThrow(function () {
+  var d = new Date();
+  d.toUTCString = null;
+  util.inspect(d);
+});
+
+assert.doesNotThrow(function () {
+  var r = /regexp/;
+  r.toString = null;
+  util.inspect(r);
+});

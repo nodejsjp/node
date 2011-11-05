@@ -19,13 +19,13 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// libuv-broken
+
 
 
 var common = require('../common');
 var assert = require('assert');
 
-// Regression test GH-511: https://github.com/ry/node/issues/issue/511
+// Regression test GH-511: https://github.com/joyent/node/issues/issue/511
 // Make sure nextTick loops quickly
 
 setTimeout(function() {
