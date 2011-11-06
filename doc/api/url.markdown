@@ -49,6 +49,9 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
 * `search`: The 'query string' portion of the URL, including the leading question mark.
 
   Example: `'?query=string'`
+* `path`: Concatenation of `pathname` and `search`.
+
+  Example: `'/p/a/t/h?query=string'`
 * `query`: Either the 'params' portion of the query string, or a querystring-parsed object.
 
   Example: `'query=string'` or `{'query':'string'}`
@@ -81,6 +84,9 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
 * `search`: URL のクエリ文字列。先頭の ? マークも含みます。
 
   例: `'?query=string'`
+* `path`: `pathname` と `search` を連結した文字列。
+
+  例: `'/p/a/t/h?query=string'`
 * `query`: クエリの変数部分の文字列、もしくはクエリ文字列を解析したオブジェクト。
 
   例: `'query=string'` or `{'query':'string'}`

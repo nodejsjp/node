@@ -33,6 +33,27 @@ fs.ReadStream into a zlib stream, then into an fs.WriteStream.
     inp.pipe(gzip).pipe(out);
 
 <!--
+Compressing or decompressing data in one step can be done by using
+the convenience methods.
+-->
+データの圧縮または解凍は [簡易メソッド](#convenience_Methods)
+を使うことにより、ワンステップで行うことができます。
+
+    var input = '.................................';
+    zlib.deflate(input, function(err, buffer) {
+      if (!err) {
+        console.log(buffer.toString('base64'));
+      }
+    });
+
+    var buffer = new Buffer('eJzT0yMAAGTvBe8=', 'base64');
+    zlib.unzip(buffer, function(err, buffer) {
+      if (!err) {
+        console.log(buffer.toString());
+      }
+    });
+
+<!--
 To use this module in an HTTP client or server, use the
 [accept-encoding](http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.3)
 on requests, and the
@@ -115,6 +136,63 @@ zlib.ht に定義された定数は `require('zlib')` でも定義されます�
 それらは zlib のドキュメントでより詳しく説明されます。
 詳細は <http://zlib.net/manual.html#Constants> を参照してください。
 
+### zlib.createGzip([options])
+
+<!--
+Returns a new [Gzip](#zlib.Gzip) object with an [options](#options).
+-->
+[options](#options) によって作られた新しい [Gzip](#zlib.Gzip)
+オブジェクトを返します。
+
+### zlib.createGunzip([options])
+
+<!--
+Returns a new [Gunzip](#zlib.Gunzip) object with an [options](#options).
+-->
+[options](#options) によって作られた新しい [Gunzip](#zlib.Gunzip)
+オブジェクトを返します。
+
+### zlib.createDeflate([options])
+
+<!--
+Returns a new [Deflate](#zlib.Deflate) object with an [options](#options).
+-->
+[options](#options) によって作られた新しい [Deflate](#zlib.Deflate)
+オブジェクトを返します。
+
+### zlib.createInflate([options])
+
+<!--
+Returns a new [Inflate](#zlib.Inflate) object with an [options](#options).
+-->
+[options](#options) によって作られた新しい [Inflate](#zlib.Inflate)
+オブジェクトを返します。
+
+### zlib.createDeflateRaw([options])
+
+<!--
+Returns a new [DeflateRaw](#zlib.DeflateRaw) object with an [options](#options).
+-->
+[options](#options) によって作られた新しい [DeflateRaw](#zlib.DeflateRaw)
+オブジェクトを返します。
+
+### zlib.createInflateRaw([options])
+
+<!--
+Returns a new [InflateRaw](#zlib.InflateRaw) object with an [options](#options).
+-->
+[options](#options) によって作られた新しい [InflateRaw](#zlib.InflateRaw)
+オブジェクトを返します。
+
+### zlib.createUnzip([options])
+
+<!--
+Returns a new [Unzip](#zlib.Unzip) object with an [options](#options).
+-->
+[options](#options) によって作られた新しい [Unzip](#zlib.Unzip)
+オブジェクトを返します。
+
+
 ### zlib.Gzip
 
 <!--
@@ -165,10 +243,74 @@ the header.
 -->
 Gzip または Deflate で圧縮されたストリームをヘッダで自動判別して解凍します。
 
-### Options
+## Convenience Methods
 
 <!--
-Each class takes an options object.  All options are optional.
+All of these take a string or buffer as the first argument, and call the
+supplied callback with `callback(error, result)`.  The
+compression/decompression engine is created using the default settings
+in all convenience methods.  To supply different options, use the
+zlib classes directly.
+-->
+これらは全て第 1 引数として文字列またはバッファを受け取り、
+与えられたコールバック `callback(error, result)` を呼び出します。
+全ての簡易メソッドで、圧縮・解凍エンジンはデフォルトの設定で作成されます。
+異なったオプションを与えるには、zlib のクラスを直接使用してください。
+
+### zlib.deflate(buf, callback)
+
+<!--
+Compress a string with Deflate.
+-->
+Deflate で文字列を圧縮します。
+
+### zlib.deflateRaw(buf, callback)
+
+<!--
+Compress a string with DeflateRaw.
+-->
+DeflateRaw で文字列を圧縮します。
+
+### zlib.gzip(buf, callback)
+
+<!--
+Compress a string with Gzip.
+-->
+Gzip で文字列を圧縮します。
+
+### zlib.gunzip(buf, callback)
+
+<!--
+Decompress a raw Buffer with Gunzip.
+-->
+Gunzip で生のバッファを解凍します。
+
+### zlib.inflate(buf, callback)
+
+<!--
+Decompress a raw Buffer with Inflate.
+-->
+Infrate で生のバッファを解凍します。
+
+### zlib.inflateRaw(buf, callback)
+
+<!--
+Decompress a raw Buffer with InflateRaw.
+-->
+InflateRaw で生のバッファを解凍します。
+
+### zlib.unzip(buf, callback)
+
+<!--
+Decompress a raw Buffer with Unzip.
+-->
+Unzip で生のバッファを解凍します。
+
+## Options
+
+<!--
+Each class takes an options object.  All options are optional.  (The
+convenience methods use the default settings for all options.)
 
 Note that some options are only
 relevant when compressing, and are ignored by the decompression classes.
@@ -183,7 +325,8 @@ See the description of `deflateInit2` and `inflateInit2` at
 <http://zlib.net/manual.html#Advanced> for more information on these.
 -->
 どのクラスもオプションオブジェクトを受け取ります。
-全てのオプションは任意です。
+全てのオプションは任意です
+(簡易メソッドは全てのオプションでデフォルト値を使用します)。
 
 いくつかのオプションは圧縮にだけ関連し、
 解凍するクラスでは無視されることに注意してください。

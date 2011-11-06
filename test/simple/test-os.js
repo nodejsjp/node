@@ -19,7 +19,7 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// libuv-broken
+
 
 
 var common = require('../common');
@@ -63,7 +63,7 @@ if (process.platform != 'sunos') {
 }
 
 
-var interfaces = os.getNetworkInterfaces();
+var interfaces = os.networkInterfaces();
 console.error(interfaces);
 switch (platform) {
   case 'linux':

@@ -60,11 +60,11 @@ Example:
 <!--
 
 Makes a request to a secure web server.
-Similar options to `http.request()`.
+All options from [http.request()](http.html#http.request) are valid.
 
 -->
 セキュアな Web サーバへのリクエストを作成します。
-`http.request()` と同様のオプションが指定できます。
+[http.request()](http.html#http.request) の全てと同様のオプションが指定できます。
 
 <!--
 
@@ -110,12 +110,31 @@ The options argument has the following options
 - path: Path to request. Default `'/'`.
 - method: HTTP request method. Default `'GET'`.
 
-The following options can also be specified.
-However, a global [Agent](http.html#http.Agent) cannot be used. 
+- `host`: A domain name or IP address of the server to issue the request to.
+  Defaults to `'localhost'`.
+- `hostname`: To support `url.parse()` `hostname` is prefered over `host`
+- `port`: Port of remote server. Defaults to 443.
+- `method`: A string specifying the HTTP request method. Defaults to `'GET'`.
+- `path`: Request path. Defaults to `'/'`. Should include query string if any.
+  E.G. `'/index.html?page=12'`
+- `headers`: An object containing request headers.
+- `auth`: Basic authentication i.e. `'user:password'` to compute an
+  Authorization header.
+- `agent`: Controls [Agent](#https.Agent) behavior. When an Agent is
+  used request will default to `Connection: keep-alive`. Possible values:
+ - `undefined` (default): use [globalAgent](#https.globalAgent) for this
+   host and port.
+ - `Agent` object: explicitly use the passed in `Agent`.
+ - `false`: opts out of connection pooling with an Agent, defaults request to
+   `Connection: close`.
 
-- key: Private key to use for SSL. Default `null`.
-- cert: Public x509 certificate to use. Default `null`.
-- ca: An authority certificate or array of authority certificates to check
+The following options from [tls.connect()](tls.html#tls.connect) can also be
+specified. However, a [globalAgent](#https.globalAgent) silently ignores these.
+
+- `key`: Private key to use for SSL. Default `null`.
+- `passphrase`: A string of passphrase for the private key. Default `null`.
+- `cert`: Public x509 certificate to use. Default `null`.
+- `ca`: An authority certificate or array of authority certificates to check
   the remote host against.
 
 In order to specify these options, use a custom `Agent`.
@@ -123,15 +142,31 @@ In order to specify these options, use a custom `Agent`.
 Example:
 
 -->
-- `host`: リクエストするホストのIPまたはドメイン。デフォルトは `'localhost'` です。
-- `port`: リクエストするホストのポート。デフォルトは 443 です。
+- `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
+   デフォルトは `'localhost'` です。
+- `hostname`: `url.parse()` サポート。`hostname` は `host` を上書きします。
+- `port`: リモートサーバのポート。デフォルトは 443 です。
+- `method`: HTTPS リクエストのメソッドの文字列。デフォルトは `'GET'` です。
 - `path`: リクエストのパス。デフォルトは `'/'` です。
-- `method`: HTTP りくえすとのメソッド。デフォルトは `'GET'` です。
+  必要なら問い合わせ文字列を含めるべきです．
+  例 `'/index.html?page=12'`
+- `headers`: リクエストヘッダを含むオブジェクト。
+- `auth`: べーしく認証すなわち Authorization ヘッダのための `'user:password'`。
+- `agent`: [Agent](#https.Agent) の振る舞いを制御します。
+  エージェントが使われる場合、`Connection:keep-alive` がデフォルトになります。
+  可能な値は:
+  - `undefined` (デフォルト): ホストとポートで
+    [グローバル Agent](#https.globalAgent) を使用します。
+  - `Agent` オブジェクト: 明示的に渡された `Agent` を使用します。
+  - `false`: Agent によるコネクションプーリングを使用しません。
+    `Connection:close` の場合のデフォルトです。
 
-以下のオプションを指定することもできますが、
-グローバル [エージェント](http.html#http.Agent) を使うことはできません。
+以下の [tls.connect()](tls.html#tls.connect) 由来のオプションを
+指定することもできますが、
+グローバル [エージェント](http.html#http.Agent) はこれらを無視します。
 
 - `key`: SSLで使用する秘密鍵。デフォルトは `null` です。
+- `passphrase`: 秘密鍵のパスフレーズを表す文字列。デフォルトは `null` です。
 - `cert`: x509公開証明書。デフォルトは `null` です。
 - `ca`: リモートホストをチェックする信頼できる認証局または認証局の配列。
 
@@ -208,5 +243,25 @@ Example:
     });
 
 
+## https.Agent
 
+<!--
 
+An Agent object for HTTPS similer to [http.Agent](http.html#http.Agent).
+See [https.request()](#https.request) for more information.
+
+-->
+
+HTTPS 用の Agent オブジェクトで，
+[http.Agent](http.html#http.Agent) と同様です。
+
+## https.globalAgent
+
+<!--
+
+Global instance of [https.Agent](#https.Agent) which is used as the default
+for all HTTPS client requests.
+
+-->
+全ての HTTPS クライアントリクエストで使用される、デフォルトの
+[https.Agent](#https.Agent) のインスタンスです。
