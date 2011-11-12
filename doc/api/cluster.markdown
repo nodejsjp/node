@@ -10,8 +10,8 @@ processes to handle the load.
 ユーザは時々 Node プロセスのクラスを起動して負荷を分散したくなります。
 
 <!--
-The cluster module allows you to easily create a network of processes all
-which share server ports.
+The cluster module allows you to easily create a network of processes that
+all share server ports.
 -->
 クラスタモジュールは、サーバポートを共有するプロセスのネットワークを
 簡単に構築することを可能にします。

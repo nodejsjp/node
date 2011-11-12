@@ -19,18 +19,66 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// Can't test this when 'make test' doesn't assign a tty to the stdout.
 var common = require('../common');
 var assert = require('assert');
+var path = require('path');
+var fs = require('fs');
 
-var exceptionCaught = false;
-
-try {
-  process.stdout.end();
-} catch(e) {
-  exceptionCaught = true;
-  assert.ok(common.isError(e));
-  assert.equal('process.stdout cannot be closed', e.message);
+function unlink(pathname) {
+  try {
+    fs.rmdirSync(pathname);
+  } catch (e) {
+  }
 }
 
-assert.ok(exceptionCaught);
+(function() {
+  var ncalls = 0;
+  var pathname = common.tmpDir + '/test1';
+
+  unlink(pathname);
+
+  fs.mkdir(pathname, function(err) {
+    assert.equal(err, null);
+    assert.equal(path.existsSync(pathname), true);
+    ncalls++;
+  });
+
+  process.on('exit', function() {
+    unlink(pathname);
+    assert.equal(ncalls, 1);
+  });
+})();
+
+(function() {
+  var ncalls = 0;
+  var pathname = common.tmpDir + '/test2';
+
+  unlink(pathname);
+
+  fs.mkdir(pathname, 511 /*=0777*/, function(err) {
+    assert.equal(err, null);
+    assert.equal(path.existsSync(pathname), true);
+    ncalls++;
+  });
+
+  process.on('exit', function() {
+    unlink(pathname);
+    assert.equal(ncalls, 1);
+  });
+})();
+
+(function() {
+  var pathname = common.tmpDir + '/test3';
+
+  unlink(pathname);
+  fs.mkdirSync(pathname);
+
+  var exists = path.existsSync(pathname);
+  unlink(pathname);
+
+  assert.equal(exists, true);
+})();
+
+// Keep the event loop alive so the async mkdir() requests
+// have a chance to run (since they don't ref the event loop).
+process.nextTick(function(){});

@@ -25,7 +25,7 @@ var assert = require('assert');
 var spawn = require('child_process').spawn;
 var debug = require('_debugger');
 
-var script = common.fixturesDir + '/breakpoints.js';
+var script = common.fixturesDir + '/breakpoints_utf8.js';
 
 var child = spawn(process.execPath, ['debug', script]);
 
@@ -58,20 +58,15 @@ child.on('line', function(line) {
 function addTest(input, output) {
   function next() {
     if (expected.length > 0) {
-      var res = child.stdin.write(expected[0].input + '\n'),
-          callback;
+      child.stdin.write(expected[0].input + '\n');
 
       if (!expected[0].lines) {
-        callback = expected[0].callback;
-        expected.shift();
-      }
+        setTimeout(function() {
+          var callback = expected[0].callback;
+          expected.shift();
 
-      if (callback) {
-        if (res !== true) {
-          child.stdin.on('drain', callback);
-        } else {
-          process.nextTick(callback);
-        }
+          callback && callback();
+        }, 50);
       }
     } else {
       finish();
@@ -95,7 +90,7 @@ addTest('n', [
 ]);
 
 // Watch
-addTest('watch("\'x\'"), true', [/true/]);
+addTest('watch("\'x\'")');
 
 // Continue
 addTest('c', [
@@ -112,7 +107,7 @@ addTest('watchers', [
 ]);
 
 // Unwatch
-addTest('unwatch("\'x\'"), true', [ /true/ ]);
+addTest('unwatch("\'x\'")');
 
 // Step out
 addTest('o', [
@@ -165,6 +160,7 @@ setTimeout(function() {
 process.once('uncaughtException', function(e) {
   quit();
   console.error(e.toString());
+  child.kill('SIGKILL');
   process.exit(1);
 });
 
