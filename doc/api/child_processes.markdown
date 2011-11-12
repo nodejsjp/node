@@ -395,7 +395,7 @@ For example:
 
 <!--
 
-And then the child script, `'sub.js'` would might look like this:
+And then the child script, `'sub.js'` might look like this:
 
 -->
 そして子スクリプトの `'sub.js'` は次のようになります:

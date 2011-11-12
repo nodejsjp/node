@@ -62,15 +62,21 @@ header on responses.
 
 **Note: these examples are drastically simplified to show
 the basic concept.**  Zlib encoding can be expensive, and the results
-ought to be cached.  See <a href="#memory_Usage_Tuning">Memory Usage
-Tuning</a> below for more information on the speed/memory/compression
+ought to be cached.  See [Memory Usage Tuning](#memory_Usage_Tuning)
+below for more information on the speed/memory/compression
 tradeoffs involved in zlib usage.
 -->
 このモジュールを HTTP クライアントとサーバで使うには、リクエストに
 [accept-encoding](http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.3)
-ヘッダ、レスポンスに
+ヘッダを、レスポンスに
 [content-encoding](http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.11)
 ヘッダを使用します。
+
+**注意:
+これらのサンプルは基本コンセプトを見せるためにとても単純化されています。**
+Zlib エンコーディングは高価なので、結果はキャッシュされるべきです。
+zlibの使い方に関する速度／メモリ／圧縮率のトレードオフについてより詳しくは、
+後述の [Memory Usage Tuning](#memory_Usage_Tuning) を参照してください。
 
     // client request example
     var zlib = require('zlib');
