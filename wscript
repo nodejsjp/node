@@ -634,12 +634,11 @@ def uv_cmd(bld, variant):
   #
   cmd = 'cp -r ' + sh_escape(srcdir)  + '/* ' + sh_escape(blddir)
   if not sys.platform.startswith('win32'):
-    cmd += ' && if [[ -z "$NODE_MAKE" ]]; then NODE_MAKE=make; fi; '
-    cmd += '$NODE_MAKE -C ' + sh_escape(blddir)
+    make = ('if [ -z "$NODE_MAKE" ]; then NODE_MAKE=make; fi; '
+            '$NODE_MAKE -C ' + sh_escape(blddir))
   else:
-    cmd += ' && make -C ' + sh_escape(blddir)
-  cmd += ' clean all'
-  return cmd
+    make = 'make -C ' + sh_escape(blddir)
+  return '%s && (%s clean) && (%s all)' % (cmd, make, make)
 
 
 def build_uv(bld):
@@ -959,7 +958,8 @@ def build(bld):
   # Only install the man page if it exists.
   # Do 'make doc install' to build and install it.
   if os.path.exists('doc/node.1'):
-    bld.install_files('${PREFIX}/share/man/man1/', 'doc/node.1')
+    prefix = 'bsd' in sys.platform and '${PREFIX}' or '${PREFIX}/share'
+    bld.install_files(prefix + '/man/man1/', 'doc/node.1')
 
   bld.install_files('${PREFIX}/bin/', 'tools/node-waf', chmod=0755)
   bld.install_files('${LIBDIR}/node/wafadmin', 'tools/wafadmin/*.py')

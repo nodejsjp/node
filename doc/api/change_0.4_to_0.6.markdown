@@ -1,6 +1,7 @@
-# v0.4 から v0.6 で変更された API
+## v0.4 から v0.6 で変更された API
 
-## 変更:
+### Changed:
+
  * Cygwin はもうサポートされません．Windows ネイティブ版を使用してください．
 
  * `Buffer`
@@ -11,7 +12,7 @@
    * Unix パイプを通じてファイル記述子を送ることはできなくなりました．`child_process.fork()` を通じてハンドルを渡してください．
 
  * `dgram`
-   * `dgram.createSocket()` で `'unix_dgram'` はサポートされなくなりました．Unix ドメインのデータグラムは，インターネットドメインのデータグラム (UDP) では *ない* ことに注意してください．それはサポートされています．
+   * `dgram.createSocket()` で `'unix_dgram'` はサポートされなくなりました．代わりに [bnoordhuis/node-unix-dgram](https://github.com/bnoordhuis/node-unix-dgram) を使用してください．Unix ドメインのデータグラムは，インターネットドメインのデータグラム (UDP) では *ない* ことに注意してください．それはサポートされています．
 
  * `dns`
    * `dns.lookup` は C-Ares ではなく，スレッドプール上で `getaddrinfo` を使うようになりました．DNS モジュールのその他のメソッドは C-Ares を使用します．ルックアップにシステムリゾルバを使用するのは，mDNS や /et/host ファイル，nsswitch その他を使用してフックしやすいために便利です．従来，`dns.lookup()` は `"****"` のような不正なドメイン名に対して `EBADNAME` エラーを返していました．`getaddrinfo()` はそれとは異なり，不正なドメインに対して `ENOTFOUND` (別名 `NXDOMAIN`) を返していました．そのため，`dns.lookup()` は `"****"` のような不正なドメインに対して `ENOTFOUND` を返すようになりました．
@@ -23,7 +24,6 @@
  * `fs`
    * `fs.mkdir()` および `fs.mkdirSync()` の `mode` 引数がオプションになりました (デフォルトは `0777`)．
    * `fs.symlink()` はオプションの `mode` 引数を受け取るようになりました．それは `'dir'` または `'file'` を指定することができます．デフォルトは `'file'` です．この引数は Windows でのみ必要です (その他のプラットフォームでは無視されます)．
-   * `fs.watchFile()` は `fs.watch()` に置き換えられました．
 
  * `http`
    * `http.request()` と `http.get()` はデフォルトで `Connection: Keep-Alive` を使うようになりました．
@@ -56,13 +56,16 @@
      });
      ```
 
- * V8 (v3.1 to v3.7)
+ * `stream`
+   * `stream.pipe()` は，`pause()/resume()` を実装していないソースストリーム上で `'pause'/'resume'` イベントを生成しなくなりました．
+
+ * V8 (v3.1 to v3.6)
    * `RegExp` は `Function` ではなくなりました (ES5 準拠)．`RegExp.exec()` を使用してください．
    * `Date` のフォーマット文字列がタイムゾーンを含まない場合 (例: `new Date('2011-06-06')`) は，ローカルのタイムゾーンではなく UTC に基づきます (ES5 準拠).明示的にタイムゾーンを指定してください (例: `new Date('2011-06-06 00:00:00 +09:00')`)．
    * `Error` の全ての標準プロパティは列挙されなくなりました (ES5 準拠). それらを表示したい場合は `util.inspect(err, true)` を使用してください．
 
 
-## 追加:
+### Added:
 
  * `assert`
    * `assert.ok(val)` の短縮版 `assert(val)`
@@ -81,13 +84,13 @@
    * `child_process.fork()`
 
  * `cluster`
-   * `node cluster` [API docs](http://nodejs.org/docs/latest/api/cluster.html) を参照してください．
+   * `node cluster` [API docs](cluster.html) を参照してください．
 
  * `crypto`
    * `crypto.createDiffieHellman()`, `crypto.pbkdf2()`, `crypto.randomBytes()`
 
  * `fs`
-   * `fs.utimes()/utimesSync()`, `fs.futimes()/futimesSync()`
+   * `fs.watch()`, `fs.utimes()/utimesSync()`, `fs.futimes()/futimesSync()`
    * `fs.createReadStream()` と `fs.createWriteStream()` に `start` オプションが追加されました．
 
  * `http`
@@ -119,10 +122,10 @@
    * `tls.connect()` に `session` オプションが追加されました．
    * `tls.CryptoStream.getSession()`
    * `tls.CleartextStream.address()`, `remoteAddress`, `remotePort`
-   * `tls.Server` が [NPN (Next Protocol Negotitation) と SNI (Server Name Indication)](http://nodejs.jp/nodejs.org_ja/api/tls.html#nPN_and_SNI) をサポートしました．
+   * `tls.Server` が [NPN (Next Protocol Negotitation) と SNI (Server Name Indication)](tls.html#nPN_and_SNI) をサポートしました．
 
  * `util`
    * `util.format()`, `util.isArray()`, `util.isRegExp()`, `uitl.isDate()`, `util.isError()`.
 
  * `zlib` モジュール
-   * [API docs](http://nodejs.jp/nodejs.org_ja/api/zlib.html) を参照してください．
+   * [API docs](zlib.html) を参照してください．
