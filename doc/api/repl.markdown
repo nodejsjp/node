@@ -145,6 +145,7 @@ connect to a long-running node process without restarting it.
 <!--
 
 Inside the REPL, Control+D will exit.  Multi-line expressions can be input.
+Tab completion is supported for both global and local variables.
 
 -->
 REPL の中で Control+D を実行すると終了します。複数行に渡る式を入力とすることができます。
@@ -205,12 +206,20 @@ There are a few special REPL commands:
     multi-line expression.
   - `.exit` - Close the I/O stream, which will cause the REPL to exit.
   - `.help` - Show this list of special commands.
+  - `.save` - Save the current REPL session to a file
+    >.save ./file/to/save.js
+  - `.load` - Load a file into the current REPL session.
+    >.load ./file/to/load.js
 
 -->
   - `.break` - 複数行に渡って式を入力している間に、途中で分からなくなったり完了させなくても良くなることがあります。`.break` で最初からやり直します。
   - `.clear` - `context` オブジェクトを空の状態にリセットし、複数行に入力している式をクリアします。
   - `.exit` - I/Oストリームを閉じ、REPLを終了させます。
   - `.help` - このコマンドの一覧を表示します。
+  - `.save` - 現在の REPL セッションをファイルに保存します。
+    >.save ./file/to/save.js
+  - `.load` - 現在の REPL セッションにファイルをロードします。
+    >.load ./file/to/load.js
 
 <!--
 

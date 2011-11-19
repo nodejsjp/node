@@ -454,7 +454,7 @@ Synchronous rmdir(2).
 <!--
 
 Asynchronous mkdir(2). No arguments other than a possible exception are given
-to the completion callback. `mode` defaults to `0777`. 
+to the completion callback. `mode` defaults to `0777`.
 
 -->
 非同期の mkdir(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
@@ -845,13 +845,20 @@ time the file is accessed.
 <!--
 
 The second argument is optional. The `options` if provided should be an object
-containing two members a boolean, `persistent`, and `interval`, a polling
-value in milliseconds. The default is `{ persistent: true, interval: 0 }`.
+containing two members a boolean, `persistent`, and `interval`. `persistent`
+indicates whether the process should continue to run as long as files are
+being watched. `interval` indicates how often the target should be polled,
+in milliseconds. (On Linux systems with inotify, `interval` is ignored.) The
+default is `{ persistent: true, interval: 0 }`.
 
 -->
 第 2 引数はオプションです．
-`options` が与えられる場合、それは boolean の `persistent` と、
-ポーリング間隔をミリ秒で表す `interval` の二つのメンバを含むオブジェクトです。
+`options` が与えられる場合、それは boolean の `persistent` と `interval`
+の二つのメンバを含むオブジェクトです。
+`persistent` はファイルが監視されている間、
+プロセスが実行し続けることを示します。
+`interval` は対象をポーリングする間隔をミリ秒で示します
+(inotify を備えた Linux システムでは `interval` は無視されます)。
 デフォルトは `{ persistent: true, interval: 0}` です。
 
 <!--
@@ -897,7 +904,9 @@ Watch for changes on `filename`, where `filename` is either a file or a
 directory.  The returned object is [fs.FSWatcher](#fs.FSWatcher).
 
 The second argument is optional. The `options` if provided should be an object
-containing a boolean member `persistent`.  The default is `{ persistent: true }`.
+containing a boolean member `persistent`, which indicates whether the process
+should continue to run as long as files are being watched. The default is
+`{ persistent: true }`.
 
 The listener callback gets two arguments `(event, filename)`.  `event` is either
 'rename' or 'change', and `filename` is the name of the file which triggered
@@ -917,7 +926,10 @@ callback, and have some fallback logic if it is null.
 
 第 2 引数はオプションです。
 もし指定されるなら、`options` は boolean の `persistent` プロパティを
-持つオブジェクトであるべきです。デフォルトは `{ persistent: true }` です。
+持つオブジェクトであるべきです。
+`persistent` はファイルが監視されている間、
+プロセスが実行し続けることを示します。
+デフォルトは `{ persistent: true }` です。
 
 リスナーコールバックは二つの引数 `(event, filename)` を与えられます。
 `event` は `'rename'` または `'change'`、そして `filename` はイベントを
