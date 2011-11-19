@@ -776,7 +776,7 @@ HTTP は、トレーラを生成するならそのヘッダフィールドのリ
 `Trailer` ヘッダを送信することを要求していることに注意してください。
 
     response.writeHead(200, { 'Content-Type': 'text/plain',
-                              'Trailer': 'TraceInfo' });
+                              'Trailer': 'Content-MD5' });
     response.write(fileData);
     response.addTrailers({'Content-MD5': "7895bf4b8828b55ceaf47747b4bca667"});
     response.end();
