@@ -127,7 +127,7 @@
    * `tls.connect()` に `session` オプションが追加されました．
    * `tls.CryptoStream.getSession()`
    * `tls.CleartextStream.address()`, `remoteAddress`, `remotePort`
-   * `tls.Server` が [NPN (Next Protocol Negotitation) と SNI (Server Name Indication)](tls.html#nPN_and_SNI) をサポートしました．
+   * `tls.Server` が [NPN (Next Protocol Negotiation) と SNI (Server Name Indication)](tls.html#nPN_and_SNI) をサポートしました．
 
  * `util`
    * `util.format()`, `util.isArray()`, `util.isRegExp()`, `uitl.isDate()`, `util.isError()`.
