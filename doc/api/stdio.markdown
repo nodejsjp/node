@@ -21,9 +21,9 @@ Prints to stdout with newline. This function can take multiple arguments in a
     console.log('count: %d', count);
 
 <!--
-If formating elements are not found in the first string then `util.inspect`
+If formatting elements are not found in the first string then `util.inspect`
 is used on each argument.
-See [util.format()](util.html#util.format) for more infomation.
+See [util.format()](util.html#util.format) for more information.
 -->
 最初の引数文字列からフォーマット要素が見つからなかった場合は、
 `util.inspect` が各引数に使われます。

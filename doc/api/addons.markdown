@@ -113,6 +113,9 @@ Note that all Node addons must export an initialization function:
 <!--
 There is no semi-colon after `NODE_MODULE` as it's not a function (see `node.h`).
 
+The `module_name` needs to match the filename of the final binary (minus the
+.node suffix).
+
 The source code needs to be built into `hello.node`, the binary Addon. To
 do this we create a file called `wscript` which is python code and looks
 like this:
@@ -120,6 +123,10 @@ like this:
 -->
 `NODE_MODULE` は関数ではないので、その後にセミコロンを付けてはいけません
 (`node.h` を参照してください)。
+
+`module_name` は最終的なバイナリのファイル名 (拡張子 .node を除く)
+とマッチする必要があります。
+
 このソースコードは、`hello.node` というバイナリアドオンとしてビルドされる必要が有ります。
 そのために `wscript` と呼ばれる以下のようなコードを Python で書きました:
 

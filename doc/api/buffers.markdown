@@ -839,7 +839,7 @@ given it will fill the entire buffer.
 
 <!--
 How many bytes will be returned when `buffer.inspect()` is called. This can
-be overriden by user modules.
+be overridden by user modules.
 -->
 `buffer.inspect()` が呼び出された場合に返すバイト数です。
 これはユーザモジュールによって上書きすることができます。
