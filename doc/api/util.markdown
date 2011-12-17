@@ -93,7 +93,7 @@ Output with timestamp on `stdout`.
     require('util').log('Timestamped message.');
 
 
-### util.inspect(object, showHidden=false, depth=2)
+### util.inspect(object, showHidden=false, depth=2, colors=false)
 
 <!--
 
@@ -130,6 +130,12 @@ in `null` for `depth`.
 デフォルトでは 2 回だけ再帰します。
 無限に再帰するには、`depth` に `null` を渡します。
 
+<!--
+
+If `colors` is `true`, the output will be styled with ANSI color codes.
+
+-->
+`colors` が `true` の場合、出力は ANSI カラーコードで色づけされます。
 
 <!--
 
