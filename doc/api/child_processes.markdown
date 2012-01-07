@@ -117,7 +117,7 @@ Example:
     grep.stdin.end();
 
 
-### child_process.spawn(command, args=[], [options])
+### child_process.spawn(command, [args], [options])
 
 <!--
 
@@ -473,7 +473,8 @@ processes:
     });
 
 
-### child.kill(signal='SIGTERM')
+
+### child.kill([signal])
 
 <!--
 

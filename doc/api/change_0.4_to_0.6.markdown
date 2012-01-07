@@ -100,6 +100,7 @@
 
  * `http`
    * `http.ClientRequest.setTimeout()/setNoDelay()/setSocketKeepAlive()`
+   * `http.request()` に `auth` オプションが追加されました．
 
  * `https`
    * `https.createServer()`，`https.request()`，`https.get()` に `passphrase` オプションが追加されました．

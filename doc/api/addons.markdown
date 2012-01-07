@@ -180,8 +180,8 @@ the recently built module:
 <!--
 
 For the moment, that is all the documentation on addons. Please see
-<https://github.com/ry/node_postgres> for a real example.
+<https://github.com/pietern/hiredis-node> for a real example.
 
 -->
 現時点では、アドオンのドキュメントはこれで全てです。
-実際の例は、<https://github.com/ry/node_postgres> を参照してください。
+実際の例は、<https://github.com/pietern/hiredis-node> を参照してください。
