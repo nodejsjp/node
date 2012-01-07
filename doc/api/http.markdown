@@ -233,11 +233,14 @@ UNIX ドメインソケットを待ち受ける場合、ポートとホスト名
 
 <!--
 
-This function is asynchronous. The last parameter `callback` will be called
-when the server has been bound to the port.
+This function is asynchronous. The last parameter `callback` will be added as
+a listener for the ['listening'](net.html#event_listening_) event.
+See also [net.Server.listen()](net.html#server.listen).
 
 -->
-この関数は非同期です。最後の引数の `callback` はサーバがポートをバインドすると呼び出されます。
+この関数は非同期です。最後の引数の `callback` は
+['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
+詳細は [net.Server.listen()](net.html#server.listen) を参照してください。
 
 
 ### server.listen(path, [callback])
@@ -251,11 +254,14 @@ Start a UNIX socket server listening for connections on the given `path`.
 
 <!--
 
-This function is asynchronous. The last parameter `callback` will be called
-when the server has been bound.
+This function is asynchronous. The last parameter `callback` will be added as
+a listener for the ['listening'](net.html#event_listening_) event.
+See also [net.Server.listen()](net.html#server.listen).
 
 -->
-この関数は非同期です。最後の引数の `callback` はサーバがバインドすると呼び出されます。
+この関数は非同期です。最後の引数の `callback` は
+['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
+詳細は [net.Server.listen()](net.html#server.listen) を参照してください。
 
 
 ### server.close()
@@ -263,6 +269,7 @@ when the server has been bound.
 <!--
 
 Stops the server from accepting new connections.
+See [net.Server.close()](net.html#server.close).
 
 -->
 サーバが新しいコネクションを受け付けるのを終了します。
@@ -333,8 +340,8 @@ Indicates that the underlaying connection was terminated before
 `response.end()` was called or able to flush.
 
 -->
-`response.end()` が呼び出されたり、フラッシュされる前に下層の接続が
-切断されたことを示します。
+`response.end()` が呼び出されたりフラッシュされる前に、
+下層の接続が切断されたことを示します。
 
 <!--
 
@@ -458,7 +465,7 @@ HTTP プロトコルのバージョンを表す文字列です。参照のみ可
 `request.httpVersionMinor` は 2 番目の整数です。
 
 
-### request.setEncoding(encoding=null)
+### request.setEncoding([encoding])
 
 <!--
 
@@ -525,6 +532,19 @@ passed as the second parameter to the `'request'` event. It is a `Writable Strea
 このオブジェクトは HTTP サーバ内部 － ユーザではなく － で作成されます。
 `'request'` リスナーの第 2 引数として渡されます。
 これは `Writable Stream` です。
+
+### Event: 'close'
+
+`function () { }`
+
+<!--
+
+Indicates that the underlaying connection was terminated before
+`response.end()` was called or able to flush.
+
+-->
+`response.end()` が呼び出されたりフラッシュされる前に、
+下層の接続が切断されたことを示します。
 
 ### response.writeContinue()
 
@@ -694,7 +714,7 @@ Example:
     response.removeHeader("Content-Encoding");
 
 
-### response.write(chunk, encoding='utf8')
+### response.write(chunk, [encoding])
 
 <!--
 
@@ -1279,7 +1299,7 @@ A client server pair that show you how to listen for the `upgrade` event using `
 
 ### Event: 'continue'
 
-`function ()`
+`function () { }`
 
 <!--
 
@@ -1292,7 +1312,7 @@ the client should send the request body.
 サーバが '100 Continue' HTTP レスポンスを送信することで生成されます。
 これはクライアントがリクエストボディを送信すべき事を示します。
 
-### request.write(chunk, encoding='utf8')
+### request.write(chunk, [encoding])
 
 <!--
 
@@ -1317,11 +1337,12 @@ or a string.
 
 <!--
 
-The `encoding` argument is optional and only
-applies when `chunk` is a string.
+The `encoding` argument is optional and only applies when `chunk` is a string.
+Defaults to `'utf8'`.
 
 -->
 `encoding` 引数はオプションで、`chunk` が文字列の場合だけ適用されます。
+デフォルトは `'utf8'` です。
 
 
 ### request.end([data], [encoding])
@@ -1339,8 +1360,8 @@ chunked, this will send the terminating `'0\r\n\r\n'`.
 
 <!--
 
-If `data` is specified, it is equivalent to calling `request.write(data, encoding)`
-followed by `request.end()`.
+If `data` is specified, it is equivalent to calling
+`request.write(data, encoding)` followed by `request.end()`.
 
 -->
 `data` が指定された場合は、
@@ -1366,7 +1387,7 @@ will be called.
 [socket.setTimeout(timeout, [callback])](net.html#socket.setTimeout)
 が呼び出されます。
 
-### request.setNoDelay(noDelay=true)
+### request.setNoDelay([noDelay])
 
 <!--
 Once a socket is assigned to this request and is connected 
@@ -1378,7 +1399,7 @@ will be called.
 が呼び出されます。
 
 
-### request.setSocketKeepAlive(enable=false, [initialDelay])
+### request.setSocketKeepAlive([enable], [initialDelay])
 
 <!--
 Once a socket is assigned to this request and is connected 
@@ -1492,12 +1513,13 @@ The response trailers object. Only populated after the 'end' event.
 レスポンスのトレーラオブジェクトです。
 'end' イベントの後にだけ発生します。
 
-### response.setEncoding(encoding=null)
+### response.setEncoding([encoding])
 
 <!--
 
-Set the encoding for the response body. Either `'utf8'`, `'ascii'`, or `'base64'`.
-Defaults to `null`, which means that the `'data'` event will emit a `Buffer` object..
+Set the encoding for the response body. Either `'utf8'`, `'ascii'`, or
+`'base64'`. Defaults to `null`, which means that the `'data'` event will emit
+a `Buffer` object..
 
 -->
 レスポンスボディのエンコーディングを設定します。

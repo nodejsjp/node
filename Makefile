@@ -42,6 +42,7 @@ test-valgrind: all
 
 test-all: all
 	python tools/test.py --mode=debug,release
+	make test-npm
 
 test-all-http1: all
 	python tools/test.py --mode=debug,release --use-http1
@@ -67,6 +68,11 @@ test-pummel: all
 test-internet: all
 	python tools/test.py internet
 
+test-npm: all
+	./node deps/npm/test/run.js
+
+test-npm-publish: all
+	npm_package_config_publishtest=true ./node deps/npm/test/run.js
 
 out/Release/node: all
 
@@ -120,7 +126,7 @@ out/doc/api/%.html: doc/api/%.markdown out/Release/node $(apidoc_dirs) $(apiasse
 out/doc/%:
 
 website-upload: doc
-	scp -r out/doc/* $(web_root)
+	rsync -r out/doc/ node@nodejs.org:~/web/nodejs.org/
 
 docopen: out/doc/api/all.html
 	-google-chrome out/doc/api/all.html
@@ -156,8 +162,8 @@ pkg: $(PKG)
 
 $(PKG):
 	-rm -rf $(PKGDIR)
-	$(WAF) configure --prefix=/usr/local
-	DESTDIR=$(PKGDIR) $(WAF) install 
+	$(WAF) configure --prefix=/usr/local --without-snapshot
+	DESTDIR=$(PKGDIR) $(WAF) install
 	$(packagemaker) \
 		--id "org.nodejs.NodeJS-$(VERSION)" \
 		--doc tools/osx-pkg.pmdoc \

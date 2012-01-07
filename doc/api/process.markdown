@@ -307,7 +307,7 @@ An object containing the user environment. See environ(7).
 ユーザの環境を含むオブジェクトです。environ(7) を参照してください。
 
 
-### process.exit(code=0)
+### process.exit([code])
 
 <!--
 
@@ -457,7 +457,7 @@ A compiled-in property that exposes `NODE_PREFIX`.
     console.log('Prefix: ' + process.installPrefix);
 
 
-### process.kill(pid, signal='SIGTERM')
+### process.kill(pid, [signal])
 
 <!--
 
