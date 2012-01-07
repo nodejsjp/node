@@ -353,17 +353,21 @@ Synchronous link(2).
 -->
 同期の link(2)。
 
-### fs.symlink(linkdata, path, [callback])
+### fs.symlink(linkdata, path, [type], [callback])
 
 <!--
 
 Asynchronous symlink(2). No arguments other than a possible exception are given
 to the completion callback.
+`type` argument can be either `'dir'` or `'file'` (default is `'file'`).  It is only 
+used on Windows (ignored on other platforms).
 
 -->
 非同期の symlink(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+`type` 引数は `'dir'` または `'file'` (デフォルトは `'file'`) です。
+これは Windows でのみ使われます (他のプラットフォームでは無視されます)。
 
-### fs.symlinkSync(linkdata, path)
+### fs.symlinkSync(linkdata, path, [type])
 
 <!--
 
@@ -672,15 +676,17 @@ written.
 -->
 同期版のバッファに基づく `fs.write()`。書き込まれたバイト数を返します。
 
-### fs.writeSync(fd, str, position, encoding='utf8')
+### fs.writeSync(fd, str, position, [encoding])
 
 <!--
 
-Synchronous version of string-based `fs.write()`. Returns the number of _bytes_
-written.
+Synchronous version of string-based `fs.write()`. `encoding` defaults to
+`'utf8'`. Returns the number of _bytes_ written.
 
 -->
-同期版の文字列に基づく `fs.write()`。書き込まれたバイト数を返します。
+同期版の文字列に基づく `fs.write()`。
+`encoding` のデフォルトは `'utf8'` です。
+書き込まれたバイト数を返します。
 
 ### fs.read(fd, buffer, offset, length, position, [callback])
 
@@ -797,19 +803,20 @@ returns a buffer.
 そうでなければバッファを返します。
 
 
-### fs.writeFile(filename, data, encoding='utf8', [callback])
+### fs.writeFile(filename, data, [encoding], [callback])
 
 <!--
 
 Asynchronously writes data to a file, replacing the file if it already exists.
 `data` can be a string or a buffer. The `encoding` argument is ignored if
-`data` is a buffer.
+`data` is a buffer. It defaults to `'utf8'`.
 
 -->
 非同期にデータをファイルに書き込みます。
 ファイルが既に存在する場合は置き換えられます。
 `data` は文字列またはバッファです。
 `data` がバッファの場合、`encoding` は無視されます。
+デフォルトは `'utf8'` です。
 
 <!--
 
@@ -823,7 +830,7 @@ Example:
       console.log('It\'s saved!');
     });
 
-### fs.writeFileSync(filename, data, encoding='utf8')
+### fs.writeFileSync(filename, data, [encoding])
 
 <!--
 

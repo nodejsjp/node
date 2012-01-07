@@ -93,7 +93,7 @@ Output with timestamp on `stdout`.
     require('util').log('Timestamped message.');
 
 
-### util.inspect(object, showHidden=false, depth=2, colors=false)
+### util.inspect(object, [showHidden], [depth], [colors])
 
 <!--
 
@@ -105,11 +105,12 @@ Return a string representation of `object`, which is useful for debugging.
 <!--
 
 If `showHidden` is `true`, then the object's non-enumerable properties will be
-shown too.
+shown too. Defaults to `false`.
 
 -->
 `showHidden` が `true` の場合、
 オブジェクトの Enumerable でないプロパティも表示されます。
+デフォルトは `false` です。
 
 <!--
 
@@ -133,9 +134,11 @@ in `null` for `depth`.
 <!--
 
 If `colors` is `true`, the output will be styled with ANSI color codes.
+Defaults to `false`.
 
 -->
 `colors` が `true` の場合、出力は ANSI カラーコードで色づけされます。
+デフォルトは `false` です。
 
 <!--
 

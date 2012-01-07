@@ -535,16 +535,16 @@ Node は、ソケットに書き込まれるデータを内部のキューに入
 
 大きな、あるいは増大する `bufferSize` を体験したユーザは、そのプログラムで `pause()` および `resume()` を使ってデータフローを「抑えよう」としなければなりません。
 
-#### socket.setEncoding(encoding=null)
+#### socket.setEncoding([encoding])
 
 <!--
 
 Sets the encoding (either `'ascii'`, `'utf8'`, or `'base64'`) for data that is
-received.
+received. Defaults to `null`.
 
 -->
 受信したデータのエンコーディングを設定します (`'ascii'`、`'utf8'`、
-あるいは `'base64'` のいずれかです)。
+あるいは `'base64'` のいずれかです)。デフォルトは `null` です。
 
 #### socket.setSecure()
 
@@ -686,36 +686,43 @@ The optional `callback` parameter will be added as a one time listener for the
 -->
 オプションの `callback` 引数は、`timeouot` イベントの一回限りのリスナを追加します。
 
-#### socket.setNoDelay(noDelay=true)
+#### socket.setNoDelay([noDelay])
 
 <!--
 
 Disables the Nagle algorithm. By default TCP connections use the Nagle
-algorithm, they buffer data before sending it off. Setting `noDelay` will
-immediately fire off data each time `socket.write()` is called.
+algorithm, they buffer data before sending it off. Setting `true` for
+`noDelay` will immediately fire off data each time `socket.write()` is called.
+`noDelay` defaults to `true`.
 
 -->
 Nagle アルゴリズムを無効にします。
 デフォルトでは TCP コネクションは Nagle アルゴリズムを使用し、データを送信する前にバッファリングします。
-`noDelay` に設定すると、データは `socket.write()` を呼び出す度に即座に送信されます。
+`noDelay` に `true` を設定すると、データは `socket.write()`
+を呼び出す度に即座に送信されます。デフォルトは `true` です。
 
-#### socket.setKeepAlive(enable=false, [initialDelay])
+#### socket.setKeepAlive([enable], [initialDelay])
 
 <!--
 
 Enable/disable keep-alive functionality, and optionally set the initial
 delay before the first keepalive probe is sent on an idle socket.
+`enable` defaults to `false`.
+
 Set `initialDelay` (in milliseconds) to set the delay between the last
 data packet received and the first keepalive probe. Setting 0 for
 initialDelay will leave the value unchanged from the default
-(or previous) setting.
+(or previous) setting. Defaults to `0`.
 
 -->
 キープアライブ機能を有効/無効にします。
 オプションで最初の keepalive probe がアイドルソケットに送信されるまでの初期遅延を設定します。
+`enable` のデフォルトは `false` です。
+
 `initialDelay` (ミリ秒) が設定されると、
 最後にデータパケットを受信してから最初の keepalive probe までの遅延が設定されます。
 初期遅延に 0 が設定されると、デフォルト設定から値を変更されないようにします。
+デフォルトは `0` です。
 
 #### socket.address()
 

@@ -511,6 +511,20 @@ TLS サーバの設定に依存しますが、認証されていないコネク�
 `cleartextStream.servername` は、SNI でリクエストされたサーバ名を持つ
 文字列です。
 
+#### Event: 'clientError'
+
+`function (exception) { }`
+
+<!--
+
+When a client connection emits an 'error' event before secure connection is
+established - it will be forwarded here.
+
+-->
+セキュアコネクションが確立される前にクライアントコネクションが
+`'error'` イベントを発した場合 － ここに転送されます。
+
+
 #### server.listen(port, [host], [callback])
 
 <!--
