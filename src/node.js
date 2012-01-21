@@ -77,8 +77,8 @@
       var module = new Module('eval');
       module.filename = path.join(cwd, 'eval');
       module.paths = Module._nodeModulePaths(cwd);
-      module._compile('eval(process._eval)', 'eval');
-
+      var result = module._compile('return eval(process._eval)', 'eval');
+      if (process._print_eval) console.log(result);
     } else if (process.argv[1]) {
       // make process.argv[1] into a full path
       var path = NativeModule.require('path');
@@ -86,9 +86,9 @@
 
       // If this is a worker in cluster mode, start up the communiction
       // channel.
-      if (process.env.NODE_WORKER_ID) {
+      if (process.env.NODE_UNIQUE_ID) {
         var cluster = NativeModule.require('cluster');
-        cluster._startWorker();
+        cluster._setupWorker();
       }
 
       var Module = NativeModule.require('module');
@@ -120,6 +120,21 @@
         });
       }
     }
+
+    if (process.tid === 1) return;
+
+    // isolate initialization
+    process.send = function(msg) {
+      if (typeof msg === 'undefined') throw new TypeError('Bad argument.');
+      msg = JSON.stringify(msg);
+      msg = new Buffer(msg);
+      return process._send(msg);
+    };
+
+    process._onmessage = function(msg) {
+      msg = JSON.parse('' + msg);
+      process.emit('message', msg);
+    };
   }
 
   startup.globalVariables = function() {
@@ -336,8 +351,13 @@
   };
 
   startup.processKillAndExit = function() {
+    var exiting = false;
+
     process.exit = function(code) {
-      process.emit('exit', code || 0);
+      if (!exiting) {
+        exiting = true;
+        process.emit('exit', code || 0);
+      }
       process.reallyExit(code || 0);
     };
 
@@ -411,8 +431,7 @@
     // If we were spawned with env NODE_CHANNEL_FD then load that up and
     // start parsing data from that stream.
     if (process.env.NODE_CHANNEL_FD) {
-      var fd = parseInt(process.env.NODE_CHANNEL_FD);
-      assert(fd >= 0);
+      assert(parseInt(process.env.NODE_CHANNEL_FD) >= 0);
       var cp = NativeModule.require('child_process');
 
       // Load tcp_wrap to avoid situation where we might immediately receive
@@ -420,7 +439,7 @@
       // FIXME is this really necessary?
       process.binding('tcp_wrap')
 
-      cp._forkChild(fd);
+      cp._forkChild();
       assert(process.send);
     }
   }

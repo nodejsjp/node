@@ -326,6 +326,7 @@ relevant when compressing, and are ignored by the decompression classes.
 * level (compression only)
 * memLevel (compression only)
 * strategy (compression only)
+* dictionary (deflate/inflate only, empty dictionary by default)
 
 See the description of `deflateInit2` and `inflateInit2` at
 <http://zlib.net/manual.html#Advanced> for more information on these.
@@ -342,6 +343,7 @@ See the description of `deflateInit2` and `inflateInit2` at
 * level (圧縮のみ)
 * memLevel (圧縮のみ)
 * strategy (圧縮のみ)
+* dictionary (deflate/inflate のみ、デフォルトは空の辞書です)
 
 これらの詳細は <http://zlib.net/manual.html#Advanced> の
 `deflateInit2` および `inflateInit2` の説明を参照してください。

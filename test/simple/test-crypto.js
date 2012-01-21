@@ -278,6 +278,11 @@ fileStream.on('close', function() {
                'Test SHA1 of sample.png');
 });
 
+// Issue #2227: unknown digest method should throw an error.
+assert.throws(function() {
+  crypto.createHash('xyzzy');
+});
+
 // Test signing and verifying
 var s1 = crypto.createSign('RSA-SHA1')
                .update('Test123')
@@ -286,7 +291,7 @@ var verified = crypto.createVerify('RSA-SHA1')
                      .update('Test')
                      .update('123')
                      .verify(certPem, s1, 'base64');
-assert.ok(verified, 'sign and verify (base 64)');
+assert.strictEqual(verified, true, 'sign and verify (base 64)');
 
 var s2 = crypto.createSign('RSA-SHA256')
                .update('Test123')
@@ -295,7 +300,7 @@ var verified = crypto.createVerify('RSA-SHA256')
                      .update('Test')
                      .update('123')
                      .verify(certPem, s2); // binary
-assert.ok(verified, 'sign and verify (binary)');
+assert.strictEqual(verified, true, 'sign and verify (binary)');
 
 // Test encryption and decryption
 var plaintext = 'Keep this a secret? No! Tell everyone about node.js!';
@@ -380,6 +385,14 @@ var secret3 = dh3.computeSecret(key2, 'hex', 'base64');
 
 assert.equal(secret1, secret3);
 
+// https://github.com/joyent/node/issues/2338
+assert.throws(function() {
+  var p = 'FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74' +
+          '020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F1437' +
+          '4FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED' +
+          'EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE65381FFFFFFFFFFFFFFFF';
+  crypto.createDiffieHellman(p, 'hex');
+});
 
 // Test RSA key signing/verification
 var rsaSign = crypto.createSign('RSA-SHA1');
@@ -392,10 +405,64 @@ var rsaSignature = rsaSign.sign(rsaKeyPem, 'hex');
 assert.equal(rsaSignature, '5c50e3145c4e2497aadb0eabc83b342d0b0021ece0d4c4a064b7c8f020d7e2688b122bfb54c724ac9ee169f83f66d2fe90abeb95e8e1290e7e177152a4de3d944cf7d4883114a20ed0f78e70e25ef0f60f06b858e6af42a2f276ede95bbc6bc9a9bbdda15bd663186a6f40819a7af19e577bb2efa5e579a1f5ce8a0d4ca8b8f6');
 
 rsaVerify.update(rsaPubPem);
-assert.equal(rsaVerify.verify(rsaPubPem, rsaSignature, 'hex'), 1);
+assert.strictEqual(rsaVerify.verify(rsaPubPem, rsaSignature, 'hex'), true);
 
+
+//
+// Test RSA signing and verification
+//
+(function() {
+  var privateKey = fs.readFileSync(
+    common.fixturesDir + '/test_rsa_privkey_2.pem');
+
+  var publicKey = fs.readFileSync(
+    common.fixturesDir + '/test_rsa_pubkey_2.pem');
+
+  var input = 'I AM THE WALRUS';
+
+  var signature = '79d59d34f56d0e94aa6a3e306882b52ed4191f07521f25f505a078dc2f89396e0c8ac89e996fde5717f4cb89199d8fec249961fcb07b74cd3d2a4ffa235417b69618e4bcd76b97e29975b7ce862299410e1b522a328e44ac9bb28195e0268da7eda23d9825ac43c724e86ceeee0d0d4465678652ccaf65010ddfb299bedeb1ad';
+
+  var sign = crypto.createSign('RSA-SHA256');
+  sign.update(input);
+
+  var output = sign.sign(privateKey, 'hex');
+  assert.equal(output, signature);
+
+  var verify = crypto.createVerify('RSA-SHA256');
+  verify.update(input);
+
+  assert.strictEqual(verify.verify(publicKey, signature, 'hex'), true);
+})();
+
+
+//
+// Test DSA signing and verification
+//
+(function() {
+  var privateKey = fs.readFileSync(
+    common.fixturesDir + '/test_dsa_privkey.pem');
+
+  var publicKey = fs.readFileSync(
+    common.fixturesDir + '/test_dsa_pubkey.pem');
+
+  var input = 'I AM THE WALRUS';
+
+  // DSA signatures vary across runs so there is no static string to verify
+  // against
+  var sign = crypto.createSign('DSS1');
+  sign.update(input);
+  var signature = sign.sign(privateKey, 'hex');
+
+  var verify = crypto.createVerify('DSS1');
+  verify.update(input);
+
+  assert.strictEqual(verify.verify(publicKey, signature, 'hex'), true);
+})();
+
+
+//
 // Test PBKDF2 with RFC 6070 test vectors (except #4)
-
+//
 crypto.pbkdf2('password', 'salt', 1, 20, function(err, result) {
   assert.equal(result, '\x0c\x60\xc8\x0f\x96\x1f\x0e\x71\xf3\xa9\xb5\x24\xaf\x60\x12\x06\x2f\xe0\x37\xa6', 'pbkdf1 test vector 1');
 });
@@ -414,4 +481,9 @@ crypto.pbkdf2('passwordPASSWORDpassword', 'saltSALTsaltSALTsaltSALTsaltSALTsalt'
 
 crypto.pbkdf2('pass\0word', 'sa\0lt', 4096, 16, function(err, result) {
   assert.equal(result, '\x56\xfa\x6a\xa7\x55\x48\x09\x9d\xcc\x37\xd7\xf0\x34\x25\xe0\xc3', 'pbkdf1 test vector 6');
+});
+
+// Error path should not leak memory (check with valgrind).
+assert.throws(function() {
+  crypto.pbkdf2('password', 'salt', 1, 20, null);
 });

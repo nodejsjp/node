@@ -98,6 +98,15 @@ void ThreadLocalTop::InitializeInternal() {
   failed_access_check_callback_ = NULL;
   save_context_ = NULL;
   catcher_ = NULL;
+  top_lookup_result_ = NULL;
+
+  // These members are re-initialized later after deserialization
+  // is complete.
+  pending_exception_ = NULL;
+  has_pending_message_ = false;
+  pending_message_obj_ = NULL;
+  pending_message_script_ = NULL;
+  scheduled_exception_ = NULL;
 }
 
 
@@ -472,6 +481,9 @@ void Isolate::Iterate(ObjectVisitor* v, ThreadLocalTop* thread) {
   for (StackFrameIterator it(this, thread); !it.done(); it.Advance()) {
     it.frame()->Iterate(v);
   }
+
+  // Iterate pointers in live lookup results.
+  thread->top_lookup_result_->Iterate(v);
 }
 
 
@@ -558,7 +570,7 @@ Handle<JSArray> Isolate::CaptureCurrentStackTrace(
     frame->Summarize(&frames);
     for (int i = frames.length() - 1; i >= 0 && frames_seen < limit; i--) {
       // Create a JSObject to hold the information for the StackFrame.
-      Handle<JSObject> stackFrame = factory()->NewJSObject(object_function());
+      Handle<JSObject> stack_frame = factory()->NewJSObject(object_function());
 
       Handle<JSFunction> fun = frames[i].function();
       Handle<Script> script(Script::cast(fun->shared()->script()));
@@ -579,16 +591,24 @@ Handle<JSArray> Isolate::CaptureCurrentStackTrace(
             // tag.
             column_offset += script->column_offset()->value();
           }
-          SetLocalPropertyNoThrow(stackFrame, column_key,
-                                  Handle<Smi>(Smi::FromInt(column_offset + 1)));
+          CHECK_NOT_EMPTY_HANDLE(
+              this,
+              JSObject::SetLocalPropertyIgnoreAttributes(
+                  stack_frame, column_key,
+                  Handle<Smi>(Smi::FromInt(column_offset + 1)), NONE));
         }
-        SetLocalPropertyNoThrow(stackFrame, line_key,
-                                Handle<Smi>(Smi::FromInt(line_number + 1)));
+        CHECK_NOT_EMPTY_HANDLE(
+            this,
+            JSObject::SetLocalPropertyIgnoreAttributes(
+                stack_frame, line_key,
+                Handle<Smi>(Smi::FromInt(line_number + 1)), NONE));
       }
 
       if (options & StackTrace::kScriptName) {
         Handle<Object> script_name(script->name(), this);
-        SetLocalPropertyNoThrow(stackFrame, script_key, script_name);
+        CHECK_NOT_EMPTY_HANDLE(this,
+                               JSObject::SetLocalPropertyIgnoreAttributes(
+                                   stack_frame, script_key, script_name, NONE));
       }
 
       if (options & StackTrace::kScriptNameOrSourceURL) {
@@ -604,8 +624,10 @@ Handle<JSArray> Isolate::CaptureCurrentStackTrace(
         if (caught_exception) {
           result = factory()->undefined_value();
         }
-        SetLocalPropertyNoThrow(stackFrame, script_name_or_source_url_key,
-                                result);
+        CHECK_NOT_EMPTY_HANDLE(this,
+                               JSObject::SetLocalPropertyIgnoreAttributes(
+                                   stack_frame, script_name_or_source_url_key,
+                                   result, NONE));
       }
 
       if (options & StackTrace::kFunctionName) {
@@ -613,23 +635,30 @@ Handle<JSArray> Isolate::CaptureCurrentStackTrace(
         if (fun_name->ToBoolean()->IsFalse()) {
           fun_name = Handle<Object>(fun->shared()->inferred_name(), this);
         }
-        SetLocalPropertyNoThrow(stackFrame, function_key, fun_name);
+        CHECK_NOT_EMPTY_HANDLE(this,
+                               JSObject::SetLocalPropertyIgnoreAttributes(
+                                   stack_frame, function_key, fun_name, NONE));
       }
 
       if (options & StackTrace::kIsEval) {
         int type = Smi::cast(script->compilation_type())->value();
         Handle<Object> is_eval = (type == Script::COMPILATION_TYPE_EVAL) ?
             factory()->true_value() : factory()->false_value();
-        SetLocalPropertyNoThrow(stackFrame, eval_key, is_eval);
+        CHECK_NOT_EMPTY_HANDLE(this,
+                               JSObject::SetLocalPropertyIgnoreAttributes(
+                                   stack_frame, eval_key, is_eval, NONE));
       }
 
       if (options & StackTrace::kIsConstructor) {
         Handle<Object> is_constructor = (frames[i].is_constructor()) ?
             factory()->true_value() : factory()->false_value();
-        SetLocalPropertyNoThrow(stackFrame, constructor_key, is_constructor);
+        CHECK_NOT_EMPTY_HANDLE(this,
+                               JSObject::SetLocalPropertyIgnoreAttributes(
+                                   stack_frame, constructor_key,
+                                   is_constructor, NONE));
       }
 
-      FixedArray::cast(stack_trace->elements())->set(frames_seen, *stackFrame);
+      FixedArray::cast(stack_trace->elements())->set(frames_seen, *stack_frame);
       frames_seen++;
     }
     it.Advance();
@@ -1060,6 +1089,16 @@ void Isolate::DoThrow(MaybeObject* exception, MessageLocation* location) {
       message_obj = MessageHandler::MakeMessageObject("uncaught_exception",
           location, HandleVector<Object>(&exception_handle, 1), stack_trace,
           stack_trace_object);
+    } else if (location != NULL && !location->script().is_null()) {
+      // We are bootstrapping and caught an error where the location is set
+      // and we have a script for the location.
+      // In this case we could have an extension (or an internal error
+      // somewhere) and we print out the line number at which the error occured
+      // to the console for easier debugging.
+      int line_number = GetScriptLineNumberSafe(location->script(),
+                                                location->start_pos());
+      OS::PrintError("Extension or internal compilation error at line %d.\n",
+                     line_number);
     }
   }
 
@@ -1284,6 +1323,9 @@ char* Isolate::ArchiveThread(char* to) {
   memcpy(to, reinterpret_cast<char*>(thread_local_top()),
          sizeof(ThreadLocalTop));
   InitializeThreadLocal();
+  clear_pending_exception();
+  clear_pending_message();
+  clear_scheduled_exception();
   return to + sizeof(ThreadLocalTop);
 }
 
@@ -1403,11 +1445,13 @@ Isolate::Isolate()
       in_use_list_(0),
       free_list_(0),
       preallocated_storage_preallocated_(false),
-      pc_to_code_cache_(NULL),
+      inner_pointer_to_code_cache_(NULL),
       write_input_buffer_(NULL),
       global_handles_(NULL),
       context_switcher_(NULL),
       thread_manager_(NULL),
+      fp_stubs_generated_(false),
+      has_installed_extensions_(false),
       string_tracker_(NULL),
       regexp_stack_(NULL),
       embedder_data_(NULL) {
@@ -1575,8 +1619,8 @@ Isolate::~Isolate() {
   compilation_cache_ = NULL;
   delete bootstrapper_;
   bootstrapper_ = NULL;
-  delete pc_to_code_cache_;
-  pc_to_code_cache_ = NULL;
+  delete inner_pointer_to_code_cache_;
+  inner_pointer_to_code_cache_ = NULL;
   delete write_input_buffer_;
   write_input_buffer_ = NULL;
 
@@ -1610,9 +1654,6 @@ Isolate::~Isolate() {
 void Isolate::InitializeThreadLocal() {
   thread_local_top_.isolate_ = this;
   thread_local_top_.Initialize();
-  clear_pending_exception();
-  clear_pending_message();
-  clear_scheduled_exception();
 }
 
 
@@ -1700,7 +1741,7 @@ bool Isolate::Init(Deserializer* des) {
   context_slot_cache_ = new ContextSlotCache();
   descriptor_lookup_cache_ = new DescriptorLookupCache();
   unicode_cache_ = new UnicodeCache();
-  pc_to_code_cache_ = new PcToCodeCache(this);
+  inner_pointer_to_code_cache_ = new InnerPointerToCodeCache(this);
   write_input_buffer_ = new StringInputBuffer();
   global_handles_ = new GlobalHandles(this);
   bootstrapper_ = new Bootstrapper();
@@ -1710,10 +1751,10 @@ bool Isolate::Init(Deserializer* des) {
   regexp_stack_->isolate_ = this;
 
   // Enable logging before setting up the heap
-  logger_->Setup();
+  logger_->SetUp();
 
-  CpuProfiler::Setup();
-  HeapProfiler::Setup();
+  CpuProfiler::SetUp();
+  HeapProfiler::SetUp();
 
   // Initialize other runtime facilities
 #if defined(USE_SIMULATOR)
@@ -1730,10 +1771,10 @@ bool Isolate::Init(Deserializer* des) {
     stack_guard_.InitThread(lock);
   }
 
-  // Setup the object heap.
+  // SetUp the object heap.
   const bool create_heap_objects = (des == NULL);
-  ASSERT(!heap_.HasBeenSetup());
-  if (!heap_.Setup(create_heap_objects)) {
+  ASSERT(!heap_.HasBeenSetUp());
+  if (!heap_.SetUp(create_heap_objects)) {
     V8::SetFatalError();
     return false;
   }
@@ -1741,7 +1782,7 @@ bool Isolate::Init(Deserializer* des) {
   InitializeThreadLocal();
 
   bootstrapper_->Initialize(create_heap_objects);
-  builtins_.Setup(create_heap_objects);
+  builtins_.SetUp(create_heap_objects);
 
   // Only preallocate on the first initialization.
   if (FLAG_preallocate_message_memory && preallocated_message_space_ == NULL) {
@@ -1760,15 +1801,20 @@ bool Isolate::Init(Deserializer* des) {
   }
 
 #ifdef ENABLE_DEBUGGER_SUPPORT
-  debug_->Setup(create_heap_objects);
+  debug_->SetUp(create_heap_objects);
 #endif
   stub_cache_->Initialize(create_heap_objects);
 
   // If we are deserializing, read the state into the now-empty heap.
   if (des != NULL) {
     des->Deserialize();
-    stub_cache_->Clear();
+    stub_cache_->Initialize(true);
   }
+
+  // Finish initialization of ThreadLocal after deserialization is done.
+  clear_pending_exception();
+  clear_pending_message();
+  clear_scheduled_exception();
 
   // Deserializing may put strange things in the root array's copy of the
   // stack guard.
@@ -1776,7 +1822,7 @@ bool Isolate::Init(Deserializer* des) {
 
   deoptimizer_data_ = new DeoptimizerData;
   runtime_profiler_ = new RuntimeProfiler(this);
-  runtime_profiler_->Setup();
+  runtime_profiler_->SetUp();
 
   // If we are deserializing, log non-function code objects and compiled
   // functions found in the snapshot.

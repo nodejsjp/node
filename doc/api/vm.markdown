@@ -20,14 +20,14 @@ JavaScript コードは、コンパイルされてすぐに実行されるか、
 ### vm.runInThisContext(code, [filename])
 
 <!--
-
-`vm.runInThisContext()` compiles `code` as if it were loaded from `filename`,
-runs it and returns the result. Running code does not have access to local scope. `filename` is optional.
+`vm.runInThisContext()` compiles `code`, runs it and returns the result. Running
+code does not have access to local scope. `filename` is optional, it's used only
+in stack traces.
 
 -->
-`vm.runInThisContext()` は `code` を `filename` からロードされたかのようにコンパイルし、
-それを実行して結果を返します。実行されるコードはローカルスコープにアクセスしません。
-`filename` はオプションです。
+`vm.runInThisContext()` は `code` をコンパイルして実行し、結果を返します。
+実行されるコードはローカルスコープにアクセスしません。
+`filename` はオプションで、スタックトレースでのみ使用されます。
 
 <!--
 
@@ -74,17 +74,18 @@ and throws an exception.
 
 <!--
 
-`vm.runInNewContext` compiles `code` to run in `sandbox` as if it were loaded from `filename`,
-then runs it and returns the result. Running code does not have access to local scope and
-the object `sandbox` will be used as the global object for `code`.
-`sandbox` and `filename` are optional.
+`vm.runInNewContext` compiles `code`, then runs it in `sandbox` and returns the
+result. Running code does not have access to local scope. The object `sandbox`
+will be used as the global object for `code`.
+`sandbox` and `filename` are optional, `filename` is only used in stack traces.
 
 -->
-`vm.runInNewContext` は `code` を `filename` からロードされたかのようにコンパイルし、
-それを `sandbox` の中で実行して結果を返します。
-実行されるコードはローカルスコープにアクセスせず、
+`vm.runInNewContext` は `code` をコンパイルし、それを `sandbox` の中で実行して
+結果を返します。
+実行されるコードはローカルスコープにアクセスしません。
 `sandbox` が `code` にとってのグローバルオブジェクトとして使われます。
-`sandbox` および `filename` はオプションです。
+`sandbox` および `filename` はオプションで、`filename` 
+スタックトレースでのみ使用されます。
 
 <!--
 
@@ -130,22 +131,24 @@ and throws an exception.
 ### vm.runInContext(code, context, [filename])
 
 <!--
-`vm.runInContext` compiles `code` to run in context `context` as if it were loaded from `filename`,
-then runs it and returns the result. A (V8) context comprises a global object, together with a
-set of built-in objects and functions. Running code does not have access to local scope and
-the global object held within `context` will be used as the global object for `code`.
-`filename` is optional.
+`vm.runInContext` compiles `code`, then runs it in `context` and returns the
+result. A (V8) context comprises a global object, together with a set of
+built-in objects and functions. Running code does not have access to local scope
+and the global object held within `context` will be used as the global object
+for `code`.
+`filename` is optional, it's used only in stack traces.
 
 Example: compile and execute code in a existing context.
 -->
 `vm.runInContext` は `code` をコンパイルして、
-`filename` としてロードされたかのように、`context` をコンテキストとして
-実行し、その結果を返します。
+`context` をコンテキストとして実行し、その結果を返します。
 (V8 の) コンテキストは組み込みのオブジェクトと関数と共に、
 グローバルオブジェクトを含みます。
 実行されるコードはローカルスコープにアクセスせず、
 `context` が `code` にとってのグローバルオブジェクトとして使われます。
-`filename` はオプションです。
+`filename` はオプションで、スタックトレースでのみ使用されます。
+
+例: コードをコンパイルして既存のコンテキストで実行します。
 
     var util = require('util'),
         vm = require('vm'),
@@ -199,20 +202,19 @@ to seed the initial contents of the global object used by the context.
 
 <!--
 
-`createScript` compiles `code` as if it were loaded from `filename`,
-but does not run it. Instead, it returns a `vm.Script` object representing this compiled code.
-This script can be run later many times using methods below.
-The returned script is not bound to any global object.
-It is bound before each run, just for that run. `filename` is optional.
+`createScript` compiles `code` but does not run it. Instead, it returns a
+`vm.Script` object representing this compiled code. This script can be run
+later many times using methods below. The returned script is not bound to any
+global object. It is bound before each run, just for that run. `filename` is
+optional, it's only used in stack traces.
 
 -->
-`createScript` は `code` を
-`filename` からロードされたかのようにコンパイルしますが、実行はしません。
+`createScript` は `code` をコンパイルしますが、実行はしません。
 代わりに、コンパイルされたコードを表現する `vm.Script` オブジェクトを返します。
 このスクリプトは後述のメソッドを使って後から何度でも実行することができます。
 返されるスクリプトはどのグローバルオブジェクトとも結びつけられていません。
 それぞれの実行前に結びつけることで、そのとおりに実行されます。
-`filename` はオプションです。
+`filename` はオプションで、スタックトレースでのみ使用されます。
 
 <!--
 

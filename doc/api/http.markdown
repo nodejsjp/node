@@ -148,6 +148,42 @@ not be emitted.
 -->
 このイベントが生成されて処理された場合、`request`イベントは生成されないことに注意してください。
 
+### Event: 'connect'
+
+`function (request, socket, head) { }`
+
+<!--
+
+Emitted each time a client requests a http CONNECT method. If this event isn't
+listened for, then clients requesting a CONNECT method will have their
+connections closed.
+
+-->
+クライアントが HTTP の CONNECT メソッドを要求する度に生成されます。
+このイベントが監視されない場合、CONNECT メソッドを要求したクライアントのコネクションはクローズされます。
+
+<!--
+
+* `request` is the arguments for the http request, as it is in the request
+  event.
+* `socket` is the network socket between the server and client.
+* `head` is an instance of Buffer, the first packet of the tunneling stream,
+  this may be empty.
+
+-->
+* `request` はリクエストイベントの引数と同様に HTTP リクエストです。
+* `socket` はサーバとクライアントの間のネットワークソケットです。
+* `head` はトンネリングストリームの最初のパケットを持つ Buffer のインスタンスです。
+  空の場合もあります。
+
+<!--
+
+After this event is emitted, the request's socket will not have a `data`
+event listener, meaning you will need to bind to it in order to handle data
+sent to the server on that socket.
+
+-->
+
 ### Event: 'upgrade'
 
 `function (request, socket, head) { }`
@@ -164,15 +200,17 @@ closed.
 
 <!--
 
-* `request` is the arguments for the http request, as it is in the request event.
+* `request` is the arguments for the http request, as it is in the request
+  event.
 * `socket` is the network socket between the server and client.
-* `head` is an instance of Buffer, the first packet of the upgraded stream, this may be empty.
+* `head` is an instance of Buffer, the first packet of the upgraded stream,
+  this may be empty.
 
 -->
-* `request` はリクエストイベントと同様に HTTP リクエストへの引数です。
+* `request` はリクエストイベントの引数と同様に HTTP リクエストです。
 * `socket` はサーバとクライアントの間のネットワークソケットです。
 * `head` はアップグレードストリームの最初のパケットを持つ Buffer のインスタンスです。
-空の場合もあります。
+  空の場合もあります。
 
 <!--
 
@@ -233,11 +271,14 @@ UNIX ドメインソケットを待ち受ける場合、ポートとホスト名
 
 <!--
 
-This function is asynchronous. The last parameter `callback` will be called
-when the server has been bound to the port.
+This function is asynchronous. The last parameter `callback` will be added as
+a listener for the ['listening'](net.html#event_listening_) event.
+See also [net.Server.listen()](net.html#server.listen).
 
 -->
-この関数は非同期です。最後の引数の `callback` はサーバがポートをバインドすると呼び出されます。
+この関数は非同期です。最後の引数の `callback` は
+['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
+詳細は [net.Server.listen()](net.html#server.listen) を参照してください。
 
 
 ### server.listen(path, [callback])
@@ -251,11 +292,14 @@ Start a UNIX socket server listening for connections on the given `path`.
 
 <!--
 
-This function is asynchronous. The last parameter `callback` will be called
-when the server has been bound.
+This function is asynchronous. The last parameter `callback` will be added as
+a listener for the ['listening'](net.html#event_listening_) event.
+See also [net.Server.listen()](net.html#server.listen).
 
 -->
-この関数は非同期です。最後の引数の `callback` はサーバがバインドすると呼び出されます。
+この関数は非同期です。最後の引数の `callback` は
+['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
+詳細は [net.Server.listen()](net.html#server.listen) を参照してください。
 
 
 ### server.close()
@@ -263,9 +307,22 @@ when the server has been bound.
 <!--
 
 Stops the server from accepting new connections.
+See [net.Server.close()](net.html#server.close).
 
 -->
 サーバが新しいコネクションを受け付けるのを終了します。
+
+
+### server.maxHeadersCount
+
+<!--
+
+Limits maximum incoming headers count, equal to 1000 by default. If set to 0 -
+no limit will be applied.
+
+-->
+受け付けるヘッダ数の上限で、デフォルトは 1000 です。
+0 に設定されると、制限しないことになります。
 
 
 ## http.ServerRequest
@@ -333,8 +390,8 @@ Indicates that the underlaying connection was terminated before
 `response.end()` was called or able to flush.
 
 -->
-`response.end()` が呼び出されたり、フラッシュされる前に下層の接続が
-切断されたことを示します。
+`response.end()` が呼び出されたりフラッシュされる前に、
+下層の接続が切断されたことを示します。
 
 <!--
 
@@ -458,7 +515,7 @@ HTTP プロトコルのバージョンを表す文字列です。参照のみ可
 `request.httpVersionMinor` は 2 番目の整数です。
 
 
-### request.setEncoding(encoding=null)
+### request.setEncoding([encoding])
 
 <!--
 
@@ -525,6 +582,19 @@ passed as the second parameter to the `'request'` event. It is a `Writable Strea
 このオブジェクトは HTTP サーバ内部 － ユーザではなく － で作成されます。
 `'request'` リスナーの第 2 引数として渡されます。
 これは `Writable Stream` です。
+
+### Event: 'close'
+
+`function () { }`
+
+<!--
+
+Indicates that the underlaying connection was terminated before
+`response.end()` was called or able to flush.
+
+-->
+`response.end()` が呼び出されたりフラッシュされる前に、
+下層の接続が切断されたことを示します。
 
 ### response.writeContinue()
 
@@ -694,7 +764,7 @@ Example:
     response.removeHeader("Content-Encoding");
 
 
-### response.write(chunk, encoding='utf8')
+### response.write(chunk, [encoding])
 
 <!--
 
@@ -776,7 +846,7 @@ HTTP は、トレーラを生成するならそのヘッダフィールドのリ
 `Trailer` ヘッダを送信することを要求していることに注意してください。
 
     response.writeHead(200, { 'Content-Type': 'text/plain',
-                              'Trailer': 'TraceInfo' });
+                              'Trailer': 'Content-MD5' });
     response.write(fileData);
     response.addTrailers({'Content-MD5': "7895bf4b8828b55ceaf47747b4bca667"});
     response.end();
@@ -829,7 +899,7 @@ Options:
 
 - `host`: A domain name or IP address of the server to issue the request to.
   Defaults to `'localhost'`.
-- `hostname`: To support `url.parse()` `hostname` is prefered over `host`
+- `hostname`: To support `url.parse()` `hostname` is preferred over `host`
 - `port`: Port of remote server. Defaults to 80.
 - `socketPath`: Unix Domain Socket (use one of host:port or socketPath)
 - `method`: A string specifying the HTTP request method. Defaults to `'GET'`.
@@ -951,7 +1021,7 @@ There are a few special headers that should be noted.
   and listen for the `continue` event. See RFC2616 Section 8.2.3 for more
   information.
 
-* Sending an Authorization header will override useing the `auth` option
+* Sending an Authorization header will override using the `auth` option
   to compute basic authentication.
 
 -->
@@ -1212,6 +1282,82 @@ Emitted after a socket is assigned to this request.
 -->
 このリクエストにソケットが割り当てられた後に生成されます。
 
+### Event: 'connect'
+
+`function (response, socket, head) { }`
+
+<!--
+
+Emitted each time a server responds to a request with a CONNECT method. If this
+event isn't being listened for, clients receiving a CONNECT method will have
+their connections closed.
+
+-->
+サーバが CONNECT メソッドの要求に応答する度に生成されます。
+このイベントが監視されていない場合、クライアントが CONNECT メソッドへの
+レスポンスを受信すると、そのコネクションはクローズされます。
+
+<!--
+
+A client server pair that show you how to listen for the `connect` event.
+
+-->
+どのように `connect` イベントを監視するかを示すクライアントとサーバのペア:
+
+
+    var http = require('http');
+    var net = require('net');
+    var url = require('url');
+
+    // Create an HTTP tunneling proxy
+    var proxy = http.createServer(function (req, res) {
+      res.writeHead(200, {'Content-Type': 'text/plain'});
+      res.end('okay');
+    });
+    proxy.on('connect', function(req, cltSocket, head) {
+      // connect to an origin server
+      var srvUrl = url.parse('http://' + req.url);
+      var srvSocket = net.connect(srvUrl.port, srvUrl.hostname, function() {
+        cltSocket.write('HTTP/1.1 200 Connection Established\r\n' +
+                        'Proxy-agent: Node-Proxy\r\n' +
+                        '\r\n');
+        srvSocket.write(head);
+        srvSocket.pipe(cltSocket);
+        cltSocket.pipe(srvSocket);
+      });
+    });
+
+    // now that proxy is running
+    proxy.listen(1337, '127.0.0.1', function() {
+
+      // make a request to a tunneling proxy
+      var options = {
+        port: 1337,
+        host: '127.0.0.1',
+        method: 'CONNECT',
+        path: 'www.google.com:80'
+      };
+
+      var req = http.request(options);
+      req.end();
+
+      req.on('connect', function(res, socket, head) {
+        console.log('got connected!');
+
+        // make a request over an HTTP tunnel
+        socket.write('GET / HTTP/1.1\r\n' +
+                     'Host: www.google.com:80\r\n' +
+                     'Connection: close\r\n' +
+                     '\r\n');
+        socket.on('data', function(chunk) {
+          console.log(chunk.toString());
+        });
+        socket.on('end', function() {
+          proxy.close();
+        });
+      });
+    });
+
 ### Event: 'upgrade'
 
 `function (response, socket, head) { }`
@@ -1228,29 +1374,25 @@ their connections closed.
 
 <!--
 
-A client server pair that show you how to listen for the `upgrade` event using `http.getAgent`:
+A client server pair that show you how to listen for the `upgrade` event.
 
 -->
-`http.getAget` を使ってどのように `upgrade` イベントを監視するかを示す、
-クライアントとサーバのペア:
+どのように `upgrade` イベントを監視するかを示すクライアントとサーバのペア:
 
     var http = require('http');
-    var net = require('net');
 
     // Create an HTTP server
     var srv = http.createServer(function (req, res) {
       res.writeHead(200, {'Content-Type': 'text/plain'});
       res.end('okay');
     });
-    srv.on('upgrade', function(req, socket, upgradeHead) {
+    srv.on('upgrade', function(req, socket, head) {
       socket.write('HTTP/1.1 101 Web Socket Protocol Handshake\r\n' +
                    'Upgrade: WebSocket\r\n' +
                    'Connection: Upgrade\r\n' +
-                   '\r\n\r\n');
+                   '\r\n');
 
-      socket.ondata = function(data, start, end) {
-        socket.write(data.toString('utf8', start, end), 'utf8'); // echo back
-      };
+      socket.pipe(socket); // echo back
     });
 
     // now that server is running
@@ -1279,7 +1421,7 @@ A client server pair that show you how to listen for the `upgrade` event using `
 
 ### Event: 'continue'
 
-`function ()`
+`function () { }`
 
 <!--
 
@@ -1292,7 +1434,7 @@ the client should send the request body.
 サーバが '100 Continue' HTTP レスポンスを送信することで生成されます。
 これはクライアントがリクエストボディを送信すべき事を示します。
 
-### request.write(chunk, encoding='utf8')
+### request.write(chunk, [encoding])
 
 <!--
 
@@ -1317,11 +1459,12 @@ or a string.
 
 <!--
 
-The `encoding` argument is optional and only
-applies when `chunk` is a string.
+The `encoding` argument is optional and only applies when `chunk` is a string.
+Defaults to `'utf8'`.
 
 -->
 `encoding` 引数はオプションで、`chunk` が文字列の場合だけ適用されます。
+デフォルトは `'utf8'` です。
 
 
 ### request.end([data], [encoding])
@@ -1339,8 +1482,8 @@ chunked, this will send the terminating `'0\r\n\r\n'`.
 
 <!--
 
-If `data` is specified, it is equivalent to calling `request.write(data, encoding)`
-followed by `request.end()`.
+If `data` is specified, it is equivalent to calling
+`request.write(data, encoding)` followed by `request.end()`.
 
 -->
 `data` が指定された場合は、
@@ -1366,7 +1509,7 @@ will be called.
 [socket.setTimeout(timeout, [callback])](net.html#socket.setTimeout)
 が呼び出されます。
 
-### request.setNoDelay(noDelay=true)
+### request.setNoDelay([noDelay])
 
 <!--
 Once a socket is assigned to this request and is connected 
@@ -1378,7 +1521,7 @@ will be called.
 が呼び出されます。
 
 
-### request.setSocketKeepAlive(enable=false, [initialDelay])
+### request.setSocketKeepAlive([enable], [initialDelay])
 
 <!--
 Once a socket is assigned to this request and is connected 
@@ -1492,12 +1635,13 @@ The response trailers object. Only populated after the 'end' event.
 レスポンスのトレーラオブジェクトです。
 'end' イベントの後にだけ発生します。
 
-### response.setEncoding(encoding=null)
+### response.setEncoding([encoding])
 
 <!--
 
-Set the encoding for the response body. Either `'utf8'`, `'ascii'`, or `'base64'`.
-Defaults to `null`, which means that the `'data'` event will emit a `Buffer` object..
+Set the encoding for the response body. Either `'utf8'`, `'ascii'`, or
+`'base64'`. Defaults to `null`, which means that the `'data'` event will emit
+a `Buffer` object.
 
 -->
 レスポンスボディのエンコーディングを設定します。

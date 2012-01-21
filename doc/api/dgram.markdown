@@ -46,6 +46,19 @@ on this socket.
 `close()` によってソケットがクローズすると生成されます。
 このソケットでは新しい `message` イベントは生成されなくなります。
 
+### Event: 'error'
+
+`function (exception) {}`
+
+<!--
+
+Emitted when an error occurs.
+
+-->
+エラーが発生すると生成されます。
+
+---
+
 ### dgram.createSocket(type, [callback])
 
 <!--

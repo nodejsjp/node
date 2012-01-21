@@ -35,6 +35,7 @@
 #include "deoptimizer.h"
 #include "execution.h"
 #include "global-handles.h"
+#include "isolate-inl.h"
 #include "mark-compact.h"
 #include "platform.h"
 #include "scopeinfo.h"
@@ -64,7 +65,7 @@ Atomic32 RuntimeProfiler::state_ = 0;
 Semaphore* RuntimeProfiler::semaphore_ = OS::CreateSemaphore(0);
 
 #ifdef DEBUG
-bool RuntimeProfiler::has_been_globally_setup_ = false;
+bool RuntimeProfiler::has_been_globally_set_up_ = false;
 #endif
 bool RuntimeProfiler::enabled_ = false;
 
@@ -81,10 +82,10 @@ RuntimeProfiler::RuntimeProfiler(Isolate* isolate)
 
 
 void RuntimeProfiler::GlobalSetup() {
-  ASSERT(!has_been_globally_setup_);
+  ASSERT(!has_been_globally_set_up_);
   enabled_ = V8::UseCrankshaft() && FLAG_opt;
 #ifdef DEBUG
-  has_been_globally_setup_ = true;
+  has_been_globally_set_up_ = true;
 #endif
 }
 
@@ -135,14 +136,13 @@ void RuntimeProfiler::AttemptOnStackReplacement(JSFunction* function) {
   // Get the stack check stub code object to match against.  We aren't
   // prepared to generate it, but we don't expect to have to.
   StackCheckStub check_stub;
-  Object* check_code;
-  MaybeObject* maybe_check_code = check_stub.TryGetCode();
-  if (maybe_check_code->ToObject(&check_code)) {
+  Code* stack_check_code = NULL;
+  if (check_stub.FindCodeInCache(&stack_check_code)) {
     Code* replacement_code =
         isolate_->builtins()->builtin(Builtins::kOnStackReplacement);
     Code* unoptimized_code = shared->code();
     Deoptimizer::PatchStackCheckCode(unoptimized_code,
-                                     Code::cast(check_code),
+                                     stack_check_code,
                                      replacement_code);
   }
 }
@@ -245,8 +245,8 @@ void RuntimeProfiler::NotifyTick() {
 }
 
 
-void RuntimeProfiler::Setup() {
-  ASSERT(has_been_globally_setup_);
+void RuntimeProfiler::SetUp() {
+  ASSERT(has_been_globally_set_up_);
   ClearSampleBuffer();
   // If the ticker hasn't already started, make sure to do so to get
   // the ticks for the runtime profiler.
@@ -338,7 +338,8 @@ void RuntimeProfiler::StopRuntimeProfilerThreadBeforeShutdown(Thread* thread) {
 void RuntimeProfiler::RemoveDeadSamples() {
   for (int i = 0; i < kSamplerWindowSize; i++) {
     Object* function = sampler_window_[i];
-    if (function != NULL && !HeapObject::cast(function)->IsMarked()) {
+    if (function != NULL &&
+        !Marking::MarkBitFrom(HeapObject::cast(function)).Get()) {
       sampler_window_[i] = NULL;
     }
   }

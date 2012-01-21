@@ -38,6 +38,7 @@
 #include "log.h"
 #include "runtime-profiler.h"
 #include "serialize.h"
+#include "store-buffer.h"
 
 namespace v8 {
 namespace internal {
@@ -46,16 +47,19 @@ static Mutex* init_once_mutex = OS::CreateMutex();
 static bool init_once_called = false;
 
 bool V8::is_running_ = false;
-bool V8::has_been_setup_ = false;
+bool V8::has_been_set_up_ = false;
 bool V8::has_been_disposed_ = false;
 bool V8::has_fatal_error_ = false;
 bool V8::use_crankshaft_ = true;
+List<CallCompletedCallback>* V8::call_completed_callbacks_ = NULL;
 
 static Mutex* entropy_mutex = OS::CreateMutex();
 static EntropySource entropy_source;
 
 
 bool V8::Initialize(Deserializer* des) {
+  FlagList::EnforceFlagImplications();
+
   InitializeOncePerProcess();
 
   // The current thread may not yet had entered an isolate to run.
@@ -78,7 +82,7 @@ bool V8::Initialize(Deserializer* des) {
   if (isolate->IsInitialized()) return true;
 
   is_running_ = true;
-  has_been_setup_ = true;
+  has_been_set_up_ = true;
   has_fatal_error_ = false;
   has_been_disposed_ = false;
 
@@ -96,11 +100,14 @@ void V8::TearDown() {
   Isolate* isolate = Isolate::Current();
   ASSERT(isolate->IsDefaultIsolate());
 
-  if (!has_been_setup_ || has_been_disposed_) return;
+  if (!has_been_set_up_ || has_been_disposed_) return;
   isolate->TearDown();
 
   is_running_ = false;
   has_been_disposed_ = true;
+
+  delete call_completed_callbacks_;
+  call_completed_callbacks_ = NULL;
 }
 
 
@@ -140,9 +147,10 @@ void V8::SetEntropySource(EntropySource source) {
 
 
 // Used by JavaScript APIs
-uint32_t V8::Random(Isolate* isolate) {
-  ASSERT(isolate == Isolate::Current());
-  return random_base(isolate->random_seed());
+uint32_t V8::Random(Context* context) {
+  ASSERT(context->IsGlobalContext());
+  ByteArray* seed = context->random_seed();
+  return random_base(reinterpret_cast<uint32_t*>(seed->GetDataStartAddress()));
 }
 
 
@@ -155,13 +163,48 @@ uint32_t V8::RandomPrivate(Isolate* isolate) {
 }
 
 
-bool V8::IdleNotification() {
+bool V8::IdleNotification(int hint) {
   // Returning true tells the caller that there is no need to call
   // IdleNotification again.
   if (!FLAG_use_idle_notification) return true;
 
   // Tell the heap that it may want to adjust.
-  return HEAP->IdleNotification();
+  return HEAP->IdleNotification(hint);
+}
+
+
+void V8::AddCallCompletedCallback(CallCompletedCallback callback) {
+  if (call_completed_callbacks_ == NULL) {  // Lazy init.
+    call_completed_callbacks_ = new List<CallCompletedCallback>();
+  }
+  for (int i = 0; i < call_completed_callbacks_->length(); i++) {
+    if (callback == call_completed_callbacks_->at(i)) return;
+  }
+  call_completed_callbacks_->Add(callback);
+}
+
+
+void V8::RemoveCallCompletedCallback(CallCompletedCallback callback) {
+  if (call_completed_callbacks_ == NULL) return;
+  for (int i = 0; i < call_completed_callbacks_->length(); i++) {
+    if (callback == call_completed_callbacks_->at(i)) {
+      call_completed_callbacks_->Remove(i);
+    }
+  }
+}
+
+
+void V8::FireCallCompletedCallback(Isolate* isolate) {
+  if (call_completed_callbacks_ == NULL) return;
+  HandleScopeImplementer* handle_scope_implementer =
+      isolate->handle_scope_implementer();
+  if (!handle_scope_implementer->CallDepthIsZero()) return;
+  // Fire callbacks.  Increase call depth to prevent recursive callbacks.
+  handle_scope_implementer->IncrementCallDepth();
+  for (int i = 0; i < call_completed_callbacks_->length(); i++) {
+    call_completed_callbacks_->at(i)();
+  }
+  handle_scope_implementer->DecrementCallDepth();
 }
 
 
@@ -172,8 +215,9 @@ typedef union {
 } double_int_union;
 
 
-Object* V8::FillHeapNumberWithRandom(Object* heap_number, Isolate* isolate) {
-  uint64_t random_bits = Random(isolate);
+Object* V8::FillHeapNumberWithRandom(Object* heap_number,
+                                     Context* context) {
+  uint64_t random_bits = Random(context);
   // Make a double* from address (heap_number + sizeof(double)).
   double_int_union* r = reinterpret_cast<double_int_union*>(
       reinterpret_cast<char*>(heap_number) +
@@ -195,8 +239,8 @@ void V8::InitializeOncePerProcess() {
   if (init_once_called) return;
   init_once_called = true;
 
-  // Setup the platform OS support.
-  OS::Setup();
+  // Set up the platform OS support.
+  OS::SetUp();
 
   use_crankshaft_ = FLAG_crankshaft;
 
@@ -204,7 +248,7 @@ void V8::InitializeOncePerProcess() {
     use_crankshaft_ = false;
   }
 
-  CPU::Setup();
+  CPU::SetUp();
   if (!CPU::SupportsCrankshaft()) {
     use_crankshaft_ = false;
   }
@@ -215,6 +259,12 @@ void V8::InitializeOncePerProcess() {
   FLAG_peephole_optimization = !use_crankshaft_;
 
   ElementsAccessor::InitializeOncePerProcess();
+
+  if (FLAG_stress_compaction) {
+    FLAG_force_marking_deque_overflows = true;
+    FLAG_gc_global = true;
+    FLAG_max_new_space_size = (1 << (kPageSizeBits - 10)) * 2;
+  }
 }
 
 } }  // namespace v8::internal

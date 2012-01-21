@@ -129,16 +129,19 @@ prints the active watchers. To remove a watcher, type
 * `next`, `n` - Step next
 * `step`, `s` - Step in
 * `out`, `o` - Step out
+* `pause` - Pause running code (like pause button in Developer TOols)
 -->
 * `cont`, `c` - 実行を継続します。
 * `next`, `n` - 次の行へステップオーバーします。
 * `step`, `s` - ステップインします。
 * `out`, `o` - ステップアウトします。
+* `pause` - コードの実行を中断します (Developer Tools の pause ボタンと同じです)。
 
 #### Breakpoints
 
 <!--
 * `setBreakpoint()`, `sb()` - Set breakpoint on current line
+* `setBreakpoint(line)`, `sb(line)` - Set breakpoint on specific line
 * `setBreakpoint('fn()')`, `sb(...)` - Set breakpoint on a first statement in
 functions body
 * `setBreakpoint('script.js', 1)`, `sb(...)` - Set breakpoint on first line of
@@ -146,6 +149,7 @@ script.js
 * `clearBreakpoint`, `cb(...)` - Clear breakpoint
 -->
 * `setBreakpoint()`, `sb()` - 現在行にブレークポイントを設定します。
+* `setBreakpoint(line)`, `sb(line)` - 指定した行にブレークポイントを設定します。
 * `setBreakpoint('fn()')`, `sb(...)` - 指定した関数の先頭行にブレークポイントを設定します
 * `setBreakpoint('script.js', 1)`, `sb(...)` - 指定したスクリプトファイルの指定した行にブレークポイントを設定します。
 * `clearBreakpoint`, `cb(...)` - ブレークポイントを削除します。

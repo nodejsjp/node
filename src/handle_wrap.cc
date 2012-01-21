@@ -21,6 +21,7 @@
 
 #include <node.h>
 #include <handle_wrap.h>
+#include <node_vars.h>
 
 namespace node {
 
@@ -64,11 +65,31 @@ Handle<Value> HandleWrap::Unref(const Arguments& args) {
 
   UNWRAP
 
-  // Calling this function twice should never happen.
-  assert(wrap->unref == false);
+  // Calling unnecessarily is a no-op
+  if (wrap->unref) {
+    return v8::Undefined();
+  }
 
   wrap->unref = true;
-  uv_unref(uv_default_loop());
+  uv_unref(Loop());
+
+  return v8::Undefined();
+}
+
+
+// Adds a reference to keep uv alive because of this thing.
+Handle<Value> HandleWrap::Ref(const Arguments& args) {
+  HandleScope scope;
+
+  UNWRAP
+
+  // Calling multiple times is a no-op
+  if (!wrap->unref) {
+    return v8::Undefined();
+  }
+
+  wrap->unref = false;
+  uv_ref(uv_default_loop());
 
   return v8::Undefined();
 }
@@ -79,13 +100,13 @@ Handle<Value> HandleWrap::Close(const Arguments& args) {
 
   UNWRAP
 
+  // guard against uninitialized handle or double close
+  if (wrap->handle__ == NULL) return v8::Null();
   assert(!wrap->object_.IsEmpty());
   uv_close(wrap->handle__, OnClose);
+  wrap->handle__ = NULL;
 
-  if (wrap->unref) {
-    uv_ref(uv_default_loop());
-    wrap->unref = false;
-  }
+  HandleWrap::Ref(args);
 
   wrap->StateChange();
 
@@ -124,6 +145,9 @@ void HandleWrap::OnClose(uv_handle_t* handle) {
 
   // The wrap object should still be there.
   assert(wrap->object_.IsEmpty() == false);
+
+  // But the handle pointer should be gone.
+  assert(wrap->handle__ == NULL);
 
   wrap->object_->SetPointerInInternalField(0, NULL);
   wrap->object_.Dispose();

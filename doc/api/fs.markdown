@@ -353,17 +353,21 @@ Synchronous link(2).
 -->
 同期の link(2)。
 
-### fs.symlink(linkdata, path, [callback])
+### fs.symlink(linkdata, path, [type], [callback])
 
 <!--
 
 Asynchronous symlink(2). No arguments other than a possible exception are given
 to the completion callback.
+`type` argument can be either `'dir'` or `'file'` (default is `'file'`).  It is only 
+used on Windows (ignored on other platforms).
 
 -->
 非同期の symlink(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+`type` 引数は `'dir'` または `'file'` (デフォルトは `'file'`) です。
+これは Windows でのみ使われます (他のプラットフォームでは無視されます)。
 
-### fs.symlinkSync(linkdata, path)
+### fs.symlinkSync(linkdata, path, [type])
 
 <!--
 
@@ -454,7 +458,7 @@ Synchronous rmdir(2).
 <!--
 
 Asynchronous mkdir(2). No arguments other than a possible exception are given
-to the completion callback. `mode` defaults to `0777`. 
+to the completion callback. `mode` defaults to `0777`.
 
 -->
 非同期の mkdir(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
@@ -672,15 +676,17 @@ written.
 -->
 同期版のバッファに基づく `fs.write()`。書き込まれたバイト数を返します。
 
-### fs.writeSync(fd, str, position, encoding='utf8')
+### fs.writeSync(fd, str, position, [encoding])
 
 <!--
 
-Synchronous version of string-based `fs.write()`. Returns the number of _bytes_
-written.
+Synchronous version of string-based `fs.write()`. `encoding` defaults to
+`'utf8'`. Returns the number of _bytes_ written.
 
 -->
-同期版の文字列に基づく `fs.write()`。書き込まれたバイト数を返します。
+同期版の文字列に基づく `fs.write()`。
+`encoding` のデフォルトは `'utf8'` です。
+書き込まれたバイト数を返します。
 
 ### fs.read(fd, buffer, offset, length, position, [callback])
 
@@ -797,19 +803,20 @@ returns a buffer.
 そうでなければバッファを返します。
 
 
-### fs.writeFile(filename, data, encoding='utf8', [callback])
+### fs.writeFile(filename, data, [encoding], [callback])
 
 <!--
 
 Asynchronously writes data to a file, replacing the file if it already exists.
 `data` can be a string or a buffer. The `encoding` argument is ignored if
-`data` is a buffer.
+`data` is a buffer. It defaults to `'utf8'`.
 
 -->
 非同期にデータをファイルに書き込みます。
 ファイルが既に存在する場合は置き換えられます。
 `data` は文字列またはバッファです。
 `data` がバッファの場合、`encoding` は無視されます。
+デフォルトは `'utf8'` です。
 
 <!--
 
@@ -823,7 +830,7 @@ Example:
       console.log('It\'s saved!');
     });
 
-### fs.writeFileSync(filename, data, encoding='utf8')
+### fs.writeFileSync(filename, data, [encoding])
 
 <!--
 
@@ -831,6 +838,42 @@ The synchronous version of `fs.writeFile`.
 
 -->
 同期版の `fs.writeFile`。
+
+### fs.appendFile(filename, data, encoding='utf8', [callback])
+
+<!--
+
+Asynchronously append data to a file, creating the file if it not yet exists.
+`data` can be a string or a buffer. The `encoding` argument is ignored if
+`data` is a buffer.
+
+-->
+非同期にデータをファイルに追加します。
+ファイルが存在しなければ作成されます。
+`data` は文字列またはバッファです。
+`data` がバッファの場合、`encoding` は無視されます。
+デフォルトは `'utf8'` です。
+
+<!--
+
+Example:
+
+-->
+例:
+
+    fs.appendFile('message.txt', 'data to append', function (err) {
+      if (err) throw err;
+      console.log('The "data to append" was appended to file!');
+    });
+
+### fs.appendFileSync(filename, data, encoding='utf8')
+
+<!--
+
+The synchronous version of `fs.appendFile`.
+
+-->
+同期版の `fs.appendFile`。
 
 ### fs.watchFile(filename, [options], listener)
 
@@ -845,13 +888,20 @@ time the file is accessed.
 <!--
 
 The second argument is optional. The `options` if provided should be an object
-containing two members a boolean, `persistent`, and `interval`, a polling
-value in milliseconds. The default is `{ persistent: true, interval: 0 }`.
+containing two members a boolean, `persistent`, and `interval`. `persistent`
+indicates whether the process should continue to run as long as files are
+being watched. `interval` indicates how often the target should be polled,
+in milliseconds. (On Linux systems with inotify, `interval` is ignored.) The
+default is `{ persistent: true, interval: 0 }`.
 
 -->
 第 2 引数はオプションです．
-`options` が与えられる場合、それは boolean の `persistent` と、
-ポーリング間隔をミリ秒で表す `interval` の二つのメンバを含むオブジェクトです。
+`options` が与えられる場合、それは boolean の `persistent` と `interval`
+の二つのメンバを含むオブジェクトです。
+`persistent` はファイルが監視されている間、
+プロセスが実行し続けることを示します。
+`interval` は対象をポーリングする間隔をミリ秒で示します
+(inotify を備えた Linux システムでは `interval` は無視されます)。
 デフォルトは `{ persistent: true, interval: 0}` です。
 
 <!--
@@ -897,7 +947,9 @@ Watch for changes on `filename`, where `filename` is either a file or a
 directory.  The returned object is [fs.FSWatcher](#fs.FSWatcher).
 
 The second argument is optional. The `options` if provided should be an object
-containing a boolean member `persistent`.  The default is `{ persistent: true }`.
+containing a boolean member `persistent`, which indicates whether the process
+should continue to run as long as files are being watched. The default is
+`{ persistent: true }`.
 
 The listener callback gets two arguments `(event, filename)`.  `event` is either
 'rename' or 'change', and `filename` is the name of the file which triggered
@@ -917,7 +969,10 @@ callback, and have some fallback logic if it is null.
 
 第 2 引数はオプションです。
 もし指定されるなら、`options` は boolean の `persistent` プロパティを
-持つオブジェクトであるべきです。デフォルトは `{ persistent: true }` です。
+持つオブジェクトであるべきです。
+`persistent` はファイルが監視されている間、
+プロセスが実行し続けることを示します。
+デフォルトは `{ persistent: true }` です。
 
 リスナーコールバックは二つの引数 `(event, filename)` を与えられます。
 `event` は `'rename'` または `'change'`、そして `filename` はイベントを

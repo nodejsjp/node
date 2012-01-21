@@ -1,13 +1,35 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 /*
  * Tests to verify we're reading in signed integers correctly
  */
+var SlowBuffer = process.binding('buffer').SlowBuffer;
 var ASSERT = require('assert');
 
 /*
  * Test 8 bit signed integers
  */
-function test8() {
-  var data = new Buffer(4);
+function test8(clazz) {
+  var data = new clazz(4);
 
   data[0] = 0x23;
   ASSERT.equal(0x23, data.readInt8(0));
@@ -26,8 +48,8 @@ function test8() {
 }
 
 
-function test16() {
-  var buffer = new Buffer(6);
+function test16(clazz) {
+  var buffer = new clazz(6);
 
   buffer[0] = 0x16;
   buffer[1] = 0x79;
@@ -59,8 +81,8 @@ function test16() {
 }
 
 
-function test32() {
-  var buffer = new Buffer(6);
+function test32(clazz) {
+  var buffer = new clazz(6);
 
   buffer[0] = 0x43;
   buffer[1] = 0x53;
@@ -91,6 +113,9 @@ function test32() {
 }
 
 
-test8();
-test16();
-test32();
+test8(Buffer);
+test8(SlowBuffer);
+test16(Buffer);
+test16(SlowBuffer);
+test32(Buffer);
+test32(SlowBuffer);

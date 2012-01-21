@@ -53,17 +53,18 @@ process's stdin fd to act either as a raw device or default.
 
 <!--
 
-`ioctl`s the window size settings to the file descriptor.
+This function was removed in v0.6.0.
 
 -->
-ファイル記述子に関するウィンドウサイズの設定を `ioctl` します。
+この関数は v0.6.0 で削除されました。
 
 ### tty.getWindowSize(fd)
 
 <!--
 
-Returns `[row, col]` for the TTY associated with the file descriptor.
+This function was removed in v0.6.0. Use `process.stdout.getWindowSize()`
+instead.
 
 -->
-ファイル記述子に関連づけられた TTY の `[row, col]` を返します。
-
+この関数は v0.6.0 で削除されました。
+代わりに `process.stdout.getWindowSize()` を使用してください。

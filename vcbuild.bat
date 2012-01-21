@@ -16,6 +16,8 @@ set config=Debug
 set target=Build
 set noprojgen=
 set nobuild=
+set nosign=
+set nosnapshot=
 set test=
 set test_args=
 set msi=
@@ -28,6 +30,8 @@ if /i "%1"=="release"      set config=Release&goto arg-ok
 if /i "%1"=="clean"        set target=Clean&goto arg-ok
 if /i "%1"=="noprojgen"    set noprojgen=1&goto arg-ok
 if /i "%1"=="nobuild"      set nobuild=1&goto arg-ok
+if /i "%1"=="nosign"       set nosign=1&goto arg-ok
+if /i "%1"=="nosnapshot"   set nosnapshot=1&goto arg-ok
 if /i "%1"=="test-uv"      set test=test-uv&goto arg-ok
 if /i "%1"=="test-internet"set test=test-internet&goto arg-ok
 if /i "%1"=="test-pummel"  set test=test-pummel&goto arg-ok
@@ -37,6 +41,8 @@ if /i "%1"=="test-all"     set test=test-all&goto arg-ok
 if /i "%1"=="test"         set test=test&goto arg-ok
 if /i "%1"=="msi"          set msi=1&goto arg-ok
 if /i "%1"=="upload"       set upload=1&goto arg-ok
+
+
 :arg-ok
 shift
 goto next-arg
@@ -49,7 +55,15 @@ if defined upload goto upload
 if defined noprojgen goto msbuild
 
 @rem Generate the VS project.
+if defined nosnapshot goto nosnapshotgen
 python tools\gyp_node -f msvs -G msvs_version=2010
+if errorlevel 1 goto create-msvs-files-failed
+if not exist node.sln goto create-msvs-files-failed
+echo Project files generated.
+goto msbuild
+
+:nosnapshotgen
+python tools\gyp_node -f msvs -G msvs_version=2010 -D v8_use_snapshot='false'
 if errorlevel 1 goto create-msvs-files-failed
 if not exist node.sln goto create-msvs-files-failed
 echo Project files generated.
@@ -72,8 +86,11 @@ goto run
 
 :msbuild-found
 @rem Build the sln with msbuild.
-msbuild node.sln /t:%target% /p:Configuration=%config% /clp:NoSummary;NoItemAndPropertyList;Verbosity=minimal /nologo
+msbuild node.sln /m /t:%target% /p:Configuration=%config% /clp:NoSummary;NoItemAndPropertyList;Verbosity=minimal /nologo
 if errorlevel 1 goto exit
+
+if defined nosign goto msi
+signtool sign /a Release\node.exe
 
 :msi
 @rem Skip msi generation if not requested
@@ -81,8 +98,12 @@ if not defined msi goto run
 python "%~dp0tools\getnodeversion.py" > "%temp%\node_version.txt"
 if not errorlevel 0 echo Cannot determine current version of node.js & goto exit
 for /F "tokens=*" %%i in (%temp%\node_version.txt) do set NODE_VERSION=%%i
-msbuild "%~dp0tools\msvs\msi\nodemsi.sln" /t:Clean,Build /p:Configuration=%config% /p:NodeVersion=%NODE_VERSION% /clp:NoSummary;NoItemAndPropertyList;Verbosity=minimal /nologo
+heat dir deps\npm -var var.NPMSourceDir -dr NodeModulesFolder -cg NPMFiles -gg -template fragment -nologo -out npm.wxs
+msbuild "%~dp0tools\msvs\msi\nodemsi.sln" /m /t:Clean,Build /p:Configuration=%config% /p:NodeVersion=%NODE_VERSION% /clp:NoSummary;NoItemAndPropertyList;Verbosity=minimal /nologo
 if errorlevel 1 goto exit
+
+if defined nosign goto run
+signtool sign /a Release\node.msi
 
 :run
 @rem Run tests if requested.
@@ -120,7 +141,7 @@ scp Release\node.pdb node@nodejs.org:~/web/nodejs.org/dist/v%NODE_VERSION%/node.
 goto exit
 
 :help
-echo vcbuild.bat [debug/release] [msi] [test-all/test-uv/test-internet/test-pummel/test-simple/test-message] [clean] [noprojgen] [nobuild]
+echo vcbuild.bat [debug/release] [msi] [test-all/test-uv/test-internet/test-pummel/test-simple/test-message] [clean] [noprojgen] [nobuild] [nosign]
 echo Examples:
 echo   vcbuild.bat                : builds debug build
 echo   vcbuild.bat release msi    : builds release build and MSI installer package

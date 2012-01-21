@@ -266,7 +266,7 @@ occurred or `end()` / `destroy()` was called.
 デフォルトでは `true` ですが、`'error'` が発生した後、
 `end()` / `destroy()` が呼ばれた後で `false` に設定される boolean です。
 
-### stream.write(string, encoding='utf8', [fd])
+### stream.write(string, [encoding], [fd])
 
 <!--
 

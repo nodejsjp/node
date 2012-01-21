@@ -150,6 +150,29 @@ function expectBody(expected) {
 
 
 //
+// Response with no headers.
+//
+(function() {
+  var request = Buffer(
+    'HTTP/1.0 200 Connection established' + CRLF +
+    CRLF
+  );
+
+  var parser = newParser(RESPONSE);
+
+  parser.onHeadersComplete = mustCall(function(info) {
+    assert.equal(info.method, undefined);
+    assert.equal(info.versionMajor, 1);
+    assert.equal(info.versionMinor, 0);
+    assert.equal(info.statusCode, 200);
+    assert.deepEqual(info.headers || parser.headers, []);
+  });
+
+  parser.execute(request, 0, request.length);
+})();
+
+
+//
 // Trailing headers.
 //
 (function() {
@@ -381,7 +404,7 @@ function expectBody(expected) {
 //
 (function() {
   var request = Buffer(
-    'POST /it HTTP/1.1' + CRLF +
+    'POST /helpme HTTP/1.1' + CRLF +
     'Content-Type: text/plain' + CRLF +
     'Transfer-Encoding: chunked' + CRLF +
     CRLF +
@@ -403,7 +426,7 @@ function expectBody(expected) {
 
     parser.onHeadersComplete = mustCall(function(info) {
       assert.equal(info.method, 'POST');
-      assert.equal(info.url || parser.url, '/it');
+      assert.equal(info.url || parser.url, '/helpme');
       assert.equal(info.versionMajor, 1);
       assert.equal(info.versionMinor, 1);
     });
@@ -424,7 +447,9 @@ function expectBody(expected) {
 
   for (var i = 1; i < request.length - 1; ++i) {
     var a = request.slice(0, i);
+    console.error("request.slice(0, " + i + ") = ", JSON.stringify(a.toString()));
     var b = request.slice(i);
+    console.error("request.slice(" + i + ") = ", JSON.stringify(b.toString()));
     test(a, b);
   }
 })();
@@ -481,7 +506,7 @@ function expectBody(expected) {
 
 
 //
-//
+// Test parser reinit sequence.
 //
 (function() {
   var req1 = Buffer(
