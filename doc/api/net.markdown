@@ -33,7 +33,7 @@ event.
 
 <!--
 
-If `allowHalfOpen` is `true`, then the socket won't automatically send FIN
+If `allowHalfOpen` is `true`, then the socket won't automatically send a FIN
 packet when the other end of the socket sends a FIN packet. The socket becomes
 non-readable, but still writable. You should call the `end()` method explicitly.
 See ['end'](#event_end_) event for more information.
@@ -93,66 +93,72 @@ Use `nc` to connect to a UNIX domain socket server:
 
     nc -U /tmp/echo.sock
 
-### net.connect(arguments...)
-### net.createConnection(arguments...)
+### net.connect(options, [cnnectionListener])
+### net.createConnection(options, [cnnectionListener])
 
 <!--
-
-Construct a new socket object and opens a socket to the given location. When
-the socket is established the ['connect'](#event_connect_) event will be
+Constructs a new socket object and opens the socket to the given location.
+When the socket is established, the ['connect'](#event_connect_) event will be
 emitted.
-
 -->
-新しいソケットオブジェクトを構築し、与えられたロケーションへのソケットをオープンします。
+新しいソケットオブジェクトを構築し、与えられたロケーションへのソケットを
+オープンします。
 ソケットが確立されると、['connect'](#event_connect_) イベントが生成されます。
 
 <!--
-
-The arguments for these methods change the type of connection:
-
+For TCP sockets, `options` argument should be an object which specifies:
 -->
-このメソッドの引数はコネクションの種類によって変わります。
-
-* `net.connect(port, [host], [connectListener])`
-* `net.createConnection(port, [host], [connectListener])`
+TCP ソケットの場合、`options` 引数は以下を指定したオブジェクトです。
 
 <!--
+  - `port`: Port the client should connect to (Required).
 
-  Creates a TCP connection to `port` on `host`. If `host` is omitted,
-  `'localhost'` will be assumed.
-
+  - `host`: Host the client should connect to. Defaults to `'localhost'`.
 -->
-  `host` 上の `port` に対する TCP コネクションを作成します。
-  `host` が省略されると `localhost` が仮定されます。
+  - `port`: クライアントが接続するポート番号です (必須)。
 
-* `net.connect(path, [connectListener])`
-* `net.createConnection(path, [connectListener])`
+  - `host`: クライアントが接続するホストです。デフォルトは `localhost` です。
 
 <!--
-
-  Creates unix socket connection to `path`.
-
+For UNIX domain sockets, `options` argument should be an object which specifies:
 -->
-  `path` に対する UNIX ドメインソケットを作成します。
+UNIX ドメインソケットの場合、`options` 引数は以下を指定したオブジェクトです。
 
 <!--
+  - `path`: Path the client should connect to (Required).
+-->
+  - `path`: クライアントが接続するパスです (必須)。
 
+<!--
+Common options are:
+-->
+共通のオプション:
+
+<!--
+  - `allowHalfOpen`: if `true`, the socket won't automatically send
+    a FIN packet when the other end of the socket sends a FIN packet. 
+    Defaults to `false`.
+    See ['end'](#event_end_) event for more information.
+-->
+  - `allowHalfOpen`: `true` の場合、反対側のソケットが FIN
+    パケットを送信してきても自動的に FIN を送信しなくなります。
+    ['end'](#event_end_) イベントにより多くの情報があります。
+
+<!--
 The `connectListener` parameter will be added as an listener for the
 ['connect'](#event_connect_) event.
-
 -->
 `connectListener` 引数は ['connect'](#event_connect_)
 イベントのリスナとして追加されます。
 
 <!--
-
 Here is an example of a client of echo server as described previously:
-
 -->
 前述のエコーサーバに接続するクライアントの例:
 
     var net = require('net');
-    var client = net.connect(8124, function() { //'connect' listener
+    var client = net.connect({port: 8124},
+        function() { //'connect' listener
       console.log('client connected');
       client.write('world!\r\n');
     });
@@ -165,14 +171,38 @@ Here is an example of a client of echo server as described previously:
     });
 
 <!--
-
 To connect on the socket `/tmp/echo.sock` the second line would just be
 changed to
-
 -->
 `'/tmp/echo.sock'` へのソケットに接続するには、2 行目をこのように変更します。
 
-    var client = net.connect('/tmp/echo.sock', function() { //'connect' listener
+    var client = net.connect({path: '/tmp/echo.sock'},
+
+### net.connect(port, [host], [connectListener])
+### net.createConnection(port, [host], [connectListener])
+
+<!--
+Creates a TCP connection to `port` on `host`. If `host` is omitted,
+`'localhost'` will be assumed.
+The `connectListener` parameter will be added as an listener for the
+['connect'](#event_connect_) event.
+-->
+`host` 上の `port` に対する TCP コネクションを作成します。
+`host` が省略されると `localhost` が仮定されます。
+`connectListener` 引数は ['connect'](#event_connect_)
+イベントのリスナとして追加されます。
+
+### net.connect(path, [connectListener])
+### net.createConnection(path, [connectListener])
+
+<!--
+Creates unix socket connection to `path`.
+The `connectListener` parameter will be added as an listener for the
+['connect'](#event_connect_) event.
+-->
+`path` に対する UNIX ドメインソケットを作成します。
+`connectListener` 引数は ['connect'](#event_connect_)
+イベントのリスナとして追加されます。
 
 ---
 
@@ -256,15 +286,16 @@ Start a UNIX socket server listening for connections on the given `path`.
 
 <!--
 
-This function is asynchronous. The last parameter `listeningListener` will be
-called when the server has been bound.
-See also ['listening'](#event_listening_) event.
+This function is asynchronous.  When the server has been bound,
+['listening'](#event_listening_) event will be emitted.
+the last parameter `listeningListener` will be added as an listener for the
+['listening'](#event_listening_) event.
 
 -->
 この関数は非同期です。
-最後の引数 `listeningListener` はサーバがバインドすると呼び出されます。
-['listening'](#event_listening_) イベントも参照してください。
-
+サーバがバインドされると、`'listening'` イベントが生成されます。
+最後の引数 `listeningListener` は ['listening'](#event_listening_)
+のリスナとして加えられます。
 
 #### server.pause(msecs)
 
@@ -535,16 +566,16 @@ Node は、ソケットに書き込まれるデータを内部のキューに入
 
 大きな、あるいは増大する `bufferSize` を体験したユーザは、そのプログラムで `pause()` および `resume()` を使ってデータフローを「抑えよう」としなければなりません。
 
-#### socket.setEncoding(encoding=null)
+#### socket.setEncoding([encoding])
 
 <!--
 
 Sets the encoding (either `'ascii'`, `'utf8'`, or `'base64'`) for data that is
-received.
+received. Defaults to `null`.
 
 -->
 受信したデータのエンコーディングを設定します (`'ascii'`、`'utf8'`、
-あるいは `'base64'` のいずれかです)。
+あるいは `'base64'` のいずれかです)。デフォルトは `null` です。
 
 #### socket.setSecure()
 
@@ -686,36 +717,43 @@ The optional `callback` parameter will be added as a one time listener for the
 -->
 オプションの `callback` 引数は、`timeouot` イベントの一回限りのリスナを追加します。
 
-#### socket.setNoDelay(noDelay=true)
+#### socket.setNoDelay([noDelay])
 
 <!--
 
 Disables the Nagle algorithm. By default TCP connections use the Nagle
-algorithm, they buffer data before sending it off. Setting `noDelay` will
-immediately fire off data each time `socket.write()` is called.
+algorithm, they buffer data before sending it off. Setting `true` for
+`noDelay` will immediately fire off data each time `socket.write()` is called.
+`noDelay` defaults to `true`.
 
 -->
 Nagle アルゴリズムを無効にします。
 デフォルトでは TCP コネクションは Nagle アルゴリズムを使用し、データを送信する前にバッファリングします。
-`noDelay` に設定すると、データは `socket.write()` を呼び出す度に即座に送信されます。
+`noDelay` に `true` を設定すると、データは `socket.write()`
+を呼び出す度に即座に送信されます。デフォルトは `true` です。
 
-#### socket.setKeepAlive(enable=false, [initialDelay])
+#### socket.setKeepAlive([enable], [initialDelay])
 
 <!--
 
 Enable/disable keep-alive functionality, and optionally set the initial
 delay before the first keepalive probe is sent on an idle socket.
+`enable` defaults to `false`.
+
 Set `initialDelay` (in milliseconds) to set the delay between the last
 data packet received and the first keepalive probe. Setting 0 for
 initialDelay will leave the value unchanged from the default
-(or previous) setting.
+(or previous) setting. Defaults to `0`.
 
 -->
 キープアライブ機能を有効/無効にします。
 オプションで最初の keepalive probe がアイドルソケットに送信されるまでの初期遅延を設定します。
+`enable` のデフォルトは `false` です。
+
 `initialDelay` (ミリ秒) が設定されると、
 最後にデータパケットを受信してから最初の keepalive probe までの遅延が設定されます。
 初期遅延に 0 が設定されると、デフォルト設定から値を変更されないようにします。
+デフォルトは `0` です。
 
 #### socket.address()
 

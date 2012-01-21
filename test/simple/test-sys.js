@@ -31,7 +31,7 @@ assert.equal('[Function]', common.inspect(function() {}));
 assert.equal('undefined', common.inspect(undefined));
 assert.equal('null', common.inspect(null));
 assert.equal('/foo(bar\\n)?/gi', common.inspect(/foo(bar\n)?/gi));
-assert.equal('Sun, 14 Feb 2010 11:48:40 GMT',
+assert.equal(new Date('2010-02-14T12:48:40+01:00').toString(),
              common.inspect(new Date('Sun, 14 Feb 2010 11:48:40 GMT')));
 
 assert.equal("'\\n\\u0001'", common.inspect('\n\u0001'));
@@ -60,17 +60,29 @@ assert.equal('{ visible: 1 }',
     common.inspect(Object.create({},
     {visible: {value: 1, enumerable: true}, hidden: {value: 2}}))
 );
-assert.equal('{ [hidden]: 2, visible: 1 }',
-    common.inspect(Object.create({},
-    {visible: {value: 1, enumerable: true}, hidden: {value: 2}}), true)
-);
+
+// Due to the hash seed randomization it's not deterministic the order that
+// the following ways this hash is displayed.
+// See http://codereview.chromium.org/9124004/
+
+var out = common.inspect(Object.create({},
+    {visible: {value: 1, enumerable: true}, hidden: {value: 2}}), true);
+if (out !== '{ [hidden]: 2, visible: 1 }' &&
+    out !== '{ visible: 1, [hidden]: 2 }') {
+  assert.ok(false);
+}
+
 
 // Objects without prototype
-assert.equal('{ [hidden]: \'secret\', name: \'Tim\' }',
-    common.inspect(Object.create(null,
-                                 {name: {value: 'Tim', enumerable: true},
-                                   hidden: {value: 'secret'}}), true)
-);
+var out = common.inspect(Object.create(null,
+    { name: {value: 'Tim', enumerable: true},
+      hidden: {value: 'secret'}}), true);
+if (out !== "{ [hidden]: 'secret', name: 'Tim' }" &&
+    out !== "{ name: 'Tim', [hidden]: 'secret' }") {
+  assert(false);
+}
+
+
 assert.equal('{ name: \'Tim\' }',
     common.inspect(Object.create(null,
                                  {name: {value: 'Tim', enumerable: true},

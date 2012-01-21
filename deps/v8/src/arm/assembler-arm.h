@@ -32,7 +32,7 @@
 
 // The original source code covered by the above license above has been
 // modified significantly by Google Inc.
-// Copyright 2011 the V8 project authors. All rights reserved.
+// Copyright 2012 the V8 project authors. All rights reserved.
 
 // A light-weight ARM Assembler
 // Generates user mode instructions for the ARM architecture up to version 5
@@ -176,14 +176,11 @@ struct DwVfpRegister {
   static const int kNumAllocatableRegisters = kNumRegisters -
       kNumReservedRegisters;
 
-  static int ToAllocationIndex(DwVfpRegister reg) {
-    ASSERT(reg.code() != 0);
-    return reg.code() - 1;
-  }
+  inline static int ToAllocationIndex(DwVfpRegister reg);
 
   static DwVfpRegister FromAllocationIndex(int index) {
     ASSERT(index >= 0 && index < kNumAllocatableRegisters);
-    return from_code(index + 1);
+    return from_code(index);
   }
 
   static const char* AllocationIndexToString(int index) {
@@ -304,9 +301,10 @@ const DwVfpRegister d14 = { 14 };
 const DwVfpRegister d15 = { 15 };
 
 // Aliases for double registers.
-const DwVfpRegister kFirstCalleeSavedDoubleReg = d8;
-const DwVfpRegister kLastCalleeSavedDoubleReg = d15;
-const DwVfpRegister kDoubleRegZero = d14;
+static const DwVfpRegister& kFirstCalleeSavedDoubleReg = d8;
+static const DwVfpRegister& kLastCalleeSavedDoubleReg = d15;
+static const DwVfpRegister& kDoubleRegZero = d14;
+static const DwVfpRegister& kScratchDoubleReg = d15;
 
 
 // Coprocessor register
@@ -1209,6 +1207,10 @@ class Assembler : public AssemblerBase {
   PositionsRecorder* positions_recorder() { return &positions_recorder_; }
 
   // Read/patch instructions
+  Instr instr_at(int pos) { return *reinterpret_cast<Instr*>(buffer_ + pos); }
+  void instr_at_put(int pos, Instr instr) {
+    *reinterpret_cast<Instr*>(buffer_ + pos) = instr;
+  }
   static Instr instr_at(byte* pc) { return *reinterpret_cast<Instr*>(pc); }
   static void instr_at_put(byte* pc, Instr instr) {
     *reinterpret_cast<Instr*>(pc) = instr;
@@ -1262,12 +1264,6 @@ class Assembler : public AssemblerBase {
   bool emit_debug_code() const { return emit_debug_code_; }
 
   int buffer_space() const { return reloc_info_writer.pos() - pc_; }
-
-  // Read/patch instructions
-  Instr instr_at(int pos) { return *reinterpret_cast<Instr*>(buffer_ + pos); }
-  void instr_at_put(int pos, Instr instr) {
-    *reinterpret_cast<Instr*>(buffer_ + pos) = instr;
-  }
 
   // Decode branch instruction at pos and return branch target pos
   int target_at(int pos);

@@ -86,12 +86,15 @@ static void uv_loop_init(uv_loop_t* loop) {
   loop->ares_active_sockets = 0;
   loop->ares_chan = NULL;
 
+  loop->active_tcp_streams = 0;
+  loop->active_udp_streams = 0;
+
   loop->last_err = uv_ok_;
 }
 
 
 static void uv_default_loop_init(void) {
-  /* Intialize libuv itself first */
+  /* Initialize libuv itself first */
   uv_once(&uv_init_guard_, uv_init);
 
   /* Initialize the main loop */
@@ -106,13 +109,31 @@ uv_loop_t* uv_default_loop(void) {
 
 
 uv_loop_t* uv_loop_new(void) {
-  assert(0 && "implement me");
-  return NULL;
+  uv_loop_t* loop;
+
+  /* Initialize libuv itself first */
+  uv_once(&uv_init_guard_, uv_init);
+
+  loop = (uv_loop_t*)malloc(sizeof(uv_loop_t));
+
+  if (!loop) {
+    uv_fatal_error(ERROR_OUTOFMEMORY, "malloc");
+  }
+
+  uv_loop_init(loop);
+  return loop;
 }
 
 
 void uv_loop_delete(uv_loop_t* loop) {
-  assert(0 && "implement me");
+  if (loop != &uv_default_loop_) {
+    free(loop);
+  }
+}
+
+
+int uv_loop_refcount(const uv_loop_t* loop) {
+  return loop->refs;
 }
 
 
@@ -192,9 +213,8 @@ static void uv_poll_ex(uv_loop_t* loop, int block) {
   }
 }
 
-
-#define UV_LOOP(loop, poll)                                                   \
-  while ((loop)->refs > 0) {                                                  \
+#define UV_LOOP_ONCE(loop, poll)                                              \
+  do {                                                                        \
     uv_update_time((loop));                                                   \
     uv_process_timers((loop));                                                \
                                                                               \
@@ -204,13 +224,8 @@ static void uv_poll_ex(uv_loop_t* loop, int block) {
       uv_idle_invoke((loop));                                                 \
     }                                                                         \
                                                                               \
-    /* Completely flush all pending reqs and endgames. */                     \
-    /* We do even when we just called the idle callbacks because those may */ \
-    /* have closed handles or started requests that short-circuited. */       \
-    while ((loop)->pending_reqs_tail || (loop)->endgame_handles) {            \
-      uv_process_endgames((loop));                                            \
-      uv_process_reqs((loop));                                                \
-    }                                                                         \
+    uv_process_reqs((loop));                                                  \
+    uv_process_endgames((loop));                                              \
                                                                               \
     if ((loop)->refs <= 0) {                                                  \
       break;                                                                  \
@@ -218,10 +233,28 @@ static void uv_poll_ex(uv_loop_t* loop, int block) {
                                                                               \
     uv_prepare_invoke((loop));                                                \
                                                                               \
-    poll((loop), (loop)->idle_handles == NULL && (loop)->refs > 0);           \
+    poll((loop), (loop)->idle_handles == NULL &&                              \
+                 (loop)->pending_reqs_tail == NULL &&                         \
+                 (loop)->endgame_handles == NULL &&                           \
+                 (loop)->refs > 0);                                           \
                                                                               \
     uv_check_invoke((loop));                                                  \
+  } while (0);
+
+#define UV_LOOP(loop, poll)                                                   \
+  while ((loop)->refs > 0) {                                                  \
+    UV_LOOP_ONCE(loop, poll)                                                  \
   }
+
+
+int uv_run_once(uv_loop_t* loop) {
+  if (pGetQueuedCompletionStatusEx) {
+    UV_LOOP_ONCE(loop, uv_poll_ex);
+  } else {
+    UV_LOOP_ONCE(loop, uv_poll);
+  }
+  return 0;
+}
 
 
 int uv_run(uv_loop_t* loop) {

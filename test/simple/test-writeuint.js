@@ -1,6 +1,28 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 /*
  * A battery of tests to help us read a series of uints
  */
+var SlowBuffer = process.binding('buffer').SlowBuffer;
 var ASSERT = require('assert');
 
 /*
@@ -10,8 +32,8 @@ var ASSERT = require('assert');
  *  - Correctly using the offsets
  *  - Correctly interpreting values that are beyond the signed range as unsigned
  */
-function test8() {
-  var data = new Buffer(4);
+function test8(clazz) {
+  var data = new clazz(4);
 
   data.writeUInt8(23, 0);
   data.writeUInt8(23, 1);
@@ -39,9 +61,9 @@ function test8() {
 }
 
 
-function test16() {
+function test16(clazz) {
   var value = 0x2343;
-  var data = new Buffer(4);
+  var data = new clazz(4);
 
   data.writeUInt16BE(value, 0);
   ASSERT.equal(0x23, data[0]);
@@ -78,8 +100,8 @@ function test16() {
 }
 
 
-function test32() {
-  var data = new Buffer(6);
+function test32(clazz) {
+  var data = new clazz(6);
   var value = 0xe7f90a6d;
 
   data.writeUInt32BE(value, 0);
@@ -120,6 +142,9 @@ function test32() {
 }
 
 
-test8();
-test16();
-test32();
+test8(Buffer);
+test8(SlowBuffer);
+test16(Buffer);
+test16(SlowBuffer);
+test32(Buffer);
+test32(SlowBuffer);

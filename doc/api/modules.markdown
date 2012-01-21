@@ -211,6 +211,7 @@ That is, `circle.js` must be in the same directory as `foo.js` for
 Without a leading '/' or './' to indicate a file, the module is either a
 "core module" or is loaded from a `node_modules` folder.
 
+<<<<<<< HEAD
 -->
 指定された名前のファイルが見つからなかったら、 Node は指定されたファイル名に
 `.js`、`.json`、または `.node` を付けたものを読み込もうとします。
@@ -227,6 +228,10 @@ Without a leading '/' or './' to indicate a file, the module is either a
 すなわち、 `foo.js` から `require('./circle')` によって `circle.js` を読み込むには、 `circle.js` は `foo.js` と同じディレクトリに存在していなければなりません。
 
 '/' や './' が先頭になければ、モジュールは "コアモジュール" であるかもしくは `node_modules` フォルダから読み込まれることになります。
+=======
+If the given path does not exist, `require()` will throw an Error with its
+`code` property set to `'MODULE_NOT_FOUND'`.
+>>>>>>> master
 
 ### Loading from `node_modules` Folders
 
@@ -533,7 +538,7 @@ Where `$HOME` is the user's home directory, and `$PREFIX` is node's
 configured `installPrefix`.
 
 These are mostly for historic reasons.  You are highly encouraged to
-place your dependencies localy in `node_modules` folders.  They will be
+place your dependencies locally in `node_modules` folders.  They will be
 loaded faster, and more reliably.
 
 -->

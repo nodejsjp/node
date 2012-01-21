@@ -29,6 +29,7 @@
 #define V8_LOG_H_
 
 #include "allocation.h"
+#include "objects.h"
 #include "platform.h"
 #include "log-utils.h"
 
@@ -149,14 +150,14 @@ class Logger {
 #undef DECLARE_ENUM
 
   // Acquires resources for logging if the right flags are set.
-  bool Setup();
+  bool SetUp();
 
   void EnsureTickerStarted();
   void EnsureTickerStopped();
 
   Sampler* sampler();
 
-  // Frees resources acquired in Setup.
+  // Frees resources acquired in SetUp.
   // When a temporary file is used for the log, returns its stream descriptor,
   // leaving the file open.
   FILE* TearDown();
@@ -294,7 +295,13 @@ class Logger {
   INLINE(static LogEventsAndTags ToNativeByScript(LogEventsAndTags, Script*));
 
   // Profiler's sampling interval (in milliseconds).
+#if defined(ANDROID)
+  // Phones and tablets have processors that are much slower than desktop
+  // and laptop computers for which current heuristics are tuned.
+  static const int kSamplingIntervalMs = 5;
+#else
   static const int kSamplingIntervalMs = 1;
+#endif
 
   // Callback from Log, stops profiling in case of insufficient resources.
   void LogFailure();
@@ -404,7 +411,7 @@ class Logger {
   NameMap* address_to_name_map_;
 
   // Guards against multiple calls to TearDown() that can happen in some tests.
-  // 'true' between Setup() and TearDown().
+  // 'true' between SetUp() and TearDown().
   bool is_initialized_;
 
   // Support for 'incremental addresses' in compressed logs:

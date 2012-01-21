@@ -103,29 +103,36 @@ Example: this program that takes the sha1 sum of a file
       console.log(d + '  ' + filename);
     });
 
-### hash.update(data)
+### hash.update(data, [input_encoding])
 
 <!--
 
-Updates the hash content with the given `data`.
+Updates the hash content with the given `data`, the encoding of which is given
+in `input_encoding` and can be `'utf8'`, `'ascii'` or `'binary'`.
+Defaults to `'binary'`.
 This can be called many times with new data as it is streamed.
 
 -->
 与えられた `data` でハッシュの内容を更新します。
+そのエンコーディングは `input_encoding` で与えられ、`'utf8'`、`'ascii'`、
+または `'binary'` を指定することができます。
+デフォルトは `'binary'` です。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
 
-### hash.digest(encoding='binary')
+### hash.digest([encoding])
 
 <!--
 
 Calculates the digest of all of the passed data to be hashed.
 The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
+Defaults to `'binary'`.
 
 Note: `hash` object can not be used after `digest()` method been called.
 
 -->
 渡された全てのデータがハッシュ化されたダイジェストを計算します。
 `encoding` は `'hex'`、`'binary'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
 
 注意: `digest()` メソッドを呼び出した後で `hash` 
 オブジェクトを使うことはできません。
@@ -160,18 +167,20 @@ This can be called many times with new data as it is streamed.
 与えられた `data` で HMAC の内容を更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
 
-### hmac.digest(encoding='binary')
+### hmac.digest([encoding])
 
 <!--
 
 Calculates the digest of all of the passed data to the hmac.
 The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
+Defaults to `'binary'`.
 
 Note: `hmac` object can not be used after `digest()` method been called.
 
 -->
 渡された全てのデータが HMAC 化されたダイジェストを計算します。
 `encoding` は `'hex'`、`'binary'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
 
 注意: `digest()` メソッドを呼び出した後で `hmac` 
 オブジェクトを使うことはできません。
@@ -215,19 +224,25 @@ encoded string (See the [Buffers](buffers.html) for more information).
 `key` と `iv` は `'binary'` でエンコードされた文字列でなければなりません
 (より詳細は [Buffers](buffers.html) を参照してください)。
 
-### cipher.update(data, input_encoding='binary', output_encoding='binary')
+### cipher.update(data, [input_encoding], [output_encoding])
 
 <!--
 
-Updates the cipher with `data`, the encoding of which is given in `input_encoding`
-and can be `'utf8'`, `'ascii'` or `'binary'`. The `output_encoding` specifies
-the output format of the enciphered data, and can be `'binary'`, `'base64'` or `'hex'`.
+Updates the cipher with `data`, the encoding of which is given in
+`input_encoding` and can be `'utf8'`, `'ascii'` or `'binary'`.
+Defaults to `'binary'`.
+
+The `output_encoding` specifies the output format of the enciphered data,
+and can be `'binary'`, `'base64'` or `'hex'`. Defaults to `'binary'`.
 
 -->
 `data` で暗号を更新します。
 `input_encoding` で与えられるエンコーディングは `'utf8'`、`'ascii'`、`'binary'` のいずれかです。
+デフォルトは `'binary'` です。
+
 `output_encoding` は暗号化されたデータの出力フォーマットを指定するもので、
 `'utf8'`、`'ascii'` または `'binary'` のいずれかです。
+デフォルトは `'binary'` です。
 
 <!--
 
@@ -236,17 +251,19 @@ Returns the enciphered contents, and can be called many times with new data as i
 -->
 暗号化されたコンテンツが返されます。これは新しいデータがストリームに流される際に何度も呼び出されます。
 
-### cipher.final(output_encoding='binary')
+### cipher.final([output_encoding])
 
 <!--
 
-Returns any remaining enciphered contents, with `output_encoding` being one of: `'binary'`, `'base64'` or `'hex'`.
+Returns any remaining enciphered contents, with `output_encoding` being one of:
+`'binary'`, `'base64'` or `'hex'`. Defaults to `'binary'`.
 
 Note: `cipher` object can not be used after `final()` method been called.
 
 -->
 暗号化されたコンテンツの残りを返します。
-`output_encoding` は次のいずれかです: `'binary'`、`'base64'` または `'hex'`
+`output_encoding` は次のいずれかです: `'binary'`、`'base64'` または `'hex'`。
+デフォルトは `'binary'` です。
 
 注意: `final()` メソッドを呼び出した後で `cipher` 
 オブジェクトを使うことはできません。
@@ -274,29 +291,39 @@ This is the mirror of the [createCipheriv()](#crypto.createCipheriv) above.
 与えられたアルゴリズムとキー、IV を使用する復号オブジェクトを作成して返します。
 これは前述の [createCipheriv()](#crypto.createCipheriv) の鏡写しです。
 
-### decipher.update(data, input_encoding='binary', output_encoding='binary')
+
+### decipher.update(data, [input_encoding], [output_encoding])
 
 <!--
 
-Updates the decipher with `data`, which is encoded in `'binary'`, `'base64'` or `'hex'`.
-The `output_decoding` specifies in what format to return the deciphered plaintext: `'binary'`, `'ascii'` or `'utf8'`.
+Updates the decipher with `data`, which is encoded in `'binary'`, `'base64'`
+or `'hex'`. Defaults to `'binary'`.
+
+The `output_decoding` specifies in what format to return the deciphered
+plaintext: `'binary'`, `'ascii'` or `'utf8'`. Defaults to `'binary'`.
 
 -->
-`'binary'`、`'base64'` または `'hex'` のいずれかでエンコードされた復号を `data` で更新します。
+`'binary'`、`'base64'` または `'hex'` のいずれかでエンコードされた復号を
+`data` で更新します。デフォルトは `'binary'` です。
+
 `output_decoding` は復号化されたプレーンテキストのフォーマットを指定するもので、
 `'binary'`、`'ascii'` あるいは `'utf8'` のいずれかです。
+デフォルトは `'binary'` です。
 
-### decipher.final(output_encoding='binary')
+
+### decipher.final([output_encoding])
 
 <!--
 
 Returns any remaining plaintext which is deciphered,
 with `output_encoding` being one of: `'binary'`, `'ascii'` or `'utf8'`.
+Defaults to `'binary'`.
 
 Note: `decipher` object can not be used after `final()` method been called.
 -->
 復号化されたプレーンテキストの残りを返します。
 `output_decoding` は `'binary'`、`'ascii'` あるいは `'utf8'` のいずれかです。
+デフォルトは `'binary'` です。
 
 注意: `final()` メソッドを呼び出した後で `decipher` 
 オブジェクトを使うことはできません。
@@ -326,7 +353,8 @@ This can be called many times with new data as it is streamed.
 署名オブジェクトをデータで更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
 
-### signer.sign(private_key, output_format='binary')
+
+### signer.sign(private_key, [output_format])
 
 <!--
 
@@ -339,12 +367,14 @@ Calculates the signature on all the updated data passed through the signer.
 
 <!--
 
-Returns the signature in `output_format` which can be `'binary'`, `'hex'` or `'base64'`.
+Returns the signature in `output_format` which can be `'binary'`, `'hex'` or
+`'base64'`. Defaults to `'binary'`.
 
 Note: `signer` object can not be used after `sign()` method been called.
 
 -->
-`'binary'`、`'hex'`、あるいは `'base64'` のいずれかを指定した `output_format` による署名を返します。
+`'binary'`、`'hex'`、あるいは `'base64'` のいずれかを指定した `output_format`
+による署名を返します。デフォルトは `'binary'` です。
 
 注意: `sign()` メソッドを呼び出した後で `signer` 
 オブジェクトを使うことはできません。
@@ -371,7 +401,8 @@ This can be called many times with new data as it is streamed.
 検証オブジェクトをデータで更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
 
-### verifier.verify(object, signature, signature_format='binary')
+
+### verifier.verify(object, signature, [signature_format])
 
 <!--
 
@@ -379,14 +410,15 @@ Verifies the signed data by using the `object` and `signature`. `object` is  a
 string containing a PEM encoded object, which can be one of RSA public key,
 DSA public key, or X.509 certificate. `signature` is the previously calculated
 signature for the data, in the `signature_format` which can be `'binary'`,
-`'hex'` or `'base64'`.
+`'hex'` or `'base64'`. Defaults to `'binary'`.
 
 -->
 署名されたデータを `object` と `signature` で検証します。
 `object` は RSA 公開鍵、DSA 公開鍵、X.509証明書のいずれかを
 PEM でエンコードしたオブジェクトです。
 `signature` は先に計算したデータの署名で、
-その `signature_format` は `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+その `signature_format` は `'binary'`、`'hex'`、または `'base64'`
+のいずれかです。デフォルトは `'binary'` です。
 
 <!--
 
@@ -412,97 +444,119 @@ given bit length. The generator used is `2`.
 ディフィー・ヘルマン鍵共有オブジェクトを作成し、
 与えられた長さの素数を生成します。生成元は `2` です。
 
-### crypto.createDiffieHellman(prime, encoding='binary')
+
+### crypto.createDiffieHellman(prime, [encoding])
 
 <!--
 Creates a Diffie-Hellman key exchange object using the supplied prime. The
 generator used is `2`. Encoding can be `'binary'`, `'hex'`, or `'base64'`.
+Defaults to `'binary'`.
 -->
 与えられた素数からディフィー・ヘルマン鍵共有オブジェクトを作成します。
 生成元は `2` です。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
 
-### diffieHellman.generateKeys(encoding='binary')
+
+### diffieHellman.generateKeys([encoding])
 
 <!--
 Generates private and public Diffie-Hellman key values, and returns the
 public key in the specified encoding. This key should be transferred to the
 other party. Encoding can be `'binary'`, `'hex'`, or `'base64'`.
+Defaults to `'binary'`.
 -->
 ディフィー・ヘルマン法で秘密および公開鍵を作成し、
 指定の方法でエンコーディングされた公開鍵を返します。
 この鍵は相手側に渡されるものです。
+エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
 
-### diffieHellman.computeSecret(other_public_key, input_encoding='binary', output_encoding=input_encoding)
+
+### diffieHellman.computeSecret(other_public_key, [input_encoding], [output_encoding])
 
 <!--
 Computes the shared secret using `other_public_key` as the other party's
 public key and returns the computed shared secret. Supplied key is
 interpreted using specified `input_encoding`, and secret is encoded using
 specified `output_encoding`. Encodings can be `'binary'`, `'hex'`, or
-`'base64'`. If no output encoding is given, the input encoding is used as
-output encoding.
+`'base64'`. The input encoding defaults to `'binary'`.
+If no output encoding is given, the input encoding is used as output encoding.
 -->
 `other_public_key` を相手側の公開鍵として共有の秘密鍵を計算して返します。
 与えられた公開鍵は指定の `input_encoding` を使って解釈され、
 秘密鍵は `output_encoding` で指定された方法でエンコードされます。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+入力エンコーディングのデフォルトは `'binary'` です。
 出力のエンコーディングが与えられなかった場合は、入力のエンコーディングが
 出力エンコーディングとして使われます。
 
-### diffieHellman.getPrime(encoding='binary')
+
+### diffieHellman.getPrime([encoding])
 
 <!--
 Returns the Diffie-Hellman prime in the specified encoding, which can be
-`'binary'`, `'hex'`, or `'base64'`.
+`'binary'`, `'hex'`, or `'base64'`. Defaults to `'binary'`.
 -->
 ディフィー・ヘルマン法の素数を指定のエンコーディングで返します。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
 
-### diffieHellman.getGenerator(encoding='binary')
+
+### diffieHellman.getGenerator([encoding])
 
 <!--
 Returns the Diffie-Hellman prime in the specified encoding, which can be
-`'binary'`, `'hex'`, or `'base64'`.
+`'binary'`, `'hex'`, or `'base64'`. Defaults to `'binary'`.
 -->
 ディフィー・ヘルマン法の生成元を指定のエンコーディングで返します。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
 
-### diffieHellman.getPublicKey(encoding='binary')
+
+### diffieHellman.getPublicKey([encoding])
 
 <!--
 Returns the Diffie-Hellman public key in the specified encoding, which can
-be `'binary'`, `'hex'`, or `'base64'`.
+be `'binary'`, `'hex'`, or `'base64'`. Defaults to `'binary'`.
 -->
 ディフィー・ヘルマン法による公開鍵を指定のエンコーディングで返します。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
 
-### diffieHellman.getPrivateKey(encoding='binary')
+
+### diffieHellman.getPrivateKey([encoding])
 
 <!--
 Returns the Diffie-Hellman private key in the specified encoding, which can
-be `'binary'`, `'hex'`, or `'base64'`.
+be `'binary'`, `'hex'`, or `'base64'`. Defaults to `'binary'`.
 -->
 ディフィー・ヘルマン法による秘密鍵を指定のエンコーディングで返します。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
 
-### diffieHellman.setPublicKey(public_key, encoding='binary')
+
+### diffieHellman.setPublicKey(public_key, [encoding])
 
 <!--
 Sets the Diffie-Hellman public key. Key encoding can be `'binary'`, `'hex'`,
-or `'base64'`.
+or `'base64'`. Defaults to `'binary'`.
 -->
 ディフィー・ヘルマン法による公開鍵を設定します。
 鍵のエンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
 
 
-### diffieHellman.setPrivateKey(public_key, encoding='binary')
+### diffieHellman.setPrivateKey(public_key, [encoding])
 
 <!--
-Sets the Diffie-Hellman private key. Key encoding can be `'binary'`, `'hex'`, or `'base64'`.
+Sets the Diffie-Hellman private key. Key encoding can be `'binary'`, `'hex'`,
+or `'base64'`. Defaults to `'binary'`.
 -->
 ディフィー・ヘルマン法による秘密鍵を設定します。
 鍵のエンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
+デフォルトは `'binary'` です。
+
 
 ### pbkdf2(password, salt, iterations, keylen, callback)
 
@@ -515,6 +569,7 @@ The callback gets two arguments `(err, derivedKey)`.
 (ランダムなバイト値)、および繰り返しから、指定された長さの鍵を生成する、
 非同期の PBKDF2 です。
 コールバック関数は二つの引数を受け取る `(err, derivedKey)` です。
+
 
 ### randomBytes(size, [callback])
 

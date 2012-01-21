@@ -74,7 +74,9 @@ static uint64_t CpuFeaturesImpliedByCompiler() {
 
 
 void CpuFeatures::Probe() {
-  ASSERT(!initialized_);
+  unsigned standard_features = (OS::CpuFeaturesImpliedByPlatform() |
+                                CpuFeaturesImpliedByCompiler());
+  ASSERT(supported_ == 0 || supported_ == standard_features);
 #ifdef DEBUG
   initialized_ = true;
 #endif
@@ -82,8 +84,7 @@ void CpuFeatures::Probe() {
   // Get the features implied by the OS and the compiler settings. This is the
   // minimal set of features which is also allowed for generated code in the
   // snapshot.
-  supported_ |= OS::CpuFeaturesImpliedByPlatform();
-  supported_ |= CpuFeaturesImpliedByCompiler();
+  supported_ |= standard_features;
 
   if (Serializer::enabled()) {
     // No probing for features if we might serialize (generate snapshot).
@@ -300,7 +301,7 @@ Assembler::Assembler(Isolate* arg_isolate, void* buffer, int buffer_size)
     own_buffer_ = false;
   }
 
-  // Setup buffer pointers.
+  // Set up buffer pointers.
   ASSERT(buffer_ != NULL);
   pc_ = buffer_;
   reloc_info_writer.Reposition(buffer_ + buffer_size, pc_);
@@ -336,7 +337,7 @@ Assembler::~Assembler() {
 
 void Assembler::GetCode(CodeDesc* desc) {
   ASSERT(pc_ <= reloc_info_writer.pos());  // No overlap.
-  // Setup code descriptor.
+  // Set up code descriptor.
   desc->buffer = buffer_;
   desc->buffer_size = buffer_size_;
   desc->instr_size = pc_offset();
@@ -1969,7 +1970,7 @@ void Assembler::GrowBuffer() {
   }
   CHECK_GT(desc.buffer_size, 0);  // No overflow.
 
-  // Setup new buffer.
+  // Set up new buffer.
   desc.buffer = NewArray<byte>(desc.buffer_size);
 
   desc.instr_size = pc_offset();
@@ -2018,7 +2019,8 @@ void Assembler::dd(uint32_t data) {
 
 
 void Assembler::RecordRelocInfo(RelocInfo::Mode rmode, intptr_t data) {
-  RelocInfo rinfo(pc_, rmode, data);  // We do not try to reuse pool constants.
+  // We do not try to reuse pool constants.
+  RelocInfo rinfo(pc_, rmode, data, NULL);
   if (rmode >= RelocInfo::JS_RETURN && rmode <= RelocInfo::DEBUG_BREAK_SLOT) {
     // Adjust code for new modes.
     ASSERT(RelocInfo::IsDebugBreakSlot(rmode)
@@ -2041,7 +2043,7 @@ void Assembler::RecordRelocInfo(RelocInfo::Mode rmode, intptr_t data) {
     }
     ASSERT(buffer_space() >= kMaxRelocSize);  // Too late to grow buffer here.
     if (rmode == RelocInfo::CODE_TARGET_WITH_ID) {
-      RelocInfo reloc_info_with_ast_id(pc_, rmode, RecordedAstId());
+      RelocInfo reloc_info_with_ast_id(pc_, rmode, RecordedAstId(), NULL);
       ClearRecordedAstId();
       reloc_info_writer.Write(&reloc_info_with_ast_id);
     } else {

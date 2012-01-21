@@ -63,12 +63,6 @@ void uv__next(EV_P_ ev_idle* watcher, int revents);
 static void uv__finish_close(uv_handle_t* handle);
 
 
-
-#ifndef __GNUC__
-#define __attribute__(a)
-#endif
-
-
 void uv_close(uv_handle_t* handle, uv_close_cb close_cb) {
   uv_udp_t* udp;
   uv_async_t* async;
@@ -158,10 +152,31 @@ void uv_close(uv_handle_t* handle, uv_close_cb close_cb) {
 }
 
 
-uv_loop_t* uv_loop_new(void) {
-  uv_loop_t* loop = calloc(1, sizeof(uv_loop_t));
-  loop->ev = ev_loop_new(0);
+static int uv__loop_init(uv_loop_t* loop,
+                         struct ev_loop *(ev_loop_new)(unsigned int flags)) {
+  memset(loop, 0, sizeof(*loop));
+#if HAVE_KQUEUE
+  loop->ev = ev_loop_new(EVBACKEND_KQUEUE);
+#else
+  loop->ev = ev_loop_new(EVFLAG_AUTO);
+#endif
   ev_set_userdata(loop->ev, loop);
+  eio_channel_init(&loop->uv_eio_channel, loop);
+  return 0;
+}
+
+
+uv_loop_t* uv_loop_new(void) {
+  uv_loop_t* loop;
+
+  if ((loop = malloc(sizeof(*loop))) == NULL)
+    return NULL;
+
+  if (uv__loop_init(loop, ev_loop_new)) {
+    free(loop);
+    return NULL;
+  }
+
   return loop;
 }
 
@@ -169,27 +184,43 @@ uv_loop_t* uv_loop_new(void) {
 void uv_loop_delete(uv_loop_t* loop) {
   uv_ares_destroy(loop, loop->channel);
   ev_loop_destroy(loop->ev);
-  free(loop);
+
+#ifndef NDEBUG
+  memset(loop, 0, sizeof *loop);
+#endif
+
+  if (loop == default_loop_ptr)
+    default_loop_ptr = NULL;
+  else
+    free(loop);
+}
+
+
+int uv_loop_refcount(const uv_loop_t* loop) {
+  return ev_loop_refcount(loop->ev);
 }
 
 
 uv_loop_t* uv_default_loop(void) {
-  if (!default_loop_ptr) {
-    default_loop_ptr = &default_loop_struct;
-#if HAVE_KQUEUE
-    default_loop_struct.ev = ev_default_loop(EVBACKEND_KQUEUE);
-#else
-    default_loop_struct.ev = ev_default_loop(EVFLAG_AUTO);
-#endif
-    ev_set_userdata(default_loop_struct.ev, default_loop_ptr);
-  }
-  assert(default_loop_ptr->ev == EV_DEFAULT_UC);
+  if (default_loop_ptr)
+    return default_loop_ptr;
+
+  if (uv__loop_init(&default_loop_struct, ev_default_loop))
+    return NULL;
+
+  default_loop_ptr = &default_loop_struct;
   return default_loop_ptr;
 }
 
 
 int uv_run(uv_loop_t* loop) {
   ev_run(loop->ev, 0);
+  return 0;
+}
+
+
+int uv_run_once(uv_loop_t* loop) {
+  ev_run(loop->ev, EVRUN_ONCE);
   return 0;
 }
 
@@ -309,8 +340,8 @@ int64_t uv_now(uv_loop_t* loop) {
 }
 
 
-void uv__req_init(uv_req_t* req) {
-  /* loop->counters.req_init++; */
+void uv__req_init(uv_loop_t* loop, uv_req_t* req) {
+  loop->counters.req_init++;
   req->type = UV_UNKNOWN_REQ;
 }
 
@@ -650,7 +681,7 @@ int uv_getaddrinfo(uv_loop_t* loop,
     return -1;
   }
 
-  uv__req_init((uv_req_t*)handle);
+  uv__req_init(loop, (uv_req_t*)handle);
   handle->type = UV_GETADDRINFO;
   handle->loop = loop;
   handle->cb = cb;
@@ -678,7 +709,7 @@ int uv_getaddrinfo(uv_loop_t* loop,
   uv_ref(loop);
 
   req = eio_custom(getaddrinfo_thread_proc, EIO_PRI_DEFAULT,
-      uv_getaddrinfo_done, handle);
+      uv_getaddrinfo_done, handle, &loop->uv_eio_channel);
   assert(req);
   assert(req->data == handle);
 
@@ -727,8 +758,8 @@ int uv__accept(int sockfd, struct sockaddr* saddr, socklen_t slen) {
   assert(sockfd >= 0);
 
   while (1) {
-#if HAVE_ACCEPT4
-    peerfd = accept4(sockfd, saddr, &slen, SOCK_NONBLOCK | SOCK_CLOEXEC);
+#if HAVE_SYS_ACCEPT4
+    peerfd = sys_accept4(sockfd, saddr, &slen, SOCK_NONBLOCK | SOCK_CLOEXEC);
 
     if (peerfd != -1)
       break;
@@ -844,4 +875,26 @@ size_t uv__strlcpy(char* dst, const char* src, size_t size) {
   *dst = '\0';
 
   return src - org;
+}
+
+
+uv_err_t uv_cwd(char* buffer, size_t size) {
+  if (!buffer || !size) {
+    return uv__new_artificial_error(UV_EINVAL);
+  }
+
+  if (getcwd(buffer, size)) {
+    return uv_ok_;
+  } else {
+    return uv__new_sys_error(errno);
+  }
+}
+
+
+uv_err_t uv_chdir(const char* dir) {
+  if (chdir(dir) == 0) {
+    return uv_ok_;
+  } else {
+    return uv__new_sys_error(errno);
+  }
 }

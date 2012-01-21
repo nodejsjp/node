@@ -60,10 +60,11 @@
 #include "objects-inl.h"
 #include "spaces-inl.h"
 #include "heap-inl.h"
+#include "incremental-marking-inl.h"
+#include "mark-compact-inl.h"
 #include "log-inl.h"
 #include "cpu-profiler-inl.h"
 #include "handles-inl.h"
-#include "isolate-inl.h"
 
 namespace v8 {
 namespace internal {
@@ -95,17 +96,21 @@ class V8 : public AllStatic {
   // generation.
   static void SetEntropySource(EntropySource source);
   // Random number generation support. Not cryptographically safe.
-  static uint32_t Random(Isolate* isolate);
+  static uint32_t Random(Context* context);
   // We use random numbers internally in memory allocation and in the
   // compilers for security. In order to prevent information leaks we
   // use a separate random state for internal random number
   // generation.
   static uint32_t RandomPrivate(Isolate* isolate);
   static Object* FillHeapNumberWithRandom(Object* heap_number,
-                                          Isolate* isolate);
+                                          Context* context);
 
   // Idle notification directly from the API.
-  static bool IdleNotification();
+  static bool IdleNotification(int hint);
+
+  static void AddCallCompletedCallback(CallCompletedCallback callback);
+  static void RemoveCallCompletedCallback(CallCompletedCallback callback);
+  static void FireCallCompletedCallback(Isolate* isolate);
 
  private:
   static void InitializeOncePerProcess();
@@ -113,7 +118,7 @@ class V8 : public AllStatic {
   // True if engine is currently running
   static bool is_running_;
   // True if V8 has ever been run
-  static bool has_been_setup_;
+  static bool has_been_set_up_;
   // True if error has been signaled for current engine
   // (reset to false if engine is restarted)
   static bool has_fatal_error_;
@@ -122,7 +127,18 @@ class V8 : public AllStatic {
   static bool has_been_disposed_;
   // True if we are using the crankshaft optimizing compiler.
   static bool use_crankshaft_;
+  // List of callbacks when a Call completes.
+  static List<CallCompletedCallback>* call_completed_callbacks_;
 };
+
+
+// JavaScript defines two kinds of 'nil'.
+enum NilValue { kNullValue, kUndefinedValue };
+
+
+// JavaScript defines two kinds of equality.
+enum EqualityKind { kStrictEquality, kNonStrictEquality };
+
 
 } }  // namespace v8::internal
 

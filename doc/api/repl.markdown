@@ -51,19 +51,20 @@ For example, you could add this to your bashrc file:
     alias node="env NODE_NO_READLINE=1 rlwrap node"
 
 
-### repl.start(prompt='> ', stream=process.stdin, eval=eval, useGlobal=false, ignoreUndefined=false)
+### repl.start([prompt], [stream], [eval], [useGlobal], [ignoreUndefined])
 
 <!--
 
 Starts a REPL with `prompt` as the prompt and `stream` for all I/O.  `prompt`
 is optional and defaults to `> `.  `stream` is optional and defaults to
-`process.stdin`. `eval` is optional too and defaults to async wrapper for `eval`.
+`process.stdin`. `eval` is optional too and defaults to async wrapper for
+`eval()`.
 
 If `useGlobal` is set to true, then the repl will use the global object,
-instead of running scripts in a separate context.
+instead of running scripts in a separate context. Defaults to `false`.
 
 If `ignoreUndefined` is set to true, then the repl will not output return value
-of command if it's `undefined`.
+of command if it's `undefined`. Defaults to `false`.
 
 You can use your own `eval` function if it has following signature:
 
@@ -75,8 +76,9 @@ You can use your own `eval` function if it has following signature:
 
 `useGlobal` を `true` に指定した場合、REPL は別のコンテキストでスクリプトを
 実行するのではなく、グローバルオブジェクトを使用します。
+デフォルトは `false` です。
 
-`ignoreUndefined` を `true` に指定した場合、REPL はコマンドの戻り値が `undefined` だった場合にそれを出力しません。
+`ignoreUndefined` を `true` に指定した場合、REPL はコマンドの戻り値が `undefined` だった場合にそれを出力しません。デフォルトは `false` です。
 
 独自の `eval()` 関数は以下のシグネチャを持ちます。
 
@@ -145,6 +147,7 @@ connect to a long-running node process without restarting it.
 <!--
 
 Inside the REPL, Control+D will exit.  Multi-line expressions can be input.
+Tab completion is supported for both global and local variables.
 
 -->
 REPL の中で Control+D を実行すると終了します。複数行に渡る式を入力とすることができます。
@@ -205,12 +208,20 @@ There are a few special REPL commands:
     multi-line expression.
   - `.exit` - Close the I/O stream, which will cause the REPL to exit.
   - `.help` - Show this list of special commands.
+  - `.save` - Save the current REPL session to a file
+    >.save ./file/to/save.js
+  - `.load` - Load a file into the current REPL session.
+    >.load ./file/to/load.js
 
 -->
   - `.break` - 複数行に渡って式を入力している間に、途中で分からなくなったり完了させなくても良くなることがあります。`.break` で最初からやり直します。
   - `.clear` - `context` オブジェクトを空の状態にリセットし、複数行に入力している式をクリアします。
   - `.exit` - I/Oストリームを閉じ、REPLを終了させます。
   - `.help` - このコマンドの一覧を表示します。
+  - `.save` - 現在の REPL セッションをファイルに保存します。
+    >.save ./file/to/save.js
+  - `.load` - 現在の REPL セッションにファイルをロードします。
+    >.load ./file/to/load.js
 
 <!--
 
@@ -228,5 +239,5 @@ REPL では、以下のキーコンビネーションは特別な効果を持ち
 -->
   - `<ctrl>C` - `.break` キーワードと同様です。
   現在のコマンドを終了します。
-  強制的に終了したkれば空の行で 2 回押してください。
+  強制的に終了したければ空の行で 2 回押してください。
   - `<ctrl>D` - `.exit` キーワードと同様です。

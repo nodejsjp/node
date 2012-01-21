@@ -96,27 +96,34 @@ Allocates a new buffer using an `array` of octets.
 -->
 オクテットの `array` を使用する新しいバッファを割り当てます。
 
-### new Buffer(str, encoding='utf8')
+### new Buffer(str, [encoding])
 
 <!--
 
 Allocates a new buffer containing the given `str`.
+`encoding` defaults to `'utf8'`.
 
 -->
 与えられた `str` を内容とする新しいバッファを割り当てます。
+`encoding` のデフォルトは `'utf8'` です。
 
-### buffer.write(string, offset=0, length=buffer.length-offset, encoding='utf8')
+### buffer.write(string, [offset], [length], [encoding])
+
 <!--
 
-Writes `string` to the buffer at `offset` using the given encoding. `length` is
+Writes `string` to the buffer at `offset` using the given encoding.
+`offset` defaults to `0`, `encoding` defaults to `'utf8'`. `length` is
 the number of bytes to write. Returns number of octets written. If `buffer` did
 not contain enough space to fit the entire string, it will write a partial
-amount of the string. The method will not write partial characters.
+amount of the string. `length` defaults to `buffer.length - offset`.
+The method will not write partial characters.
 
 -->
 与えられたエンコーディングを使用して、`string` をバッファの `offset` から書き込みます。
+`offset` のデフォルトは `0`、`encoding` のデフォルトは `'utf8'` です。
 `length` は書き込むバイト数です。書き込まれたオクテット数を返します。
 もし `buffer` が文字列全体を挿入するのに十分なスペースを含んでいなければ、文字列の一部だけを書き込みます。
+`length` のデフォルトは `buffer.length - offset` です。
 このメソッドは文字の一部だけを書き込むことはありません。
 
 <!--
@@ -141,16 +148,18 @@ next time `buf.write()` is called.
 次に `buf.write()` が呼び出されて上書きされるまで
 `Buffer._charsWritten` に設定されています。
 
-### buffer.toString(encoding, start=0, end=buffer.length)
+### buffer.toString(encoding, [start], [end])
 
 <!--
 
 Decodes and returns a string from buffer data encoded with `encoding`
-beginning at `start` and ending at `end`.
+(defaults to `'utf8'`) beginning at `start` (defaults to `0`) and ending at
+`end` (defaults to `buffer.length`).
 
 -->
-`encoding` でエンコードされたバッファデータの `start` から
-`end` までをデコードした文字列を返します。
+`encoding` (デフォルトは `'utf8'`) でエンコードされたバッファデータの
+`start` (デフォルトは `0`) から `end` (デフォルトは `buffer.length`)
+までをデコードした文字列を返します。
 
 <!--
 
@@ -194,16 +203,16 @@ Example: copy an ASCII string into a buffer, one byte at a time:
 
 Tests if `obj` is a `Buffer`.
 
-### Buffer.byteLength(string, encoding='utf8')
+### Buffer.byteLength(string, [encoding])
 
 <!--
 
-Gives the actual byte length of a string.  This is not the same as
-`String.prototype.length` since that returns the number of *characters* in a
-string.
+Gives the actual byte length of a string. `encoding` defaults to `'utf8'`.
+This is not the same as `String.prototype.length` since that returns the
+number of *characters* in a string.
 
 -->
-文字列の実際のバイト数を返します。
+文字列の実際のバイト数を返します。`encoding` のデフォルトは `'utf8'` です。
 これは文字列の*文字*数を返す `String.prototype.length` と同じではありません。
 
 <!--
@@ -243,15 +252,19 @@ buffer object.  It does not change when the contents of the buffer are changed.
     // 1234
     // 1234
 
-### buffer.copy(targetBuffer, targetStart=0, sourceStart=0, sourceEnd=buffer.length)
+### buffer.copy(targetBuffer, [targetStart], [sourceStart], [sourceEnd])
 
 <!--
 
 Does copy between buffers. The source and target regions can be overlapped.
+`targetStart` and `sourceStart` default to `0`.
+`sourceEnd` defaults to `buffer.length`.
 
 -->
 バッファ間でコピーします。
 ソースとターゲットの領域は重なっていても構いません。
+`targetStart` と `sourceStart` のデフォルトは `0` です。
+`sourceEnd` のデフォルトは `buffer.length` です。
 
 <!--
 
@@ -276,17 +289,18 @@ into `buf2`, starting at the 8th byte in `buf2`.
     // !!!!!!!!qrst!!!!!!!!!!!!!
 
 
-### buffer.slice(start, end=buffer.length)
+### buffer.slice([start], [end])
 
 <!--
 
-Returns a new buffer which references the
-same memory as the old, but offset and cropped by the `start` and `end`
-indexes.
+Returns a new buffer which references the same memory as the old, but offset
+and cropped by the `start` (defaults to `0`) and `end` (defaults to
+`buffer.length`) indexes.
 
 -->
-元のバッファと同じメモリを参照しますが、`start` と `end`
-で示されるオフセットで始まり短くされた新しいバッファを返します。
+元のバッファと同じメモリを参照しますが、`start` (デフォルトは `0`) と
+`end` (デフォルトは `buffer.length`) で示されるオフセットと長さを持つ
+新しいバッファを返します。
 
 <!--
 
@@ -317,18 +331,19 @@ byte from the original Buffer.
     // abc
     // !bc
 
-### buffer.readUInt8(offset, noAssert=false)
+### buffer.readUInt8(offset, [noAssert])
 
 <!--
 Reads an unsigned 8 bit integer from the buffer at the specified offset.
 
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
-may be beyond the end of the buffer.
+may be beyond the end of the buffer. Defaults to `false`.
 -->
 バッファの指定された位置を符号無し 8bit 整数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
 これは `offset` がバッファの終端を越えてしまう場合があることを意味します。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -351,20 +366,21 @@ Example:
     // 0x23
     // 0x42
 
-### buffer.readUInt16LE(offset, noAssert=false)
-### buffer.readUInt16BE(offset, noAssert=false)
+### buffer.readUInt16LE(offset, [noAssert])
+### buffer.readUInt16BE(offset, [noAssert])
 
 <!--
 Reads an unsigned 16 bit integer from the buffer at the specified offset with
 specified endian format.
 
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
-may be beyond the end of the buffer.
+may be beyond the end of the buffer. Defaults to `false`.
 -->
 バッファの指定された位置を符号無し 16bit 整数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
 これは `offset` がバッファの終端を越えてしまう場合があることを意味します。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -392,20 +408,21 @@ Example:
     // 0x2342
     // 0x4223
 
-### buffer.readUInt32LE(offset, noAssert=false)
-### buffer.readUInt32BE(offset, noAssert=false)
+### buffer.readUInt32LE(offset, [noAssert])
+### buffer.readUInt32BE(offset, [noAssert])
 
 <!--
 Reads an unsigned 32 bit integer from the buffer at the specified offset with
 specified endian format.
 
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
-may be beyond the end of the buffer.
+may be beyond the end of the buffer. Defaults to `false`.
 -->
 バッファの指定された位置を符号無し 32bit 整数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
 これは `offset` がバッファの終端を越えてしまう場合があることを意味します。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -425,13 +442,13 @@ Example:
     // 0x03042342
     // 0x42230403
 
-### buffer.readInt8(offset, noAssert=false)
+### buffer.readInt8(offset, [noAssert])
 
 <!--
 Reads a signed 8 bit integer from the buffer at the specified offset.
 
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
-may be beyond the end of the buffer.
+may be beyond the end of the buffer. Defaults to `false`.
 
 Works as `buffer.readUInt8`, except buffer contents are treated as two's
 complement signed values.
@@ -440,19 +457,20 @@ complement signed values.
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
 これは `offset` がバッファの終端を越えてしまう場合があることを意味します。
+デフォルトは `false` です。
 
 バッファの内容を 2 の補数による符号付き値として扱うこと以外は
 `buffer.readUInt8` と同じように動作します。
 
-### buffer.readInt16LE(offset, noAssert=false)
-### buffer.readInt16BE(offset, noAssert=false)
+### buffer.readInt16LE(offset, [noAssert])
+### buffer.readInt16BE(offset, [noAssert])
 
 <!--
 Reads a signed 16 bit integer from the buffer at the specified offset with
 specified endian format.
 
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
-may be beyond the end of the buffer.
+may be beyond the end of the buffer. Defaults to `false`.
 
 Works as `buffer.readUInt16*`, except buffer contents are treated as two's
 complement signed values.
@@ -461,20 +479,21 @@ complement signed values.
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
 これは `offset` がバッファの終端を越えてしまう場合があることを意味します。
+デフォルトは `false` です。
 
 バッファの内容を 2 の補数による符号付き値として扱うこと以外は
 `buffer.readUInt16` と同じように動作します。
 
 
-### buffer.readInt32LE(offset, noAssert=false)
-### buffer.readInt32BE(offset, noAssert=false)
+### buffer.readInt32LE(offset, [noAssert])
+### buffer.readInt32BE(offset, [noAssert])
 
 <!--
 Reads a signed 32 bit integer from the buffer at the specified offset with
 specified endian format.
 
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
-may be beyond the end of the buffer.
+may be beyond the end of the buffer. Defaults to `false`.
 
 Works as `buffer.readUInt32*`, except buffer contents are treated as two's
 complement signed values.
@@ -483,25 +502,27 @@ complement signed values.
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
 これは `offset` がバッファの終端を越えてしまう場合があることを意味します。
+デフォルトは `false` です。
 
 バッファの内容を 2 の補数による符号付き値として扱うこと以外は
 `buffer.readUInt32` と同じように動作します。
 
 
-### buffer.readFloatLE(offset, noAssert=false)
-### buffer.readFloatBE(offset, noAssert=false)
+### buffer.readFloatLE(offset, [noAssert])
+### buffer.readFloatBE(offset, [noAssert])
 
 <!--
 Reads a 32 bit float from the buffer at the specified offset with specified
 endian format.
 
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
-may be beyond the end of the buffer.
+may be beyond the end of the buffer. Defaults to `false`.
 -->
 バッファの指定された位置を 32bit 浮動小数点数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
 これは `offset` がバッファの終端を越えてしまう場合があることを意味します。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -519,20 +540,21 @@ Example:
 
     // 0x01
 
-### buffer.readDoubleLE(offset, noAssert=false)
-### buffer.readDoubleBE(offset, noAssert=false)
+### buffer.readDoubleLE(offset, [noAssert])
+### buffer.readDoubleBE(offset, [noAssert])
 
 <!--
 Reads a 64 bit double from the buffer at the specified offset with specified
 endian format.
 
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
-may be beyond the end of the buffer.
+may be beyond the end of the buffer. Defaults to `false`.
 -->
 バッファの指定された位置を 64bit 倍精度浮動小数点数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
 これは `offset` がバッファの終端を越えてしまう場合があることを意味します。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -554,7 +576,7 @@ Example:
 
     // 0.3333333333333333
 
-### buffer.writeUInt8(value, offset, noAssert=false)
+### buffer.writeUInt8(value, offset, [noAssert])
 
 <!--
 Writes `value` to the buffer at the specified offset. Note, `value` must be a
@@ -563,7 +585,7 @@ valid unsigned 8 bit integer.
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
-should not be used unless you are certain of correctness.
+should not be used unless you are certain of correctness. Defaults to `false`.
 -->
 `value` を符号無し 8bit 整数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
@@ -573,6 +595,7 @@ should not be used unless you are certain of correctness.
 これは、`value` がこの関数で扱えるより大きな場合や、`offset` 
 がバッファの終端を越えてしまう場合は、静かに捨てられることを意味します。
 正確性に確信がない限り、これらを使用すべきではありません。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -589,8 +612,8 @@ Example:
 
     // <Buffer 03 04 23 42>
 
-### buffer.writeUInt16LE(value, offset, noAssert=false)
-### buffer.writeUInt16BE(value, offset, noAssert=false)
+### buffer.writeUInt16LE(value, offset, [noAssert])
+### buffer.writeUInt16BE(value, offset, [noAssert])
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -599,7 +622,7 @@ format. Note, `value` must be a valid unsigned 16 bit integer.
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
-should not be used unless you are certain of correctness.
+should not be used unless you are certain of correctness. Defaults to `false`.
 -->
 `value` を符号無し 16bit 整数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
@@ -609,6 +632,7 @@ should not be used unless you are certain of correctness.
 これは、`value` がこの関数で扱えるより大きな場合や、`offset` 
 がバッファの終端を越えてしまう場合は、静かに捨てられることを意味します。
 正確性に確信がない限り、これらを使用すべきではありません。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -629,8 +653,8 @@ Example:
     // <Buffer de ad be ef>
     // <Buffer ad de ef be>
 
-### buffer.writeUInt32LE(value, offset, noAssert=false)
-### buffer.writeUInt32BE(value, offset, noAssert=false)
+### buffer.writeUInt32LE(value, offset, [noAssert])
+### buffer.writeUInt32BE(value, offset, [noAssert])
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -639,7 +663,7 @@ format. Note, `value` must be a valid unsigned 32 bit integer.
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
-should not be used unless you are certain of correctness.
+should not be used unless you are certain of correctness. Defaults to `false`.
 -->
 `value` を符号無し 32bit 整数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
@@ -649,6 +673,7 @@ should not be used unless you are certain of correctness.
 これは、`value` がこの関数で扱えるより大きな場合や、`offset` 
 がバッファの終端を越えてしまう場合は、静かに捨てられることを意味します。
 正確性に確信がない限り、これらを使用すべきではありません。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -667,7 +692,7 @@ Example:
     // <Buffer fe ed fa ce>
     // <Buffer ce fa ed fe>
 
-### buffer.writeInt8(value, offset, noAssert=false)
+### buffer.writeInt8(value, offset, [noAssert])
 
 <!--
 Writes `value` to the buffer at the specified offset. Note, `value` must be a
@@ -676,7 +701,7 @@ valid signed 8 bit integer.
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
-should not be used unless you are certain of correctness.
+should not be used unless you are certain of correctness. Defaults to `false`.
 
 Works as `buffer.writeUInt8`, except value is written out as a two's complement
 signed integer into `buffer`.
@@ -689,12 +714,13 @@ signed integer into `buffer`.
 これは、`value` がこの関数で扱えるより大きな場合や、`offset` 
 がバッファの終端を越えてしまう場合は、静かに捨てられることを意味します。
 正確性に確信がない限り、これらを使用すべきではありません。
+デフォルトは `false` です。
 
 `value` を 2 の補数による符号付き値として書き込むこと以外は 
 `buffer.writeUInt8` と同じように動作します。
 
-### buffer.writeInt16LE(value, offset, noAssert=false)
-### buffer.writeInt16BE(value, offset, noAssert=false)
+### buffer.writeInt16LE(value, offset, [noAssert])
+### buffer.writeInt16BE(value, offset, [noAssert])
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -703,7 +729,7 @@ format. Note, `value` must be a valid signed 16 bit integer.
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
-should not be used unless you are certain of correctness.
+should not be used unless you are certain of correctness. Defaults to `false`.
 
 Works as `buffer.writeUInt16*`, except value is written out as a two's
 complement signed integer into `buffer`.
@@ -716,12 +742,13 @@ complement signed integer into `buffer`.
 これは、`value` がこの関数で扱えるより大きな場合や、`offset` 
 がバッファの終端を越えてしまう場合は、静かに捨てられることを意味します。
 正確性に確信がない限り、これらを使用すべきではありません。
+デフォルトは `false` です。
 
 `value` を 2 の補数による符号付き値として書き込むこと以外は 
 `buffer.writeUInt16` と同じように動作します。
 
-### buffer.writeInt32LE(value, offset, noAssert=false)
-### buffer.writeInt32BE(value, offset, noAssert=false)
+### buffer.writeInt32LE(value, offset, [noAssert])
+### buffer.writeInt32BE(value, offset, [noAssert])
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -730,7 +757,7 @@ format. Note, `value` must be a valid signed 32 bit integer.
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
-should not be used unless you are certain of correctness.
+should not be used unless you are certain of correctness. Defaults to `false`.
 
 Works as `buffer.writeUInt32*`, except value is written out as a two's
 complement signed integer into `buffer`.
@@ -743,12 +770,13 @@ complement signed integer into `buffer`.
 これは、`value` がこの関数で扱えるより大きな場合や、`offset` 
 がバッファの終端を越えてしまう場合は、静かに捨てられることを意味します。
 正確性に確信がない限り、これらを使用すべきではありません。
+デフォルトは `false` です。
 
 `value` を 2 の補数による符号付き値として書き込むこと以外は 
 `buffer.writeUInt32` と同じように動作します。
 
-### buffer.writeFloatLE(value, offset, noAssert=false)
-### buffer.writeFloatBE(value, offset, noAssert=false)
+### buffer.writeFloatLE(value, offset, [noAssert])
+### buffer.writeFloatBE(value, offset, [noAssert])
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -757,7 +785,7 @@ format. Note, `value` must be a valid 32 bit float.
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
-should not be used unless you are certain of correctness.
+should not be used unless you are certain of correctness. Defaults to `false`.
 -->
 `value` を 32bit 浮動小数点数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
@@ -767,6 +795,7 @@ should not be used unless you are certain of correctness.
 これは、`value` がこの関数で扱えるより大きな場合や、`offset` 
 がバッファの終端を越えてしまう場合は、静かに捨てられることを意味します。
 正確性に確信がない限り、これらを使用すべきではありません。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -785,8 +814,8 @@ Example:
     // <Buffer 4f 4a fe bb>
     // <Buffer bb fe 4a 4f>
 
-### buffer.writeDoubleLE(value, offset, noAssert=false)
-### buffer.writeDoubleBE(value, offset, noAssert=false)
+### buffer.writeDoubleLE(value, offset, [noAssert])
+### buffer.writeDoubleBE(value, offset, [noAssert])
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -795,7 +824,7 @@ format. Note, `value` must be a valid 64 bit double.
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
-should not be used unless you are certain of correctness.
+should not be used unless you are certain of correctness. Defaults to `false`.
 -->
 `value` を 64bit 倍精度浮動小数点数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
@@ -805,6 +834,7 @@ should not be used unless you are certain of correctness.
 これは、`value` がこの関数で扱えるより大きな場合や、`offset` 
 がバッファの終端を越えてしまう場合は、静かに捨てられることを意味します。
 正確性に確信がない限り、これらを使用すべきではありません。
+デフォルトは `false` です。
 
 <!--
 Example:
@@ -823,14 +853,16 @@ Example:
     // <Buffer 43 eb d5 b7 dd f9 5f d7>
     // <Buffer d7 5f f9 dd b7 d5 eb 43>
 
-### buffer.fill(value, offset=0, end=buffer.length)
+### buffer.fill(value, [offset], [end])
 
 <!--
-Fills the buffer with the specified value. If the offset and end are not
-given it will fill the entire buffer.
+Fills the buffer with the specified value. If the `offset` (defaults to `0`)
+and `end` (defaults to `buffer.length`) are not given it will fill the entire
+buffer.
 -->
 指定された値でバッファを埋めます。
-開始位置と終了位置が与えられなかった場合はバッファ全体を埋めます。
+`offset` (デフォルトは `0`) と `end` (デフォルトは `buffer.length`)
+Fが与えられなかった場合はバッファ全体を埋めます。
 
     var b = new Buffer(50);
     b.fill("h");
@@ -839,7 +871,7 @@ given it will fill the entire buffer.
 
 <!--
 How many bytes will be returned when `buffer.inspect()` is called. This can
-be overriden by user modules.
+be overridden by user modules.
 -->
 `buffer.inspect()` が呼び出された場合に返すバイト数です。
 これはユーザモジュールによって上書きすることができます。

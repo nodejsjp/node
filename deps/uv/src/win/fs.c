@@ -490,16 +490,69 @@ void fs__readdir(uv_fs_t* req, const wchar_t* path, int flags) {
 
 
 void fs__stat(uv_fs_t* req, const wchar_t* path) {
+  HANDLE file;
+  WIN32_FIND_DATAW ent;
   int result;
 
-  result = _wstati64(path, &req->stat);
-  if (result == -1) {
-    req->ptr = NULL;
-  } else {
-    req->ptr = &req->stat;
+  req->ptr = NULL;
+
+  file = FindFirstFileExW(path, FindExInfoStandard, &ent,
+    FindExSearchNameMatch, NULL, 0);
+
+  if (file == INVALID_HANDLE_VALUE) {
+    SET_REQ_RESULT_WIN32_ERROR(req, GetLastError());
+    return;
   }
 
-  SET_REQ_RESULT(req, result);
+  FindClose(file);
+
+  if (ent.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT &&
+      ent.dwReserved0 == IO_REPARSE_TAG_SYMLINK) {
+    fs__open(req, path, _O_RDONLY, 0);
+    if (req->result != -1) {
+      result = _fstati64(req->result, &req->stat);
+      _close(req->result);
+
+      if (result != -1) {
+        req->ptr = &req->stat;
+      }
+    
+      SET_REQ_RESULT(req, result);
+    }
+
+    return;
+  }
+
+  req->stat.st_ino = 0;
+  req->stat.st_uid = 0;
+  req->stat.st_gid = 0;
+  req->stat.st_mode = 0;
+  req->stat.st_rdev = 0;
+  req->stat.st_dev = 0;
+  req->stat.st_nlink = 1;
+
+  if (ent.dwFileAttributes & FILE_ATTRIBUTE_READONLY ) {
+    req->stat.st_mode |= (_S_IREAD + (_S_IREAD >> 3) + (_S_IREAD >> 6));
+  } else {
+    req->stat.st_mode |= ((_S_IREAD|_S_IWRITE) + ((_S_IREAD|_S_IWRITE) >> 3) +
+      ((_S_IREAD|_S_IWRITE) >> 6));
+  }
+
+  if (ent.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+    req->stat.st_mode |= _S_IFDIR;
+  } else {
+    req->stat.st_mode |= _S_IFREG;
+  }
+
+  uv_filetime_to_time_t(&ent.ftLastWriteTime, &(req->stat.st_mtime));
+  uv_filetime_to_time_t(&ent.ftLastAccessTime, &(req->stat.st_atime));
+  uv_filetime_to_time_t(&ent.ftCreationTime, &(req->stat.st_ctime));
+
+  req->stat.st_size = ((int64_t)ent.nFileSizeHigh << 32) +
+    (int64_t)ent.nFileSizeLow;
+
+  req->ptr = &req->stat;
+  req->result = 0;
 }
 
 
@@ -520,8 +573,12 @@ void fs__fstat(uv_fs_t* req, uv_file file) {
 
 
 void fs__rename(uv_fs_t* req, const wchar_t* path, const wchar_t* new_path) {
-  int result = _wrename(path, new_path);
-  SET_REQ_RESULT(req, result);
+  if (!MoveFileExW(path, new_path, MOVEFILE_REPLACE_EXISTING)) {
+    SET_REQ_RESULT_WIN32_ERROR(req, GetLastError());
+    return;
+  }
+
+  SET_REQ_RESULT(req, 0);
 }
 
 
@@ -687,7 +744,7 @@ void fs__symlink(uv_fs_t* req, const wchar_t* path, const wchar_t* new_path,
     req->last_error = ERROR_SUCCESS;
     return;
   }
-  
+
   SET_REQ_RESULT(req, result);
 }
 
@@ -726,7 +783,7 @@ void fs__readlink(uv_fs_t* req, const wchar_t* path) {
                        FSCTL_GET_REPARSE_POINT,
                        NULL,
                        0,
-                       buffer, 
+                       buffer,
                        MAXIMUM_REPARSE_DATA_BUFFER_SIZE,
                        &bytes_returned,
                        NULL);
@@ -1517,3 +1574,4 @@ void uv_fs_req_cleanup(uv_fs_t* req) {
 
   req->flags |= UV_FS_CLEANEDUP;
 }
+

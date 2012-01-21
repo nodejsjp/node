@@ -24,9 +24,9 @@ This class is a subclass of `tls.Server` and emits events same as
 
 <!--
 
-Returns a new HTTPS web server object. The `options` is similer to
-`tls.createServer()`. The `requestListener` is a function which is
-automatically added to the `'request'` event.
+Returns a new HTTPS web server object. The `options` is similar to
+[tls.createServer()](tls.html#tls.createServer).  The `requestListener` is
+a function which is automatically added to the `'request'` event.
 
 -->
 新しい HTTPS Web サーバオブジェクトを返します。
@@ -112,7 +112,7 @@ The options argument has the following options
 
 - `host`: A domain name or IP address of the server to issue the request to.
   Defaults to `'localhost'`.
-- `hostname`: To support `url.parse()` `hostname` is prefered over `host`
+- `hostname`: To support `url.parse()` `hostname` is preferred over `host`
 - `port`: Port of remote server. Defaults to 443.
 - `method`: A string specifying the HTTP request method. Defaults to `'GET'`.
 - `path`: Request path. Defaults to `'/'`. Should include query string if any.
@@ -136,6 +136,10 @@ specified. However, a [globalAgent](#https.globalAgent) silently ignores these.
 - `cert`: Public x509 certificate to use. Default `null`.
 - `ca`: An authority certificate or array of authority certificates to check
   the remote host against.
+- `rejectUnauthorized`: If `true`, the server certificate is verified against
+  the list of supplied CAs. An `'error'` event is emitted if verification
+  fails. Verification happens at the connection level, *before* the HTTP
+  request is sent. Default `false`.
 
 In order to specify these options, use a custom `Agent`.
 
@@ -169,6 +173,11 @@ Example:
 - `passphrase`: 秘密鍵のパスフレーズを表す文字列。デフォルトは `null` です。
 - `cert`: x509公開証明書。デフォルトは `null` です。
 - `ca`: リモートホストをチェックする信頼できる認証局または認証局の配列。
+- `rejectUnauthorized`: `true` の場合、サーバ証明書は提供された認証局の
+  リストによって検証されます。
+  認証されなかった場合は `'error'` イベントが生成されます。
+  認証は HTTP リクエストが送信される *前* にコネクションレベルで行われます。
+  デフォルトは false です。
 
 これらのオプションを指定するには、カスタムエージェントを使用します。
 
@@ -247,7 +256,7 @@ Example:
 
 <!--
 
-An Agent object for HTTPS similer to [http.Agent](http.html#http.Agent).
+An Agent object for HTTPS similar to [http.Agent](http.html#http.Agent).
 See [https.request()](#https.request) for more information.
 
 -->

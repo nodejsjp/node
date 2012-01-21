@@ -42,10 +42,6 @@ const unsigned int uv_simultaneous_server_accepts = 32;
 /* A zero-size buffer for use by uv_tcp_read */
 static char uv_zero_[] = "";
 
-/* Counter to keep track of active tcp streams */
-static unsigned int active_tcp_streams = 0;
-
-
 static int uv__tcp_nodelay(uv_tcp_t* handle, SOCKET socket, int enable) {
   if (setsockopt(socket,
                  IPPROTO_TCP,
@@ -217,7 +213,7 @@ void uv_tcp_endgame(uv_loop_t* loop, uv_tcp_t* handle) {
       handle->close_cb((uv_handle_t*)handle);
     }
 
-    active_tcp_streams--;
+    loop->active_tcp_streams--;
 
     uv_unref(loop);
   }
@@ -399,7 +395,7 @@ static void uv_tcp_queue_read(uv_loop_t* loop, uv_tcp_t* handle) {
    * Preallocate a read buffer if the number of active streams is below
    * the threshold.
   */
-  if (active_tcp_streams < uv_active_tcp_streams_threshold) {
+  if (loop->active_tcp_streams < uv_active_tcp_streams_threshold) {
     handle->flags &= ~UV_HANDLE_ZERO_READ;
     handle->read_buffer = handle->alloc_cb((uv_handle_t*) handle, 65536);
     assert(handle->read_buffer.len > 0);
@@ -559,7 +555,7 @@ int uv_tcp_accept(uv_tcp_t* server, uv_tcp_t* client) {
     }
   }
 
-  active_tcp_streams++;
+  loop->active_tcp_streams++;
 
   return rv;
 }
@@ -822,7 +818,8 @@ void uv_process_tcp_read_req(uv_loop_t* loop, uv_tcp_t* handle,
 
   if (!REQ_SUCCESS(req)) {
     /* An error occurred doing the read. */
-    if ((handle->flags & UV_HANDLE_READING)) {
+    if ((handle->flags & UV_HANDLE_READING) ||
+        !(handle->flags & UV_HANDLE_ZERO_READ)) {
       handle->flags &= ~UV_HANDLE_READING;
       buf = (handle->flags & UV_HANDLE_ZERO_READ) ?
             uv_buf_init(NULL, 0) : handle->read_buffer;
@@ -1006,7 +1003,7 @@ void uv_process_tcp_connect_req(uv_loop_t* loop, uv_tcp_t* handle,
                       NULL,
                       0) == 0) {
         uv_connection_init((uv_stream_t*)handle);
-        active_tcp_streams++;
+        loop->active_tcp_streams++;
         ((uv_connect_cb)req->cb)(req, 0);
       } else {
         uv__set_sys_error(loop, WSAGetLastError());
@@ -1084,7 +1081,7 @@ int uv_tcp_duplicate_socket(uv_tcp_t* handle, int pid,
   /* 
    * We're about to share the socket with another process.  Because
    * this is a listening socket, we assume that the other process will
-   * be accepting conections on it.  So, before sharing the socket
+   * be accepting connections on it.  So, before sharing the socket
    * with another process, we call listen here in the parent process.
    * This needs to be modified if the socket is shared with
    * another process for anything other than accepting connections.
@@ -1137,7 +1134,7 @@ int uv_tcp_simultaneous_accepts(uv_tcp_t* handle, int enable) {
 
   handle->flags |= UV_HANDLE_TCP_SINGLE_ACCEPT;
 
-  /* Flip the changing flag if we have already queueed multiple accepts. */
+  /* Flip the changing flag if we have already queued multiple accepts. */
   if (handle->flags & UV_HANDLE_LISTENING) {
     handle->flags |= UV_HANDLE_TCP_ACCEPT_STATE_CHANGING;
   }
