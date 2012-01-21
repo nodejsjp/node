@@ -256,14 +256,16 @@ Start a UNIX socket server listening for connections on the given `path`.
 
 <!--
 
-This function is asynchronous. The last parameter `listeningListener` will be
-called when the server has been bound.
-See also ['listening'](#event_listening_) event.
+This function is asynchronous.  When the server has been bound,
+['listening'](#event_listening_) event will be emitted.
+the last parameter `listeningListener` will be added as an listener for the
+['listening'](#event_listening_) event.
 
 -->
 この関数は非同期です。
-最後の引数 `listeningListener` はサーバがバインドすると呼び出されます。
-['listening'](#event_listening_) イベントも参照してください。
+サーバがバインドされると、`'listening'` イベントが生成されます。
+最後の引数 `listeningListener` は ['listening'](#event_listening_)
+のリスナとして加えられます。
 
 
 #### server.pause(msecs)
