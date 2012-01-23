@@ -1519,7 +1519,7 @@ The response trailers object. Only populated after the 'end' event.
 
 Set the encoding for the response body. Either `'utf8'`, `'ascii'`, or
 `'base64'`. Defaults to `null`, which means that the `'data'` event will emit
-a `Buffer` object..
+a `Buffer` object.
 
 -->
 レスポンスボディのエンコーディングを設定します。
