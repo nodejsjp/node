@@ -59,7 +59,11 @@
  * `stream`
    * `stream.pipe()` は，`pause()/resume()` を実装していないソースストリーム上で `'pause'/'resume'` イベントを生成しなくなりました．
 
- * V8 (v3.1 to v3.6)
+ * `tty`
+   * `tty.setWindowSize(fd, row, col)` は削除されました．
+   * `tty.getWindowSize(fd)` は削除されました．代わりに `process.stdout.getWindowSize()` を使用してください．
+
+ * V8 (v3.1 から v3.6)
    * `RegExp` は `Function` ではなくなりました (ES5 準拠)．`RegExp.exec()` を使用してください．
    * `Date` のフォーマット文字列がタイムゾーンを含まない場合 (例: `new Date('2011-06-06')`) は，ローカルのタイムゾーンではなく UTC に基づきます (ES5 準拠).明示的にタイムゾーンを指定してください (例: `new Date('2011-06-06 00:00:00 +09:00')`)．
    * `Error` の全ての標準プロパティは列挙されなくなりました (ES5 準拠). それらを表示したい場合は `util.inspect(err, true)` を使用してください．
@@ -90,11 +94,13 @@
    * `crypto.createDiffieHellman()`, `crypto.pbkdf2()`, `crypto.randomBytes()`
 
  * `fs`
-   * `fs.watch()`, `fs.utimes()/utimesSync()`, `fs.futimes()/futimesSync()`
+   * `fs.watch()`
+   * `fs.utimes()/utimesSync()`, `fs.futimes()/futimesSync()`
    * `fs.createReadStream()` と `fs.createWriteStream()` に `start` オプションが追加されました．
 
  * `http`
    * `http.ClientRequest.setTimeout()/setNoDelay()/setSocketKeepAlive()`
+   * `http.request()` に `auth` オプションが追加されました．
 
  * `https`
    * `https.createServer()`，`https.request()`，`https.get()` に `passphrase` オプションが追加されました．
@@ -122,7 +128,7 @@
    * `tls.connect()` に `session` オプションが追加されました．
    * `tls.CryptoStream.getSession()`
    * `tls.CleartextStream.address()`, `remoteAddress`, `remotePort`
-   * `tls.Server` が [NPN (Next Protocol Negotitation) と SNI (Server Name Indication)](tls.html#nPN_and_SNI) をサポートしました．
+   * `tls.Server` が [NPN (Next Protocol Negotiation) と SNI (Server Name Indication)](tls.html#nPN_and_SNI) をサポートしました．
 
  * `util`
    * `util.format()`, `util.isArray()`, `util.isRegExp()`, `uitl.isDate()`, `util.isError()`.

@@ -67,11 +67,12 @@ Node は全ての依存ライブラリを実行ファイルに静的にコンパ
 
 <!--
 
-To get started let's make a small Addon which does the following except in
-C++:
+To get started let's make a small Addon which is the C++ equivalent of
+the following Javascript code:
 
 -->
-では、 C++ で以下の様に動作する小さなアドオンを作成してみましょう。
+では、 以下の JavaScript コードと同じ様に動作する小さなアドオンを
+C++ で作成してみましょう。
 
     exports.hello = function() { return 'world'; };
 
@@ -94,17 +95,38 @@ To get started we create a file `hello.cc`:
     }
 
     void init(Handle<Object> target) {
-      NODE_SET_METHOD(target, "method", Method);
+      NODE_SET_METHOD(target, "hello", Method);
     }
     NODE_MODULE(hello, init)
 
 <!--
 
-This source code needs to be built into `hello.node`, the binary Addon. To
+Note that all Node addons must export an initialization function:
+
+-->
+全ての Node アドオンは初期化関数をエクスポートしなければならないことに
+注意してください。
+
+    void Initialize (Handle<Object> target);
+    NODE_MODULE(module_name, Initialize)
+
+<!--
+There is no semi-colon after `NODE_MODULE` as it's not a function (see `node.h`).
+
+The `module_name` needs to match the filename of the final binary (minus the
+.node suffix).
+
+The source code needs to be built into `hello.node`, the binary Addon. To
 do this we create a file called `wscript` which is python code and looks
 like this:
 
 -->
+`NODE_MODULE` は関数ではないので、その後にセミコロンを付けてはいけません
+(`node.h` を参照してください)。
+
+`module_name` は最終的なバイナリのファイル名 (拡張子 .node を除く)
+とマッチする必要があります。
+
 このソースコードは、`hello.node` というバイナリアドオンとしてビルドされる必要が有ります。
 そのために `wscript` と呼ばれる以下のようなコードを Python で書きました:
 
@@ -143,19 +165,23 @@ provided for the ease of users.
 
 <!--
 
-All Node addons must export an initialization function:
+You can now use the binary addon in a Node project `hello.js` by pointing `require` to
+the recently built module:
 
 -->
-全ての Node アドオンは初期化関数をエクスポートする必要が有ります:
+ビルドされたモジュールを `require` で指定することにより、
+このバイナリアドオンを Node プロジェクトの `hello.js` から利用することが
+可能になります。
 
-    void Initialize (Handle<Object> target);
-    NODE_MODULE(hello, Initialize)
+    var addon = require('./build/Release/hello');
+
+    console.log(addon.hello()); // 'world'
 
 <!--
 
 For the moment, that is all the documentation on addons. Please see
-<https://github.com/ry/node_postgres> for a real example.
+<https://github.com/pietern/hiredis-node> for a real example.
 
 -->
 現時点では、アドオンのドキュメントはこれで全てです。
-実際の例は、<https://github.com/ry/node_postgres> を参照してください。
+実際の例は、<https://github.com/pietern/hiredis-node> を参照してください。

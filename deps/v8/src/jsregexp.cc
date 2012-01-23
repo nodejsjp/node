@@ -68,9 +68,9 @@ Handle<Object> RegExpImpl::CreateRegExpLiteral(Handle<JSFunction> constructor,
                                                Handle<String> flags,
                                                bool* has_pending_exception) {
   // Call the construct code with 2 arguments.
-  Object** argv[2] = { Handle<Object>::cast(pattern).location(),
-                       Handle<Object>::cast(flags).location() };
-  return Execution::New(constructor, 2, argv, has_pending_exception);
+  Handle<Object> argv[] = { pattern, flags };
+  return Execution::New(constructor, ARRAY_SIZE(argv), argv,
+                        has_pending_exception);
 }
 
 
@@ -509,14 +509,16 @@ RegExpImpl::IrregexpResult RegExpImpl::IrregexpExecOnce(
   }
   Handle<ByteArray> byte_codes(IrregexpByteCode(*irregexp, is_ascii), isolate);
 
-  if (IrregexpInterpreter::Match(isolate,
-                                 byte_codes,
-                                 subject,
-                                 register_vector,
-                                 index)) {
-    return RE_SUCCESS;
+  IrregexpResult result = IrregexpInterpreter::Match(isolate,
+                                                     byte_codes,
+                                                     subject,
+                                                     register_vector,
+                                                     index);
+  if (result == RE_EXCEPTION) {
+    ASSERT(!isolate->has_pending_exception());
+    isolate->StackOverflow();
   }
-  return RE_FAILURE;
+  return result;
 #endif  // V8_INTERPRETED_REGEXP
 }
 
@@ -2634,7 +2636,7 @@ void TextNode::MakeCaseIndependent(bool is_ascii) {
     TextElement elm = elms_->at(i);
     if (elm.type == TextElement::CHAR_CLASS) {
       RegExpCharacterClass* cc = elm.data.u_char_class;
-      // None of the standard character classses is different in the case
+      // None of the standard character classes is different in the case
       // independent case and it slows us down if we don't know that.
       if (cc->is_standard()) continue;
       ZoneList<CharacterRange>* ranges = cc->ranges();
@@ -4723,7 +4725,6 @@ bool OutSet::Get(unsigned value) {
 
 
 const uc16 DispatchTable::Config::kNoKey = unibrow::Utf8::kBadChar;
-const DispatchTable::Entry DispatchTable::Config::kNoValue;
 
 
 void DispatchTable::AddRange(CharacterRange full_range, int value) {

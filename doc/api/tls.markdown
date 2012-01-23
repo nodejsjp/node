@@ -230,19 +230,30 @@ You can test this server by connecting to it with `openssl s_client`:
     openssl s_client -connect 127.0.0.1:8000
 
 
+#### tls.connect(options, [secureConnectListener])
 #### tls.connect(port, [host], [options], [secureConnectListener])
 
 <!--
 
-Creates a new client connection to the given `port` and `host`. (If `host`
-defaults to `localhost`.) `options` should be an object which specifies
+Creates a new client connection to the given `port` and `host` (old API) or
+`options.port` and `options.host`. (If `host` is omitted, it defaults to
+`localhost`.) `options` should be an object which specifies:
 
 -->
-与えられた `port` と `host` で新しいクライアントコネクションを作成します
-(`host` のデフォルトは `localhost` です)。
-`options` は以下を指定したオブジェクトです。
+与えられた `port` と `host` (旧 API) または `options.port` と `options.host`
+で新しいクライアントコネクションを作成します
+(`host` が省略された場合、デフォルトは `localhost` です)。
+`options` は以下を指定したオブジェクトです:
 
 <!--
+
+  - `host`: Host the client should connect to
+
+  - `port`: Port the client should connect to
+
+  - `socket`: Establish secure connection on a given socket rather than
+    creating a new socket. If this option is specified, `host` and `port`
+    are ignored.
 
   - `key`: A string or `Buffer` containing the private key of the client in
     PEM format.
@@ -256,14 +267,26 @@ defaults to `localhost`.) `options` should be an object which specifies
     omitted several well known "root" CAs will be used, like VeriSign.
     These are used to authorize connections.
 
+  - `rejectUnauthorized`: If `true`, the server certificate is verified against
+    the list of supplied CAs. An `'error'` event is emitted if verification
+    fails. Default: `false`.
+
   - `NPNProtocols`: An array of string or `Buffer` containing supported NPN
     protocols. `Buffer` should have following format: `0x05hello0x05world`,
     where first byte is next protocol name's length. (Passing array should
-    usually be much simplier: `['hello', 'world']`.)
+    usually be much simpler: `['hello', 'world']`.)
 
   - `servername`: Servername for SNI (Server Name Indication) TLS extension.
 
 -->
+  - `host`: クライアントが接続するホスト。
+
+  - `port`: クライアントが接続するポート番号。
+
+  - `socket`: 新しいソケットを生成するのではなく、与えられたソケット上で
+    セキュアな接続を確立します。
+    このオプションが指定された場合、`host` および `port` は無視されます。
+
   - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または
     `Buffer` です。
 
@@ -274,6 +297,12 @@ defaults to `localhost`.) `options` should be an object which specifies
   - `ca`: 信頼できる証明書の文字列または `Buffer` の配列です。
     省略された場合、ベリサインなどのよく知られた「ルート」認証局が使われます。
     これらはコネクションの認証に使われます。
+
+  - `rejectUnauthorized`: `true` の場合、サーバ証明書は提供された認証局の
+    リストによって検証されます。
+    認証されなかった場合は `'error'` イベントが生成されます。
+    認証は HTTP リクエストが送信される *前* にコネクションレベルで行われます。
+    デフォルトは false です。
 
   - `NPNProtocols`: サポートする NPN プロトコルの文字列または `Buffer` 
     の配列です。
@@ -385,7 +414,7 @@ v0.4 ブランチでは、既に存在する TCP コネクション上で TLS �
 ### NPN and SNI
 
 <!--
-NPN (Next Protocol Negotitation) and SNI (Server Name Indication) are TLS
+NPN (Next Protocol Negotiation) and SNI (Server Name Indication) are TLS
 handshake extensions allowing you:
 -->
 NPN (Next Protocol Negotitation) と SNI (Server Name Indication) は
@@ -510,6 +539,20 @@ TLS サーバの設定に依存しますが、認証されていないコネク�
 `cleartextStream.npnProtocol` は、選択された NPN プロトコルを持つ文字列です。
 `cleartextStream.servername` は、SNI でリクエストされたサーバ名を持つ
 文字列です。
+
+#### Event: 'clientError'
+
+`function (exception) { }`
+
+<!--
+
+When a client connection emits an 'error' event before secure connection is
+established - it will be forwarded here.
+
+-->
+セキュアコネクションが確立される前にクライアントコネクションが
+`'error'` イベントを発した場合 － ここに転送されます。
+
 
 #### server.listen(port, [host], [callback])
 
@@ -661,7 +704,7 @@ becomes available only when `cleartextStream.authorized === false`.
 #### cleartextStream.getPeerCertificate()
 
 <!--
-Returns an object representing the peer's certicicate. The returned object has
+Returns an object representing the peer's certificate. The returned object has
 some properties corresponding to the field of the certificate.
 -->
 接続相手の証明書を表現するオブジェクトを返します。

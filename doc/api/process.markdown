@@ -264,6 +264,17 @@ Example:
     /usr/local/bin/node
 
 
+### process.abort()
+
+<!--
+
+This causes node to emit an abort. This will cause node to exit and
+generate a core file.
+
+-->
+これは node がアボートさせます。
+これは node が終了してコアファイルを生成する原因となります。
+
 ### process.chdir(directory)
 
 <!--
@@ -307,7 +318,7 @@ An object containing the user environment. See environ(7).
 ユーザの環境を含むオブジェクトです。environ(7) を参照してください。
 
 
-### process.exit(code=0)
+### process.exit([code])
 
 <!--
 
@@ -457,7 +468,7 @@ A compiled-in property that exposes `NODE_PREFIX`.
     console.log('Prefix: ' + process.installPrefix);
 
 
-### process.kill(pid, signal='SIGTERM')
+### process.kill(pid, [signal])
 
 <!--
 

@@ -1,9 +1,9 @@
-Evented I/O for V8 javascript.
+Evented I/O for V8 javascript. [![Build Status](https://secure.travis-ci.org/joyent/node.png)](http://travis-ci.org/joyent/node)
 ===
 
 ### To build:
 
-Unix/Macintosh (requires python >= 2.5.2):
+Unix/Macintosh (requires python 2.6 or 2.7):
 
     ./configure
     make

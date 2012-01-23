@@ -50,16 +50,20 @@ resolves the IP addresses which are returned.
       });
     });
 
-### dns.lookup(domain, family=null, callback)
+### dns.lookup(domain, [family], callback)
 
 <!--
 
 Resolves a domain (e.g. `'google.com'`) into the first found A (IPv4) or
 AAAA (IPv6) record.
+The `family` can be the integer `4` or `6`. Defaults to `null` that indicates
+both Ip v4 and v6 address family.
 
 -->
 ドメイン (例 `'google.com'`) を解決して最初に見つかった
 A (IPv4) または AAAA (IPv6) レコードにします。
+`family` は整数の `4` または `6` を指定することができます。
+デフォルトは `null` で、IP v4 と v6 の両方をアドレスファミリーを意味します。
 
 <!--
 
@@ -71,26 +75,26 @@ necessarily the value initially passed to `lookup`).
 -->
 コールバックは引数 `(err, address, family)` を持ちます。
 `address` 引数は IP v4 または v6 アドレスを表現する文字列です。
-`family` 引数は 4 または 6 の整数で、`address` のファミリーを意味します
+`family` 引数は整数の 4 または 6 で、`address` のファミリーを意味します
 (この値は必ずしも最初に `lookup` に渡す必要はありません)。
 
 
-### dns.resolve(domain, rrtype='A', callback)
+### dns.resolve(domain, [rrtype], callback)
 
 <!--
 
 Resolves a domain (e.g. `'google.com'`) into an array of the record types
-specified by rrtype. Valid rrtypes are `A` (IPV4 addresses), `AAAA` (IPV6
-addresses), `MX` (mail exchange records), `TXT` (text records), `SRV` (SRV
-records), `PTR` (used for reverse IP lookups), `NS` (name server records)
-and `CNAME` (canonical name records).
+specified by rrtype. Valid rrtypes are `'A'` (IPV4 addresses, default),
+`'AAAA'` (IPV6 addresses), `'MX'` (mail exchange records), `'TXT'` (text
+records), `'SRV'` (SRV records), `'PTR'` (used for reverse IP lookups),
+`'NS'` (name server records) and `'CNAME'` (canonical name records).
 
 -->
 ドメイン (例 `'google.com'`) を解決して `rrtype` で指定されたレコードタイプの配列にします。
-妥当な `rrtype` は `A` (IPV4アドレス)、`AAAA` (IPV6アドレス)、
-`MX` (mail exchangeレコード), `TXT` (テキストレコード)、`SRV` (SRVレコード)、
-`PTR` (IP を逆引きでルックアップするために使われる)、`NS`
-(ネームサーバレコード)、そして CNAME (別名レコード) です。
+妥当な `rrtype` は `'A'` (IPV4アドレス)、`'AAAA'` (IPV6アドレス)、
+`'MX'` (mail exchangeレコード), `'TXT'` (テキストレコード)、
+`'SRV'` (SRVレコード)、`'PTR'` (IP を逆引きでルックアップするために使われる)、
+`'NS'` (ネームサーバレコード)、そして `'CNAME'` (別名レコード) です。
 
 <!--
 

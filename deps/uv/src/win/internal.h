@@ -284,10 +284,8 @@ void uv_fs_event_endgame(uv_loop_t* loop, uv_fs_event_t* handle);
 
 /* Utils */
 int uv_parent_pid();
-
-
+void uv_filetime_to_time_t(FILETIME* file_time,  time_t* stat_time);
 void uv_fatal_error(const int errorno, const char* syscall);
-
 uv_err_code uv_translate_sys_error(int sys_errno);
 
 #define SET_REQ_STATUS(req, status)                                     \
@@ -342,23 +340,5 @@ extern int uv_allow_ipv6;
 /* Ip address used to bind to any port at any interface */
 extern struct sockaddr_in uv_addr_ip4_any_;
 extern struct sockaddr_in6 uv_addr_ip6_any_;
-
-
-/*
- * Threads and synchronization
- */
-typedef struct uv_once_s {
-  unsigned char ran;
-  /* The actual event handle must be aligned to sizeof(HANDLE), so in */
-  /* practice it might overlap padding a little. */
-  HANDLE event;
-  HANDLE padding;
-} uv_once_t;
-
-#define UV_ONCE_INIT \
-  { 0, NULL, NULL }
-
-void uv_once(uv_once_t* guard, void (*callback)(void));
-
 
 #endif /* UV_WIN_INTERNAL_H_ */

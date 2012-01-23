@@ -117,7 +117,7 @@ Example:
     grep.stdin.end();
 
 
-### child_process.spawn(command, args=[], [options])
+### child_process.spawn(command, [args], [options])
 
 <!--
 
@@ -367,7 +367,7 @@ This is a special case of the `spawn()` functionality for spawning Node
 processes. In addition to having all the methods in a normal ChildProcess
 instance, the returned object has a communication channel built-in. The
 channel is written to with `child.send(message, [sendHandle])` and messages
-are recieved by a `'message'` event on the child.
+are received by a `'message'` event on the child.
 
 -->
 これは `spawn()` の特別版で、Node プロセスを起動します。
@@ -417,12 +417,28 @@ will emit objects each time it receives a message on its channel.
 
 <!--
 
-By default the spawned Node process will have the stdin, stdout, stderr
-associated with the parent's.
+There is a special case when sending a `{cmd: 'NODE_foo'}` message. All messages
+containing a `NODE_` prefix in its `cmd` property will not be emitted in
+the `message` event, since they are internal messages used by node core.
+Messages containing the prefix are emitted in the `internalMessage` event, you
+should by all means avoid using this feature, it may change without warranty.
+
+By default the spawned Node process will have the stdout, stderr associated
+with the parent's. To change this behavior set the `silent` property in the
+`options` object to `true`.
+
 
 -->
-デフォルトでは、起動された Node プロセスは親プロセスに関連づけられた標準入力、
-標準出力、標準エラー出力を持ちます。
+特別なケースとして、`{cmd: 'NODE_foo'}` のようなメッセージを
+送信する場合があります。
+`cmd` プロパティが接頭辞 `NODE_` を含む全てのメッセージは node のコアで
+使われる内部的なメッセージであるため、`message` イベントを生成しません。
+この接頭辞を含むメッセージは `internalMessage` イベントを生成しますが、
+それを使用すべきではありません。それは保証なしに変更される可能性があります。
+
+デフォルトでは、起動された Node プロセスは親プロセスに関連づけられた標準出力と
+標準エラー出力を持ちます。これを変更するには options` オブジェクトの
+`silent` プロパティを `true` に設定します。
 
 <!--
 
@@ -473,7 +489,8 @@ processes:
     });
 
 
-### child.kill(signal='SIGTERM')
+
+### child.kill([signal])
 
 <!--
 

@@ -30,8 +30,9 @@ all share server ports.
         console.log('worker ' + worker.pid + ' died');
       });
     } else {
-      // Worker processes have a http server.
-      http.Server(function(req, res) {
+      // Workers can share any TCP connection
+      // In this case its a HTTP server
+      http.createServer(function(req, res) {
         res.writeHead(200);
         res.end("hello world\n");
       }).listen(8000);
@@ -46,73 +47,90 @@ node は 8000 番ポートをワーカ間で共有します。
     Worker 2438 online
     Worker 2437 online
 
-<!--
-The difference between `cluster.fork()` and `child_process.fork()` is simply
-that cluster allows TCP servers to be shared between workers. `cluster.fork`
-is implemented on top of `child_process.fork`. The message passing API that
-is available with `child_process.fork` is available with `cluster` as well.
-As an example, here is a cluster which keeps count of the number of requests
-in the master process via message passing:
--->
-`cluster.fork()` と `child_process.fork()` の違いは単純で、
-クラスタはワーカ間で共有する TCP サーバを実現できることです。
-`cluster.fork()` は `child_process.fork()` 上に実装されています。
-`child_process.fork()` によって実現されるメッセージパッシング API は
-`cluseter` でも同様に利用できます。
-以下のクラスタの例は、メッセージパッシングを通じてマスタプロセスで
-リクエスト数をカウントします。
-
-    var cluster = require('cluster');
-    var http = require('http');
-    var numReqs = 0;
-
-    if (cluster.isMaster) {
-      // Fork workers.
-      for (var i = 0; i < 2; i++) {
-        var worker = cluster.fork();
-
-        worker.on('message', function(msg) {
-          if (msg.cmd && msg.cmd == 'notifyRequest') {
-            numReqs++;
-          }
-        });
-      }
-
-      setInterval(function() {
-        console.log("numReqs =", numReqs);
-      }, 1000);
-    } else {
-      // Worker processes have a http server.
-      http.Server(function(req, res) {
-        res.writeHead(200);
-        res.end("hello world\n");
-        // Send message to master process
-        process.send({ cmd: 'notifyRequest' });
-      }).listen(8000);
-    }
-
-
-
-### cluster.fork()
-
-<!--
-Spawn a new worker process. This can only be called from the master process.
--->
-新しいワーカプロセスを起動します。
-マスタプロセスから飲み呼び出すことができます。
 
 ### cluster.isMaster
+
+<!--
+This boolean flag is true if the process is a master. This is determined
+by the `process.env.NODE_UNIQUE_ID`. If `process.env.NODE_UNIQUE_ID` is
+undefined `isMaster` is `true`.
+-->
+現在のプロセスがマスタの場合、この論理値型のフラグは `true` です。
+これは `process.env.NODE_UNIQUE_ID` から決定されます。
+`process.env.NODE_UNIQUE_ID` が未定義だと `isMaster` は `true` になります。
+
 ### cluster.isWorker
 
 <!--
-Boolean flags to determine if the current process is a master or a worker
-process in a cluster. A process `isMaster` if `process.env.NODE_WORKER_ID`
-is undefined.
+This boolean flag is true if the process is a worker forked from a master.
+If the `process.env.NODE_UNIQUE_ID` is set to a value different efined
+`isWorker` is `true`.
 -->
-現在のプロセスがクラスタ内でマスタかワーカかを決定することができる
-Boolean 値です。
-`isMaster` は `process.env.NODE_WORKER_ID` が未定義かどうかです。
+現在のプロセスがマスタからフォークされたワーカの場合、
+この論理値型のフラグは `true` です。
+`process.env.NODE_UNIQUE_ID` に値が設定されていると `isWorker` は `true`
+になります。
 
+### Event: 'fork'
+
+<!--
+When a new worker is forked the cluster module will emit a 'fork' event.
+This can be used to log worker activity, and create you own timeout.
+-->
+新しいワーカがフォークされると、クラスタモジュールは `'fork'` イベントを
+生成します。
+これはワーカの活動をロギングしたり、タイムアウトのために使うことができます。
+
+    var timeouts = [];
+    var errorMsg = function () {
+      console.error("Something must be wrong with the connection ...");
+    });
+
+    cluster.on('fork', function (worker) {
+      timeouts[worker.uniqueID] = setTimeout(errorMsg, 2000);
+    });
+    cluster.on('listening', function (worker) {
+      clearTimeout(timeouts[worker.uniqueID]);
+    });
+    cluster.on('death', function (worker) {
+      clearTimeout(timeouts[worker.uniqueID]);
+      errorMsg();
+    });
+
+### Event: 'online'
+
+<!--
+After forking a new worker, the worker should respond with a online message.
+When the master receives a online message it will emit such event.
+The difference between 'fork' and 'online' is that fork is emitted when the
+master tries to fork a worker, and 'online' is emitted when the worker is being
+executed.
+-->
+新しいワーカをフォークした後、ワーカはオンラインメッセージを応答します。
+マスタがオンラインメッセージを受信すると、このイベントが生成されます。
+`'fork'` と `'online'` の違いは、`'fork'` はマスタがワーカのフォークを
+試みた時点で生成されるのに対し、`'online'` はワーカの実行が開始されてから
+生成される点です。
+
+    cluster.on('online', function (worker) {
+      console.log("Yay, the worker responded after it was forked");
+    });
+
+### Event: 'listening'
+
+<!--
+When calling `listen()` from a worker, a 'listening' event is automatically assigned
+to the server instance. When the server is listening a message is send to the master
+where the 'listening' event is emitted.
+-->
+ワーカが `net.Server.listen()` を呼び出すと、`'listening'` イベントは自動的に
+`net.Server` インスタンスに割り当てられます。
+`net.Server` が `'listening'` メッセージをマスタに送信すると、
+`'listening'` イベントが生成されます。
+
+    cluster.on('listening', function (worker) {
+      console.log("We are now connected");
+    });
 
 ### Event: 'death'
 
@@ -120,18 +138,232 @@ Boolean 値です。
 When any of the workers die the cluster module will emit the 'death' event.
 This can be used to restart the worker by calling `fork()` again.
 -->
-ワーカが死ぬとクラスタモジュールは `'deth'` イベントを生成します。
-これはワーカを再起動するために再び `fork()`
-を呼び出すことに使うことができます。
+どのワーカが死んだ場合でも、クラスタモジュールは `'death'` イベントを
+生成します。
+これは `fork()` を呼び出してワーカを再開する場合に使用することができます。
 
     cluster.on('death', function(worker) {
       console.log('worker ' + worker.pid + ' died. restart...');
       cluster.fork();
     });
-  
+
+### cluster.fork([env])
+
 <!--
-Different techniques can be used to restart the worker depending on the
-application.
+Spawn a new worker process. This can only be called from the master process.
+The function takes an optional `env` object. The properties in this object
+will be added to the process environment in the worker.
 -->
-アプリケーションによっては、ワーカを再起動するために
-別のテクニックを使うこともできます。
+新しいワーカプロセスを起動します。
+これはマスタプロセスから飲み呼び出すことができます。
+この関数はオプションの `env` オブジェクトを受け取ることができます。
+このオブジェクトのプロパティはワーカプロセスの環境変数に加えられます。
+
+### cluster.workers
+
+<!--
+In the cluster all living worker objects are stored in this object by there
+`uniqueID` as the key. This makes it easy to loop through all living workers.
+-->
+このクラスタで生きている全てのワーカオブジェクトを、その `uniqueID`
+をキーとして保存しているオブジェクトです。
+これは全ての生きているワーカに対して繰り返しを行うことを容易にします。
+
+    // Go through all workers
+    function eachWorker(callback) {
+      for (var uniqueID in cluster.workers) {
+        callback(cluster.workers[uniqueID]);
+      }
+    }
+    eachWorker(function (worker) {
+      worker.send('big announcement to all workers');
+    });
+
+<!--
+Should you wish to reference a worker over a communication channel, using
+the worker's uniqueID is the easiest way to find the worker.
+-->
+通信チャネルを越えてワーカの参照を渡す場合は、
+ワーカのユニーク ID を使ってワーカを探すのが簡単です。
+
+    socket.on('data', function (uniqueID) {
+      var worker = cluster.workers[uniqueID];
+    });
+
+## Worker
+
+<!--
+This object contains all public information and method about a worker.
+In the master it can be obtained using `cluster.workers`. In a worker
+it can be obtained using `cluster.worker`.
+-->
+このオブジェクトはワーカに関する全ての公開された情報やメソッドを持ちます。
+マスタでは `cluster.wrokers` から取得することができます。
+ワーカでは `cluster.worker` から取得することができます。
+
+### Worker.uniqueID
+
+<!--
+Each new worker is given its own unique id, this id is stored in the `uniqueID`
+-->
+新しいワーカはいずれもユニークな ID を与えられます。
+この ID は `uniqueID` に保存されます。.
+
+### Worker.process
+
+<!--
+All workers are created using `child_process.fork()`, the returned object from this
+function is stored in process.
+-->
+全てのワーカは `child_process.fork()` によって作成されます。
+その戻り値が `process` に設定されます。
+
+### Worker.send(message, [sendHandle])
+
+<!--
+This function is equal to the send methods provided by `child_process.fork()`.
+In the master you should use this function to send a message to a specific worker.
+However in a worker you can also use `process.send(message)`, since this is the same
+function.
+
+This example will echo back all messages from the master:
+-->
+この関数は `child_process.fork()` が返すオブジェクトの `send()`
+メソッドと同じです．
+マスタは特定のワーカにメッセージを送信するためにこの関数を
+使用することができます。
+しかし、ワーカでは `process.send(message)` を使うこともできます。
+
+この例はマスタからのメッセージをエコーバックします。
+
+    if (cluster.isMaster) {
+      var worker = cluster.fork();
+      worker.send('hi there');
+
+    } else if (cluster.isWorker) {
+      process.on('message', function (msg) {
+        process.send(msg);
+      });
+    }
+
+### Worker.destroy()
+
+<!--
+This function will kill the worker, and inform the master to not spawn a new worker.
+To know the difference between suicide and accidentally death a suicide boolean is set to true.
+-->
+この関数はワーカを終了し、マスタに新しいワーカを起動しないように伝えます。
+意図しない終了と区別するために `suicide` プロパティに `true`
+が設定されることを知っておいてください。
+
+    cluster.on('death', function (worker) {
+      if (worker.suicide === true) {
+        console.log('Oh, it was just suicide' – no need to worry').
+      }
+    });
+
+    // destroy worker
+    worker.destroy();
+
+### Worker.suicide
+
+<!--
+This property is a boolean. It is set when a worker dies, until then it is `undefined`.
+It is true if the worker was killed using the `.destroy()` method, and false otherwise.
+-->
+このプロパティは論理値型です。
+ワーカが終了するまで、これは `undefined` です。
+ワーカが `.destroy()` で終了した場合は `true` に、その他の場合は
+`false` に設定されます。
+
+### Event: message
+
+<!--
+This event is the same as the one provided by `child_process.fork()`.
+In the master you should use this event, however in a worker you can also use
+`process.on('message')`
+
+As an example, here is a cluster that keeps count of the number of requests
+in the master process using the message system:
+-->
+このイベントは `child_process.fork()` が提供するものと同じです。
+マスタではこのイベントを使うべきですが、ワーカでは `process.on('message')`
+を使うこともできます。
+
+メッセージシステムを使用してクラスタ全体のリクエスト数を
+マスタプロセスで保持する例です:
+
+    var cluster = require('cluster');
+    var http = require('http');
+
+    if (cluster.isMaster) {
+
+      // Keep track of http requests
+      var numReqs = 0;
+      setInterval(function() {
+        console.log("numReqs =", numReqs);
+      }, 1000);
+
+      // Count requestes
+      var messageHandler = function (msg) {
+        if (msg.cmd && msg.cmd == 'notifyRequest') {
+          numReqs += 1;
+        }
+      };
+
+      // Start workers and listen for messages containing notifyRequest
+      cluster.autoFork();
+      Object.keys(cluster.workers).forEach(function (uniqueID) {
+        cluster.workers[uniqueID].on('message', messageHandler);
+      });
+
+    } else {
+
+      // Worker processes have a http server.
+      http.Server(function(req, res) {
+        res.writeHead(200);
+        res.end("hello world\n");
+
+        // notify master about the request
+        process.send({ cmd: 'notifyRequest' });
+      }).listen(8000);
+    }
+
+### Event: online
+
+<!--
+Same as the `cluster.on('online')` event, but emits only when the state change
+on the specified worker.
+-->
+`cluster.on('online')` と同様ですが，特定のワーカの状態が変化した場合のみ
+イベントを生成します。
+
+    cluster.fork().on('online', function (worker) {
+      // Worker is online
+    };
+
+### Event: listening
+
+<!--
+Same as the `cluster.on('listening')` event, but emits only when the state change
+on the specified worker.
+-->
+`cluster.on('listening')` と同様ですが、特定のワーカの状態が変化した場合のみ
+イベントを生成します。
+
+    cluster.fork().on('listening', function (worker) {
+      // Worker is listening
+    };
+
+### Event: death
+
+<!--
+Same as the `cluster.on('death')` event, but emits only when the state change
+on the specified worker.
+-->
+`cluster.on('death')` と同様ですが、特定のワーカの状態が変化した場合のみ
+イベントを生成します。
+
+    cluster.fork().on('death', function (worker) {
+      // Worker has died
+    };
