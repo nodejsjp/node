@@ -996,6 +996,28 @@ callback, and have some fallback logic if it is null.
 	  }
     });
 
+### fs.exists(p, [callback])
+
+<!--
+Test whether or not the given path exists by checking with the file system.
+Then call the `callback` argument with either true or false.  Example:
+-->
+与えられたパスがファイルシステム上に存在するかどうか検査します。
+そして引数の `callback` を真か偽か検査の結果とともに呼び出します。
+例:
+
+    fs.exists('/etc/passwd', function (exists) {
+      util.debug(exists ? "it's there" : "no passwd!");
+    });
+
+
+### fs.existsSync(p)
+
+<!--
+Synchronous version of `fs.exists`.
+-->
+同期版の `fs.exists` です。
+
 ## fs.Stats
 
 <!--

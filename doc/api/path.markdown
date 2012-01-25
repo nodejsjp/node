@@ -6,19 +6,12 @@ This module contains utilities for handling and transforming file
 paths.  Almost all these methods perform only string transformations.
 The file system is not consulted to check whether paths are valid.
 
-`path.exists` and `path.existsSync` are the exceptions, and should
-logically be found in the fs module as they do access the file system.
-
 Use `require('path')` to use this module.  The following methods are provided:
 
 -->
 このモジュールはファイルのパスに対する処理や変換を行うユーティリティを含みます。
 ほとんどのメソッドは文字列の変換だけを行います。
 パスが正しいか検証するためにファイルシステムに尋ねることはありません。
-
-例外は `path.exists` および `path.existsSync` で、
-これらはファイルシステムにアクセスするため、
-論理的には fs モジュールにあるべきです。
 
 このモジュールを利用するには`require('path')`を呼び出してください。
 このモジュールは以下のメソッドを提供します。
@@ -260,29 +253,3 @@ an empty string.  Examples:
     path.extname('index')
     // returns
     ''
-
-### path.exists(p, [callback])
-
-<!--
-
-Test whether or not the given path exists by checking with the file system.
-Then call the `callback` argument with either true or false.  Example:
-
--->
-与えられたパスがファイルシステム上に存在するかどうか検査します。
-そして引数の `callback` を真か偽か検査の結果とともに呼び出します。
-例:
-
-    path.exists('/etc/passwd', function (exists) {
-      util.debug(exists ? "it's there" : "no passwd!");
-    });
-
-
-### path.existsSync(p)
-
-<!--
-
-Synchronous version of `path.exists`.
-
--->
-同期版の `path.exists` です。
