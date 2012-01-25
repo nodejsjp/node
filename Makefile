@@ -1,3 +1,5 @@
+-include config.mk
+
 BUILDTYPE ?= Release
 PYTHON ?= python
 
@@ -11,13 +13,16 @@ endif
 # to check for changes.
 .PHONY: node node_g
 
-node:
+node: config.gypi
 	$(MAKE) -C out BUILDTYPE=Release
 	ln -fs out/Release/node node
 
-node_g:
+node_g: config.gypi
 	$(MAKE) -C out BUILDTYPE=Debug
 	ln -fs out/Debug/node node_g
+
+config.gypi: configure
+	./configure
 
 out/Debug/node:
 	$(MAKE) -C out BUILDTYPE=Debug

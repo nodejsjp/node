@@ -359,7 +359,7 @@ leaner than `child_process.exec`. It has the same options.
 これは `child_process.exec` より若干効率的で、同じオプションを持ちます。
 
 
-### child_process.fork(modulePath, arguments, options)
+### child_process.fork(modulePath, [arguments], [options])
 
 <!--
 
