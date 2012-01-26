@@ -268,6 +268,21 @@ Note: `cipher` object can not be used after `final()` method been called.
 注意: `final()` メソッドを呼び出した後で `cipher` 
 オブジェクトを使うことはできません。
 
+### cipher.setAutoPadding(auto_padding=true)
+
+<!--
+You can disable automatic padding of the input data to block size. If `auto_padding` is false,
+the length of the entire input data must be a multiple of the cipher's block size or `final` will fail.
+Useful for non-standard padding, e.g. using `0x0` instead of PKCS padding. You must call this before `cipher.final`.
+-->
+入力データが自動的にブロックサイズにパディングされることを抑止することができます。
+`auto_padding` が `false` の場合、入力データ全体の長さは
+暗号ブロックサイズの倍数でなければなりません。
+でなければ、`final()` は失敗します。
+これは非標準のパディング、たとえば PKCS パディングの代わりに
+`0x0` を使う場合に便利です。
+`cipher.final()` の前に呼び出す必要があります。
+
 
 ### crypto.createDecipher(algorithm, password)
 
@@ -327,6 +342,18 @@ Note: `decipher` object can not be used after `final()` method been called.
 
 注意: `final()` メソッドを呼び出した後で `decipher` 
 オブジェクトを使うことはできません。
+
+### decipher.setAutoPadding(auto_padding=true)
+
+<!--
+You can disable auto padding if the data has been encrypted without standard block padding to prevent
+`decipher.final` from checking and removing it. Can only work if the input data's length is a multiple of the
+ciphers block size. You must call this before streaming data to `decipher.update`.
+-->
+データブロックが非標準のパディングで暗号化されている場合、
+`decipher.final()` によるチェックを無効にすることができます。
+入力データの長さが暗号ブロックサイズの倍数の場合のみ動作します。
+`decipher.update()` の前に呼び出す必要があります。
 
 
 ### crypto.createSign(algorithm)
