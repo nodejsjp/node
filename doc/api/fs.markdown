@@ -530,16 +530,28 @@ An exception occurs if the file does not exist.
 * `'w'` - Open file for writing.
 The file is created (if it does not exist) or truncated (if it exists).
 
+* `'wx'` - Like `'w'` but opens the file in exclusive mode.
+
 * `'w+'` - Open file for reading and writing.
 The file is created (if it does not exist) or truncated (if it exists).
+
+* `'wx+'` - Like `'w+'` but opens the file in exclusive mode.
 
 * `'a'` - Open file for appending.
 The file is created if it does not exist.
 
+* `'ax'` - Like `'a'` but opens the file in exclusive mode.
+
 * `'a+'` - Open file for reading and appending.
 The file is created if it does not exist.
 
+* `'ax+'` - Like `'a+'` but opens the file in exclusive mode.
+
 `mode` defaults to `0666`. The callback gets two arguments `(err, fd)`.
+
+Exclusive mode (`O_EXCL`) ensures that `path` is newly created. `fs.open()`
+fails if a file by that name already exists. On POSIX systems, symlinks are
+not followed. Exclusive mode may or may not work with network file systems.
 
 -->
 非同期のファイルオープン。open(2) を参照してください。
@@ -555,18 +567,33 @@ The file is created if it does not exist.
 ファイルは作成される (存在しない場合) または長さ 0 に切り詰められます
 (存在する場合)。
 
-* `'r+'` - 読み書き両用でオープンします。
+* `'wx'` - `'w'` と似ていますが、ファイルを排他モードでオープンします。
+
+* `'w+'` - 読み書き両用でオープンします。
 ファイルは作成される (存在しない場合) または長さ 0 に切り詰められます
 (存在する場合)。
+
+* `'wx'` - `'w+'` と似ていますが、ファイルを排他モードでオープンします。
 
 * `'a'` - 追記用でオープンします。
 ファイルが存在しない場合は作成されます。
 
+* `'ax'` - `'a'` と似ていますが、ファイルを排他モードでオープンします。
+
 * `'a+'` - 読み込みおよび追記用でオープンします。
 ファイルが存在しない場合は作成されます。
 
+* `'ax+'` - `'a+'` と似ていますが、ファイルを排他モードでオープンします。
+
 `mode` のデフォルトは 0666 です。
 コールバックは 2 つの引数を受け取る `(err, fd)`です。
+
+排他モード (`O_EXCL`) は、`path` が新しいファイルとして作成されることを
+確実にします。 指定された名前のファイルが既に存在する場合、
+`fs.open()` は失敗します。
+POSIX システムでは、シンボリックリンクは辿られません。
+排他モードはネットワークファイルシステムでは動くかもしれませんし、
+動かないかもしれません。
 
 ### fs.openSync(path, flags, [mode])
 

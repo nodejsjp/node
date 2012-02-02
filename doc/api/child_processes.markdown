@@ -65,6 +65,23 @@ See `waitpid(2)`.
 -->
 `waitpid(2)` を参照してください。
 
+### Event: 'disconnect'
+
+<!--
+
+This event is emitted after using the `.disconnect()` method in the parent or
+in the child. After disconnecting it is no longer possible to send messages.
+An alternative way to check if you can send messages is to see if the
+`child.connected` property is `true`.
+
+-->
+
+このイベントは、親プロセスまたは子プロセスで `disconnect()` メソッドが
+呼び出された場合に生成されます。
+この後では、プロセス間でのメッセージ送信はもうできません。
+メッセージを送信できるかを調べるには、`child.connected` プロパティが `true`
+かチェックしてください。
+
 ### child.stdin
 
 <!--
@@ -488,7 +505,24 @@ processes:
       }
     });
 
+<!--
 
+To close the IPC connection between parent and child use the
+`child.disconnect()` method. This allows the child to exit gracefully since
+there is no IPC channel keeping it alive. When calling this method the
+`disconnect` event will be emitted in both parent and child, and the
+`connected` flag will be set to `false`. Please note that you can also call
+`process.disconnect()` in the child process.
+
+-->
+親プロセスと子プロセス間の IPC 接続を閉じるには、`child.disconnect()`
+メソッドを使用します。
+これは IPC チャネルを解放することにより、子プロセスが通常通りに終了することを
+可能にします。
+このメソッドが呼び出されると、親プロセスと子プロセスの両方で `'disconnect'`
+イベントが生成され、`connected` フラグは `false` に設定されます。
+子プロセスでは `process.disconnect()` を呼び出すこともできることに
+注意してください。
 
 ### child.kill([signal])
 
