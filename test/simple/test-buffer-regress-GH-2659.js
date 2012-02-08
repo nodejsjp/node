@@ -19,43 +19,12 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-var assert = require('assert');
 var common = require('../common');
+var assert = require('assert');
 
-if (process.argv[2] === 'child') {
-  process.exit(0);
-} else if (process.argv[2] === 'testcase') {
-
-  // testcase
-  var fork = require('child_process').fork;
-  var child = fork(process.argv[1], ['child'], {thread: true});
-
-  process.on('exit', function () {
-    process.stdout.write('exit\n');
-  });
-} else {
-  // we need this to check that process.on('exit') fires
-
-  var spawn = require('child_process').spawn;
-  var child = spawn(process.execPath, [process.argv[1], 'testcase']);
-
-  // pipe stderr and stdin
-  child.stderr.pipe(process.stderr);
-  process.stdin.pipe(child.stdin);
-
-  var missing = true;
-  child.stdout.on('data', function(chunk) {
-    if (missing) {
-        missing = chunk.toString() !== 'exit\n';
-    }
-    process.stdout.write(chunk);
-  });
-
-  child.on('exit', function(code) {
-    process.exit(code);
-  });
-
-  process.on('exit', function() {
-    assert.equal(missing, false);
-  });
+// This is not a great test. It depends on a Node internal, namely the slab
+// size. Maybe we should expose that in some way. Then again, maybe not...
+for (var n = 1; n <= 8192; ++n) {
+  Buffer(n);
+  Buffer(0).write('', 'base64');
 }

@@ -151,12 +151,11 @@ This can be used to restart the worker by calling `fork()` again.
 
 <!--
 When the `.setupMaster()` function has been executed this event emits. If `.setupMaster()`
-was not executed before `fork()` or `.autoFork()`, they will execute the function with no
-arguments.
+was not executed before `fork()` this function will call `.setupMaster()` with no arguments.
 -->
 `setupMaster()` が実行された時、このイベントが生成されます。
-`fork()`  または `autoFork()` の前に`setupMaster()` が呼ばれなかった場合、
-それは引数無しで実行されます。
+`fork()` の前に`setupMaster()` が呼ばれなかった場合、
+この関数は引数無しで `setupMaster()` を呼び出します。
 
 ### cluster.setupMaster([options])
 
