@@ -30,9 +30,15 @@ A `Readable Stream` has the following methods, members, and events.
 The `'data'` event emits either a `Buffer` (by default) or a string if
 `setEncoding()` was used.
 
+Note that the __data will be lost__ if there is no listener when a
+`Readable Stream` emits a `'data'` event.
+
 -->
 `'data'` イベントは `Buffer` (デフォルト) または、
 `setEncoding()` された場合は文字列のどちらかを生成します
+
+`Readable Stream` が `'data'` イベントを生成した時にリスナが存在しなければ、
+__データは失われる__ことに注意してください。
 
 ### Event: 'end'
 
