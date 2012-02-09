@@ -1,4 +1,19 @@
-2012.02.01, Version 0.7.2 (unstable)
+2012.02.07, Version 0.7.3 (unstable)
+
+* Upgrade V8 to 3.9.2
+
+* Revert support for isolates. (Ben Noordhuis)
+
+* cluster: Cleanup docs, event handling, and process.disconnect (Andreas Madsen)
+
+* gyp_addon: link with node.lib on Windows (Nathan Rajlich)
+
+* http: fix case where http-parser is freed twice (koichik)
+
+* Windows: disable RTTI and exceptions (Bert Belder)
+
+
+2012.02.01, Version 0.7.2 (unstable), ec79acb3a6166e30f0bf271fbbfda1fb575b3321
 
 * Update V8 to 3.8.9
 
@@ -57,6 +72,29 @@
 * Use isolates for internal debugger (Fedor Indutny)
 
 * Bug fixes
+
+
+2012.02.02, Version 0.6.10 (stable)
+
+* Update V8 to 3.6.6.20
+
+* Add npm msysgit bash shim to msi installer (isaacs)
+
+* buffers: fix intermittent out of bounds error (Ben Noordhuis)
+
+* buffers: honor length argument in base64 decoder (Ben Noordhuis)
+
+* windows: Fix path.exists regression (Bert Belder)
+
+* Make QueryString.parse run faster (Philip Tellis)
+
+* http: avoid freeing http-parser objects too early (koichik)
+
+* timers: add v0.4 compatibility hack (Ben Noordhuis)
+
+* Proper EPERM error code support (Igor Zinkovsky, Brandon Philips)
+
+* dgram: Implement udp multicast methods on windows (Bert Belder)
 
 
 2012.01.27, Version 0.6.9 (stable), f19e20d33f57c4d2853aaea7d2724d44f3b0012f
