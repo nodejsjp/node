@@ -39,7 +39,8 @@ uninstall:
 	out/Release/node tools/installer.js ./config.gypi uninstall
 
 clean:
-	-rm -rf out/Makefile node node_g out/**/*.o  out/**/*.a out/$(BUILDTYPE)/node
+	-rm -rf out/Makefile node node_g out/$(BUILDTYPE)/node
+	-find out/ -name '*.o' -o -name '*.a' | xargs rm -rf
 
 distclean:
 	-rm -rf out
@@ -91,9 +92,11 @@ test-npm-publish: node
 apidoc_sources = $(wildcard doc/api/*.markdown)
 apidocs = $(addprefix out/,$(apidoc_sources:.markdown=.html))
 
-apidoc_dirs = out/doc out/doc/api/ out/doc/api/assets out/doc/about out/doc/community out/doc/logos
+apidoc_dirs = out/doc out/doc/api/ out/doc/api/assets out/doc/about out/doc/community out/doc/logos out/doc/images
 
 apiassets = $(subst api_assets,api/assets,$(addprefix out/,$(wildcard doc/api_assets/*)))
+
+doc_images = $(addprefix out/,$(wildcard doc/images/* doc/*.jpg doc/*.png))
 
 website_files = \
 	out/doc/index.html    \
@@ -103,33 +106,12 @@ website_files = \
 	out/doc/sh_javascript.min.js \
 	out/doc/sh_vim-dark.css \
 	out/doc/sh.css \
-	out/doc/logo.png      \
 	out/doc/favicon.ico   \
 	out/doc/pipe.css \
 	out/doc/about/index.html \
-	out/doc/close-downloads.png \
 	out/doc/community/index.html \
-	out/doc/community/not-invented-here.png \
 	out/doc/logos/index.html \
-	out/doc/microsoft-logo.png \
-	out/doc/ryan-speaker.jpg \
-	out/doc/download-logo.png \
-	out/doc/ebay-logo.png \
-	out/doc/footer-logo-alt.png \
-	out/doc/footer-logo.png \
-	out/doc/icons-interior.png \
-	out/doc/icons.png \
-	out/doc/home-icons.png \
-	out/doc/joyent-logo_orange_nodeorg-01.png \
-	out/doc/linkedin-logo.png \
-	out/doc/logo-light.png \
-	out/doc/mac_osx_nodejs_installer_logo.png \
-	out/doc/microsoft-logo.png \
-	out/doc/platform-icons.png \
-	out/doc/sponsored.png \
-	out/doc/twitter-bird.png \
-	out/doc/community-icons.png \
-	out/doc/yahoo-logo.png
+	$(doc_images)
 
 doc: node $(apidoc_dirs) $(website_files) $(apiassets) $(apidocs)
 
@@ -140,7 +122,7 @@ out/doc/api/assets/%: doc/api_assets/% out/doc/api/assets/
 	cp $< $@
 
 out/doc/%: doc/%
-	cp $< $@
+	cp -r $< $@
 
 out/doc/api/%.html: doc/api/%.markdown node $(apidoc_dirs) $(apiassets) tools/doctool/doctool.js
 	out/Release/node tools/doctool/doctool.js doc/template.html $< > $@
@@ -192,7 +174,7 @@ $(TARBALL): node out/doc
 	cp doc/node.1 $(TARNAME)/doc/node.1
 	cp -r out/doc/api $(TARNAME)/doc/api
 	rm -rf $(TARNAME)/deps/v8/test # too big
-	rm -rf $(TARNAME)/doc/logos # too big
+	rm -rf $(TARNAME)/doc/images # too big
 	tar -cf $(TARNAME).tar $(TARNAME)
 	rm -rf $(TARNAME)
 	gzip -f -9 $(TARNAME).tar

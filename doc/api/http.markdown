@@ -352,10 +352,14 @@ interface. This is an `EventEmitter` with the following events:
 
 <!--
 
-Emitted when a piece of the message body is received.
+Emitted when a piece of the message body is received. The chunk is a string if
+an encoding has been set with `request.setEncoding()`, otherwise it's a
+[Buffer](buffers.html).
 
 -->
 メッセージボディの断片を受信した場合に生成されます。
+`request.setEncoding()` によってエンコーディングが設定された場合、
+`chunk` は文字列です。それ以外の場合は [Buffer](buffers.html) です。
 
 <!--
 

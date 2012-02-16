@@ -354,6 +354,12 @@ Example:
       console.log("opened server on %j", address);
     });
 
+<!--
+
+Don't call `server.address()` until the `'listening'` event has been emitted.
+
+-->
+`'listening'` イベントが生成される前に `server.address()` を呼び出してはいけません。
 
 #### server.maxConnections
 
