@@ -99,6 +99,10 @@ The `options` object has these possibilities:
     omitted several well known "root" CAs will be used, like VeriSign.
     These are used to authorize connections.
 
+  - `ciphers`: A string describing the ciphers to use or exclude. Consult
+    <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for
+    details on the format.
+
   - `requestCert`: If `true` the server will request a certificate from
     clients that connect and attempt to verify that certificate. Default:
     `false`.
@@ -133,6 +137,10 @@ The `options` object has these possibilities:
   - `ca`: 信頼できる証明書の文字列または `Buffer` の配列です。
     省略された場合、ベリサインなどのよく知られた「ルート」認証局が使われます。
     これらはコネクションの認証に使われます。
+
+  - `ciphers`: 使用または除外する暗号を記述した文字列。
+    詳細は <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT>
+    を参照してください。
 
   - `requestCert`: `true` の場合、サーバは接続しようとするクライアントからの
     証明書を要求します。デフォルトは `false` です。
