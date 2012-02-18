@@ -68,6 +68,51 @@ Alternatively you can send the CSR to a Certificate Authority for signing.
 (TODO: CA を作るドキュメント、現在は興味あるユーザは Node のソースコードから
 `test/fixtures/keys/Makefile` を見る必要がある)
 
+### Client-initiated renegotiation attack mitigation
+
+<!--
+
+The TLS protocol lets the client renegotiate certain aspects of the TLS session.
+Unfortunately, session renegotiation requires a disproportional amount of
+server-side resources, which makes it a potential vector for denial-of-service
+attacks.
+
+To mitigate this, renegotiations are limited to three times every 10 minutes. An
+error is emitted on the [CleartextStream](#tls.CleartextStream) instance when
+the threshold is exceeded. The limits are configurable:
+
+  - `tls.CLIENT_RENEG_LIMIT`: renegotiation limit, default is 3.
+
+  - `tls.CLIENT_RENEG_WINDOW`: renegotiation window in seconds, default is
+                               10 minutes.
+
+Don't change the defaults unless you know what you are doing.
+
+To test your server, connect to it with `openssl s_client -connect address:port`
+and tap `R<CR>` (that's the letter `R` followed by a carriage return) a few
+times.
+
+-->
+TLS では、クライアントから TLS セッションの再ネゴシエーションが可能です。
+
+残念なことに、セッションの再ネゴシエーションは過度な量のサーバサイドリソースを
+要求し、それは潜在的にサービスを強制停止する攻撃となります。
+
+これを緩和するために、再ネゴシエーションは 10 分あたり 3 回までに
+制限されています。この閾値を超えると、[CleartextStream](#tls.CleartextStream)
+のインスタンスで `'error'` が生成されます。
+この制限はコンフィグレーション可能です:
+
+  - `tls.CLIENT_RENEG_LIMIT`: 再ネゴシエーションの上限、デフォルトは 3 です。
+
+  - `tls.CLIENT_RENEG_WINDOW`: 再ネゴシエーションのウィンドウサイズ (秒単位)、
+デフォルトは 10 分です。
+
+あなたが何をしたいのか理解していない限り、デフォルトを変更しないでください。
+
+サーバをテストするために、`openssl s_client -connect address:port` で
+接続して `R<CR>` (これは `R` の後に復帰改行を続けます)
+を、数回試すことができます。
 
 #### tls.createServer(options, [secureConnectionListener])
 
@@ -98,6 +143,10 @@ The `options` object has these possibilities:
   - `ca`: An array of strings or `Buffer`s of trusted certificates. If this is
     omitted several well known "root" CAs will be used, like VeriSign.
     These are used to authorize connections.
+
+  - `ciphers`: A string describing the ciphers to use or exclude. Consult
+    <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for
+    details on the format.
 
   - `requestCert`: If `true` the server will request a certificate from
     clients that connect and attempt to verify that certificate. Default:
@@ -133,6 +182,10 @@ The `options` object has these possibilities:
   - `ca`: 信頼できる証明書の文字列または `Buffer` の配列です。
     省略された場合、ベリサインなどのよく知られた「ルート」認証局が使われます。
     これらはコネクションの認証に使われます。
+
+  - `ciphers`: 使用または除外する暗号を記述した文字列。
+    詳細は <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT>
+    を参照してください。
 
   - `requestCert`: `true` の場合、サーバは接続しようとするクライアントからの
     証明書を要求します。デフォルトは `false` です。
@@ -263,6 +316,11 @@ defaults to `localhost`.) `options` should be an object which specifies
 
   - `servername`: Servername for SNI (Server Name Indication) TLS extension.
 
+  - `socket`: Establish secure connection on a given socket rather than
+    creating a new socket. If this option is specified, `host` and `port`
+    are ignored.  This is intended FOR INTERNAL USE ONLY.  As with all
+    undocumented APIs in Node, they should not be used.
+
 -->
   - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または
     `Buffer` です。
@@ -283,9 +341,13 @@ defaults to `localhost`.) `options` should be an object which specifies
 
   - `servername`: TLS 拡張である SNI (Server Name Indication) のサーバ名です。
 
-<!--
+  - `socket`: 新しいソケットを生成するのではなく、与えられたソケット上で
+    セキュアな接続を確立します。
+    このオプションが指定された場合、`host` および `port` は無視されます。
+    これは内部的な利用のみを意図しています。他のアンドキュメンテッドな
+    API と同様、これを使用すべきではありません。
 
-`tls.connect()` returns a [CleartextStream](#tls.CleartextStream) object.
+<!--
 
 The `secureConnectListener` parameter will be added as a listener for the
 ['secureConnect'](#event_secureConnect_) event.
@@ -321,9 +383,6 @@ Here is an example of a client of echo server as described previously:
     });
 
 -->
-`tls.connect()` は [CleartextStream](#tls.CleartextStream) 
-オブジェクトを返します。
-
 `secureConnectLister` 引数は ['secureConnect'](#event_secureConnect_)
 イベントのリスナとして加えられます。
 
@@ -358,29 +417,6 @@ Here is an example of a client of echo server as described previously:
       server.close();
     });
 
-
-### STARTTLS
-
-<!--
-
-In the v0.4 branch no function exists for starting a TLS session on an
-already existing TCP connection.  This is possible it just requires a bit of
-work. The technique is to use `tls.createSecurePair()` which returns two
-streams: an encrypted stream and a cleartext stream. The encrypted stream is
-then piped to the socket, the cleartext stream is what the user interacts with
-thereafter.
-
-[Here is some code that does it.](http://gist.github.com/848444)
-
--->
-v0.4 ブランチでは、既に存在する TCP コネクション上で TLS セッションを開始する機能はありません。
-それには少しの作業が必要となります。
-そのテクニックは `tls.createSecurePair()` が返す二つのストリーム:
-暗号化されたストリームと平文のストリームを使います。
-暗号化されたストリームは既存のソケットにつながれ、
-平文のストリームはその後ユーザとのインタラクションで使われます。
-
-[ここにそのコードがあります。](http://gist.github.com/848444)
 
 ### NPN and SNI
 

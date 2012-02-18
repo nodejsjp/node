@@ -288,9 +288,12 @@ the user -- and passed as the first argument to a `'request'` listener.
 
 <!--
 
-This is an `EventEmitter` with the following events:
+The request implements the [Readable Stream](streams.html#readable_Stream)
+interface. This is an `EventEmitter` with the following events:
 
 -->
+リクエストは [Readable Stream](streams.html#readable_Stream)
+インタフェースを実装します。
 これは以下のイベントを持つ `EventEmitter` です:
 
 ### Event: 'data'
@@ -299,10 +302,14 @@ This is an `EventEmitter` with the following events:
 
 <!--
 
-Emitted when a piece of the message body is received.
+Emitted when a piece of the message body is received. The chunk is a string if
+an encoding has been set with `request.setEncoding()`, otherwise it's a
+[Buffer](buffers.html).
 
 -->
 メッセージボディの断片を受信した場合に生成されます。
+`request.setEncoding()` によってエンコーディングが設定された場合、
+`chunk` は文字列です。それ以外の場合は [Buffer](buffers.html) です。
 
 <!--
 
@@ -311,11 +318,17 @@ argument. The transfer-encoding has been decoded.  The
 body chunk is a string.  The body encoding is set with
 `request.setEncoding()`.
 
+Note that the __data will be lost__ if there is no listener when a
+`ServerRequest` emits a `'data'` event.
+
 -->
 例: 一つの引数としてボディのチャンクが与えられます。
 転送エンコーディングでデコードされます。
 ボディのチャンクは文字列です。
 ボディのエンコーディングは `request.setBodyEncoding()` で設定されます。
+
+`ServerRequest` が `'data'` イベントを生成した時にリスナが存在しなければ、
+__データは失われる__ことに注意してください。
 
 ### Event: 'end'
 
@@ -526,12 +539,18 @@ HTTPS では `request.connection.verifyPeer()` と
 <!--
 
 This object is created internally by a HTTP server--not by the user. It is
-passed as the second parameter to the `'request'` event. It is a `Writable Stream`.
+passed as the second parameter to the `'request'` event.
+
+The response implements the [Writable  Stream](streams.html#writable_Stream)
+interface. This is an `EventEmitter` with the following events:
 
 -->
 このオブジェクトは HTTP サーバ内部 － ユーザではなく － で作成されます。
 `'request'` リスナーの第 2 引数として渡されます。
-これは `Writable Stream` です。
+
+レスポンスは [Writable  Stream](streams.html#writable_Stream)
+インタフェースを実装します。
+これは以下のイベントを持つ `EventEmitter` です:
 
 ### Event: 'close'
 
@@ -1174,19 +1193,20 @@ event, the entire body will be caught.
 
 <!--
 
-This is a `Writable Stream`.
 Note: Node does not check whether Content-Length and the length of the body
 which has been transmitted are equal or not.
 
 -->
-これは `Writable Stream` です。
 注意: Node は Content-Length と実際に送信されたリクエストボディの長さが等しいかどうかチェックしません。
 
 <!--
 
-This is an `EventEmitter` with the following events:
+The request implements the [Writable  Stream](streams.html#writable_Stream)
+interface. This is an `EventEmitter` with the following events:
 
 -->
+リクエストは [Writable  Stream](streams.html#writable_Stream)
+インタフェースを実装します。
 これは以下のイベントを持つ `EventEmitter` です。
 
 ### Event 'response'
@@ -1424,10 +1444,14 @@ passed to the `'response'` event of the request object.
 
 <!--
 
-The response implements the `Readable Stream` interface.
+The response implements the [Readable Stream](streams.html#readable_Stream)
+interface. This is an `EventEmitter` with the following events:
+
 
 -->
-レスポンスは `Readable Stream` インタフェースを実装します。
+レスポンスは [Readable Stream](streams.html#readable_Stream)
+インタフェースを実装します。
+これは以下のイベントを持つ `EventEmitter` です:
 
 ### Event: 'data'
 
@@ -1437,9 +1461,14 @@ The response implements the `Readable Stream` interface.
 
 Emitted when a piece of the message body is received.
 
+Note that the __data will be lost__ if there is no listener when a
+`ClientResponse` emits a `'data'` event.
+
 -->
 メッセージボディの断片を受信した場合に生成されます。
 
+`ClientResponse` が `'data'` イベントを生成した時にリスナが存在しなければ、
+__データは失われる__ことに注意してください。
 
 ### Event: 'end'
 

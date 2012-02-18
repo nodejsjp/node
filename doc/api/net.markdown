@@ -325,6 +325,12 @@ Example:
       console.log("opened server on %j", address);
     });
 
+<!--
+
+Don't call `server.address()` until the `'listening'` event has been emitted.
+
+-->
+`'listening'` イベントが生成される前に `server.address()` を呼び出してはいけません。
 
 #### server.maxConnections
 
@@ -820,11 +826,17 @@ Emitted when data is received.  The argument `data` will be a `Buffer` or
 (See the [Readable Stream](streams.html#readable_Stream) section for more
 information.)
 
+Note that the __data will be lost__ if there is no listener when a `Socket`
+emits a `'data'` event.
+
 -->
 データを受信した場合に生成されます。
 `data` 引数は `Buffer` または `String` です。
 データのエンコーディングは `socket.setEncoding()` で設定されます。
 (より詳しい情報は [Readable Stream](streams.html#readable_Stream) を参照してください)。
+
+`Socket` が `'data'` イベントを生成した時にリスナが存在しなければ、
+__データは失われる__ことに注意してください。
 
 #### Event: 'end'
 

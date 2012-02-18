@@ -39,11 +39,17 @@ Creates a credentials object, with the optional details being a dictionary with 
 * `key` : a string holding the PEM encoded private key
 * `cert` : a string holding the PEM encoded certificate
 * `ca` : either a string or list of strings of PEM encoded CA certificates to trust.
+* `ciphers`: a string describing the ciphers to use or exclude. Consult
+  <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for details
+  on the format.
 
 -->
 * `key` : PEM でエンコードされた秘密鍵を保持する文字列
 * `cert` : PEM でエンコードされた証明書を保持する文字列
 * `ca` : 信頼できる認証局の証明書が PEM でエンコードされた文字列または文字列の配列
+* `ciphers`: 使用または除外する暗号を記述した文字列。
+  詳細は <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT>
+  を参照してください。
 
 <!--
 
