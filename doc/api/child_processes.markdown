@@ -454,7 +454,7 @@ with the parent's. To change this behavior set the `silent` property in the
 それを使用すべきではありません。それは保証なしに変更される可能性があります。
 
 デフォルトでは、起動された Node プロセスは親プロセスに関連づけられた標準出力と
-標準エラー出力を持ちます。これを変更するには options` オブジェクトの
+標準エラー出力を持ちます。これを変更するには `options` オブジェクトの
 `silent` プロパティを `true` に設定します。
 
 <!--
