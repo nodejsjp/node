@@ -9,13 +9,12 @@ Readline はストリーム (たとえば標準入力) を行ごとに読み込�
 
 <!--
 Note that once you've invoked this module, your node program will not
-terminate until you've closed the interface, and the STDIN stream. Here's how
-to allow your program to gracefully terminate:
+terminate until you've paused the interface. Here's how to allow your
+program to gracefully pause:
 -->
-このモジュールを一度起動すると、このインタフェースと 
-(標準入力などの) ストリームをクローズするまで node
-プログラムは終了しないことに注意してください。
-きれいに終了する方法を以下に示します:
+このモジュールを一度起動すると、このインタフェースを
+中断するまで node プログラムは終了しないことに注意してください。
+プログラムをスムーズに中断する方法を以下に示します:
 
     var rl = require('readline');
 
@@ -24,10 +23,7 @@ to allow your program to gracefully terminate:
       // TODO: Log the answer in a database
       console.log("Thank you for your valuable feedback.");
 
-      // These two lines together allow the program to terminate. Without
-      // them, it would run forever.
-      i.close();
-      process.stdin.destroy();
+      i.pause();
     });
 
 ### rl.createInterface(input, output, completer)
@@ -76,10 +72,16 @@ Sets the prompt, for example when you run `node` on the command line, you see
 <!--
 Readies readline for input from the user, putting the current `setPrompt`
 options on a new line, giving the user a new spot to write.
+
+This will also resume the `in` stream used with `createInterface` if it has
+been paused.
 -->
 ユーザからの入力を 1 行読み込みます。
 現在の `setPrompt()` の値を新しい行に出力し、
 ユーザに新しい入力エリアを与えます。
+
+これは、 `createInterface()` によって使われる `in` ストリームが
+中断されていれば再開します。
 
 <!-- ### rl.getColumns() Not available? -->
 
@@ -89,9 +91,15 @@ options on a new line, giving the user a new spot to write.
 Prepends the prompt with `query` and invokes `callback` with the user's
 response. Displays the query to the user, and then invokes `callback` with the
 user's response after it has been typed.
+
+This will also resume the `in` stream used with `createInterface` if it has
+been paused.
 -->
 `query` をプロンプトとして、ユーザが応答すると `callback` を起動します。
 ユーザに質問を表示し、ユーザが応答をタイプすると、`callback` が起動されます。
+
+これは、 `createInterface()` によって使われる `in` ストリームが
+中断されていれば再開します。
 
 <!--
 Example usage:
@@ -102,33 +110,33 @@ Example usage:
       console.log('Oh, so your favorite food is ' + answer);
     });
 
-### rl.close()
-
-<!--
-  Closes tty.
--->
-tty をクローズします。
-
 ### rl.pause()
 
 <!--
-  Pauses tty.
+Pauses the readline `in` stream, allowing it to be resumed later if needed.
 -->
-tty からの入力を中断します。
+`in` ストリームからの入力を中断します。
+必要なら後で再開することができます。
 
 ### rl.resume()
 
 <!--
-  Resumes tty.
+Resumes the readline `in` stream.
 -->
-tty からの入力を再開します。
+`in` ストリームからの入力を再開します。
 
 ### rl.write()
 
 <!--
-  Writes to tty.
+Writes to tty.
+
+This will also resume the `in` stream used with `createInterface` if it has
+been paused.
 -->
 tty へ出力します。
+
+これは、 `createInterface()` によって使われる `in` ストリームが
+中断されていれば再開します。
 
 ### Event: 'line'
 
@@ -151,27 +159,138 @@ Example of listening for `line`:
       console.log('You just typed: '+cmd);
     });
 
-### Event: 'close'
+### Event: 'pause'
 
 `function () {}`
 
 <!--
-Emitted whenever the `in` stream receives a `^C` or `^D`, respectively known
-as `SIGINT` and `EOT`. This is a good way to know the user is finished using
-your program.
+Emitted whenever the `in` stream is paused or receives `^D`, respectively known
+as `EOT`. This event is also called if there is no `SIGINT` event listener
+present when the `in` stream receives a `^C`, respectively known as `SIGINT`.
+
+Also emitted whenever the `in` stream is not paused and receives the `SIGCONT`
+event. (See events `SIGTSTP` and `SIGCONT`)
+
+Example of listening for `pause`:
 -->
-`in` ストリームから `^C` または `^D` を受信すると生成されます。
-それぞれ `SIGINT` および `EOT` として知られています。
-これはユーザがプログラムの使用を終わらせようとしていることを知るよい方法です。
+`in` ストリームが中断された時、または `EOT` として知られる `^D` 
+を受信すると生成されます。
+このイベントは、`in` ストリームが `SIGINT` として知られる `^C` を受信した際に、
+`SIGINT` イベントのリスナが存在しない場合にも生成されます。
+
+`in` ストリームが中断されていない時に `SIGCONT` イベントを受信した際にも
+生成されます (`SIGTSTP` および `SIGCONT` も参照してください)。
+
+`'pause'` を監視する例:
+
+    rl.on('pause', function() {
+      console.log('Readline paused.');
+    });
+
+### Event: 'resume'
+
+`function () {}`
 
 <!--
-Example of listening for `close`, and exiting the program afterward:
--->
-`close` を監視し、その後プログラムを終了する例:
+Emitted whenever the `in` stream is resumed.
 
-    rl.on('close', function() {
-      console.log('goodbye!');
-      process.exit(0);
+Example of listening for `resume`:
+-->
+`in` ストリームが再開された時に生成されます。
+
+`'resume'` を監視する例:
+
+    rl.on('resume', function() {
+      console.log('Readline resumed.');
+    });
+
+### Event: 'SIGINT'
+
+`function () {}`
+
+<!--
+Emitted whenever the `in` stream receives a `^C`, respectively known as
+`SIGINT`. If there is no `SIGINT` event listener present when the `in` stream
+receives a `SIGINT`, `pause` will be triggered.
+
+Example of listening for `SIGINT`:
+-->
+`in` ストリームが `SIGINT` として知られる `^C` を受信した場合に生成されます。
+もし `in` ストリームが `SIGINT` を受信した時に `'SIGINT'` イベントの
+リスナが存在しなければ、`'pause'` イベントがトリガされます。
+
+`'SIGINT'` を監視する例:
+
+    rl.on('SIGINT', function() {
+      rl.question('Are you sure you want to exit?', function(answer) {
+        if (answer.match(/^y(es)?$/i)) rl.pause();
+      });
+    });
+
+### Event: 'SIGTSTP'
+
+`function () {}`
+
+<!--
+**This does not work on Windows.**
+
+Emitted whenever the `in` stream receives a `^Z`, respectively known as
+`SIGTSTP`. If there is no `SIGTSTP` event listener present when the `in` stream
+receives a `SIGTSTP`, the program will be sent to the background.
+
+When the program is resumed with `fg`, the `pause` and `SIGCONT` events will be
+emitted. You can use either to resume the stream.
+
+The `pause` and `SIGCONT` events will not be triggered if the stream was paused
+before the program was sent to the background.
+
+Example of listening for `SIGTSTP`:
+-->
+**これは Windows では動作しません。**
+
+`in` ストリームが `SIGTSTP` として知られる `^Z` を受信した場合に生成されます。
+もし `in` ストリームが `SIGTSTP` を受信した時に `'SIGTSTP'` イベントの
+リスナが存在しなければ、プログラムはバックグラウンドに送られます。
+
+プログラムが `fg` により再開されると、`'pause'` および `'SIGCONT'` イベントが
+生成されます。どちらもストリームを再開するために使うことができます。
+
+プログラムがバックグラウンドに送られる前にストリームが中断されていると、
+`'pause'` および `'SIGCONT'` イベントは生成されません。
+
+`'SIGTSTP'` を監視する例:
+
+    rl.on('SIGTSTP', function() {
+      // This will override SIGTSTP and prevent the program from going to the
+      // background.
+      console.log('Caught SIGTSTP.');
+    });
+
+### Event: 'SIGCONT'
+
+`function () {}`
+
+<!--
+**This does not work on Windows.**
+
+Emitted whenever the `in` stream is sent to the background with `^Z`,
+respectively known as `SIGTSTP`, and then continued with `fg`. This event only
+emits if the stream was not paused before sending the program to the
+background.
+
+Example of listening for `SIGCONT`:
+-->
+**これは Windows では動作しません。**
+
+`in` ストリームが `SIGTSTP` として知られる `^Z` によってバックグラウンドに
+送られた後で、`fg` によって再開されるた場合に生成されます。
+このイベントはプログラムがバックグラウンドに送られる前にストリームが中断されていなかった場合にのみ生成されます。
+
+`'SIGCONT'` を監視する例:
+
+    rl.on('SIGCONT', function() {
+      // `prompt` will automatically resume the stream
+      rl.prompt();
     });
 
 <!--
@@ -181,8 +300,10 @@ line interface:
 全てを一緒に使う、小さなコマンドラインインタフェースの例:
 
     var readline = require('readline'),
-      rl = readline.createInterface(process.stdin, process.stdout),
-      prefix = 'OHAI> ';
+        rl = readline.createInterface(process.stdin, process.stdout);
+
+    rl.setPrompt('OHAI> ');
+    rl.prompt();
 
     rl.on('line', function(line) {
       switch(line.trim()) {
@@ -193,23 +314,8 @@ line interface:
           console.log('Say what? I might have heard `' + line.trim() + '`');
           break;
       }
-      rl.setPrompt(prefix, prefix.length);
       rl.prompt();
-    }).on('close', function() {
+    }).on('pause', function() {
       console.log('Have a great day!');
       process.exit(0);
     });
-    console.log(prefix + 'Good to see you. Try typing stuff.');
-    rl.setPrompt(prefix, prefix.length);
-    rl.prompt();
-
-
-<!--
-Take a look at this slightly more complicated
-[example](https://gist.github.com/901104), and
-[http-console](https://github.com/cloudhead/http-console) for a real-life use
-case.
--->
-より複雑な [例](https://gist.github.com/901104) や、実践的なユースケースとして
-[http-console](https://github.com/cloudhead/http-console)
-を見ることが出来ます。
