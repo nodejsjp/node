@@ -27,10 +27,8 @@
 (function(process) {
   global = this;
 
-  var EventEmitter;
-
   function startup() {
-    EventEmitter = NativeModule.require('events').EventEmitter;
+    var EventEmitter = NativeModule.require('events').EventEmitter;
     process.__proto__ = EventEmitter.prototype;
     process.EventEmitter = EventEmitter; // process.EventEmitter is deprecated
 
@@ -45,8 +43,6 @@
     startup.processSignalHandlers();
 
     startup.processChannel();
-
-    startup.removedMethods();
 
     startup.resolveArgv0();
 
@@ -328,6 +324,10 @@
       // For supporting legacy API we put the FD here.
       stdin.fd = fd;
 
+      // stdin starts out life in a paused state, but node doesn't
+      // know yet.  Call pause() explicitly to unref() it.
+      stdin.pause();
+
       return stdin;
     });
 
@@ -431,51 +431,16 @@
     }
   }
 
-  startup._removedProcessMethods = {
-    'assert': 'process.assert() use require("assert").ok() instead',
-    'debug': 'process.debug() use console.error() instead',
-    'error': 'process.error() use console.error() instead',
-    'watchFile': 'process.watchFile() has moved to fs.watchFile()',
-    'unwatchFile': 'process.unwatchFile() has moved to fs.unwatchFile()',
-    'mixin': 'process.mixin() has been removed.',
-    'createChildProcess': 'childProcess API has changed. See doc/api.txt.',
-    'inherits': 'process.inherits() has moved to util.inherits()',
-    '_byteLength': 'process._byteLength() has moved to Buffer.byteLength'
-  };
-
-  startup.removedMethods = function() {
-    var desc = {
-      configurable: true,
-      writable: true,
-      enumerable: false
-    };
-    for (var method in startup._removedProcessMethods) {
-      var reason = startup._removedProcessMethods[method];
-      desc.value = startup._removedMethod(reason);
-      Object.defineProperty(process, method, desc);
-    }
-  };
-
-  startup._removedMethod = function(reason) {
-    return function() {
-      throw new Error(reason);
-    };
-  };
-
   startup.resolveArgv0 = function() {
     var cwd = process.cwd();
-    var isWindows = process.platform === 'win32';
 
     // Make process.argv[0] into a full path, but only touch argv[0] if it's
     // not a system $PATH lookup.
     // TODO: Make this work on Windows as well.  Note that "node" might
     // execute cwd\node.exe, or some %PATH%\node.exe on Windows,
     // and that every directory has its own cwd, so d:node.exe is valid.
-    var argv0 = process.argv[0];
-    if (!isWindows && argv0.indexOf('/') !== -1 && argv0.charAt(0) !== '/') {
-      var path = NativeModule.require('path');
-      process.argv[0] = path.join(cwd, process.argv[0]);
-    }
+    var path = NativeModule.require('path');
+    process.argv[0] = path.resolve(process.argv[0]);
   };
 
   // Below you find a minimal module system, which is used to load the node
@@ -524,7 +489,7 @@
   }
 
   NativeModule.exists = function(id) {
-    return (id in NativeModule._source);
+    return NativeModule._source.hasOwnProperty(id);
   }
 
   NativeModule.getSource = function(id) {

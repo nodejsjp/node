@@ -68,8 +68,70 @@ Alternatively you can send the CSR to a Certificate Authority for signing.
 (TODO: CA を作るドキュメント、現在は興味あるユーザは Node のソースコードから
 `test/fixtures/keys/Makefile` を見る必要がある)
 
+### Client-initiated renegotiation attack mitigation
 
-#### tls.createServer(options, [secureConnectionListener])
+<!--
+The TLS protocol lets the client renegotiate certain aspects of the TLS session.
+Unfortunately, session renegotiation requires a disproportional amount of
+server-side resources, which makes it a potential vector for denial-of-service
+attacks.
+
+To mitigate this, renegotiations are limited to three times every 10 minutes. An
+error is emitted on the [CleartextStream](#tls.CleartextStream) instance when
+the threshold is exceeded. The limits are configurable:
+
+  - `tls.CLIENT_RENEG_LIMIT`: renegotiation limit, default is 3.
+
+  - `tls.CLIENT_RENEG_WINDOW`: renegotiation window in seconds, default is
+                               10 minutes.
+
+Don't change the defaults unless you know what you are doing.
+
+To test your server, connect to it with `openssl s_client -connect address:port`
+and tap `R<CR>` (that's the letter `R` followed by a carriage return) a few
+times.
+-->
+TLS プロトコルでは、クライアントに TLS セッションの再ネゴシエーションを
+許します。
+
+残念ながら、セッション再ネゴシエーション要求はサーバサイドに過度なリソースを
+要求するため、それは潜在的なサーバ強制停止攻撃となります。
+
+これを軽減するために、再ネゴシエーションは 10 分当たり 3 回までに
+制限されています。この制限を超えると、[CleartextStream](#tls.CleartextStream)
+のインスタンス上でエラーが生成されます。この制限は変更可能です:
+
+  - `tls.CLIENT_RENEG_LIMIT`: 再ネゴシエーションの上限、デフォルトは 3 です。
+
+  - `tls.CLIENT_RENEG_WINDOW`: 秒単位の再ネゴシエーションウィンドウ、
+                               デフォルトは 10 分です。
+
+あなたが何をしようとしているか十分に理解していない限り、
+デフォルトを変更しないでください。
+
+サーバをテストするために、`openssl s_client -connect address:port`
+および `R<CR>` (`R` キーの後に続けてリターンキー) を
+数回繰り返します。
+
+
+### NPN and SNI
+
+<!--
+NPN (Next Protocol Negotiation) and SNI (Server Name Indication) are TLS
+handshake extensions allowing you:
+
+  * NPN - to use one TLS server for multiple protocols (HTTP, SPDY)
+  * SNI - to use one TLS server for multiple hostnames with different SSL
+    certificates.
+-->
+NPN (Next Protocol Negotitation) と SNI (Server Name Indication) は
+TLS の拡張で、以下を可能にします。
+
+  * NPN - 一つの TLS サーバで複数のプロトコル (HTTP、SPDY) を使用。
+  * SNI - 一つの TLS サーバでホスト名の異なる複数の証明書を使用。
+
+
+## tls.createServer(options, [secureConnectionListener])
 
 <!--
 
@@ -396,47 +458,7 @@ Here is an example of a client of echo server as described previously:
     });
 
 
-### STARTTLS
-
-<!--
-
-In the v0.4 branch no function exists for starting a TLS session on an
-already existing TCP connection.  This is possible it just requires a bit of
-work. The technique is to use `tls.createSecurePair()` which returns two
-streams: an encrypted stream and a cleartext stream. The encrypted stream is
-then piped to the socket, the cleartext stream is what the user interacts with
-thereafter.
-
-[Here is some code that does it.](http://gist.github.com/848444)
-
--->
-v0.4 ブランチでは、既に存在する TCP コネクション上で TLS セッションを開始する機能はありません。
-それには少しの作業が必要となります。
-そのテクニックは `tls.createSecurePair()` が返す二つのストリーム:
-暗号化されたストリームと平文のストリームを使います。
-暗号化されたストリームは既存のソケットにつながれ、
-平文のストリームはその後ユーザとのインタラクションで使われます。
-
-[ここにそのコードがあります。](http://gist.github.com/848444)
-
-### NPN and SNI
-
-<!--
-NPN (Next Protocol Negotiation) and SNI (Server Name Indication) are TLS
-handshake extensions allowing you:
--->
-NPN (Next Protocol Negotitation) と SNI (Server Name Indication) は
-TLS の拡張で、以下を可能にします。
-
-<!--
-  * NPN - to use one TLS server for multiple protocols (HTTP, SPDY)
-  * SNI - to use one TLS server for multiple hostnames with different SSL
-    certificates.
--->
-  * NPN - 一つの TLS サーバで複数のプロトコル (HTTP、SPDY) を使用。
-  * SNI - 一つの TLS サーバでホスト名の異なる複数の証明書を使用。
-
-### pair = tls.createSecurePair([credentials], [isServer], [requestCert], [rejectUnauthorized])
+## tls.createSecurePair([credentials], [isServer], [requestCert], [rejectUnauthorized])
 
 <!--
 Creates a new secure pair object with two streams, one of which reads/writes
@@ -480,7 +502,7 @@ and the cleartext one is used as a replacement for the initial encrypted stream.
 `tls.createSequrePair()` は、[cleartext](#tls.CleartextStream) と `encrypted`
 をプロパティとして持つ `SecurePair` オブジェクトを返します。
 
-#### Event: 'secure'
+### Event: 'secure'
 
 <!--
 The event is emitted from the SecurePair once the pair has successfully
@@ -496,7 +518,7 @@ SecurePair オブジェクトのペアが安全な接続を確立した場合に
 `pari.cleartext.authorized` によって接続相手の証明書を承認できたかどうかを
 チェックすることができます。
 
-### tls.Server
+## tls.Server
 
 <!--
 
@@ -509,8 +531,7 @@ connections using TLS or SSL.
 生の TCP コネクションを受け入れる代わりに、
 TLS または SSL を使った暗号化されたコネクションを受け付けます。
 
-
-#### Event: 'secureConnection'
+### Event: 'secureConnection'
 
 `function (cleartextStream) {}`
 
@@ -548,7 +569,7 @@ TLS サーバの設定に依存しますが、認証されていないコネク�
 `cleartextStream.servername` は、SNI でリクエストされたサーバ名を持つ
 文字列です。
 
-#### Event: 'clientError'
+### Event: 'clientError'
 
 `function (exception) { }`
 
@@ -562,7 +583,7 @@ established - it will be forwarded here.
 `'error'` イベントを発した場合 － ここに転送されます。
 
 
-#### server.listen(port, [host], [callback])
+### server.listen(port, [host], [callback])
 
 <!--
 
@@ -591,7 +612,7 @@ See `net.Server` for more information.
 より詳細は `net.Server` を参照してください。
 
 
-#### server.close()
+### server.close()
 
 <!--
 
@@ -603,7 +624,7 @@ event.
 サーバが新しい接続を受け入れることを終了します。
 この関数は非同期で、サーバが最終的にクローズされるとサーバは `'close'` イベントを生成します。
 
-#### server.address()
+### server.address()
 
 <!--
 
@@ -617,7 +638,7 @@ See [net.Server.address()](net.html#server.address) for more information.
 より詳しくは [net.Server.address()](net.html#server.address)
 を参照してください。
 
-#### server.addContext(hostname, credentials)
+### server.addContext(hostname, credentials)
 
 <!--
 
@@ -630,7 +651,7 @@ matching passed `hostname` (wildcards can be used). `credentials` can contain
 がマッチした場合のセキュリティコンテキストを追加します。
 `credentials` は `key`、`cert`、そして `ca` を含むことができます。
 
-#### server.maxConnections
+### server.maxConnections
 
 <!--
 
@@ -639,8 +660,7 @@ gets high.
 
 -->
 このプロパティを設定すると、サーバの接続数がこれを越えた場合に接続を破棄します。
-
-#### server.connections
+### server.connections
 
 <!--
 
@@ -649,7 +669,7 @@ The number of concurrent connections on the server.
 -->
 サーバの並行コネクションの数です。
 
-### tls.CleartextStream
+## tls.CleartextStream
 
 <!--
 This is a stream on top of the *Encrypted* stream that makes it possible to
@@ -665,7 +685,7 @@ It has all the common stream methods and events.
 実装します。
 ストリームに共通な全てのメソッドとイベントを持ちます。
 
-#### Event: 'secureConnect'
+### Event: 'secureConnect'
 
 `function () {}`
 
@@ -689,8 +709,7 @@ If `cleartextStream.authorized === false` then the error can be found in
 同様に NPN が使われている場合は `cleartextStream.npnProtocol`
 から合意されたプロトコルをチェックすることが出来ます。
 
-
-#### cleartextStream.authorized
+### cleartextStream.authorized
 
 <!--
 A boolean that is `true` if the peer certificate was signed by one of the
@@ -699,7 +718,7 @@ specified CAs, otherwise `false`
 接続相手の証明書が CA の一つによって署名されていれば `true`、
 そうでなければ `false` です。
 
-#### cleartextStream.authorizationError
+### cleartextStream.authorizationError
 
 <!--
 The reason why the peer's certificate has not been verified. This property
@@ -709,7 +728,7 @@ becomes available only when `cleartextStream.authorized === false`.
 このプロパティは `cleartextStream.authorized === false`
 の場合だけ利用可能になります。
 
-#### cleartextStream.getPeerCertificate()
+### cleartextStream.getPeerCertificate()
 
 <!--
 Returns an object representing the peer's certificate. The returned object has
@@ -748,7 +767,7 @@ object.
 接続相手が証明書を提供しなかった場合は、
 `null` または空のオブジェクトを返します。
 
-#### cleartextStream.address()
+### cleartextStream.address()
 
 <!--
 Returns the bound address and port of the underlying socket as reported by the
@@ -760,7 +779,7 @@ operating system. Returns an object with two properties, e.g.
 返されるオブジェクトは二つのプロパティを持ちます。
 例えば、`{"address":"192.168.57.1", "port":62053}`
 
-#### cleartextStream.remoteAddress
+### cleartextStream.remoteAddress
 
 <!--
 The string representation of the remote IP address. For example,
@@ -769,7 +788,7 @@ The string representation of the remote IP address. For example,
 リモートの IP アドレスを表現する文字列です。
 例えば、`'74.125.127.100'` あるいは `'2001:4860:a005::68'`。
 
-#### cleartextStream.remotePort
+### cleartextStream.remotePort
 
 <!--
 The numeric representation of the remote port. For example, `443`.
