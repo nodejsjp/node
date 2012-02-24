@@ -156,15 +156,19 @@ Example: running `node example.js` from `/Users/mjr`
 <!--
 
 A reference to the current module. In particular
-`module.exports` is the same as the `exports` object. See `src/node.js`
-for more information.
+`module.exports` is the same as the `exports` object.
 `module` isn't actually a global but rather local to each module.
+
+See the [module system documentation](modules.html) for more
+information.
 
 -->
 現在のモジュールへの参照です。
 特に `module.exports` は `exports` オブジェクトと同じです。
-より詳しくは `src/node.js` を参照してください。
 `module` は実際はグローバルではなく、各モジュール毎のローカルです。
+
+より詳しくは [module system documentation](modules.html) を参照してください。
+
 
 ### exports
 
@@ -172,17 +176,19 @@ for more information.
 
 An object which is shared between all instances of the current module and
 made accessible through `require()`.
-`exports` is the same as the `module.exports` object. See `src/node.js`
-for more information.
+`exports` is the same as the `module.exports` object.
 `exports` isn't actually a global but rather local to each module.
 
+See the [module system documentation](modules.html) for more
+information.
 -->
 
 現在のモジュールの全てのインスタンス間で共有されるオブジェクトで、
 `require` を通じてアクセス可能になります。
 `exports` は `module.exports` と同じオブジェクトです。
-より詳しくは `src/node.js` を参照してください。
 `exports` は実際はグローバルではなく、各モジュール毎のローカルです。
+
+より詳しくは [module system documentation](modules.html) を参照してください。
 
 
 ### setTimeout(cb, ms)

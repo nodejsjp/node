@@ -19,59 +19,36 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// This test starts two clustered HTTP servers on the same port. It expects the
-// first cluster to succeed and the second cluster to fail with EADDRINUSE.
-
 var common = require('../common');
 var assert = require('assert');
-var cluster = require('cluster');
-var fork = require('child_process').fork;
 var http = require('http');
 
-var id = process.argv[2];
+var testResBody = 'other stuff!\n';
 
-if (!id) {
-  var a = fork(__filename, ['one']);
-  var b = fork(__filename, ['two']);
-
-  a.on('message', function(m) {
-    assert.equal(m, 'READY');
-    b.send('START');
+var server = http.createServer(function(req, res) {
+  assert.ok(! ('date' in req.headers),
+            'Request headers contained a Date.');
+  res.writeHead(200, {
+    'Content-Type': 'text/plain'
   });
+  res.end(testResBody);
+});
+server.listen(common.PORT);
 
-  var ok = false;
 
-  b.on('message', function(m) {
-    assert.equal(m, 'EADDRINUSE');
-    a.kill();
-    b.kill();
-    ok = true;
-  });
-
-  process.on('exit', function() {
-    a.kill();
-    b.kill();
-    assert(ok);
-  });
-}
-else if (id === 'one') {
-  if (cluster.isMaster) cluster.fork();
-  http.createServer(assert.fail).listen(common.PORT, function() {
-    process.send('READY');
-  });
-}
-else if (id === 'two') {
-  if (cluster.isMaster) cluster.fork();
-  process.on('message', function(m) {
-    assert.equal(m, 'START');
-    var server = http.createServer(assert.fail);
-    server.listen(common.PORT, assert.fail);
-    server.on('error', function(e) {
-      assert.equal(e.code, 'EADDRINUSE');
-      process.send(e.code);
+server.addListener('listening', function() {
+  var options = {
+    port: common.PORT,
+    path: '/',
+    method: 'GET'
+  };
+  var req = http.request(options, function(res) {
+    assert.ok('date' in res.headers,
+              'Response headers didn\'t contain a Date.');
+    res.addListener('end', function() {
+      server.close();
+      process.exit();
     });
   });
-}
-else {
-  assert(0); // bad command line argument
-}
+  req.end();
+});

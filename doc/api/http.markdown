@@ -302,7 +302,7 @@ See also [net.Server.listen()](net.html#server.listen).
 詳細は [net.Server.listen()](net.html#server.listen) を参照してください。
 
 
-### server.close()
+### server.close([cb])
 
 <!--
 
@@ -741,6 +741,23 @@ or
 
     response.setHeader("Set-Cookie", ["type=ninja", "language=javascript"]);
 
+### response.sendDate
+
+<!--
+
+When true, the Date header will be automatically generated and sent in 
+the response if it is not already present in the headers. Defaults to true.
+
+This should only be disabled for testing; HTTP requires the Date header
+in responses.
+
+-->
+`true` の場合、Date ヘッダが自動的に生成され、レスポンスとして送信されます
+(`headers` にすでに与えられていない場合)。
+デフォルトは `true` です。
+
+これを無効にするのはテストでのみにすべきです。
+HTTP はレスポンスに Date ヘッダを要求します。
 
 ### response.getHeader(name)
 

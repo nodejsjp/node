@@ -591,6 +591,55 @@ or `'base64'`. Defaults to `'binary'`.
 デフォルトは `'binary'` です。
 
 
+### crypto.getDiffieHellman(group_name)
+
+<!--
+Creates a predefined Diffie-Hellman key exchange object.
+The supported groups are: `'modp1'`, `'modp2'`, `'modp5'`
+(defined in [RFC 2412](http://www.rfc-editor.org/rfc/rfc2412.txt ))
+and `'modp14'`, `'modp15'`, `'modp16'`, `'modp17'`, `'modp18'`
+(defined in [RFC 3526](http://www.rfc-editor.org/rfc/rfc3526.txt )).
+The returned object mimics the interface of objects created by
+[crypto.createDiffieHellman()](#crypto.createDiffieHellman) above, but
+will not allow to change the keys (with
+[diffieHellman.setPublicKey()](#diffieHellman.setPublicKey) for example).
+The advantage of using this routine is that the parties don't have to
+generate nor exchange group modulus beforehand, saving both processor and
+communication time.
+-->
+事前に定義された Diffie-Hellman 鍵交換オブジェクトを作成します。
+サポートされるグループは、`'modp1'`, `'modp2'`, `'modp5'`
+([RFC 2412](http://www.rfc-editor.org/rfc/rfc2412.txt ) で定義される)、
+および `'modp14'`, `'modp15'`, `'modp16'`, `'modp17'`, `'modp18'`
+([RFC 3526](http://www.rfc-editor.org/rfc/rfc3526.txt ) で定義される) です。
+返されるオブジェクトは、前述の
+[crypto.createDiffieHellman()](#crypto.createDiffieHellman)
+によって作成されたオブジェクトのインタフェースを模倣します。
+しかし、
+(たとえば [diffieHellman.setPublicKey()](#diffieHellman.setPublicKey) で)
+鍵を交換することはできません。
+このルーチンを使うことによるアドバンテージは、
+事前にグループ係数を生成することも交換する必要もないため、
+処理と通信の時間を共に節約できることです。
+
+<!--
+Example (obtaining a shared secret):
+-->
+例 (共有鍵を取得):
+
+    var crypto = require('crypto');
+    var alice = crypto.getDiffieHellman('modp5');
+    var bob = crypto.getDiffieHellman('modp5');
+
+    alice.generateKeys();
+    bob.generateKeys();
+
+    var alice_secret = alice.computeSecret(bob.getPublicKey(), 'binary', 'hex');
+    var bob_secret = bob.computeSecret(alice.getPublicKey(), 'binary', 'hex');
+
+    /* alice_secret and bob_secret should be the same */
+    console.log(alice_secret == bob_secret);
+
 ### pbkdf2(password, salt, iterations, keylen, callback)
 
 <!--

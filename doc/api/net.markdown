@@ -136,7 +136,7 @@ Common options are:
 
 <!--
   - `allowHalfOpen`: if `true`, the socket won't automatically send
-    a FIN packet when the other end of the socket sends a FIN packet. 
+    a FIN packet when the other end of the socket sends a FIN packet.
     Defaults to `false`.
     See ['end'](#event_end_) event for more information.
 -->
@@ -297,31 +297,18 @@ the last parameter `listeningListener` will be added as an listener for the
 最後の引数 `listeningListener` は ['listening'](#event_listening_)
 のリスナとして加えられます。
 
-#### server.pause(msecs)
-
-<!--
-
-Stop accepting connections for the given number of milliseconds (default is
-one second).  This could be useful for throttling new connections against
-DoS attacks or other oversubscription.
-
--->
-接続の待ち受けをミリ秒で与えられた時間だけ中断します (デフォルトは 1 秒です)。
-これは、新しい接続を抑えることで DoS 攻撃やその他の加入超過に対抗するために
-役立ちます。
-
-#### server.close()
+#### server.close([cb])
 
 <!--
 
 Stops the server from accepting new connections. This function is
 asynchronous, the server is finally closed when the server emits a `'close'`
-event.
+event. Optionally, you can pass a callback to listen for the `'close'` event.
 
 -->
 サーバが新しいコネクションを受け付けるのを終了します。
 この関数は非同期で、サーバは最終的に `'close'` イベントを生成した時にクローズされます。
-
+オプションとして、`'close'` イベントに対するリスナを渡すことができます。
 
 #### server.address()
 
@@ -583,18 +570,6 @@ received. Defaults to `null`.
 受信したデータのエンコーディングを設定します (`'ascii'`、`'utf8'`、
 あるいは `'base64'` のいずれかです)。デフォルトは `null` です。
 
-#### socket.setSecure()
-
-<!--
-
-This function has been removed in v0.3. It used to upgrade the connection to
-SSL/TLS. See the [TLS section](tls.html#tLS_) for the new API.
-
--->
-この関数は v0.3 で削除されました。
-これはコネクションを SSL/TLS にアップグレードするために使われていました。
-新しい API である [TLS の章](tls.html#tLS_) を参照してください。
-
 #### socket.write(data, [encoding], [callback])
 
 <!--
@@ -625,17 +600,6 @@ written out - this may not be immediately.
 -->
 オプションの `callback` 引数はデータが最終的に出力された時に実行されます
 － これはすぐには起きないでしょう。
-
-#### socket.write(data, [encoding], [callback])
-
-<!--
-
-Write data with the optional encoding. The callback will be made when the
-data is flushed to the kernel.
-
--->
-データを出力します。オプションのエンコーディングを指定することができます。
-コールバックはデータがカーネルにフラッシュされると呼び出されます。
 
 #### socket.end([data], [encoding])
 

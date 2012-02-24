@@ -24,6 +24,14 @@ var assert = require('assert');
 var path = require('path');
 var fs = require('fs');
 
+
+if (process.platform === 'darwin') {
+  assert(false,
+         'This test is known to fail on OS X\n' +
+         'See: https://github.com/joyent/node/issues/2813');
+}
+
+
 var expectFilePath = process.platform == 'win32' || process.platform == 'linux';
 
 var watchSeenOne = 0;
@@ -51,10 +59,10 @@ process.on('exit', function() {
 });
 
 // Clean up stale files (if any) from previous run.
-try { fs.unlinkSync(filepathOne);    } catch (e) { }
+try { fs.unlinkSync(filepathOne); } catch (e) { }
 try { fs.unlinkSync(filepathTwoAbs); } catch (e) { }
-try { fs.unlinkSync(filepathThree);  } catch (e) { }
-try { fs.rmdirSync(testsubdir);      } catch (e) { }
+try { fs.unlinkSync(filepathThree); } catch (e) { }
+try { fs.rmdirSync(testsubdir); } catch (e) { }
 
 fs.writeFileSync(filepathOne, 'hello');
 
