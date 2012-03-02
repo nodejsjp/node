@@ -962,7 +962,8 @@ Options:
   必要なら問い合わせ文字列を含めるべきです．
   例 `'/index.html?page=12'`
 - `headers`: リクエストヘッダを含むオブジェクト。
-- `auth`: べーしく認証すなわち Authorization ヘッダのための `'user:password'`。
+- `auth`: ベーシック認証すなわち Authorization ヘッダのための
+  `'user:password'`。
 - `agent`: `Agent` の振る舞いを制御します。
   エージェントが使われる場合、Connection:keep-alive がデフォルトになります。
   可能な値は:
