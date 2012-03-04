@@ -1,7 +1,5 @@
-## Table of Contents
-
 <!--
-
+* [About these Docs](documentation.html)
 * [Synopsis](synopsis.html)
 * [Globals](globals.html)
 * [STDIO](stdio.html)
@@ -11,8 +9,8 @@
 * [Process](process.html)
 * [Utilities](util.html)
 * [Events](events.html)
-* [Buffers](buffers.html)
-* [Streams](streams.html)
+* [Buffer](buffer.html)
+* [Stream](stream.html)
 * [Crypto](crypto.html)
 * [TLS/SSL](tls.html)
 * [String Decoder](string_decoder.html)
@@ -28,7 +26,7 @@
 * [Readline](readline.html)
 * [REPL](repl.html)
 * [VM](vm.html)
-* [Child Processes](child_processes.html)
+* [Child Processes](child_process.html)
 * [Assertion Testing](assert.html)
 * [TTY](tty.html)
 * [ZLIB](zlib.html)
@@ -37,9 +35,9 @@
 * [Cluster](cluster.html)
 * Appendixes
   * [Appendix 1: Recommended Third-party Modules](appendix_1.html)
-  * [Appendix 2: Deprecated API's](appendix_2.html)
-
 -->
+
+* [このドキュメントについて](documentation.html)
 * [概要](synopsis.html)
 * [グローバル](globals.html)
 * [標準入出力](stdio.html)
@@ -49,8 +47,8 @@
 * [プロセス](process.html)
 * [ユーティリティ](util.html)
 * [イベント](events.html)
-* [バッファ](buffers.html)
-* [ストリーム](streams.html)
+* [バッファ](buffer.html)
+* [ストリーム](stream.html)
 * [暗号化](crypto.html)
 * [TLS/SSL](tls.html)
 * [文字列デコーダ](string_decoder.html)
@@ -66,7 +64,7 @@
 * [Readline](readline.html)
 * [REPL](repl.html)
 * [VM](vm.html)
-* [子プロセス](child_processes.html)
+* [子プロセス](child_process.html)
 * [表明とテスティング](assert.html)
 * [TTY](tty.html)
 * [ZLIB](zlib.html)
@@ -75,5 +73,3 @@
 * [クラスタ](cluster.html)
 * 付録
   * [付録 1: 推奨されるサードパーティ製のモジュール](appendix_1.html)
-  * [付録 2: 廃止された API](appendix_2.html)
-

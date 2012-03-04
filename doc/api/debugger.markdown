@@ -1,4 +1,6 @@
-## Debugger
+# Debugger
+
+<!-- type=misc -->
 
 <!--
 V8 comes with an extensive debugger which is accessible out-of-process via a
@@ -6,6 +8,7 @@ simple [TCP protocol](http://code.google.com/p/v8/wiki/DebuggerProtocol).
 Node has a built-in client for this debugger. To use this, start Node with the
 `debug` argument; a prompt will appear:
 -->
+
 V8は外部プロセスから [TCP プロトコル](http://code.google.com/p/v8/wiki/DebuggerProtocol)経由で接続可能なデバッガを備えています。
 Node にはこのデバッガへのクライアントが組み込まれています。
 これを使うには、 `debug` 引数を指定して Node を起動します。
@@ -25,6 +28,7 @@ Node's debugger client doesn't support the full range of commands, but
 simple step and inspection is possible. By putting the statement `debugger;`
 into the source code of your script, you will enable a breakpoint.
 -->
+
 Node のデバッガクライアントはあらゆるコマンドを完全にサポートしているわけではありませんが、
 単純なステップ実行やインスペクションが可能です。
 スクリプトのソースコードに `debugger;` 文を挿入すると、
@@ -33,6 +37,7 @@ Node のデバッガクライアントはあらゆるコマンドを完全にサ
 <!--
 For example, suppose `myscript.js` looked like this:
 -->
+
 例えば、`myscript.js` が次のようだとします:
 
     // myscript.js
@@ -46,6 +51,7 @@ For example, suppose `myscript.js` looked like this:
 <!--
 Then once the debugger is run, it will break on line 4.
 -->
+
 ひとたびデバッガを実行すると、4行目で中断します。
 
     % node debug myscript.js
@@ -93,12 +99,13 @@ The `repl` command allows you to evaluate code remotely. The `next` command
 steps over to the next line. There are a few other commands available and more
 to come. Type `help` to see others.
 -->
-``repl`` コマンドはコードをリモートで評価します。
-``next`` コマンドは次の行にステップオーバーします。
-他にもいくつかのコマンドを利用することができます。
-その他については ``help`` をタイプしてください。
 
-### Watchers
+`repl` コマンドはコードをリモートで評価します。
+`next` コマンドは次の行にステップオーバーします。
+他にもいくつかのコマンドを利用することができます。
+その他については `help` をタイプしてください。
+
+## Watchers
 
 <!--
 You can watch expression and variable values while debugging your code.
@@ -106,6 +113,7 @@ On every breakpoint each expression from the watchers list will be evaluated
 in the current context and displayed just before the breakpoint's source code
 listing.
 -->
+
 デバッグ中に式や変数の値をウォッチすることができます。
 全てのブレークポイントにおいて、ウォッチリストのそれぞれの式は
 現在のコンテキストで評価され、ブレークポイントのソースコードの前に
@@ -116,13 +124,14 @@ To start watching an expression, type `watch("my_expression")`. `watchers`
 prints the active watchers. To remove a watcher, type
 `unwatch("my_expression")`.
 -->
+
 式のウォッチを開始するには、`watch("my_expression")` をタイプします。
 `watchers` はアクティブなウォッチの一覧を表示します。
 ウォッチを解除するには、`unwatch("my_expression")` とタイプします。
 
-### Commands reference
+## Commands reference
 
-#### Stepping
+### Stepping
 
 <!--
 * `cont`, `c` - Continue execution
@@ -130,12 +139,13 @@ prints the active watchers. To remove a watcher, type
 * `step`, `s` - Step in
 * `out`, `o` - Step out
 -->
+
 * `cont`, `c` - 実行を継続します。
 * `next`, `n` - 次の行へステップオーバーします。
 * `step`, `s` - ステップインします。
 * `out`, `o` - ステップアウトします。
 
-#### Breakpoints
+### Breakpoints
 
 <!--
 * `setBreakpoint()`, `sb()` - Set breakpoint on current line
@@ -145,12 +155,13 @@ functions body
 script.js
 * `clearBreakpoint`, `cb(...)` - Clear breakpoint
 -->
+
 * `setBreakpoint()`, `sb()` - 現在行にブレークポイントを設定します。
 * `setBreakpoint('fn()')`, `sb(...)` - 指定した関数の先頭行にブレークポイントを設定します
 * `setBreakpoint('script.js', 1)`, `sb(...)` - 指定したスクリプトファイルの指定した行にブレークポイントを設定します。
 * `clearBreakpoint`, `cb(...)` - ブレークポイントを削除します。
 
-#### Info
+### Info
 
 <!--
 * `backtrace`, `bt` - Print backtrace of current execution frame
@@ -162,6 +173,7 @@ after)
 breakpoint)
 * `repl` - Open debugger's repl for evaluation in debugging script's context
 -->
+
 * `backtrace`, `bt` - 現在の実行フレームのバックトレースを表示します。
 * `list(5)` - 現在の行の前後のソースコードを表示します (例では前後とも 5 行が表示されます)。
 * `watch(expr)` - 式をウォッチリストに追加します。
@@ -169,32 +181,34 @@ breakpoint)
 * `watchers` - ウォッチしている全ての式とその値を表示します (各ブレークポイントで自動的に表示されます)。
 * `repl` - デバッグしているスクリプトをコンテキストとする REPL を開きます。
 
-#### Execution control
+### Execution control
 
 <!--
 * `run` - Run script (automatically runs on debugger's start)
 * `restart` - Restart script
 * `kill` - Kill script
 -->
+
 * `run` - スクリプトを実行します (デバッガを開始すると自動的に実行します)。
 * `restart` - スクリプトを再実行します。
 * `kill` - スクリプトを終了します。
 
-#### Various
+### Various
 
 <!--
 * `scripts` - List all loaded scripts
 * `version` - Display v8's version
 -->
+
 * `scripts` - ロードされている全スクリプトの一覧を表示します。
 * `version` - v8 のバージョンを表示します。
 
-### Advanced Usage
+## Advanced Usage
 
 <!--
 The V8 debugger can be enabled and accessed either by starting Node with
 the `--debug` command-line flag or by signaling an existing Node process
 with `SIGUSR1`.
 -->
-V8 デバッガは Node をコマンドラインの `--debug` フラグで起動したり、起動済みの Node プロセスに `SIGUSR1` シグナルを送ることでも有効にできます。
 
+V8 デバッガは Node をコマンドラインの `--debug` フラグで起動したり、起動済みの Node プロセスに `SIGUSR1` シグナルを送ることでも有効にできます。

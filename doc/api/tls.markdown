@@ -1,27 +1,24 @@
-## TLS (SSL)
+# TLS (SSL)
 
 <!--
-
 Use `require('tls')` to access this module.
-
 -->
+
 `require('tls')` でこのモジュールにアクセスします。
 
 <!--
-
 The `tls` module uses OpenSSL to provide Transport Layer Security and/or
 Secure Socket Layer: encrypted stream communication.
-
 -->
+
 `tls` モジュールは OpenSSL を使用することで Transport Layer Security および
 Secure Socket Layer: 暗号化されたストリーム通信を提供します。
 
 <!--
-
 TLS/SSL is a public/private key infrastructure. Each client and each
 server must have a private key. A private key is created like this
-
 -->
+
 TLS/SSL は公開／秘密鍵を基礎とします。
 どのクライアントとサーバも秘密鍵が必要です。
 秘密鍵は次のように作成します
@@ -29,13 +26,12 @@ TLS/SSL は公開／秘密鍵を基礎とします。
     openssl genrsa -out ryans-key.pem 1024
 
 <!--
-
 All severs and some clients need to have a certificate. Certificates are public
 keys signed by a Certificate Authority or self-signed. The first step to
 getting a certificate is to create a "Certificate Signing Request" (CSR)
 file. This is done with:
-
 -->
+
 全てのサーバと一部のクライアントは証明書を必要とします。
 証明書は認証局の公開鍵または自身によって署名されます。
 証明書を作成する最初のステップは「証明書署名要求 (CSR)」ファイルです。
@@ -44,34 +40,32 @@ file. This is done with:
     openssl req -new -key ryans-key.pem -out ryans-csr.pem
 
 <!--
-
 To create a self-signed certificate with the CSR, do this:
-
 -->
+
 CSR から自己署名証明書を作成するには次のようにします:
 
     openssl x509 -req -in ryans-csr.pem -signkey ryans-key.pem -out ryans-cert.pem
 
 <!--
-
 Alternatively you can send the CSR to a Certificate Authority for signing.
-
 -->
+
 他に CSR を認証局に送って署名してもらうこともできます。
 
 <!--
-
 (TODO: docs on creating a CA, for now interested users should just look at
 `test/fixtures/keys/Makefile` in the Node source code)
-
 -->
+
 (TODO: CA を作るドキュメント、現在は興味あるユーザは Node のソースコードから
 `test/fixtures/keys/Makefile` を見る必要がある)
 
-### Client-initiated renegotiation attack mitigation
+## Client-initiated renegotiation attack mitigation
+
+<!-- type=misc -->
 
 <!--
-
 The TLS protocol lets the client renegotiate certain aspects of the TLS session.
 Unfortunately, session renegotiation requires a disproportional amount of
 server-side resources, which makes it a potential vector for denial-of-service
@@ -91,8 +85,8 @@ Don't change the defaults unless you know what you are doing.
 To test your server, connect to it with `openssl s_client -connect address:port`
 and tap `R<CR>` (that's the letter `R` followed by a carriage return) a few
 times.
-
 -->
+
 TLS では、クライアントから TLS セッションの再ネゴシエーションが可能です。
 
 残念なことに、セッションの再ネゴシエーションは過度な量のサーバサイドリソースを
@@ -114,16 +108,36 @@ TLS では、クライアントから TLS セッションの再ネゴシエー�
 接続して `R<CR>` (これは `R` の後に復帰改行を続けます)
 を、数回試すことができます。
 
-#### tls.createServer(options, [secureConnectionListener])
+## NPN and SNI
+
+<!-- type=misc -->
 
 <!--
+NPN (Next Protocol Negotiation) and SNI (Server Name Indication) are TLS
+handshake extensions allowing you:
+-->
 
+NPN (Next Protocol Negotitation) と SNI (Server Name Indication) は
+TLS の拡張で、以下を可能にします。
+
+<!--
+  * NPN - to use one TLS server for multiple protocols (HTTP, SPDY)
+  * SNI - to use one TLS server for multiple hostnames with different SSL
+    certificates.
+-->
+
+  * NPN - 一つの TLS サーバで複数のプロトコル (HTTP、SPDY) を使用。
+  * SNI - 一つの TLS サーバでホスト名の異なる複数の証明書を使用。
+
+## tls.createServer(options, [secureConnectionListener])
+
+<!--
 Creates a new [tls.Server](#tls.Server).
 The `connectionListener` argument is automatically set as a listener for the
 [secureConnection](#event_secureConnection_) event.
 The `options` object has these possibilities:
-
 -->
+
 新しい [tls.Server](#tls.Server) を作成します。
 `connectionListener` は [secureConnection](#event_secureConnection_)
 イベントのリスナとして自動的に登録されます。
@@ -131,7 +145,6 @@ The `options` object has these possibilities:
 
 
 <!--
-
   - `key`: A string or `Buffer` containing the private key of the server in
     PEM format. (Required)
 
@@ -169,8 +182,8 @@ The `options` object has these possibilities:
   - `sessionIdContext`: A string containing a opaque identifier for session
     resumption. If `requestCert` is `true`, the default is MD5 hash value
     generated from command-line. Otherwise, the default is not provided.
-
 -->
+
   - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です
     (必須)。
 
@@ -213,7 +226,6 @@ The `options` object has these possibilities:
     そうでない場合はデフォルトは提供されません。
 
 <!--
-
 Here is a simple example echo server:
 
 
@@ -241,8 +253,8 @@ Here is a simple example echo server:
     server.listen(8000, function() {
       console.log('server bound');
     });
-
 -->
+
 これはシンプルはエコーサーバの例です:
 
 
@@ -273,30 +285,27 @@ Here is a simple example echo server:
 
 
 <!--
-
 You can test this server by connecting to it with `openssl s_client`:
-
 -->
+
 `openssl s_client` を使用してこのサーバに接続するテストを行うことができます。
 
 
     openssl s_client -connect 127.0.0.1:8000
 
 
-#### tls.connect(port, [host], [options], [secureConnectListener])
+## tls.connect(port, [host], [options], [secureConnectListener])
 
 <!--
-
 Creates a new client connection to the given `port` and `host`. (If `host`
 defaults to `localhost`.) `options` should be an object which specifies
-
 -->
+
 与えられた `port` と `host` で新しいクライアントコネクションを作成します
 (`host` のデフォルトは `localhost` です)。
 `options` は以下を指定したオブジェクトです。
 
 <!--
-
   - `key`: A string or `Buffer` containing the private key of the client in
     PEM format.
 
@@ -320,8 +329,8 @@ defaults to `localhost`.) `options` should be an object which specifies
     creating a new socket. If this option is specified, `host` and `port`
     are ignored.  This is intended FOR INTERNAL USE ONLY.  As with all
     undocumented APIs in Node, they should not be used.
-
 -->
+
   - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または
     `Buffer` です。
 
@@ -348,7 +357,6 @@ defaults to `localhost`.) `options` should be an object which specifies
     API と同様、これを使用すべきではありません。
 
 <!--
-
 The `secureConnectListener` parameter will be added as a listener for the
 ['secureConnect'](#event_secureConnect_) event.
 
@@ -381,8 +389,8 @@ Here is an example of a client of echo server as described previously:
     cleartextStream.on('end', function() {
       server.close();
     });
-
 -->
+
 `secureConnectLister` 引数は ['secureConnect'](#event_secureConnect_)
 イベントのリスナとして加えられます。
 
@@ -418,24 +426,7 @@ Here is an example of a client of echo server as described previously:
     });
 
 
-### NPN and SNI
-
-<!--
-NPN (Next Protocol Negotiation) and SNI (Server Name Indication) are TLS
-handshake extensions allowing you:
--->
-NPN (Next Protocol Negotitation) と SNI (Server Name Indication) は
-TLS の拡張で、以下を可能にします。
-
-<!--
-  * NPN - to use one TLS server for multiple protocols (HTTP, SPDY)
-  * SNI - to use one TLS server for multiple hostnames with different SSL
-    certificates.
--->
-  * NPN - 一つの TLS サーバで複数のプロトコル (HTTP、SPDY) を使用。
-  * SNI - 一つの TLS サーバでホスト名の異なる複数の証明書を使用。
-
-### pair = tls.createSecurePair([credentials], [isServer], [requestCert], [rejectUnauthorized])
+## tls.createSecurePair([credentials], [isServer], [requestCert], [rejectUnauthorized])
 
 <!--
 Creates a new secure pair object with two streams, one of which reads/writes
@@ -457,6 +448,7 @@ and the cleartext one is used as a replacement for the initial encrypted stream.
 `tls.createSecurePair()` returns a SecurePair object with
 [cleartext](#tls.CleartextStream) and `encrypted` stream properties.
 -->
+
 二つのストリームを持つセキュアペアオブジェクトを作成します。
 一つは暗号化されたデータを読み書きし、もう一つは平文のデータを読み書きします。
 通常、暗号化されたストリームに外部からの暗号化されたデータが連結され、
@@ -479,7 +471,11 @@ and the cleartext one is used as a replacement for the initial encrypted stream.
 `tls.createSequrePair()` は、[cleartext](#tls.CleartextStream) と `encrypted`
 をプロパティとして持つ `SecurePair` オブジェクトを返します。
 
-#### Event: 'secure'
+## Class: SecurePair
+
+Returned by tls.createSecurePair.
+
+### Event: 'secure'
 
 <!--
 The event is emitted from the SecurePair once the pair has successfully
@@ -489,44 +485,42 @@ Similarly to the checking for the server 'secureConnection' event,
 pair.cleartext.authorized should be checked to confirm whether the certificate
 used properly authorized.
 -->
+
 SecurePair オブジェクトのペアが安全な接続を確立した場合に発生します。
 
 サーバの `'secureConnection'` イベントと同様に、
 `pari.cleartext.authorized` によって接続相手の証明書を承認できたかどうかを
 チェックすることができます。
 
-### tls.Server
+## Class: tls.Server
 
 <!--
-
 This class is a subclass of `net.Server` and has the same methods on it.
 Instead of accepting just raw TCP connections, this accepts encrypted
 connections using TLS or SSL.
-
 -->
+
 このクラスは `net.Server` のサブクラスで、同じメソッドを持っています。
 生の TCP コネクションを受け入れる代わりに、
 TLS または SSL を使った暗号化されたコネクションを受け付けます。
 
 
-#### Event: 'secureConnection'
+### Event: 'secureConnection'
 
 `function (cleartextStream) {}`
 
 <!--
-
 This event is emitted after a new connection has been successfully
 handshaked. The argument is a instance of
 [CleartextStream](#tls.CleartextStream). It has all the common stream methods
 and events.
-
 -->
+
 このイベントは、新しい接続のハンドシェークが成功した場合に生成されます。
 引数は [CleartextStream](#tls.CleartextStream) のインスタンスです。
 これはストリームに共通する全てのメソッドとイベントを持っています。
 
 <!--
-
 `cleartextStream.authorized` is a boolean value which indicates if the
 client has verified by one of the supplied certificate authorities for the
 server. If `cleartextStream.authorized` is false, then
@@ -536,8 +530,8 @@ server, you unauthorized connections may be accepted.
 `cleartextStream.npnProtocol` is a string containing selected NPN protocol.
 `cleartextStream.servername` is a string containing servername requested with
 SNI.
-
 -->
+
 `cleartextStream.authorized` は提供された認証局のいずれかによって認証されたかを示す boolean 値です。
 `cleartextStream.authorized` が false の場合、
 `cleartextStream.authorizationError` にはどのように認証が失敗したのかが設定されます。
@@ -547,129 +541,122 @@ TLS サーバの設定に依存しますが、認証されていないコネク�
 `cleartextStream.servername` は、SNI でリクエストされたサーバ名を持つ
 文字列です。
 
-#### Event: 'clientError'
+### Event: 'clientError'
 
 `function (exception) { }`
 
 <!--
-
 When a client connection emits an 'error' event before secure connection is
 established - it will be forwarded here.
-
 -->
+
 セキュアコネクションが確立される前にクライアントコネクションが
 `'error'` イベントを発した場合 － ここに転送されます。
 
 
-#### server.listen(port, [host], [callback])
+### server.listen(port, [host], [callback])
 
 <!--
-
 Begin accepting connections on the specified `port` and `host`.  If the
 `host` is omitted, the server will accept connections directed to any
 IPv4 address (`INADDR_ANY`).
-
 -->
+
 指定の `port` と `host` で接続の受け入れを開始します。
 `host` が省略されると、サーバはどんな IPv4 アドレスからのコネクションも受け入れます (`INADDR_ANY`)。
 
 <!--
-
 This function is asynchronous. The last parameter `callback` will be called
 when the server has been bound.
-
 -->
+
 この関数は非同期です。
 最後の引数 `callback` はサーバがバインドされると呼び出されます。
 
 <!--
-
 See `net.Server` for more information.
-
 -->
+
 より詳細は `net.Server` を参照してください。
 
 
-#### server.close()
+### server.close()
 
 <!--
-
 Stops the server from accepting new connections. This function is
 asynchronous, the server is finally closed when the server emits a `'close'`
 event.
-
 -->
+
 サーバが新しい接続を受け入れることを終了します。
 この関数は非同期で、サーバが最終的にクローズされるとサーバは `'close'` イベントを生成します。
 
-#### server.address()
+### server.address()
 
 <!--
-
 Returns the bound address and port of the server as reported by the operating
 system.
 See [net.Server.address()](net.html#server.address) for more information.
-
 -->
+
 オペレーティングシステムから報告された、
 サーバにバインドされたアドレスとポートを返します。 
 より詳しくは [net.Server.address()](net.html#server.address)
 を参照してください。
 
-#### server.addContext(hostname, credentials)
+### server.addContext(hostname, credentials)
 
 <!--
-
 Add secure context that will be used if client request's SNI hostname is
 matching passed `hostname` (wildcards can be used). `credentials` can contain
 `key`, `cert` and `ca`.
-
 -->
+
 クライアントが要求してきた SNI ホスト名と `hostname` (ワイルドカードを使用可能)
 がマッチした場合のセキュリティコンテキストを追加します。
 `credentials` は `key`、`cert`、そして `ca` を含むことができます。
 
-#### server.maxConnections
+### server.maxConnections
 
 <!--
-
 Set this property to reject connections when the server's connection count
 gets high.
-
 -->
+
 このプロパティを設定すると、サーバの接続数がこれを越えた場合に接続を破棄します。
 
-#### server.connections
+### server.connections
 
 <!--
-
 The number of concurrent connections on the server.
-
 -->
+
 サーバの並行コネクションの数です。
 
-### tls.CleartextStream
+## Class: tls.CleartextStream
 
 <!--
 This is a stream on top of the *Encrypted* stream that makes it possible to
 read/write an encrypted data as a cleartext data.
 
-This instance implements a duplex [Stream](streams.html#streams) interfaces.
+This instance implements a duplex [Stream](stream.html) interfaces.
 It has all the common stream methods and events.
+
+A ClearTextStream is the `clear` member of a SecurePair object.
 -->
+
 暗号化されたストリーム上で、暗号化されたデータを平文のデータとして
 読み書きすることができるストリームです。
 
-このインスタンスは双方向の [Stream](streams.html#streams) インタフェースを
+このインスタンスは双方向の [Stream](stream.html#streams) インタフェースを
 実装します。
 ストリームに共通な全てのメソッドとイベントを持ちます。
 
-#### Event: 'secureConnect'
+ClearText ストリームは SecurePair オブジェクトの `clear` メンバです。
 
-`function () {}`
+### Event: 'secureConnect'
 
 <!--
-
 This event is emitted after a new connection has been successfully handshaked. 
 The listener will be called no matter if the server's certificate was
 authorized or not. It is up to the user to test `cleartextStream.authorized`
@@ -677,8 +664,8 @@ to see if the server certificate was signed by one of the specified CAs.
 If `cleartextStream.authorized === false` then the error can be found in
 `cleartextStream.authorizationError`. Also if NPN was used - you can check
 `cleartextStream.npnProtocol` for negotiated protocol.
-
 -->
+
 新しいコネクションの TLS/SSL ハンドシェークが成功すると生成されます。
 リスナはサーバの証明書が認証されたかどうかに関わらず呼び出されます。
 サーバ証明書が指定した認証局に承認されたかチェックするために
@@ -689,37 +676,41 @@ If `cleartextStream.authorized === false` then the error can be found in
 から合意されたプロトコルをチェックすることが出来ます。
 
 
-#### cleartextStream.authorized
+### cleartextStream.authorized
 
 <!--
 A boolean that is `true` if the peer certificate was signed by one of the
 specified CAs, otherwise `false`
 -->
+
 接続相手の証明書が CA の一つによって署名されていれば `true`、
 そうでなければ `false` です。
 
-#### cleartextStream.authorizationError
+### cleartextStream.authorizationError
 
 <!--
 The reason why the peer's certificate has not been verified. This property
 becomes available only when `cleartextStream.authorized === false`.
 -->
+
 接続相手の証明書が認証されなかった理由です。
 このプロパティは `cleartextStream.authorized === false`
 の場合だけ利用可能になります。
 
-#### cleartextStream.getPeerCertificate()
+### cleartextStream.getPeerCertificate()
 
 <!--
 Returns an object representing the peer's certificate. The returned object has
 some properties corresponding to the field of the certificate.
 -->
+
 接続相手の証明書を表現するオブジェクトを返します。
 返されるオブジェクトは証明書のフィールドに対応するプロパティを持ちます。
 
 <!--
 Example:
 -->
+
 例:
 
     { subject: 
@@ -744,34 +735,38 @@ Example:
 If the peer does not provide a certificate, it returns `null` or an empty
 object.
 -->
+
 接続相手が証明書を提供しなかった場合は、
 `null` または空のオブジェクトを返します。
 
-#### cleartextStream.address()
+### cleartextStream.address()
 
 <!--
 Returns the bound address and port of the underlying socket as reported by the
 operating system. Returns an object with two properties, e.g.
 `{"address":"192.168.57.1", "port":62053}`
 -->
+
 オペレーティングシステムから報告された、
 ソケットにバインドされたアドレスとポートを返します。
 返されるオブジェクトは二つのプロパティを持ちます。
 例えば、`{"address":"192.168.57.1", "port":62053}`
 
-#### cleartextStream.remoteAddress
+### cleartextStream.remoteAddress
 
 <!--
 The string representation of the remote IP address. For example,
 `'74.125.127.100'` or `'2001:4860:a005::68'`.
 -->
+
 リモートの IP アドレスを表現する文字列です。
 例えば、`'74.125.127.100'` あるいは `'2001:4860:a005::68'`。
 
-#### cleartextStream.remotePort
+### cleartextStream.remotePort
 
 <!--
 The numeric representation of the remote port. For example, `443`.
 -->
+
 リモートポートの数値表現です。
 例えば、`443`。
