@@ -1,21 +1,19 @@
-## URL
+# URL
 
 <!--
-
 This module has utilities for URL resolution and parsing.
 Call `require('url')` to use it.
-
 -->
+
 このモジュールはURLの解決や解析の為のユーティリティを持ちます。
 利用するには `require('url')` を呼び出してください。
 
 <!--
-
 Parsed URL objects have some or all of the following fields, depending on
 whether or not they exist in the URL string. Any parts that are not in the URL
 string will not be in the parsed object. Examples are shown for the URL
-
 -->
+
 解析されたURLオブジェクトは、URL文字列の中に存在するかどうかに応じて
 次に示すフィールドをいくつかもしくは全てを持ちます。
 URL文字列に含まれないフィールドは解析結果のオブジェクトに含まれません。
@@ -24,7 +22,6 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
 `'http://user:pass@host.com:8080/p/a/t/h?query=string#hash'`
 
 <!--
-
 * `href`: The full URL that was originally parsed. Both the protocol and host are lowercased.
 
   Example: `'http://user:pass@host.com:8080/p/a/t/h?query=string#hash'`
@@ -58,8 +55,8 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
 * `hash`: The 'fragment' portion of the URL including the pound-sign.
 
   Example: `'#hash'`
-
 -->
+
 * `href`: 解析する前の完全な URL。protocol と host はどちらも小文字化されます。
   
   例: `'http://user:pass@host.com:8080/p/a/t/h?query=string#hash'`
@@ -95,16 +92,14 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
   例: `'#hash'`
 
 <!--
-
 The following methods are provided by the URL module:
-
 -->
+
 以下のメソッドはURLモジュールにより提供されます:
 
-### url.parse(urlStr, [parseQueryString], [slashesDenoteHost])
+## url.parse(urlStr, [parseQueryString], [slashesDenoteHost])
 
 <!--
-
 Take a URL string, and return an object.
 
 Pass `true` as the second argument to also parse
@@ -114,8 +109,8 @@ Defaults to `false`.
 Pass `true` as the third argument to treat `//foo/bar` as
 `{ host: 'foo', pathname: '/bar' }` rather than
 `{ pathname: '//foo/bar' }`. Defaults to `false`.
-
 -->
+
 URL文字列を引数に取り、解析結果のオブジェクトを返します。
 
 `querystring` モジュールを使ってクエリ文字列も解析したい場合は、
@@ -127,17 +122,15 @@ URL文字列を引数に取り、解析結果のオブジェクトを返しま�
 第 3 引数に `true` を渡してください。
 デフォルトは `false` です。
 
-### url.format(urlObj)
+## url.format(urlObj)
 
 <!--
-
 Take a parsed URL object, and return a formatted URL string.
-
 -->
+
 URL オブジェクトを引数に取り、フォーマットした URL 文字列を返します。
 
 <!--
-
 * `href` will be ignored.
 * `protocol`is treated the same with or without the trailing `:` (colon).
   * The protocols `http`, `https`, `ftp`, `gopher`, `file` will be postfixed with `://` (colon-slash-slash).
@@ -151,8 +144,8 @@ URL オブジェクトを引数に取り、フォーマットした URL 文字�
 * `query` (object; see `querystring`) will only be used if `search` is absent.
 * `search` is treated the same with or without the leading `?` (question mark)
 * `hash` is treated the same with or without the leading `#` (pound sign, anchor)
-
 -->
+
 * `href` は無視されます。
 * `protocol` の末尾に `:` (コロン) があってもなくても同じように扱われます。
   * `http`、`https`、`ftp`、`gopher`、`file` は末尾に `://` (コロン、スラッシュ、スラッシュ) が付けられます。
@@ -167,12 +160,10 @@ URL オブジェクトを引数に取り、フォーマットした URL 文字�
 * `search` の先頭に `?` (クエスチョンマーク) があってもなくても同じように扱われます。
 * `hash` の先頭に `#` (シャープ, アンカー) があってもなくても同じように扱われます。
 
-
-### url.resolve(from, to)
+## url.resolve(from, to)
 
 <!--
-
 Take a base URL, and a href URL, and resolve them as a browser would for an anchor tag.
-
 -->
+
 ベースとなる URL と相対 URL を引数に取り、ブラウザがアンカータグに対して行うのと同様に URL を解決します。

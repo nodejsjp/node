@@ -1,68 +1,67 @@
-## Buffers
+# Buffer
+
+    Stability: 3 - Stable
 
 <!--
-
 Pure Javascript is Unicode friendly but not nice to binary data.  When
 dealing with TCP streams or the file system, it's necessary to handle octet
 streams. Node has several strategies for manipulating, creating, and
 consuming octet streams.
-
 -->
+
 純粋な JavaScript は Unicode と相性がいいものの、バイナリデータの扱いはうまくありません。
 TCP ストリームやファイルシステムを扱う場合は、オクテットストリームを処理する必要があります。
 Node にはオクテットストリームを操作、作成、消費するためにいくつかの戦略があります。
 
 <!--
-
 Raw data is stored in instances of the `Buffer` class. A `Buffer` is similar
 to an array of integers but corresponds to a raw memory allocation outside
 the V8 heap. A `Buffer` cannot be resized.
-
 -->
+
 生のデータは `Buffer` クラスのインスタンスに保存されます。
 `Buffer` は整数の配列と似ていますが、
 V8 ヒープの外部に割り当てられた生のメモリに対応します。
 `Buffer` のサイズを変更することはできません。
 
 <!--
-
-The `Buffer` object is global.
-
+The `Buffer` class is a global, making it very rare that one would need
+to ever `require('buffer')`.
 -->
-`Buffer` オブジェクトはグローバルです。
+
+`Buffer` クラスはグローバルなので、`require('buffer')` が必要になることは
+ほとんどありません。
 
 <!--
-
-Converting between Buffers and JavaScript string objects requires an explicit encoding
-method.  Here are the different string encodings;
-
+Converting between Buffers and JavaScript string objects requires an explicit
+encoding method.  Here are the different string encodings.
 -->
+
 バッファを JavaScript 文字列オブジェクトとの間で変換するにはエンコーディング方式を明示する必要があります。
 いくつかのエンコーディング方式があります。
 
 <!--
-
-* `'ascii'` - for 7 bit ASCII data only.  This encoding method is very fast, and will
-strip the high bit if set.
-Note that this encoding converts a null character (`'\0'` or `'\u0000'`) into
-`0x20` (character code of a space). If you want to convert a null character
-into `0x00`, you should use `'utf8'`.
+* `'ascii'` - for 7 bit ASCII data only.  This encoding method is very fast, and
+  will strip the high bit if set.
+  Note that this encoding converts a null character (`'\0'` or `'\u0000'`) into
+  `0x20` (character code of a space). If you want to convert a null character
+  into `0x00`, you should use `'utf8'`.
 
 * `'utf8'` - Multi byte encoded Unicode characters.  Many web pages and other document formats use UTF-8.
 
 * `'ucs2'` - 2-bytes, little endian encoded Unicode characters. It can encode
-only BMP(Basic Multilingual Plane, U+0000 - U+FFFF).
+  only BMP(Basic Multilingual Plane, U+0000 - U+FFFF).
 
 * `'base64'` - Base64 string encoding.
 
 * `'binary'` - A way of encoding raw binary data into strings by using only
-the first 8 bits of each character. This encoding method is deprecated and
-should be avoided in favor of `Buffer` objects where possible. This encoding
-will be removed in future versions of Node.
+  the first 8 bits of each character. This encoding method is deprecated and
+  should be avoided in favor of `Buffer` objects where possible. This encoding
+  will be removed in future versions of Node.
 
 * `'hex'` - Encode each byte as two hexidecimal characters.
-
 -->
+
 * `'ascii'` - 7bit の ASCII データ専用です。
   このエンコーディング方式はとても高速で、もし上位ビットがセットされていれば取り除かれます。
 このエンコーディングは、null 文字 (`'\0'` または `'\u0000'`) を `0x20`
@@ -78,47 +77,77 @@ null 文字を 0x00 に変換したい場合は `'utf8'` を使用してくだ�
 このエンコーディングは、Node の将来のバージョンで削除される予定です。
 * `'hex'` - 各バイトを 2 桁の16進数文字列でエンコードします。
 
-### new Buffer(size)
+## Class: Buffer
 
 <!--
-
-Allocates a new buffer of `size` octets.
-
+The Buffer class is a global type for dealing with binary data directly.
+It can be constructed in a variety of ways.
 -->
+
+Buffer クラスはバイナリデータを直接扱うためのグローバルな型です。
+それは様々な方法で構築することができます。
+
+### new Buffer(size)
+
+* `size` Number
+
+<!--
+Allocates a new buffer of `size` octets.
+-->
+
 `size` オクテットの新しいバッファを割り当てます。
 
 ### new Buffer(array)
 
+* `array` Array
+
 <!--
-
 Allocates a new buffer using an `array` of octets.
-
 -->
+
 オクテットの `array` を使用する新しいバッファを割り当てます。
 
 ### new Buffer(str, [encoding])
 
 <!--
+* `str` String - string to encode.
+* `encoding` String - encoding to use, Optional.
+-->
 
+* `str` String - エンコードされる文字列
+* `encoding` String - 使用するエンコード、Optional、Default: 'utf8'
+
+<!--
 Allocates a new buffer containing the given `str`.
 `encoding` defaults to `'utf8'`.
-
 -->
+
 与えられた `str` を内容とする新しいバッファを割り当てます。
 `encoding` のデフォルトは `'utf8'` です。
 
-### buffer.write(string, [offset], [length], [encoding])
+### buf.write(string, [offset], [length], [encoding])
 
 <!--
+* `string` String - data to be written to buffer
+* `offset` Number, Optional, Default: 0
+* `length` Number, Optional
+* `encoding` String, Optional, Default: 'utf8'
+-->
 
+* `string` String - バッファに書き込まれるデータ
+* `offset` Number, Optional, Default: 0
+* `length` Number, Optional
+* `encoding` String, Optional, Default: 'utf8'
+
+<!--
 Writes `string` to the buffer at `offset` using the given encoding.
 `offset` defaults to `0`, `encoding` defaults to `'utf8'`. `length` is
 the number of bytes to write. Returns number of octets written. If `buffer` did
 not contain enough space to fit the entire string, it will write a partial
 amount of the string. `length` defaults to `buffer.length - offset`.
 The method will not write partial characters.
-
 -->
+
 与えられたエンコーディングを使用して、`string` をバッファの `offset` から書き込みます。
 `offset` のデフォルトは `0`、`encoding` のデフォルトは `'utf8'` です。
 `length` は書き込むバイト数です。書き込まれたオクテット数を返します。
@@ -127,10 +156,9 @@ The method will not write partial characters.
 このメソッドは文字の一部だけを書き込むことはありません。
 
 <!--
-
 Example: write a utf8 string into a buffer, then print it
-
 -->
+
 例: utf8 の文字列をバッファに書き込み、それをプリントします
 
     buf = new Buffer(256);
@@ -138,54 +166,57 @@ Example: write a utf8 string into a buffer, then print it
     console.log(len + " bytes: " + buf.toString('utf8', 0, len));
 
 <!--
-
 The number of characters written (which may be different than the number of
 bytes written) is set in `Buffer._charsWritten` and will be overwritten the
 next time `buf.write()` is called.
-
 -->
+
 書き込まれた文字数 (書き込まれたバイト数とは異なる場合があります) は、
 次に `buf.write()` が呼び出されて上書きされるまで
 `Buffer._charsWritten` に設定されています。
 
-### buffer.toString(encoding, [start], [end])
+### buf.toString([encoding], [start], [end])
+
+* `encoding` String, Optional, Default: 'utf8'
+* `start` Number, Optional, Default: 0
+* `end` Number, Optional
 
 <!--
-
 Decodes and returns a string from buffer data encoded with `encoding`
 (defaults to `'utf8'`) beginning at `start` (defaults to `0`) and ending at
 `end` (defaults to `buffer.length`).
-
 -->
+
 `encoding` (デフォルトは `'utf8'`) でエンコードされたバッファデータの
 `start` (デフォルトは `0`) から `end` (デフォルトは `buffer.length`)
 までをデコードした文字列を返します。
 
 <!--
-
 See `buffer.write()` example, above.
-
 -->
+
 上の `buffer.write()` の例を参照してください。
 
 
-### buffer[index]
+### buf[index]
+
+<!--type=property-->
+
+<!--name=[index]-->
 
 <!--
-
 Get and set the octet at `index`. The values refer to individual bytes,
 so the legal range is between `0x00` and `0xFF` hex or `0` and `255`.
-
 -->
+
 `index` の位置のオクテットを取得および設定します。
 その値は個々のバイトを参照するので、妥当な範囲は 16 進の `0x00` から `0xFF`
 または `0` から`255`までの間です。
 
 <!--
-
 Example: copy an ASCII string into a buffer, one byte at a time:
-
 -->
+
 例: ASCII 文字列を 1 バイトずつバッファにコピーします
 
     str = "node.js";
@@ -199,27 +230,36 @@ Example: copy an ASCII string into a buffer, one byte at a time:
 
     // node.js
 
-### Buffer.isBuffer(obj)
+### Class Method: Buffer.isBuffer(obj)
 
-Tests if `obj` is a `Buffer`.
-
-### Buffer.byteLength(string, [encoding])
+* `obj` Object
+* Return: Boolean
 
 <!--
+Tests if `obj` is a `Buffer`.
+-->
 
+`obj` が `Buffer` かどうかテストします。
+
+### Class Method: Buffer.byteLength(string, [encoding])
+
+* `string` String
+* `encoding` String, Optional, Default: 'utf8'
+* Return: Number
+
+<!--
 Gives the actual byte length of a string. `encoding` defaults to `'utf8'`.
 This is not the same as `String.prototype.length` since that returns the
 number of *characters* in a string.
-
 -->
+
 文字列の実際のバイト数を返します。`encoding` のデフォルトは `'utf8'` です。
 これは文字列の*文字*数を返す `String.prototype.length` と同じではありません。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     str = '\u00bd + \u00bc = \u00be';
@@ -229,16 +269,16 @@ Example:
 
     // ½ + ¼ = ¾: 9 characters, 12 bytes
 
+### buf.length
 
-### buffer.length
+* Number
 
 <!--
-
 The size of the buffer in bytes.  Note that this is not necessarily the size
 of the contents. `length` refers to the amount of memory allocated for the
 buffer object.  It does not change when the contents of the buffer are changed.
-
 -->
+
 バイト数によるバッファのサイズ。
 これは実際の内容のサイズではないことに注意してください。
 `length` はバッファオブジェクトに割り当てられたメモリ全体を参照します。
@@ -252,26 +292,36 @@ buffer object.  It does not change when the contents of the buffer are changed.
     // 1234
     // 1234
 
-### buffer.copy(targetBuffer, [targetStart], [sourceStart], [sourceEnd])
+### buf.copy(targetBuffer, [targetStart], [sourceStart], [sourceEnd])
 
 <!--
+* `targetBuffer` Buffer object - Buffer to copy into
+* `targetStart` Number, Optional, Default: 0
+* `sourceStart` Number, Optional, Default: 0
+* `sourceEnd` Number, Optional, Default: 0
+-->
 
+* `targetBuffer` Buffer object - コピー先の Buffer
+* `targetStart` Number, Optional, Default: 0
+* `sourceStart` Number, Optional, Default: 0
+* `sourceEnd` Number, Optional, Default: 0
+
+<!--
 Does copy between buffers. The source and target regions can be overlapped.
 `targetStart` and `sourceStart` default to `0`.
 `sourceEnd` defaults to `buffer.length`.
-
 -->
+
 バッファ間でコピーします。
 ソースとターゲットの領域は重なっていても構いません。
 `targetStart` と `sourceStart` のデフォルトは `0` です。
 `sourceEnd` のデフォルトは `buffer.length` です。
 
 <!--
-
 Example: build two Buffers, then copy `buf1` from byte 16 through byte 19
 into `buf2`, starting at the 8th byte in `buf2`.
-
 -->
+
 例: バッファを2個作成し、`buf1` の 16 バイト目から 19 バイト目を、
 `buf2` の 8 バイト目から始まる位置へコピーします。
 
@@ -289,32 +339,32 @@ into `buf2`, starting at the 8th byte in `buf2`.
     // !!!!!!!!qrst!!!!!!!!!!!!!
 
 
-### buffer.slice([start], [end])
+### buf.slice([start], [end])
+
+* `start` Number, Optional, Default: 0
+* `end` Number, Optional, Default: 0
 
 <!--
-
 Returns a new buffer which references the same memory as the old, but offset
 and cropped by the `start` (defaults to `0`) and `end` (defaults to
 `buffer.length`) indexes.
-
 -->
+
 元のバッファと同じメモリを参照しますが、`start` (デフォルトは `0`) と
 `end` (デフォルトは `buffer.length`) で示されるオフセットと長さを持つ
 新しいバッファを返します。
 
 <!--
-
 **Modifying the new buffer slice will modify memory in the original buffer!**
-
 -->
+
 **新しいバッファスライスの変更は、オリジナルバッファのメモリを変更することになります！**
 
 <!--
-
 Example: build a Buffer with the ASCII alphabet, take a slice, then modify one
 byte from the original Buffer.
-
 -->
+
 例: ASCII のアルファベットでバッファを構築してスライスし、元のバッファで 1 バイトを変更します。
 
     var buf1 = new Buffer(26);
@@ -331,7 +381,11 @@ byte from the original Buffer.
     // abc
     // !bc
 
-### buffer.readUInt8(offset, [noAssert])
+### buf.readUInt8(offset, [noAssert])
+
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
+* Return: Number
 
 <!--
 Reads an unsigned 8 bit integer from the buffer at the specified offset.
@@ -339,6 +393,7 @@ Reads an unsigned 8 bit integer from the buffer at the specified offset.
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
 may be beyond the end of the buffer. Defaults to `false`.
 -->
+
 バッファの指定された位置を符号無し 8bit 整数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
@@ -348,6 +403,7 @@ may be beyond the end of the buffer. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(4);
@@ -366,8 +422,12 @@ Example:
     // 0x23
     // 0x42
 
-### buffer.readUInt16LE(offset, [noAssert])
-### buffer.readUInt16BE(offset, [noAssert])
+### buf.readUInt16LE(offset, [noAssert])
+### buf.readUInt16BE(offset, [noAssert])
+
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
+* Return: Number
 
 <!--
 Reads an unsigned 16 bit integer from the buffer at the specified offset with
@@ -376,6 +436,7 @@ specified endian format.
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
 may be beyond the end of the buffer. Defaults to `false`.
 -->
+
 バッファの指定された位置を符号無し 16bit 整数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
@@ -385,6 +446,7 @@ may be beyond the end of the buffer. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(4);
@@ -408,8 +470,12 @@ Example:
     // 0x2342
     // 0x4223
 
-### buffer.readUInt32LE(offset, [noAssert])
-### buffer.readUInt32BE(offset, [noAssert])
+### buf.readUInt32LE(offset, [noAssert])
+### buf.readUInt32BE(offset, [noAssert])
+
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
+* Return: Number
 
 <!--
 Reads an unsigned 32 bit integer from the buffer at the specified offset with
@@ -418,6 +484,7 @@ specified endian format.
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
 may be beyond the end of the buffer. Defaults to `false`.
 -->
+
 バッファの指定された位置を符号無し 32bit 整数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
@@ -427,6 +494,7 @@ may be beyond the end of the buffer. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(4);
@@ -442,7 +510,11 @@ Example:
     // 0x03042342
     // 0x42230403
 
-### buffer.readInt8(offset, [noAssert])
+### buf.readInt8(offset, [noAssert])
+
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
+* Return: Number
 
 <!--
 Reads a signed 8 bit integer from the buffer at the specified offset.
@@ -453,6 +525,7 @@ may be beyond the end of the buffer. Defaults to `false`.
 Works as `buffer.readUInt8`, except buffer contents are treated as two's
 complement signed values.
 -->
+
 バッファの指定された位置を符号付き 8bit 整数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
@@ -462,8 +535,12 @@ complement signed values.
 バッファの内容を 2 の補数による符号付き値として扱うこと以外は
 `buffer.readUInt8` と同じように動作します。
 
-### buffer.readInt16LE(offset, [noAssert])
-### buffer.readInt16BE(offset, [noAssert])
+### buf.readInt16LE(offset, [noAssert])
+### buf.readInt16BE(offset, [noAssert])
+
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
+* Return: Number
 
 <!--
 Reads a signed 16 bit integer from the buffer at the specified offset with
@@ -475,6 +552,7 @@ may be beyond the end of the buffer. Defaults to `false`.
 Works as `buffer.readUInt16*`, except buffer contents are treated as two's
 complement signed values.
 -->
+
 バッファの指定された位置を符号付き 16bit 整数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
@@ -485,8 +563,12 @@ complement signed values.
 `buffer.readUInt16` と同じように動作します。
 
 
-### buffer.readInt32LE(offset, [noAssert])
-### buffer.readInt32BE(offset, [noAssert])
+### buf.readInt32LE(offset, [noAssert])
+### buf.readInt32BE(offset, [noAssert])
+
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
+* Return: Number
 
 <!--
 Reads a signed 32 bit integer from the buffer at the specified offset with
@@ -498,6 +580,7 @@ may be beyond the end of the buffer. Defaults to `false`.
 Works as `buffer.readUInt32*`, except buffer contents are treated as two's
 complement signed values.
 -->
+
 バッファの指定された位置を符号付き 32bit 整数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
@@ -508,8 +591,12 @@ complement signed values.
 `buffer.readUInt32` と同じように動作します。
 
 
-### buffer.readFloatLE(offset, [noAssert])
-### buffer.readFloatBE(offset, [noAssert])
+### buf.readFloatLE(offset, [noAssert])
+### buf.readFloatBE(offset, [noAssert])
+
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
+* Return: Number
 
 <!--
 Reads a 32 bit float from the buffer at the specified offset with specified
@@ -518,6 +605,7 @@ endian format.
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
 may be beyond the end of the buffer. Defaults to `false`.
 -->
+
 バッファの指定された位置を 32bit 浮動小数点数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
@@ -527,6 +615,7 @@ may be beyond the end of the buffer. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(4);
@@ -540,8 +629,12 @@ Example:
 
     // 0x01
 
-### buffer.readDoubleLE(offset, [noAssert])
-### buffer.readDoubleBE(offset, [noAssert])
+### buf.readDoubleLE(offset, [noAssert])
+### buf.readDoubleBE(offset, [noAssert])
+
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
+* Return: Number
 
 <!--
 Reads a 64 bit double from the buffer at the specified offset with specified
@@ -550,6 +643,7 @@ endian format.
 Set `noAssert` to true to skip validation of `offset`. This means that `offset`
 may be beyond the end of the buffer. Defaults to `false`.
 -->
+
 バッファの指定された位置を 64bit 倍精度浮動小数点数として読み込みます。
 
 もし `noAssert` が `true` なら `offset` の検証をスキップします。
@@ -559,6 +653,7 @@ may be beyond the end of the buffer. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(8);
@@ -576,7 +671,11 @@ Example:
 
     // 0.3333333333333333
 
-### buffer.writeUInt8(value, offset, [noAssert])
+### buf.writeUInt8(value, offset, [noAssert])
+
+* `value` Number
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
 
 <!--
 Writes `value` to the buffer at the specified offset. Note, `value` must be a
@@ -587,6 +686,7 @@ that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
 should not be used unless you are certain of correctness. Defaults to `false`.
 -->
+
 `value` を符号無し 8bit 整数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
 `value` は妥当な 8bit 符号無し整数でなければならないことに注意してください。
@@ -600,6 +700,7 @@ should not be used unless you are certain of correctness. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(4);
@@ -612,8 +713,12 @@ Example:
 
     // <Buffer 03 04 23 42>
 
-### buffer.writeUInt16LE(value, offset, [noAssert])
-### buffer.writeUInt16BE(value, offset, [noAssert])
+### buf.writeUInt16LE(value, offset, [noAssert])
+### buf.writeUInt16BE(value, offset, [noAssert])
+
+* `value` Number
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -624,6 +729,7 @@ that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
 should not be used unless you are certain of correctness. Defaults to `false`.
 -->
+
 `value` を符号無し 16bit 整数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
 `value` は妥当な 16bit 符号無し整数でなければならないことに注意してください。
@@ -637,6 +743,7 @@ should not be used unless you are certain of correctness. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(4);
@@ -653,8 +760,12 @@ Example:
     // <Buffer de ad be ef>
     // <Buffer ad de ef be>
 
-### buffer.writeUInt32LE(value, offset, [noAssert])
-### buffer.writeUInt32BE(value, offset, [noAssert])
+### buf.writeUInt32LE(value, offset, [noAssert])
+### buf.writeUInt32BE(value, offset, [noAssert])
+
+* `value` Number
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -665,6 +776,7 @@ that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
 should not be used unless you are certain of correctness. Defaults to `false`.
 -->
+
 `value` を符号無し 32bit 整数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
 `value` は妥当な 32bit 符号無し整数でなければならないことに注意してください。
@@ -678,6 +790,7 @@ should not be used unless you are certain of correctness. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(4);
@@ -692,7 +805,11 @@ Example:
     // <Buffer fe ed fa ce>
     // <Buffer ce fa ed fe>
 
-### buffer.writeInt8(value, offset, [noAssert])
+### buf.writeInt8(value, offset, [noAssert])
+
+* `value` Number
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
 
 <!--
 Writes `value` to the buffer at the specified offset. Note, `value` must be a
@@ -706,6 +823,7 @@ should not be used unless you are certain of correctness. Defaults to `false`.
 Works as `buffer.writeUInt8`, except value is written out as a two's complement
 signed integer into `buffer`.
 -->
+
 `value` を符号付き 8bit 整数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
 `value` は妥当な 8bit 符号付き整数でなければならないことに注意してください。
@@ -719,8 +837,12 @@ signed integer into `buffer`.
 `value` を 2 の補数による符号付き値として書き込むこと以外は 
 `buffer.writeUInt8` と同じように動作します。
 
-### buffer.writeInt16LE(value, offset, [noAssert])
-### buffer.writeInt16BE(value, offset, [noAssert])
+### buf.writeInt16LE(value, offset, [noAssert])
+### buf.writeInt16BE(value, offset, [noAssert])
+
+* `value` Number
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -734,6 +856,7 @@ should not be used unless you are certain of correctness. Defaults to `false`.
 Works as `buffer.writeUInt16*`, except value is written out as a two's
 complement signed integer into `buffer`.
 -->
+
 `value` を符号付き 16bit 整数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
 `value` は妥当な 16bit 符号付き整数でなければならないことに注意してください。
@@ -747,8 +870,12 @@ complement signed integer into `buffer`.
 `value` を 2 の補数による符号付き値として書き込むこと以外は 
 `buffer.writeUInt16` と同じように動作します。
 
-### buffer.writeInt32LE(value, offset, [noAssert])
-### buffer.writeInt32BE(value, offset, [noAssert])
+### buf.writeInt32LE(value, offset, [noAssert])
+### buf.writeInt32BE(value, offset, [noAssert])
+
+* `value` Number
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -762,6 +889,7 @@ should not be used unless you are certain of correctness. Defaults to `false`.
 Works as `buffer.writeUInt32*`, except value is written out as a two's
 complement signed integer into `buffer`.
 -->
+
 `value` を符号付き 32bit 整数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
 `value` は妥当な 32bit 符号付き整数でなければならないことに注意してください。
@@ -775,8 +903,12 @@ complement signed integer into `buffer`.
 `value` を 2 の補数による符号付き値として書き込むこと以外は 
 `buffer.writeUInt32` と同じように動作します。
 
-### buffer.writeFloatLE(value, offset, [noAssert])
-### buffer.writeFloatBE(value, offset, [noAssert])
+### buf.writeFloatLE(value, offset, [noAssert])
+### buf.writeFloatBE(value, offset, [noAssert])
+
+* `value` Number
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -787,6 +919,7 @@ that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
 should not be used unless you are certain of correctness. Defaults to `false`.
 -->
+
 `value` を 32bit 浮動小数点数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
 `value` は妥当な 32bit 浮動小数点数でなければならないことに注意してください。
@@ -800,6 +933,7 @@ should not be used unless you are certain of correctness. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(4);
@@ -814,8 +948,12 @@ Example:
     // <Buffer 4f 4a fe bb>
     // <Buffer bb fe 4a 4f>
 
-### buffer.writeDoubleLE(value, offset, [noAssert])
-### buffer.writeDoubleBE(value, offset, [noAssert])
+### buf.writeDoubleLE(value, offset, [noAssert])
+### buf.writeDoubleBE(value, offset, [noAssert])
+
+* `value` Number
+* `offset` Number
+* `noAssert` Boolean, Optional, Default: false
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
@@ -826,6 +964,7 @@ that `value` may be too large for the specific function and `offset` may be
 beyond the end of the buffer leading to the values being silently dropped. This
 should not be used unless you are certain of correctness. Defaults to `false`.
 -->
+
 `value` を 64bit 倍精度浮動小数点数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
 `value` は妥当な 64bit 倍精度浮動小数点数でなければならないことに注意してください。
@@ -839,6 +978,7 @@ should not be used unless you are certain of correctness. Defaults to `false`.
 <!--
 Example:
 -->
+
 例:
 
     var buf = new Buffer(8);
@@ -853,13 +993,18 @@ Example:
     // <Buffer 43 eb d5 b7 dd f9 5f d7>
     // <Buffer d7 5f f9 dd b7 d5 eb 43>
 
-### buffer.fill(value, [offset], [end])
+### buf.fill(value, [offset], [end])
+
+* `value`
+* `offset` Number, Optional
+* `end` Number, Optional
 
 <!--
 Fills the buffer with the specified value. If the `offset` (defaults to `0`)
 and `end` (defaults to `buffer.length`) are not given it will fill the entire
 buffer.
 -->
+
 指定された値でバッファを埋めます。
 `offset` (デフォルトは `0`) と `end` (デフォルトは `buffer.length`)
 Fが与えられなかった場合はバッファ全体を埋めます。
@@ -867,11 +1012,42 @@ Fが与えられなかった場合はバッファ全体を埋めます。
     var b = new Buffer(50);
     b.fill("h");
 
-### INSPECT_MAX_BYTES
+## buffer.INSPECT_MAX_BYTES
+
+* Number, Default: 50
 
 <!--
 How many bytes will be returned when `buffer.inspect()` is called. This can
 be overridden by user modules.
+
+Note that this is a property on the buffer module returned by
+`require('buffer')`, not on the Buffer global, or a buffer instance.
 -->
+
 `buffer.inspect()` が呼び出された場合に返すバイト数です。
 これはユーザモジュールによって上書きすることができます。
+
+これはグローバルの Buffer やそのインスタンスではなく、 `requrie('buffer')`
+によって返される buffer モジュールのプロパティであることに注意してください。
+
+## Class: SlowBuffer
+
+<!--
+This class is primarily for internal use.  JavaScript programs should
+use Buffer instead of using SlowBuffer.
+
+In order to avoid the overhead of allocating many C++ Buffer objects for
+small blocks of memory in the lifetime of a server, Node allocates memory
+in 8Kb (8192 byte) chunks.  If a buffer is smaller than this size, then it
+will be backed by a parent SlowBuffer object.  If it is larger than this,
+then Node will allocate a SlowBuffer slab for it directly.
+-->
+
+このクラスは主に内部利用のためのものです。JavaScsript プログラムは SlowBuffer
+よりも Buffer を使用すべきです。
+
+サーバの動作中に、小さなメモリブロックのために多くの C++ バッファオブジェクトが
+割り当てられるオーバーヘッドを避けるため、Node はメモリを 8Kb (8192 バイト) の
+チャンク内に割り当てます。もしバッファがこのサイズより小さければ、それは
+親の SlowBuffer に支えられます。それより大きければ、Node は SlowBuffer を
+直接割り当てます。
