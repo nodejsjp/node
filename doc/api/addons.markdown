@@ -1,24 +1,22 @@
-## Addons
+# Addons
 
 <!--
-
 Addons are dynamically linked shared objects. They can provide glue to C and
 C++ libraries. The API (at the moment) is rather complex, involving
 knowledge of several libraries:
-
 -->
+
 アドオンは動的に共有オブジェクトをリンクします。
 それらは、C や C++ のライブラリに接合点を提供します。
 API はいくつかのライブラリの知識が必要で、(現時点では) かなり複雑です。
 
 <!--
-
  - V8 JavaScript, a C++ library. Used for interfacing with JavaScript:
    creating objects, calling functions, etc.  Documented mostly in the
    `v8.h` header file (`deps/v8/include/v8.h` in the Node source tree),
    which is also available [online](http://izs.me/v8-docs/main.html).
-
 -->
+
  - V8 JavaScript は C++ のライブラリです。
    JavaScript のオブジェクト作成や関数呼び出し等のインタフェースに使用されます。
    ドキュメントは主に、`v8.h` のヘッダファイル
@@ -26,13 +24,12 @@ API はいくつかのライブラリの知識が必要で、(現時点では) �
    [オンライン](http://izs.me/v8-docs/main.html) で参照することもできます。
 
 <!--
-
  - [libuv](https://github.com/joyent/libuv), C event loop library. Anytime one
    needs to wait for a file descriptor to become readable, wait for a timer, or
    wait for a signal to received one will need to interface with libuv. That is,
    if you perform any I/O, libuv will need to be used.
-
 -->
+
  - [libuv](https://github.com/joyent/libuv) は
    C のイベントループライブラリです。
    ファイル記述子が読み取り可能になるのを待つとき、タイマーを待つとき、
@@ -41,50 +38,45 @@ API はいくつかのライブラリの知識が必要で、(現時点では) �
    つまり、何らかの I/O 処理をすると必ず libuv を使う必要があるということです。
 
 <!--
-
  - Internal Node libraries. Most importantly is the `node::ObjectWrap`
    class which you will likely want to derive from.
-
 -->
+
  - Node の内部ライブラリ。
    もっとも重要なのは `node::ObjectWrap` クラスで、
    このクラスから派生させることが多くなるでしょう。
 
 <!--
-
  - Others. Look in `deps/` for what else is available.
-
 -->
+
  - その他。どのような物が利用できるかは `deps/` 以下を参照してさい。
 
 <!--
-
 Node statically compiles all its dependencies into the executable. When
 compiling your module, you don't need to worry about linking to any of these
 libraries.
-
 -->
+
 Node は全ての依存ライブラリを実行ファイルに静的にコンパイルします。
 モジュールのコンパイル時には、それらのリンクについて一切気にする必要は有りません。
 
-### Hello world
+## Hello world
 
 <!--
-
 To get started let's make a small Addon which is the C++ equivalent of
 the following Javascript code:
-
 -->
+
 では、 以下の JavaScript コードと同じ様に動作する小さなアドオンを
 C++ で作成してみましょう。
 
     exports.hello = function() { return 'world'; };
 
 <!--
-
 First we create a file `hello.cc`:
-
 -->
+
 最初に `hello.cc` というファイルを作成します:
 
 
@@ -105,10 +97,9 @@ First we create a file `hello.cc`:
     NODE_MODULE(hello, init)
 
 <!--
-
 Note that all Node addons must export an initialization function:
-
 -->
+
 全ての Node アドオンは初期化関数をエクスポートしなければならないことに
 注意してください。
 
@@ -124,8 +115,8 @@ The `module_name` needs to match the filename of the final binary (minus the
 The source code needs to be built into `hello.node`, the binary Addon. To
 do this we create a file called `wscript` which is python code and looks
 like this:
-
 -->
+
 `NODE_MODULE` は関数ではないので、その後にセミコロンを付けてはいけません
 (`node.h` を参照してください)。
 
@@ -152,28 +143,25 @@ like this:
       obj.source = 'hello.cc'
 
 <!--
-
 Running `node-waf configure build` will create a file
 `build/default/hello.node` which is our Addon.
-
 -->
+
 `node-waf configure build` を実行すると、`build/default/hello.node` が作成されます。これが作成したアドオンです。
 
 <!--
-
 `node-waf` is just [WAF](http://code.google.com/p/waf), the python-based build system. `node-waf` is
 provided for the ease of users.
-
 -->
+
 `node-waf` 単に [WAF](http://code.google.com/p/waf) は Python ベースのビルドシステムです。
 `node-waf` は、ユーザの負担を減らすために提供されています。
 
 <!--
-
 You can now use the binary addon in a Node project `hello.js` by pointing `require` to
 the recently built module:
-
 -->
+
 ビルドされたモジュールを `require` で指定することにより、
 このバイナリアドオンを Node プロジェクトの `hello.js` から利用することが
 可能になります。
@@ -183,11 +171,10 @@ the recently built module:
     console.log(addon.hello()); // 'world'
 
 <!--
-
 Please see patterns below for further information or
 <https://github.com/pietern/hiredis-node> for an example in production.
-
 -->
+
 さらに詳しい情報については下記のパターンか、
 <https://github.com/pietern/hiredis-node> を実際のプロダクトにおける
 例として参照してください。
@@ -204,6 +191,7 @@ function templates, etc.
 To compile these examples, create the `wscript` file below and run
 `node-waf configure build`:
 -->
+
 以下は初心者に役立つアドオンのパターンです。
 v8 の様々な API についてはオンラインの
 [v8 reference](http://izs.me/v8-docs/main.html) が、
@@ -231,19 +219,21 @@ v8 の [Embedder's Guide](http://code.google.com/apis/v8/embed.html) が
 In cases where there is more than one `.cc` file, simply add the file name to the
 `obj.source` array, e.g.:
 -->
+
 一つ以上の `.cc` ファイルがある場合は、単純に `obj.source` 配列にファイル名を
 加えるだけです。例:
 
     obj.source = ['addon.cc', 'myexample.cc']
 
 
-#### Function arguments
+### Function arguments
 
 <!--
 The following pattern illustrates how to read arguments from JavaScript
 function calls and return a result. This is the main and only needed source
 `addon.cc`:
 -->
+
 以下のパターンは JavaScript から呼び出された関数で引数を読み出したり、
 結果を返す方法を示します。これは `addon.cc` でのみ必要となります。
 
@@ -280,6 +270,7 @@ function calls and return a result. This is the main and only needed source
 <!--
 You can test it with the following JavaScript snippet:
 -->
+
 以下の JavaScript コード片でテストすることができます。
 
     var addon = require('./build/Release/addon');
@@ -287,12 +278,13 @@ You can test it with the following JavaScript snippet:
     console.log( 'This should be eight:', addon.add(3,5) );
 
 
-#### Callbacks
+### Callbacks
 
 <!--
 You can pass JavaScript functions to a C++ function and execute them from
 there. Here's `addon.cc`:
 -->
+
 JavaScript の関数を C++ の関数に渡してそこから呼び出すことができます。
 これは `addon.cc` です:
 
@@ -322,6 +314,7 @@ JavaScript の関数を C++ の関数に渡してそこから呼び出すこと�
 <!--
 To test it run the following JavaScript snippet:
 -->
+
 以下の JavaScript コード片でテストすることができます。
 
     var addon = require('./build/Release/addon');
@@ -331,13 +324,14 @@ To test it run the following JavaScript snippet:
     });
 
 
-#### Object factory
+### Object factory
 
 <!--
 You can create and return new objects from within a C++ function with this
 `addon.cc` pattern, which returns an object with property `msg` that echoes
 the string passed to `createObject()`:
 -->
+
 C++ 関数の中から新しいオブジェクトを作成して返すことができます。
 以下の `addon.cc` のパターンでは、`createObject()` に渡された文字列を
 反映する `msg` プロパティを持ったオブジェクトを返します。
@@ -366,6 +360,7 @@ C++ 関数の中から新しいオブジェクトを作成して返すことが�
 <!--
 To test it in JavaScript:
 -->
+
 テスト用の JavaScript:
 
     var addon = require('./build/Release/addon');
@@ -375,12 +370,13 @@ To test it in JavaScript:
     console.log(obj1.msg+' '+obj2.msg); // 'hello world'
 
 
-#### Function factory
+### Function factory
 
 <!--
 This pattern illustrates how to create and return a JavaScript function that
 wraps a C++ function:
 -->
+
 このパターンは C++ 関数をラップした JavaScript 関数を作成して返す方法を
 示します。
 
@@ -415,6 +411,7 @@ wraps a C++ function:
 <!--
 To test:
 -->
+
 テスト:
 
     var addon = require('./build/Release/addon');
@@ -423,13 +420,14 @@ To test:
     console.log(fn()); // 'hello world'
 
 
-#### Wrapping C++ objects
+### Wrapping C++ objects
 
 <!--
 Here we will create a wrapper for a C++ object/class `MyObject` that can be
 instantiated in JavaScript through the `new` operator. First prepare the main
 module `addon.cc`:
 -->
+
 ここでは、
 C++ オブジェクト／クラスをラップし、JavaScript から new 演算子を使って
 インスタンス化できる `MyObject` を作成します。
@@ -450,6 +448,7 @@ C++ オブジェクト／クラスをラップし、JavaScript から new 演算
 <!--
 Then in `myobject.h` make your wrapper inherit from `node::ObjectWrap`:
 -->
+
 次に、`node::ObjectWrap` を継承したラッパーを `myobject.h` に作成します。
 
     #ifndef MYOBJECT_H
@@ -477,6 +476,7 @@ And in `myobject.cc` implement the various methods that you want to expose.
 Here we expose the method `plusOne` by adding it to the constructor's
 prototype:
 -->
+
 公開したい様々なメソッドを `myobject.cc` に実装します。
 ここでは、コンストラクタに渡された値に加算する `plusOne` を公開しています:
 
@@ -524,6 +524,7 @@ prototype:
 <!--
 Test it with:
 -->
+
 これでテストします:
 
     var addon = require('./build/Release/addon');
@@ -534,12 +535,13 @@ Test it with:
     console.log( obj.plusOne() ); // 13
 
 
-#### Factory of wrapped objects
+### Factory of wrapped objects
 
 <!--
 This is useful when you want to be able to create native objects without
 explicitly instantiating them with the `new` operator in JavaScript, e.g.
 -->
+
 JavaScript の `new` 演算子で明示的にインスタンス化することなく、
 ネイティブオブジェクトを作成できるようにしたい場合に便利です。例:
 
@@ -550,7 +552,8 @@ JavaScript の `new` 演算子で明示的にインスタンス化すること�
 <!--
 Let's register our `createObject` method in `addon.cc`:
 -->
-`createObject` を `addon.cc` に登録しましょう:
+
+createObject` を `addon.cc` に登録しましょう:
 
     #define BUILDING_NODE_EXTENSION
     #include <node.h>
@@ -576,6 +579,7 @@ Let's register our `createObject` method in `addon.cc`:
 In `myobject.h` we now introduce the static method `NewInstance` that takes
 care of instantiating the object (i.e. it does the job of `new` in JavaScript):
 -->
+
 `myobject.h` にオブジェクトを生成する static メソッド `NewInstance` を
 導入しましょう (すなわち，それが JavaScript 内の `new` の働きをします)。
 
@@ -605,6 +609,7 @@ care of instantiating the object (i.e. it does the job of `new` in JavaScript):
 <!--
 The implementation is similar to the above in `myobject.cc`:
 -->
+
 実装は前述の `myobject.cc` と同様です:
 
     #define BUILDING_NODE_EXTENSION
@@ -662,6 +667,7 @@ The implementation is similar to the above in `myobject.cc`:
 <!--
 Test it with:
 -->
+
 これでテストします:
 
     var addon = require('./build/Release/addon');
@@ -677,7 +683,7 @@ Test it with:
     console.log( obj2.plusOne() ); // 23
 
 
-#### Passing wrapped objects around
+### Passing wrapped objects around
 
 <!--
 In addition to wrapping and returning C++ objects, you can pass them around
@@ -685,6 +691,7 @@ by unwrapping them with Node's `node::ObjectWrap::Unwrap` helper function.
 In the following `addon.cc` we introduce a function `add()` that can take on two
 `MyObject` objects:
 -->
+
 C++ オブジェクトをラップして返すことに加えて、Node が提供するヘルパ関数
 `node::ObjectWrap::Unwrap` を使用してアンラップすることもできます。
 以下の `addon.cc` では、二つの `MyObject` オブジェクトを受け取る `add()`
@@ -729,6 +736,7 @@ C++ オブジェクトをラップして返すことに加えて、Node が提�
 To make things interesting we introduce a public method in `myobject.h` so we
 can probe private values after unwrapping the object:
 -->
+
 よりおもしろくするために、`myobject.h` にパブリックメソッドを導入しましょう。
 したがって、アンラップされたオブジェクトのプライベート変数を調べることが
 できます。
@@ -759,6 +767,7 @@ can probe private values after unwrapping the object:
 <!--
 The implementation of `myobject.cc` is similar as before:
 -->
+
 `myobject.cc` の実装はこれまでと同様です:
 
     #define BUILDING_NODE_EXTENSION
@@ -804,6 +813,7 @@ The implementation of `myobject.cc` is similar as before:
 <!--
 Test it with:
 -->
+
 これでテストします:
 
     var addon = require('./build/Release/addon');
