@@ -20,10 +20,10 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-#include <node.h>
-#include <node_buffer.h>
+#include "node.h"
+#include "node_buffer.h"
 
-#include <v8.h>
+#include "v8.h"
 
 #include <assert.h>
 #include <stdlib.h> // malloc, free
@@ -171,13 +171,14 @@ Handle<Value> Buffer::New(const Arguments &args) {
 
   HandleScope scope;
 
-  if (args[0]->IsInt32()) {
-    // var buffer = new Buffer(1024);
-    size_t length = args[0]->Uint32Value();
-    new Buffer(args.This(), length);
-  } else {
-    return ThrowException(Exception::TypeError(String::New("Bad argument")));
+  if (!args[0]->IsUint32()) return ThrowTypeError("Bad argument");
+
+  size_t length = args[0]->Uint32Value();
+  if (length > Buffer::kMaxLength) {
+    return ThrowRangeError("length > kMaxLength");
   }
+  new Buffer(args.This(), length);
+
   return args.This();
 }
 

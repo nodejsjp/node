@@ -3439,6 +3439,11 @@ void StackCheckStub::Generate(MacroAssembler* masm) {
 }
 
 
+void InterruptStub::Generate(MacroAssembler* masm) {
+  __ TailCallRuntime(Runtime::kInterrupt, 0, 1);
+}
+
+
 void MathPowStub::Generate(MacroAssembler* masm) {
   CpuFeatures::Scope vfp3_scope(VFP3);
   const Register base = r1;
@@ -3674,17 +3679,6 @@ void CEntryStub::GenerateAheadOfTime() {
 }
 
 
-void CEntryStub::GenerateThrowTOS(MacroAssembler* masm) {
-  __ Throw(r0);
-}
-
-
-void CEntryStub::GenerateThrowUncatchable(MacroAssembler* masm,
-                                          UncatchableExceptionType type) {
-  __ ThrowUncatchable(type, r0);
-}
-
-
 void CEntryStub::GenerateCore(MacroAssembler* masm,
                               Label* throw_normal_exception,
                               Label* throw_termination_exception,
@@ -3865,13 +3859,27 @@ void CEntryStub::Generate(MacroAssembler* masm) {
                true);
 
   __ bind(&throw_out_of_memory_exception);
-  GenerateThrowUncatchable(masm, OUT_OF_MEMORY);
+  // Set external caught exception to false.
+  Isolate* isolate = masm->isolate();
+  ExternalReference external_caught(Isolate::kExternalCaughtExceptionAddress,
+                                    isolate);
+  __ mov(r0, Operand(false, RelocInfo::NONE));
+  __ mov(r2, Operand(external_caught));
+  __ str(r0, MemOperand(r2));
+
+  // Set pending exception and r0 to out of memory exception.
+  Failure* out_of_memory = Failure::OutOfMemoryException();
+  __ mov(r0, Operand(reinterpret_cast<int32_t>(out_of_memory)));
+  __ mov(r2, Operand(ExternalReference(Isolate::kPendingExceptionAddress,
+                                       isolate)));
+  __ str(r0, MemOperand(r2));
+  // Fall through to the next label.
 
   __ bind(&throw_termination_exception);
-  GenerateThrowUncatchable(masm, TERMINATION);
+  __ ThrowUncatchable(r0);
 
   __ bind(&throw_normal_exception);
-  GenerateThrowTOS(masm);
+  __ Throw(r0);
 }
 
 
@@ -4912,10 +4920,10 @@ void RegExpExecStub::Generate(MacroAssembler* masm) {
   Label termination_exception;
   __ b(eq, &termination_exception);
 
-  __ Throw(r0);  // Expects thrown value in r0.
+  __ Throw(r0);
 
   __ bind(&termination_exception);
-  __ ThrowUncatchable(TERMINATION, r0);  // Expects thrown value in r0.
+  __ ThrowUncatchable(r0);
 
   __ bind(&failure);
   // For failure and exception return null.
@@ -5922,8 +5930,8 @@ void SubStringStub::Generate(MacroAssembler* masm) {
 
   __ bind(&sliced_string);
   // Sliced string.  Fetch parent and correct start index by offset.
-  __ ldr(r4, FieldMemOperand(r0, SlicedString::kOffsetOffset));
   __ ldr(r5, FieldMemOperand(r0, SlicedString::kParentOffset));
+  __ ldr(r4, FieldMemOperand(r0, SlicedString::kOffsetOffset));
   __ add(r3, r3, Operand(r4, ASR, 1));  // Add offset to index.
   // Update instance type.
   __ ldr(r1, FieldMemOperand(r5, HeapObject::kMapOffset));
@@ -5961,8 +5969,8 @@ void SubStringStub::Generate(MacroAssembler* masm) {
     __ AllocateTwoByteSlicedString(r0, r2, r6, r7, &runtime);
     __ bind(&set_slice_header);
     __ mov(r3, Operand(r3, LSL, 1));
-    __ str(r3, FieldMemOperand(r0, SlicedString::kOffsetOffset));
     __ str(r5, FieldMemOperand(r0, SlicedString::kParentOffset));
+    __ str(r3, FieldMemOperand(r0, SlicedString::kOffsetOffset));
     __ jmp(&return_r0);
 
     __ bind(&copy_routine);
@@ -6552,15 +6560,15 @@ void ICCompareStub::GenerateHeapNumbers(MacroAssembler* masm) {
   ASSERT(state_ == CompareIC::HEAP_NUMBERS);
 
   Label generic_stub;
-  Label unordered;
+  Label unordered, maybe_undefined1, maybe_undefined2;
   Label miss;
   __ and_(r2, r1, Operand(r0));
   __ JumpIfSmi(r2, &generic_stub);
 
   __ CompareObjectType(r0, r2, r2, HEAP_NUMBER_TYPE);
-  __ b(ne, &miss);
+  __ b(ne, &maybe_undefined1);
   __ CompareObjectType(r1, r2, r2, HEAP_NUMBER_TYPE);
-  __ b(ne, &miss);
+  __ b(ne, &maybe_undefined2);
 
   // Inlining the double comparison and falling back to the general compare
   // stub if NaN is involved or VFP3 is unsupported.
@@ -6584,13 +6592,27 @@ void ICCompareStub::GenerateHeapNumbers(MacroAssembler* masm) {
     __ mov(r0, Operand(LESS), LeaveCC, lt);
     __ mov(r0, Operand(GREATER), LeaveCC, gt);
     __ Ret();
-
-    __ bind(&unordered);
   }
 
+  __ bind(&unordered);
   CompareStub stub(GetCondition(), strict(), NO_COMPARE_FLAGS, r1, r0);
   __ bind(&generic_stub);
   __ Jump(stub.GetCode(), RelocInfo::CODE_TARGET);
+
+  __ bind(&maybe_undefined1);
+  if (Token::IsOrderedRelationalCompareOp(op_)) {
+    __ CompareRoot(r0, Heap::kUndefinedValueRootIndex);
+    __ b(ne, &miss);
+    __ CompareObjectType(r1, r2, r2, HEAP_NUMBER_TYPE);
+    __ b(ne, &maybe_undefined2);
+    __ jmp(&unordered);
+  }
+
+  __ bind(&maybe_undefined2);
+  if (Token::IsOrderedRelationalCompareOp(op_)) {
+    __ CompareRoot(r1, Heap::kUndefinedValueRootIndex);
+    __ b(eq, &unordered);
+  }
 
   __ bind(&miss);
   GenerateMiss(masm);
@@ -6639,6 +6661,8 @@ void ICCompareStub::GenerateStrings(MacroAssembler* masm) {
   ASSERT(state_ == CompareIC::STRINGS);
   Label miss;
 
+  bool equality = Token::IsEqualityOp(op_);
+
   // Registers containing left and right operands respectively.
   Register left = r1;
   Register right = r0;
@@ -6672,28 +6696,39 @@ void ICCompareStub::GenerateStrings(MacroAssembler* masm) {
 
   // Check that both strings are symbols. If they are, we're done
   // because we already know they are not identical.
-  ASSERT(GetCondition() == eq);
-  STATIC_ASSERT(kSymbolTag != 0);
-  __ and_(tmp3, tmp1, Operand(tmp2));
-  __ tst(tmp3, Operand(kIsSymbolMask));
-  // Make sure r0 is non-zero. At this point input operands are
-  // guaranteed to be non-zero.
-  ASSERT(right.is(r0));
-  __ Ret(ne);
+  if (equality) {
+    ASSERT(GetCondition() == eq);
+    STATIC_ASSERT(kSymbolTag != 0);
+    __ and_(tmp3, tmp1, Operand(tmp2));
+    __ tst(tmp3, Operand(kIsSymbolMask));
+    // Make sure r0 is non-zero. At this point input operands are
+    // guaranteed to be non-zero.
+    ASSERT(right.is(r0));
+    __ Ret(ne);
+  }
 
   // Check that both strings are sequential ASCII.
   Label runtime;
-  __ JumpIfBothInstanceTypesAreNotSequentialAscii(tmp1, tmp2, tmp3, tmp4,
-                                                  &runtime);
+  __ JumpIfBothInstanceTypesAreNotSequentialAscii(
+      tmp1, tmp2, tmp3, tmp4, &runtime);
 
   // Compare flat ASCII strings. Returns when done.
-  StringCompareStub::GenerateFlatAsciiStringEquals(
-      masm, left, right, tmp1, tmp2, tmp3);
+  if (equality) {
+    StringCompareStub::GenerateFlatAsciiStringEquals(
+        masm, left, right, tmp1, tmp2, tmp3);
+  } else {
+    StringCompareStub::GenerateCompareFlatAsciiStrings(
+        masm, left, right, tmp1, tmp2, tmp3, tmp4);
+  }
 
   // Handle more complex cases in runtime.
   __ bind(&runtime);
   __ Push(left, right);
-  __ TailCallRuntime(Runtime::kStringEquals, 2, 1);
+  if (equality) {
+    __ TailCallRuntime(Runtime::kStringEquals, 2, 1);
+  } else {
+    __ TailCallRuntime(Runtime::kStringCompare, 2, 1);
+  }
 
   __ bind(&miss);
   GenerateMiss(masm);
@@ -6804,7 +6839,7 @@ void StringDictionaryLookupStub::GenerateNegativeLookup(MacroAssembler* masm,
   // not equal to the name and kProbes-th slot is not used (its name is the
   // undefined value), it guarantees the hash table doesn't contain the
   // property. It's true even if some slots represent deleted properties
-  // (their names are the null value).
+  // (their names are the hole value).
   for (int i = 0; i < kInlinedProbes; i++) {
     // scratch0 points to properties hash.
     // Compute the masked index: (hash + i + i * i) & mask.
@@ -6832,9 +6867,16 @@ void StringDictionaryLookupStub::GenerateNegativeLookup(MacroAssembler* masm,
     __ b(eq, done);
 
     if (i != kInlinedProbes - 1) {
+      // Load the hole ready for use below:
+      __ LoadRoot(tmp, Heap::kTheHoleValueRootIndex);
+
       // Stop if found the property.
       __ cmp(entity_name, Operand(Handle<String>(name)));
       __ b(eq, miss);
+
+      Label the_hole;
+      __ cmp(entity_name, tmp);
+      __ b(eq, &the_hole);
 
       // Check if the entry name is not a symbol.
       __ ldr(entity_name, FieldMemOperand(entity_name, HeapObject::kMapOffset));
@@ -6842,6 +6884,8 @@ void StringDictionaryLookupStub::GenerateNegativeLookup(MacroAssembler* masm,
               FieldMemOperand(entity_name, Map::kInstanceTypeOffset));
       __ tst(entity_name, Operand(kIsSymbolMask));
       __ b(eq, miss);
+
+      __ bind(&the_hole);
 
       // Restore the properties.
       __ ldr(properties,
@@ -7059,11 +7103,13 @@ struct AheadOfTimeWriteBarrierStubList kAheadOfTime[] = {
   { r2, r1, r3, EMIT_REMEMBERED_SET },
   { r3, r1, r2, EMIT_REMEMBERED_SET },
   // KeyedStoreStubCompiler::GenerateStoreFastElement.
-  { r4, r2, r3, EMIT_REMEMBERED_SET },
+  { r3, r2, r4, EMIT_REMEMBERED_SET },
+  { r2, r3, r4, EMIT_REMEMBERED_SET },
   // ElementsTransitionGenerator::GenerateSmiOnlyToObject
   // and ElementsTransitionGenerator::GenerateSmiOnlyToDouble
   // and ElementsTransitionGenerator::GenerateDoubleToObject
   { r2, r3, r9, EMIT_REMEMBERED_SET },
+  { r2, r3, r9, OMIT_REMEMBERED_SET },
   // ElementsTransitionGenerator::GenerateDoubleToObject
   { r6, r2, r0, EMIT_REMEMBERED_SET },
   { r2, r6, r9, EMIT_REMEMBERED_SET },

@@ -1,9 +1,12 @@
-## Readline
+# Readline
+
+    Stability: 3 - Stable
 
 <!--
 To use this module, do `require('readline')`. Readline allows reading of a
 stream (such as STDIN) on a line-by-line basis.
 -->
+
 このモジュールを使用するには、`require('readline')` をします。
 Readline はストリーム (たとえば標準入力) を行ごとに読み込むことを可能にします。
 
@@ -12,6 +15,7 @@ Note that once you've invoked this module, your node program will not
 terminate until you've paused the interface. Here's how to allow your
 program to gracefully pause:
 -->
+
 このモジュールを一度起動すると、このインタフェースを
 中断するまで node プログラムは終了しないことに注意してください。
 プログラムをスムーズに中断する方法を以下に示します:
@@ -26,13 +30,14 @@ program to gracefully pause:
       i.pause();
     });
 
-### rl.createInterface(input, output, completer)
+## rl.createInterface(input, output, completer)
 
 <!--
 Takes two streams and creates a readline interface. The `completer` function
 is used for autocompletion. When given a substring, it returns `[[substr1,
 substr2, ...], originalsubstring]`.
 -->
+
 二つのストリームを受け取り、readline のインタフェースを作成します。
 `completer` 関数は補完のために使われます。
 それは部分文字列を与えられると、`[[substr1, substr2, ...], originalsubstring]`
@@ -41,6 +46,7 @@ substr2, ...], originalsubstring]`.
 <!--
 Also `completer` can be run in async mode if it accepts two arguments:
 -->
+
 `completer` が二つの引数を持つなら、それは非同期モードで実行されます。
 
   function completer(linePartial, callback) {
@@ -51,11 +57,21 @@ Also `completer` can be run in async mode if it accepts two arguments:
 `createInterface` is commonly used with `process.stdin` and
 `process.stdout` in order to accept user input:
 -->
+
 `createInterface` には通常、ユーザからの入力を受け取るために `process.stdin` と
 `process.stdout` が使用されます。
 
     var readline = require('readline'),
       rl = readline.createInterface(process.stdin, process.stdout);
+
+## Class: Interface
+
+<!--
+The class that represents a readline interface with a stdin and stdout
+stream.
+-->
+
+標準入力と標準出力を持つ readline インタフェースを表現するクラスです。
 
 ### rl.setPrompt(prompt, length)
 
@@ -63,6 +79,7 @@ Also `completer` can be run in async mode if it accepts two arguments:
 Sets the prompt, for example when you run `node` on the command line, you see
 `> `, which is node's prompt.
 -->
+
 プロンプトを設定します。
 たとえば、コマンドプロンプトで `node` コマンドを実行すると、
 `> ` を見ることができます。これが Node のプロンプトです。
@@ -76,14 +93,13 @@ options on a new line, giving the user a new spot to write.
 This will also resume the `in` stream used with `createInterface` if it has
 been paused.
 -->
+
 ユーザからの入力を 1 行読み込みます。
 現在の `setPrompt()` の値を新しい行に出力し、
 ユーザに新しい入力エリアを与えます。
 
 これは、 `createInterface()` によって使われる `in` ストリームが
 中断されていれば再開します。
-
-<!-- ### rl.getColumns() Not available? -->
 
 ### rl.question(query, callback)
 
@@ -95,6 +111,7 @@ user's response after it has been typed.
 This will also resume the `in` stream used with `createInterface` if it has
 been paused.
 -->
+
 `query` をプロンプトとして、ユーザが応答すると `callback` を起動します。
 ユーザに質問を表示し、ユーザが応答をタイプすると、`callback` が起動されます。
 
@@ -104,6 +121,7 @@ been paused.
 <!--
 Example usage:
 -->
+
 使用例:
 
     interface.question('What is your favorite food?', function(answer) {
@@ -115,6 +133,7 @@ Example usage:
 <!--
 Pauses the readline `in` stream, allowing it to be resumed later if needed.
 -->
+
 `in` ストリームからの入力を中断します。
 必要なら後で再開することができます。
 
@@ -123,6 +142,7 @@ Pauses the readline `in` stream, allowing it to be resumed later if needed.
 <!--
 Resumes the readline `in` stream.
 -->
+
 `in` ストリームからの入力を再開します。
 
 ### rl.write()
@@ -133,6 +153,7 @@ Writes to tty.
 This will also resume the `in` stream used with `createInterface` if it has
 been paused.
 -->
+
 tty へ出力します。
 
 これは、 `createInterface()` によって使われる `in` ストリームが
@@ -146,6 +167,7 @@ tty へ出力します。
 Emitted whenever the `in` stream receives a `\n`, usually received when the
 user hits enter, or return. This is a good hook to listen for user input.
 -->
+
 `in` ストリームから `\n` を読み込むごとに生成されます。
 通常、ユーザがエンターまたはリターンを打つごとに受信します。
 これはユーザ入浴のよいフックとなります。
@@ -153,6 +175,7 @@ user hits enter, or return. This is a good hook to listen for user input.
 <!--
 Example of listening for `line`:
 -->
+
 `line` を監視する例:
 
     rl.on('line', function (cmd) {
@@ -173,6 +196,7 @@ event. (See events `SIGTSTP` and `SIGCONT`)
 
 Example of listening for `pause`:
 -->
+
 `in` ストリームが中断された時、または `EOT` として知られる `^D` 
 を受信すると生成されます。
 このイベントは、`in` ストリームが `SIGINT` として知られる `^C` を受信した際に、
@@ -196,6 +220,7 @@ Emitted whenever the `in` stream is resumed.
 
 Example of listening for `resume`:
 -->
+
 `in` ストリームが再開された時に生成されます。
 
 `'resume'` を監視する例:
@@ -215,6 +240,7 @@ receives a `SIGINT`, `pause` will be triggered.
 
 Example of listening for `SIGINT`:
 -->
+
 `in` ストリームが `SIGINT` として知られる `^C` を受信した場合に生成されます。
 もし `in` ストリームが `SIGINT` を受信した時に `'SIGINT'` イベントの
 リスナが存在しなければ、`'pause'` イベントがトリガされます。
@@ -246,6 +272,7 @@ before the program was sent to the background.
 
 Example of listening for `SIGTSTP`:
 -->
+
 **これは Windows では動作しません。**
 
 `in` ストリームが `SIGTSTP` として知られる `^Z` を受信した場合に生成されます。
@@ -280,6 +307,7 @@ background.
 
 Example of listening for `SIGCONT`:
 -->
+
 **これは Windows では動作しません。**
 
 `in` ストリームが `SIGTSTP` として知られる `^Z` によってバックグラウンドに
@@ -297,6 +325,7 @@ Example of listening for `SIGCONT`:
 Here's an example of how to use all these together to craft a tiny command
 line interface:
 -->
+
 全てを一緒に使う、小さなコマンドラインインタフェースの例:
 
     var readline = require('readline'),

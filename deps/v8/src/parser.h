@@ -464,7 +464,8 @@ class Parser {
   };
 
   enum VariableDeclarationContext {
-    kSourceElement,
+    kModuleElement,
+    kBlockElement,
     kStatement,
     kForStatement
   };
@@ -556,6 +557,7 @@ class Parser {
   void ReportUnexpectedToken(Token::Value token);
   void ReportInvalidPreparseData(Handle<String> name, bool* ok);
   void ReportMessage(const char* message, Vector<const char*> args);
+  void ReportMessage(const char* message, Vector<Handle<String> > args);
 
   bool inside_with() const { return top_scope_->inside_with(); }
   Scanner& scanner()  { return scanner_; }
@@ -564,6 +566,10 @@ class Parser {
   bool is_extended_mode() {
     ASSERT(top_scope_ != NULL);
     return top_scope_->is_extended_mode();
+  }
+  Scope* DeclarationScope(VariableMode mode) {
+    return (mode == LET || mode == CONST_HARMONY)
+        ? top_scope_ : top_scope_->DeclarationScope();
   }
 
   // Check if the given string is 'eval' or 'arguments'.
@@ -575,15 +581,27 @@ class Parser {
   // for failure at the call sites.
   void* ParseSourceElements(ZoneList<Statement*>* processor,
                             int end_token, bool* ok);
-  Statement* ParseSourceElement(ZoneStringList* labels, bool* ok);
+  Statement* ParseModuleElement(ZoneStringList* labels, bool* ok);
+  Block* ParseModuleDeclaration(ZoneStringList* names, bool* ok);
+  Module* ParseModule(bool* ok);
+  Module* ParseModuleLiteral(bool* ok);
+  Module* ParseModulePath(bool* ok);
+  Module* ParseModuleVariable(bool* ok);
+  Module* ParseModuleUrl(bool* ok);
+  Module* ParseModuleSpecifier(bool* ok);
+  Block* ParseImportDeclaration(bool* ok);
+  Statement* ParseExportDeclaration(bool* ok);
+  Statement* ParseBlockElement(ZoneStringList* labels, bool* ok);
   Statement* ParseStatement(ZoneStringList* labels, bool* ok);
-  Statement* ParseFunctionDeclaration(bool* ok);
+  Statement* ParseFunctionDeclaration(ZoneStringList* names, bool* ok);
   Statement* ParseNativeDeclaration(bool* ok);
   Block* ParseBlock(ZoneStringList* labels, bool* ok);
   Block* ParseVariableStatement(VariableDeclarationContext var_context,
+                                ZoneStringList* names,
                                 bool* ok);
   Block* ParseVariableDeclarations(VariableDeclarationContext var_context,
                                    VariableDeclarationProperties* decl_props,
+                                   ZoneStringList* names,
                                    Handle<String>* out,
                                    bool* ok);
   Statement* ParseExpressionOrLabelledStatement(ZoneStringList* labels,
@@ -686,6 +704,7 @@ class Parser {
   void Expect(Token::Value token, bool* ok);
   bool Check(Token::Value token);
   void ExpectSemicolon(bool* ok);
+  void ExpectContextualKeyword(const char* keyword, bool* ok);
 
   Handle<String> LiteralString(PretenureFlag tenured) {
     if (scanner().is_literal_ascii()) {
@@ -746,10 +765,10 @@ class Parser {
   void CheckConflictingVarDeclarations(Scope* scope, bool* ok);
 
   // Parser support
-  VariableProxy* Declare(Handle<String> name, VariableMode mode,
-                         FunctionLiteral* fun,
-                         bool resolve,
-                         bool* ok);
+  VariableProxy* NewUnresolved(Handle<String> name,
+                               VariableMode mode,
+                               Interface* interface = Interface::NewValue());
+  void Declare(Declaration* declaration, bool resolve, bool* ok);
 
   bool TargetStackContainsLabel(Handle<String> label);
   BreakableStatement* LookupBreakTarget(Handle<String> label, bool* ok);

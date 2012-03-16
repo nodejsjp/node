@@ -438,14 +438,14 @@ class LPointerMap: public ZoneObject {
 class LEnvironment: public ZoneObject {
  public:
   LEnvironment(Handle<JSFunction> closure,
-               bool is_arguments_adaptor,
+               FrameType frame_type,
                int ast_id,
                int parameter_count,
                int argument_count,
                int value_count,
                LEnvironment* outer)
       : closure_(closure),
-        is_arguments_adaptor_(is_arguments_adaptor),
+        frame_type_(frame_type),
         arguments_stack_height_(argument_count),
         deoptimization_index_(Safepoint::kNoDeoptimizationIndex),
         translation_index_(-1),
@@ -453,13 +453,13 @@ class LEnvironment: public ZoneObject {
         parameter_count_(parameter_count),
         pc_offset_(-1),
         values_(value_count),
-        is_tagged_(value_count),
+        is_tagged_(value_count, closure->GetHeap()->isolate()->zone()),
         spilled_registers_(NULL),
         spilled_double_registers_(NULL),
-        outer_(outer) {
-  }
+        outer_(outer) { }
 
   Handle<JSFunction> closure() const { return closure_; }
+  FrameType frame_type() const { return frame_type_; }
   int arguments_stack_height() const { return arguments_stack_height_; }
   int deoptimization_index() const { return deoptimization_index_; }
   int translation_index() const { return translation_index_; }
@@ -504,11 +504,9 @@ class LEnvironment: public ZoneObject {
 
   void PrintTo(StringStream* stream);
 
-  bool is_arguments_adaptor() const { return is_arguments_adaptor_; }
-
  private:
   Handle<JSFunction> closure_;
-  bool is_arguments_adaptor_;
+  FrameType frame_type_;
   int arguments_stack_height_;
   int deoptimization_index_;
   int translation_index_;

@@ -1,43 +1,41 @@
-## HTTPS
+# HTTPS
+
+    Stability: 3 - Stable
 
 <!--
-
 HTTPS is the HTTP protocol over TLS/SSL. In Node this is implemented as a
 separate module.
-
 -->
+
 HTTPS は TLS/SSL 上の HTTP プロトコルです。
 Node ではこれらは別のモジュールとして実装されています。
 
-## https.Server
+## Class: https.Server
 
 <!--
-
 This class is a subclass of `tls.Server` and emits events same as
 `http.Server`. See `http.Server` for more information.
-
 -->
+
 このクラスは `tls.Server` のサブクラスで、`http.Server` と同様のイベントを生成します。
 より詳しくは `http.Server` を参照してください。
 
 ## https.createServer(options, [requestListener])
 
 <!--
-
 Returns a new HTTPS web server object. The `options` is similar to
 [tls.createServer()](tls.html#tls.createServer).  The `requestListener` is
 a function which is automatically added to the `'request'` event.
-
 -->
+
 新しい HTTPS Web サーバオブジェクトを返します。
 `option` は `tls.createServer()` と同じです。
 `requestListener` は関数で、 `'request'` イベントに自動的に追加されます。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     // curl -k https://localhost:8000/
@@ -58,19 +56,17 @@ Example:
 ## https.request(options, callback)
 
 <!--
-
 Makes a request to a secure web server.
 All options from [http.request()](http.html#http.request) are valid.
-
 -->
+
 セキュアな Web サーバへのリクエストを作成します。
 [http.request()](http.html#http.request) の全てと同様のオプションが指定できます。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     var https = require('https');
@@ -97,14 +93,12 @@ Example:
     });
 
 <!--
-
 The options argument has the following options
-
 -->
+
 `options` 引数は以下のオプションを持ちます。
 
 <!--
-
 - host: IP or domain of host to make request to. Defaults to `'localhost'`.
 - port: port of host to request to. Defaults to 443.
 - path: Path to request. Default `'/'`.
@@ -136,6 +130,9 @@ specified. However, a [globalAgent](#https.globalAgent) silently ignores these.
 - `cert`: Public x509 certificate to use. Default `null`.
 - `ca`: An authority certificate or array of authority certificates to check
   the remote host against.
+- `ciphers`: A string describing the ciphers to use or exclude. Consult
+  <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for
+  details on the format.
 - `rejectUnauthorized`: If `true`, the server certificate is verified against
   the list of supplied CAs. An `'error'` event is emitted if verification
   fails. Verification happens at the connection level, *before* the HTTP
@@ -144,8 +141,8 @@ specified. However, a [globalAgent](#https.globalAgent) silently ignores these.
 In order to specify these options, use a custom `Agent`.
 
 Example:
-
 -->
+
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
    デフォルトは `'localhost'` です。
 - `hostname`: `url.parse()` サポート。`hostname` は `host` を上書きします。
@@ -173,6 +170,9 @@ Example:
 - `passphrase`: 秘密鍵のパスフレーズを表す文字列。デフォルトは `null` です。
 - `cert`: x509公開証明書。デフォルトは `null` です。
 - `ca`: リモートホストをチェックする信頼できる認証局または認証局の配列。
+- `ciphers`: 使用または除外する暗号を記述した文字列。
+  詳細は <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT>
+  を参照してください。
 - `rejectUnauthorized`: `true` の場合、サーバ証明書は提供された認証局の
   リストによって検証されます。
   認証されなかった場合は `'error'` イベントが生成されます。
@@ -198,13 +198,14 @@ Example:
     }
 
 <!--
-
 Or does not use an `Agent`.
 
 Example:
-
 -->
+
 あるいは、エージェントを使用しません。
+
+例:
 
     var options = {
       host: 'encrypted.google.com',
@@ -224,17 +225,15 @@ Example:
 ## https.get(options, callback)
 
 <!--
-
 Like `http.get()` but for HTTPS.
-
 -->
+
 `http.get()` と同様ですが HTTPS です。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     var https = require('https');
@@ -252,25 +251,23 @@ Example:
     });
 
 
-## https.Agent
+## Class: https.Agent
 
 <!--
-
 An Agent object for HTTPS similar to [http.Agent](http.html#http.Agent).
 See [https.request()](#https.request) for more information.
-
 -->
 
 HTTPS 用の Agent オブジェクトで，
 [http.Agent](http.html#http.Agent) と同様です。
+詳細は [https.request()](#https.request) を参照してください。
 
 ## https.globalAgent
 
 <!--
-
 Global instance of [https.Agent](#https.Agent) which is used as the default
 for all HTTPS client requests.
-
 -->
+
 全ての HTTPS クライアントリクエストで使用される、デフォルトの
 [https.Agent](#https.Agent) のインスタンスです。

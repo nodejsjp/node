@@ -19,12 +19,12 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#include <node.h>
-#include <node_buffer.h>
-#include <req_wrap.h>
-#include <handle_wrap.h>
-#include <stream_wrap.h>
-#include <pipe_wrap.h>
+#include "node.h"
+#include "node_buffer.h"
+#include "req_wrap.h"
+#include "handle_wrap.h"
+#include "stream_wrap.h"
+#include "pipe_wrap.h"
 
 #define UNWRAP \
   assert(!args.Holder().IsEmpty()); \
@@ -64,6 +64,13 @@ typedef class ReqWrap<uv_connect_t> ConnectWrap;
 
 uv_pipe_t* PipeWrap::UVHandle() {
   return &handle_;
+}
+
+
+Local<Object> PipeWrap::Instantiate() {
+  HandleScope scope;
+  assert(!pipeConstructor.IsEmpty());
+  return scope.Close(pipeConstructor->NewInstance());
 }
 
 

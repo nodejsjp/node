@@ -106,10 +106,13 @@ private:
 //
 #define FLAG FLAG_FULL
 
-// Flags for experimental language features.
+// Flags for language modes and experimental language features.
+DEFINE_bool(use_strict, false, "enforce strict mode")
+
 DEFINE_bool(harmony_typeof, false, "enable harmony semantics for typeof")
 DEFINE_bool(harmony_scoping, false, "enable harmony block scoping")
-DEFINE_bool(harmony_modules, false, "enable harmony modules")
+DEFINE_bool(harmony_modules, false,
+            "enable harmony modules (implies block scoping)")
 DEFINE_bool(harmony_proxies, false, "enable harmony proxies")
 DEFINE_bool(harmony_collections, false,
             "enable harmony collections (sets, maps, and weak maps)")
@@ -118,9 +121,10 @@ DEFINE_implication(harmony, harmony_scoping)
 DEFINE_implication(harmony, harmony_modules)
 DEFINE_implication(harmony, harmony_proxies)
 DEFINE_implication(harmony, harmony_collections)
+DEFINE_implication(harmony_modules, harmony_scoping)
 
 // Flags for experimental implementation features.
-DEFINE_bool(smi_only_arrays, false, "tracks arrays with only smi values")
+DEFINE_bool(smi_only_arrays, true, "tracks arrays with only smi values")
 DEFINE_bool(clever_optimizations,
             true,
             "Optimize object size, Array shift, DOM strings and string +")
@@ -144,6 +148,7 @@ DEFINE_bool(collect_megamorphic_maps_from_stub_cache,
             "crankshaft harvests type feedback from stub cache")
 DEFINE_bool(hydrogen_stats, false, "print statistics for hydrogen")
 DEFINE_bool(trace_hydrogen, false, "trace generated hydrogen to file")
+DEFINE_string(trace_phase, "Z", "trace generated IR for specified phases")
 DEFINE_bool(trace_inlining, false, "trace inlining decisions")
 DEFINE_bool(trace_alloc, false, "trace register allocator")
 DEFINE_bool(trace_all_uses, false, "trace all use positions")
@@ -163,16 +168,43 @@ DEFINE_bool(use_osr, true, "use on-stack replacement")
 DEFINE_bool(trace_osr, false, "trace on-stack replacement")
 DEFINE_int(stress_runs, 0, "number of stress runs")
 DEFINE_bool(optimize_closures, true, "optimize closures")
+DEFINE_bool(inline_construct, false, "inline constructor calls")
 DEFINE_int(loop_weight, 1, "loop weight for representation inference")
+
+DEFINE_bool(optimize_for_in, true,
+            "optimize functions containing for-in loops")
 
 // Experimental profiler changes.
 DEFINE_bool(experimental_profiler, false, "enable all profiler experiments")
 DEFINE_bool(watch_ic_patching, false, "profiler considers IC stability")
+DEFINE_int(frame_count, 1, "number of stack frames inspected by the profiler")
 DEFINE_bool(self_optimization, false,
             "primitive functions trigger their own optimization")
+DEFINE_bool(direct_self_opt, false,
+            "call recompile stub directly when self-optimizing")
+DEFINE_bool(retry_self_opt, false, "re-try self-optimization if it failed")
+DEFINE_bool(count_based_interrupts, false,
+            "trigger profiler ticks based on counting instead of timing")
+DEFINE_bool(interrupt_at_exit, false,
+            "insert an interrupt check at function exit")
+DEFINE_bool(weighted_back_edges, false,
+            "weight back edges by jump distance for interrupt triggering")
+DEFINE_int(interrupt_budget, 5900,
+           "execution budget before interrupt is triggered")
+DEFINE_int(type_info_threshold, 40,
+           "percentage of ICs that must have type info to allow optimization")
+DEFINE_int(self_opt_count, 130, "call count before self-optimization")
 
 DEFINE_implication(experimental_profiler, watch_ic_patching)
 DEFINE_implication(experimental_profiler, self_optimization)
+// Not implying direct_self_opt here because it seems to be a bad idea.
+DEFINE_implication(experimental_profiler, retry_self_opt)
+DEFINE_implication(experimental_profiler, count_based_interrupts)
+DEFINE_implication(experimental_profiler, interrupt_at_exit)
+DEFINE_implication(experimental_profiler, weighted_back_edges)
+
+DEFINE_bool(trace_opt_verbose, false, "extra verbose compilation tracing")
+DEFINE_implication(trace_opt_verbose, trace_opt)
 
 // assembler-ia32.cc / assembler-arm.cc / assembler-x64.cc
 DEFINE_bool(debug_code, false,
@@ -461,6 +493,11 @@ DEFINE_bool(print_global_handles, false, "report global handles after GC")
 // ic.cc
 DEFINE_bool(trace_ic, false, "trace inline cache state transitions")
 
+// interface.cc
+DEFINE_bool(print_interfaces, false, "print interfaces")
+DEFINE_bool(print_interface_details, false, "print interface inference details")
+DEFINE_int(print_interface_depth, 5, "depth for printing interfaces")
+
 // objects.cc
 DEFINE_bool(trace_normalization,
             false,
@@ -538,6 +575,13 @@ DEFINE_bool(trace_elements_transitions, false, "trace elements transitions")
 
 // code-stubs.cc
 DEFINE_bool(print_code_stubs, false, "print code stubs")
+DEFINE_bool(test_secondary_stub_cache,
+            false,
+            "test secondary stub cache by disabling the primary one")
+
+DEFINE_bool(test_primary_stub_cache,
+            false,
+            "test primary stub cache by disabling the secondary one")
 
 // codegen-ia32.cc / codegen-arm.cc
 DEFINE_bool(print_code, false, "print generated code")
