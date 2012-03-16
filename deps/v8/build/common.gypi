@@ -305,8 +305,8 @@
             'cflags': [ '-I/usr/pkg/include' ],
           }],
           ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd"', {
-            'cflags': [ '-Wall', '<(werror)', '-W', '-Wno-unused-parameter',
-                        '-Wnon-virtual-dtor' ],
+            'cflags': [ '-Wno-unused-parameter',
+                        '-Wnon-virtual-dtor', '-Woverloaded-virtual' ],
           }],
         ],
       },  # Debug

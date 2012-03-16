@@ -775,10 +775,12 @@ void Isolate::ReportFailedAccessCheck(JSObject* receiver, v8::AccessType type) {
   HandleScope scope;
   Handle<JSObject> receiver_handle(receiver);
   Handle<Object> data(AccessCheckInfo::cast(data_obj)->data());
-  thread_local_top()->failed_access_check_callback_(
-    v8::Utils::ToLocal(receiver_handle),
-    type,
-    v8::Utils::ToLocal(data));
+  { VMState state(this, EXTERNAL);
+    thread_local_top()->failed_access_check_callback_(
+      v8::Utils::ToLocal(receiver_handle),
+      type,
+      v8::Utils::ToLocal(data));
+  }
 }
 
 
@@ -1484,6 +1486,7 @@ Isolate::Isolate()
       has_installed_extensions_(false),
       string_tracker_(NULL),
       regexp_stack_(NULL),
+      date_cache_(NULL),
       embedder_data_(NULL),
       context_exit_happened_(false) {
   TRACE_ISOLATE(constructor);
@@ -1615,6 +1618,9 @@ Isolate::~Isolate() {
 
   delete unicode_cache_;
   unicode_cache_ = NULL;
+
+  delete date_cache_;
+  date_cache_ = NULL;
 
   delete regexp_stack_;
   regexp_stack_ = NULL;
@@ -1780,6 +1786,7 @@ bool Isolate::Init(Deserializer* des) {
   stub_cache_ = new StubCache(this);
   regexp_stack_ = new RegExpStack();
   regexp_stack_->isolate_ = this;
+  date_cache_ = new DateCache();
 
   // Enable logging before setting up the heap
   logger_->SetUp();
@@ -1834,13 +1841,12 @@ bool Isolate::Init(Deserializer* des) {
 #ifdef ENABLE_DEBUGGER_SUPPORT
   debug_->SetUp(create_heap_objects);
 #endif
-  stub_cache_->Initialize(create_heap_objects);
 
   // If we are deserializing, read the state into the now-empty heap.
   if (des != NULL) {
     des->Deserialize();
-    stub_cache_->Initialize(true);
   }
+  stub_cache_->Initialize();
 
   // Finish initialization of ThreadLocal after deserialization is done.
   clear_pending_exception();

@@ -1,24 +1,22 @@
-## Appendix 1 - Third Party Modules
+# Appendix 1 - Third Party Modules
 
 <!--
-
 There are many third party modules for Node. At the time of writing, August
 2010, the master repository of modules is
 [the wiki page](https://github.com/joyent/node/wiki/modules).
-
 -->
+
 Node 向けにサードパーティ製のモジュールが数多くあります。
 執筆時点 (2010 年 8 月) では、モジュールのマスタリポジトリは
 [wiki ページ](http://github.com/ry/node/wiki/modules) です。
 
 <!--
-
 This appendix is intended as a SMALL guide to new-comers to help them
 quickly find what are considered to be quality modules. It is not intended
 to be a complete list.  There may be better more complete modules found
 elsewhere.
-
 -->
+
 この付録は、良質だと考えられているモジュールを初心者が素早く見つけることを手助けする「小さな」ガイドを意図しています。
 これは完全なリストは意図していません。
 どこかでより完全なモジュールが見つかるかもしれません。
@@ -56,8 +54,7 @@ elsewhere.
   [mjsunit.runner](https://github.com/tmpvar/mjsunit.runner)
 
 <!--
-
 Patches to this list are welcome.
-
 -->
+
 このリストへのパッチを歓迎します。

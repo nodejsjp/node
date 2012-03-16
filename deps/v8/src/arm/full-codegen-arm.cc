@@ -109,6 +109,11 @@ class JumpPatchSite BASE_EMBEDDED {
 };
 
 
+int FullCodeGenerator::self_optimization_header_size() {
+  return 24;
+}
+
+
 // Generate code for a JS function.  On entry to the function the receiver
 // and arguments have been pushed on the stack left to right.  The actual
 // argument count matches the formal parameter count expected by the
@@ -123,29 +128,21 @@ class JumpPatchSite BASE_EMBEDDED {
 //
 // The function builds a JS frame.  Please see JavaScriptFrameConstants in
 // frames-arm.h for its layout.
-void FullCodeGenerator::Generate(CompilationInfo* info) {
-  ASSERT(info_ == NULL);
-  info_ = info;
-  scope_ = info->scope();
+void FullCodeGenerator::Generate() {
+  CompilationInfo* info = info_;
   handler_table_ =
       isolate()->factory()->NewFixedArray(function()->handler_count(), TENURED);
   SetFunctionPosition(function());
   Comment cmnt(masm_, "[ function compiled by full code generator");
 
-#ifdef DEBUG
-  if (strlen(FLAG_stop_at) > 0 &&
-      info->function()->name()->IsEqualTo(CStrVector(FLAG_stop_at))) {
-    __ stop("stop-at");
-  }
-#endif
-
   // We can optionally optimize based on counters rather than statistical
   // sampling.
   if (info->ShouldSelfOptimize()) {
-    if (FLAG_trace_opt) {
+    if (FLAG_trace_opt_verbose) {
       PrintF("[adding self-optimization header to %s]\n",
              *info->function()->debug_name()->ToCString());
     }
+    has_self_optimization_header_ = true;
     MaybeObject* maybe_cell = isolate()->heap()->AllocateJSGlobalPropertyCell(
         Smi::FromInt(Compiler::kCallsUntilPrimitiveOpt));
     JSGlobalPropertyCell* cell;
@@ -157,8 +154,16 @@ void FullCodeGenerator::Generate(CompilationInfo* info) {
       Handle<Code> compile_stub(
           isolate()->builtins()->builtin(Builtins::kLazyRecompile));
       __ Jump(compile_stub, RelocInfo::CODE_TARGET, eq);
+      ASSERT(masm_->pc_offset() == self_optimization_header_size());
     }
   }
+
+#ifdef DEBUG
+  if (strlen(FLAG_stop_at) > 0 &&
+      info->function()->name()->IsEqualTo(CStrVector(FLAG_stop_at))) {
+    __ stop("stop-at");
+  }
+#endif
 
   // Strict mode functions and builtins need to replace the receiver
   // with undefined when called as functions (without an explicit
@@ -331,7 +336,8 @@ void FullCodeGenerator::ClearAccumulator() {
 }
 
 
-void FullCodeGenerator::EmitStackCheck(IterationStatement* stmt) {
+void FullCodeGenerator::EmitStackCheck(IterationStatement* stmt,
+                                       Label* back_edge_target) {
   Comment cmnt(masm_, "[ Stack check");
   Label ok;
   __ LoadRoot(ip, Heap::kStackLimitRootIndex);
@@ -935,6 +941,8 @@ void FullCodeGenerator::VisitForInStatement(ForInStatement* stmt) {
   __ cmp(r0, null_value);
   __ b(eq, &exit);
 
+  PrepareForBailoutForId(stmt->PrepareId(), TOS_REG);
+
   // Convert the object to a JS object.
   Label convert, done_convert;
   __ JumpIfSmi(r0, &convert);
@@ -956,48 +964,7 @@ void FullCodeGenerator::VisitForInStatement(ForInStatement* stmt) {
   // the JSObject::IsSimpleEnum cache validity checks. If we cannot
   // guarantee cache validity, call the runtime system to check cache
   // validity or get the property names in a fixed array.
-  Label next;
-  // Preload a couple of values used in the loop.
-  Register  empty_fixed_array_value = r6;
-  __ LoadRoot(empty_fixed_array_value, Heap::kEmptyFixedArrayRootIndex);
-  Register empty_descriptor_array_value = r7;
-  __ LoadRoot(empty_descriptor_array_value,
-              Heap::kEmptyDescriptorArrayRootIndex);
-  __ mov(r1, r0);
-  __ bind(&next);
-
-  // Check that there are no elements.  Register r1 contains the
-  // current JS object we've reached through the prototype chain.
-  __ ldr(r2, FieldMemOperand(r1, JSObject::kElementsOffset));
-  __ cmp(r2, empty_fixed_array_value);
-  __ b(ne, &call_runtime);
-
-  // Check that instance descriptors are not empty so that we can
-  // check for an enum cache.  Leave the map in r2 for the subsequent
-  // prototype load.
-  __ ldr(r2, FieldMemOperand(r1, HeapObject::kMapOffset));
-  __ ldr(r3, FieldMemOperand(r2, Map::kInstanceDescriptorsOrBitField3Offset));
-  __ JumpIfSmi(r3, &call_runtime);
-
-  // Check that there is an enum cache in the non-empty instance
-  // descriptors (r3).  This is the case if the next enumeration
-  // index field does not contain a smi.
-  __ ldr(r3, FieldMemOperand(r3, DescriptorArray::kEnumerationIndexOffset));
-  __ JumpIfSmi(r3, &call_runtime);
-
-  // For all objects but the receiver, check that the cache is empty.
-  Label check_prototype;
-  __ cmp(r1, r0);
-  __ b(eq, &check_prototype);
-  __ ldr(r3, FieldMemOperand(r3, DescriptorArray::kEnumCacheBridgeCacheOffset));
-  __ cmp(r3, empty_fixed_array_value);
-  __ b(ne, &call_runtime);
-
-  // Load the prototype from the map and loop if non-null.
-  __ bind(&check_prototype);
-  __ ldr(r1, FieldMemOperand(r2, Map::kPrototypeOffset));
-  __ cmp(r1, null_value);
-  __ b(ne, &next);
+  __ CheckEnumCache(null_value, &call_runtime);
 
   // The enum cache is valid.  Load the map of the object being
   // iterated over and use the cache for the iteration.
@@ -1037,6 +1004,16 @@ void FullCodeGenerator::VisitForInStatement(ForInStatement* stmt) {
   // We got a fixed array in register r0. Iterate through that.
   Label non_proxy;
   __ bind(&fixed_array);
+
+  Handle<JSGlobalPropertyCell> cell =
+      isolate()->factory()->NewJSGlobalPropertyCell(
+          Handle<Object>(
+              Smi::FromInt(TypeFeedbackCells::kForInFastCaseMarker)));
+  RecordTypeFeedbackCell(stmt->PrepareId(), cell);
+  __ LoadHeapObject(r1, cell);
+  __ mov(r2, Operand(Smi::FromInt(TypeFeedbackCells::kForInSlowCaseMarker)));
+  __ str(r2, FieldMemOperand(r1, JSGlobalPropertyCell::kValueOffset));
+
   __ mov(r1, Operand(Smi::FromInt(1)));  // Smi indicates slow check
   __ ldr(r2, MemOperand(sp, 0 * kPointerSize));  // Get enumerated object
   STATIC_ASSERT(FIRST_JS_PROXY_TYPE == FIRST_SPEC_OBJECT_TYPE);
@@ -1050,6 +1027,7 @@ void FullCodeGenerator::VisitForInStatement(ForInStatement* stmt) {
   __ Push(r1, r0);  // Fixed array length (as smi) and initial index.
 
   // Generate code for doing the condition check.
+  PrepareForBailoutForId(stmt->BodyId(), NO_REGISTERS);
   __ bind(&loop);
   // Load the current count to r0, load the length to r1.
   __ Ldrd(r0, r1, MemOperand(sp, 0 * kPointerSize));
@@ -1093,7 +1071,7 @@ void FullCodeGenerator::VisitForInStatement(ForInStatement* stmt) {
   __ mov(result_register(), r3);
   // Perform the assignment as if via '='.
   { EffectContext context(this);
-    EmitAssignment(stmt->each(), stmt->AssignmentId());
+    EmitAssignment(stmt->each());
   }
 
   // Generate code for the body of the loop.
@@ -1106,7 +1084,7 @@ void FullCodeGenerator::VisitForInStatement(ForInStatement* stmt) {
   __ add(r0, r0, Operand(Smi::FromInt(1)));
   __ push(r0);
 
-  EmitStackCheck(stmt);
+  EmitStackCheck(stmt, &loop);
   __ b(&loop);
 
   // Remove the pointers stored on the stack.
@@ -1114,6 +1092,7 @@ void FullCodeGenerator::VisitForInStatement(ForInStatement* stmt) {
   __ Drop(5);
 
   // Exit and decrement the loop depth.
+  PrepareForBailoutForId(stmt->ExitId(), NO_REGISTERS);
   __ bind(&exit);
   decrement_loop_depth();
 }
@@ -1519,12 +1498,18 @@ void FullCodeGenerator::VisitObjectLiteral(ObjectLiteral* expr) {
         __ ldr(r0, MemOperand(sp));
         __ push(r0);
         VisitForStackValue(key);
-        __ mov(r1, Operand(property->kind() == ObjectLiteral::Property::SETTER ?
-                           Smi::FromInt(1) :
-                           Smi::FromInt(0)));
-        __ push(r1);
-        VisitForStackValue(value);
-        __ CallRuntime(Runtime::kDefineAccessor, 4);
+        if (property->kind() == ObjectLiteral::Property::GETTER) {
+          VisitForStackValue(value);
+          __ LoadRoot(r1, Heap::kNullValueRootIndex);
+          __ push(r1);
+        } else {
+          __ LoadRoot(r1, Heap::kNullValueRootIndex);
+          __ push(r1);
+          VisitForStackValue(value);
+        }
+        __ mov(r0, Operand(Smi::FromInt(NONE)));
+        __ push(r0);
+        __ CallRuntime(Runtime::kDefineOrRedefineAccessorProperty, 5);
         break;
     }
   }
@@ -1875,7 +1860,7 @@ void FullCodeGenerator::EmitBinaryOp(BinaryOperation* expr,
 }
 
 
-void FullCodeGenerator::EmitAssignment(Expression* expr, int bailout_ast_id) {
+void FullCodeGenerator::EmitAssignment(Expression* expr) {
   // Invalid left-hand sides are rewritten to have a 'throw
   // ReferenceError' on the left-hand side.
   if (!expr->IsValidLeftHandSide()) {
@@ -1927,7 +1912,6 @@ void FullCodeGenerator::EmitAssignment(Expression* expr, int bailout_ast_id) {
       break;
     }
   }
-  PrepareForBailoutForId(bailout_ast_id, TOS_REG);
   context()->Plug(r0);
 }
 
@@ -2412,6 +2396,7 @@ void FullCodeGenerator::VisitCallNew(CallNew* expr) {
 
   CallConstructStub stub(flags);
   __ Call(stub.GetCode(), RelocInfo::CONSTRUCT_CALL);
+  PrepareForBailoutForId(expr->ReturnId(), TOS_REG);
   context()->Plug(r0);
 }
 
@@ -2958,6 +2943,50 @@ void FullCodeGenerator::EmitValueOf(CallRuntime* expr) {
   __ ldr(r0, FieldMemOperand(r0, JSValue::kValueOffset));
 
   __ bind(&done);
+  context()->Plug(r0);
+}
+
+
+void FullCodeGenerator::EmitDateField(CallRuntime* expr) {
+  ZoneList<Expression*>* args = expr->arguments();
+  ASSERT(args->length() == 2);
+  ASSERT_NE(NULL, args->at(1)->AsLiteral());
+  Smi* index = Smi::cast(*(args->at(1)->AsLiteral()->handle()));
+
+  VisitForAccumulatorValue(args->at(0));  // Load the object.
+
+  Label runtime, done;
+  Register object = r0;
+  Register result = r0;
+  Register scratch0 = r9;
+  Register scratch1 = r1;
+
+#ifdef DEBUG
+  __ AbortIfSmi(object);
+  __ CompareObjectType(object, scratch1, scratch1, JS_DATE_TYPE);
+  __ Assert(eq, "Trying to get date field from non-date.");
+#endif
+
+  if (index->value() == 0) {
+    __ ldr(result, FieldMemOperand(object, JSDate::kValueOffset));
+  } else {
+    if (index->value() < JSDate::kFirstUncachedField) {
+      ExternalReference stamp = ExternalReference::date_cache_stamp(isolate());
+      __ mov(scratch1, Operand(stamp));
+      __ ldr(scratch1, MemOperand(scratch1));
+      __ ldr(scratch0, FieldMemOperand(object, JSDate::kCacheStampOffset));
+      __ cmp(scratch1, scratch0);
+      __ b(ne, &runtime);
+      __ ldr(result, FieldMemOperand(object, JSDate::kValueOffset +
+                                             kPointerSize * index->value()));
+      __ jmp(&done);
+    }
+    __ bind(&runtime);
+    __ PrepareCallCFunction(2, scratch1);
+    __ mov(r1, Operand(index));
+    __ CallCFunction(ExternalReference::get_date_field_function(isolate()), 2);
+    __ bind(&done);
+  }
   context()->Plug(r0);
 }
 

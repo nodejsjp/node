@@ -175,7 +175,8 @@ Handle<Object> RegExpImpl::Exec(Handle<JSRegExp> regexp,
     case JSRegExp::IRREGEXP: {
       Handle<Object> result =
           IrregexpExec(regexp, subject, index, last_match_info);
-      ASSERT(!result.is_null() || Isolate::Current()->has_pending_exception());
+      ASSERT(!result.is_null() ||
+             regexp->GetIsolate()->has_pending_exception());
       return result;
     }
     default:
@@ -527,6 +528,7 @@ Handle<Object> RegExpImpl::IrregexpExec(Handle<JSRegExp> jsregexp,
                                         Handle<String> subject,
                                         int previous_index,
                                         Handle<JSArray> last_match_info) {
+  Isolate* isolate = jsregexp->GetIsolate();
   ASSERT_EQ(jsregexp->TypeTag(), JSRegExp::IRREGEXP);
 
   // Prepare space for the return values.
@@ -542,11 +544,11 @@ Handle<Object> RegExpImpl::IrregexpExec(Handle<JSRegExp> jsregexp,
   int required_registers = RegExpImpl::IrregexpPrepare(jsregexp, subject);
   if (required_registers < 0) {
     // Compiling failed with an exception.
-    ASSERT(Isolate::Current()->has_pending_exception());
+    ASSERT(isolate->has_pending_exception());
     return Handle<Object>::null();
   }
 
-  OffsetsVector registers(required_registers);
+  OffsetsVector registers(required_registers, isolate);
 
   IrregexpResult res = RegExpImpl::IrregexpExecOnce(
       jsregexp, subject, previous_index, Vector<int>(registers.vector(),
@@ -568,11 +570,11 @@ Handle<Object> RegExpImpl::IrregexpExec(Handle<JSRegExp> jsregexp,
     return last_match_info;
   }
   if (res == RE_EXCEPTION) {
-    ASSERT(Isolate::Current()->has_pending_exception());
+    ASSERT(isolate->has_pending_exception());
     return Handle<Object>::null();
   }
   ASSERT(res == RE_FAILURE);
-  return Isolate::Current()->factory()->null_value();
+  return isolate->factory()->null_value();
 }
 
 
@@ -3597,22 +3599,20 @@ void RegExpEngine::DotPrint(const char* label,
 // -------------------------------------------------------------------
 // Tree to graph conversion
 
-static const int kSpaceRangeCount = 20;
-static const int kSpaceRangeAsciiCount = 4;
-static const uc16 kSpaceRanges[kSpaceRangeCount] = { 0x0009, 0x000D, 0x0020,
-    0x0020, 0x00A0, 0x00A0, 0x1680, 0x1680, 0x180E, 0x180E, 0x2000, 0x200A,
-    0x2028, 0x2029, 0x202F, 0x202F, 0x205F, 0x205F, 0x3000, 0x3000 };
+static const uc16 kSpaceRanges[] = { 0x0009, 0x000D, 0x0020, 0x0020, 0x00A0,
+    0x00A0, 0x1680, 0x1680, 0x180E, 0x180E, 0x2000, 0x200A, 0x2028, 0x2029,
+    0x202F, 0x202F, 0x205F, 0x205F, 0x3000, 0x3000, 0xFEFF, 0xFEFF };
+static const int kSpaceRangeCount = ARRAY_SIZE(kSpaceRanges);
 
-static const int kWordRangeCount = 8;
-static const uc16 kWordRanges[kWordRangeCount] = { '0', '9', 'A', 'Z', '_',
-    '_', 'a', 'z' };
+static const uc16 kWordRanges[] = { '0', '9', 'A', 'Z', '_', '_', 'a', 'z' };
+static const int kWordRangeCount = ARRAY_SIZE(kWordRanges);
 
-static const int kDigitRangeCount = 2;
-static const uc16 kDigitRanges[kDigitRangeCount] = { '0', '9' };
+static const uc16 kDigitRanges[] = { '0', '9' };
+static const int kDigitRangeCount = ARRAY_SIZE(kDigitRanges);
 
-static const int kLineTerminatorRangeCount = 6;
-static const uc16 kLineTerminatorRanges[kLineTerminatorRangeCount] = { 0x000A,
-    0x000A, 0x000D, 0x000D, 0x2028, 0x2029 };
+static const uc16 kLineTerminatorRanges[] = { 0x000A, 0x000A, 0x000D, 0x000D,
+    0x2028, 0x2029 };
+static const int kLineTerminatorRangeCount = ARRAY_SIZE(kLineTerminatorRanges);
 
 RegExpNode* RegExpAtom::ToNode(RegExpCompiler* compiler,
                                RegExpNode* on_success) {

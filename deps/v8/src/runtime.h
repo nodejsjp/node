@@ -1,4 +1,4 @@
-// Copyright 2011 the V8 project authors. All rights reserved.
+// Copyright 2012 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -70,8 +70,6 @@ namespace internal {
   F(GetPrototype, 1, 1) \
   F(IsInPrototypeChain, 2, 1) \
   \
-  F(IsConstructCall, 0, 1) \
-  \
   F(GetOwnProperty, 2, 1) \
   \
   F(IsExtensible, 1, 1) \
@@ -91,7 +89,7 @@ namespace internal {
   F(NotifyOSR, 0, 1) \
   F(DeoptimizeFunction, 1, 1) \
   F(RunningInSimulator, 0, 1) \
-  F(OptimizeFunctionOnNextCall, 1, 1) \
+  F(OptimizeFunctionOnNextCall, -1, 1) \
   F(GetOptimizationStatus, 1, 1) \
   F(GetOptimizationCount, 1, 1) \
   F(CompileForOnStackReplacement, 1, 1) \
@@ -246,10 +244,9 @@ namespace internal {
   F(DateCurrentTime, 0, 1) \
   F(DateParseString, 2, 1) \
   F(DateLocalTimezone, 1, 1) \
-  F(DateLocalTimeOffset, 0, 1) \
-  F(DateDaylightSavingsOffset, 1, 1) \
+  F(DateToUTC, 1, 1) \
   F(DateMakeDay, 2, 1) \
-  F(DateYMDFromTime, 2, 1) \
+  F(DateSetValue, 3, 1) \
   \
   /* Numbers */ \
   \
@@ -274,7 +271,6 @@ namespace internal {
   F(SwapElements, 3, 1) \
   \
   /* Getters and Setters */ \
-  F(DefineAccessor, -1 /* 4 or 5 */, 1) \
   F(LookupAccessor, 3, 1) \
   \
   /* Literals */ \
@@ -319,6 +315,7 @@ namespace internal {
   F(ReThrow, 1, 1) \
   F(ThrowReferenceError, 1, 1) \
   F(StackGuard, 0, 1) \
+  F(Interrupt, 0, 1) \
   F(PromoteScheduledException, 0, 1) \
   \
   /* Contexts */ \
@@ -493,6 +490,7 @@ namespace internal {
   F(Arguments, 1, 1)                                                         \
   F(ValueOf, 1, 1)                                                           \
   F(SetValueOf, 2, 1)                                                        \
+  F(DateField, 2 /* date object, field index */, 1)                \
   F(StringCharFromCode, 1, 1)                                                \
   F(StringCharAt, 2, 1)                                                      \
   F(ObjectEquals, 2, 1)                                                      \

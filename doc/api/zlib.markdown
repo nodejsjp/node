@@ -1,8 +1,11 @@
-## Zlib
+# Zlib
+
+    Stability: 3 - Stable
 
 <!--
 You can access this module with:
 -->
+
 このモジュールは次のようにアクセスできます。
 
     var zlib = require('zlib');
@@ -12,16 +15,18 @@ This provides bindings to Gzip/Gunzip, Deflate/Inflate, and
 DeflateRaw/InflateRaw classes.  Each class takes the same options, and
 is a readable/writable Stream.
 -->
+
 これは Gzip/Gunzip、Deflate/Inflate、そして DeflateRaw/InflateRaw
 へバインディングするクラスを提供します。
 どのクラスも同じオプションを持つ、読み込みと書き込みが可能なストリームです。
 
-### Examples
+## Examples
 
 <!--
 Compressing or decompressing a file can be done by piping an
 fs.ReadStream into a zlib stream, then into an fs.WriteStream.
 -->
+
 ファイルを圧縮および解凍するには、fs.ReadStream から zlib へ、
 そして fs.WriteStream へパイプをつなぐだけです。
 
@@ -36,6 +41,7 @@ fs.ReadStream into a zlib stream, then into an fs.WriteStream.
 Compressing or decompressing data in one step can be done by using
 the convenience methods.
 -->
+
 データの圧縮または解凍は [簡易メソッド](#convenience_Methods)
 を使うことにより、ワンステップで行うことができます。
 
@@ -66,6 +72,7 @@ ought to be cached.  See [Memory Usage Tuning](#memory_Usage_Tuning)
 below for more information on the speed/memory/compression
 tradeoffs involved in zlib usage.
 -->
+
 このモジュールを HTTP クライアントとサーバで使うには、リクエストに
 [accept-encoding](http://www.w3.org/Protocols/rfc2616/rfc2616-sec14.html#sec14.3)
 ヘッダを、レスポンスに
@@ -130,7 +137,9 @@ zlibの使い方に関する速度／メモリ／圧縮率のトレードオフ�
       }
     }).listen(1337);
 
-### Constants
+## Constants
+
+<!--type=misc-->
 
 <!--
 All of the constants defined in zlib.h are also defined on
@@ -138,118 +147,135 @@ All of the constants defined in zlib.h are also defined on
 documentation.  See <http://zlib.net/manual.html#Constants>
 for more details.
 -->
-zlib.ht に定義された定数は `require('zlib')` でも定義されます。
+
+zlib.h に定義された定数は `require('zlib')` でも定義されます。
 それらは zlib のドキュメントでより詳しく説明されます。
 詳細は <http://zlib.net/manual.html#Constants> を参照してください。
 
-### zlib.createGzip([options])
+## zlib.createGzip([options])
 
 <!--
 Returns a new [Gzip](#zlib.Gzip) object with an [options](#options).
 -->
+
 [options](#options) によって作られた新しい [Gzip](#zlib.Gzip)
 オブジェクトを返します。
 
-### zlib.createGunzip([options])
+## zlib.createGunzip([options])
 
 <!--
 Returns a new [Gunzip](#zlib.Gunzip) object with an [options](#options).
 -->
+
 [options](#options) によって作られた新しい [Gunzip](#zlib.Gunzip)
 オブジェクトを返します。
 
-### zlib.createDeflate([options])
+## zlib.createDeflate([options])
 
 <!--
 Returns a new [Deflate](#zlib.Deflate) object with an [options](#options).
 -->
+
 [options](#options) によって作られた新しい [Deflate](#zlib.Deflate)
 オブジェクトを返します。
 
-### zlib.createInflate([options])
+## zlib.createInflate([options])
 
 <!--
 Returns a new [Inflate](#zlib.Inflate) object with an [options](#options).
 -->
+
 [options](#options) によって作られた新しい [Inflate](#zlib.Inflate)
 オブジェクトを返します。
 
-### zlib.createDeflateRaw([options])
+## zlib.createDeflateRaw([options])
 
 <!--
 Returns a new [DeflateRaw](#zlib.DeflateRaw) object with an [options](#options).
 -->
+
 [options](#options) によって作られた新しい [DeflateRaw](#zlib.DeflateRaw)
 オブジェクトを返します。
 
-### zlib.createInflateRaw([options])
+## zlib.createInflateRaw([options])
 
 <!--
 Returns a new [InflateRaw](#zlib.InflateRaw) object with an [options](#options).
 -->
+
 [options](#options) によって作られた新しい [InflateRaw](#zlib.InflateRaw)
 オブジェクトを返します。
 
-### zlib.createUnzip([options])
+## zlib.createUnzip([options])
 
 <!--
 Returns a new [Unzip](#zlib.Unzip) object with an [options](#options).
 -->
+
 [options](#options) によって作られた新しい [Unzip](#zlib.Unzip)
 オブジェクトを返します。
 
 
-### zlib.Gzip
+## Class: zlib.Gzip
 
 <!--
 Compress data using gzip.
 -->
+
 gzip を使ってデータを圧縮します。
 
-### zlib.Gunzip
+## Class: zlib.Gunzip
 
 <!--
 Decompress a gzip stream.
 -->
+
 gzip ストリームを解凍します。
 
-### zlib.Deflate
+## Class: zlib.Deflate
 
 <!--
 Compress data using deflate.
 -->
+
 deflate を使ってデータを圧縮します。
 
-### zlib.Inflate
+## Class: zlib.Inflate
 
 <!--
 Decompress a deflate stream.
 -->
+
 deflate ストリームを解凍します。
 
-### zlib.DeflateRaw
+## Class: zlib.DeflateRaw
 
 <!--
 Compress data using deflate, and do not append a zlib header.
 -->
+
 deflate を使ってデータを圧縮しますが、zlib ヘッダを付加しません。
 
-### zlib.InflateRaw
+## Class: zlib.InflateRaw
 
 <!--
 Decompress a raw deflate stream.
 -->
+
 生の deflate ストリームを解凍します。
 
-### zlib.Unzip
+## Class: zlib.Unzip
 
 <!--
 Decompress either a Gzip- or Deflate-compressed stream by auto-detecting
 the header.
 -->
+
 Gzip または Deflate で圧縮されたストリームをヘッダで自動判別して解凍します。
 
 ## Convenience Methods
+
+<!--type=misc-->
 
 <!--
 All of these take a string or buffer as the first argument, and call the
@@ -258,61 +284,71 @@ compression/decompression engine is created using the default settings
 in all convenience methods.  To supply different options, use the
 zlib classes directly.
 -->
+
 これらは全て第 1 引数として文字列またはバッファを受け取り、
 与えられたコールバック `callback(error, result)` を呼び出します。
 全ての簡易メソッドで、圧縮・解凍エンジンはデフォルトの設定で作成されます。
 異なったオプションを与えるには、zlib のクラスを直接使用してください。
 
-### zlib.deflate(buf, callback)
+## zlib.deflate(buf, callback)
 
 <!--
 Compress a string with Deflate.
 -->
+
 Deflate で文字列を圧縮します。
 
-### zlib.deflateRaw(buf, callback)
+## zlib.deflateRaw(buf, callback)
 
 <!--
 Compress a string with DeflateRaw.
 -->
+
 DeflateRaw で文字列を圧縮します。
 
-### zlib.gzip(buf, callback)
+## zlib.gzip(buf, callback)
 
 <!--
 Compress a string with Gzip.
 -->
+
 Gzip で文字列を圧縮します。
 
-### zlib.gunzip(buf, callback)
+## zlib.gunzip(buf, callback)
 
 <!--
 Decompress a raw Buffer with Gunzip.
 -->
+
 Gunzip で生のバッファを解凍します。
 
-### zlib.inflate(buf, callback)
+## zlib.inflate(buf, callback)
 
 <!--
 Decompress a raw Buffer with Inflate.
 -->
+
 Infrate で生のバッファを解凍します。
 
-### zlib.inflateRaw(buf, callback)
+## zlib.inflateRaw(buf, callback)
 
 <!--
 Decompress a raw Buffer with InflateRaw.
 -->
+
 InflateRaw で生のバッファを解凍します。
 
-### zlib.unzip(buf, callback)
+## zlib.unzip(buf, callback)
 
 <!--
 Decompress a raw Buffer with Unzip.
 -->
+
 Unzip で生のバッファを解凍します。
 
 ## Options
+
+<!--type=misc-->
 
 <!--
 Each class takes an options object.  All options are optional.  (The
@@ -331,6 +367,7 @@ relevant when compressing, and are ignored by the decompression classes.
 See the description of `deflateInit2` and `inflateInit2` at
 <http://zlib.net/manual.html#Advanced> for more information on these.
 -->
+
 どのクラスもオプションオブジェクトを受け取ります。
 全てのオプションは任意です
 (簡易メソッドは全てのオプションでデフォルト値を使用します)。
@@ -348,13 +385,16 @@ See the description of `deflateInit2` and `inflateInit2` at
 これらの詳細は <http://zlib.net/manual.html#Advanced> の
 `deflateInit2` および `inflateInit2` の説明を参照してください。
 
-### Memory Usage Tuning
+## Memory Usage Tuning
+
+<!--type=misc-->
 
 <!--
 From `zlib/zconf.h`, modified to node's usage:
 
 The memory requirements for deflate are (in bytes):
 -->
+
 node は `zlib/zconf.h` を変更して使っています:
 
     (1 << (windowBits+2)) +  (1 << (memLevel+9))
@@ -366,6 +406,7 @@ that is: 128K for windowBits=15  +  128K for memLevel = 8
 For example, if you want to reduce
 the default memory requirements from 256K to 128K, set the options to:
 -->
+
 すなわち: windowBits = 15 の場合 128K + 
 memLevel = 8 の場合 128K (デフォルト値) に加えて数キロバイトが
 小さなオブジェクトのために使われます。
@@ -380,6 +421,7 @@ Of course this will generally degrade compression (there's no free lunch).
 
 The memory requirements for inflate are (in bytes)
 -->
+
 もちろん、これは圧縮率を悪化します (ただ飯ははありません)。
 
 
@@ -402,6 +444,7 @@ fewer calls to zlib, since it'll be able to process more data in a
 single `write` operation.  So, this is another factor that affects the
 speed, at the cost of memory usage.
 -->
+
 この場合、windowBits=15 (デフォルト値) の場合 32K に加えて数キロバイトが
 小さなオブジェクトのために使われます。
 

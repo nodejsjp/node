@@ -605,6 +605,7 @@ TYPE_CHECKER(Oddball, ODDBALL_TYPE)
 TYPE_CHECKER(JSGlobalPropertyCell, JS_GLOBAL_PROPERTY_CELL_TYPE)
 TYPE_CHECKER(SharedFunctionInfo, SHARED_FUNCTION_INFO_TYPE)
 TYPE_CHECKER(JSValue, JS_VALUE_TYPE)
+TYPE_CHECKER(JSDate, JS_DATE_TYPE)
 TYPE_CHECKER(JSMessageObject, JS_MESSAGE_OBJECT_TYPE)
 
 
@@ -797,6 +798,11 @@ double Object::Number() {
   return IsSmi()
     ? static_cast<double>(reinterpret_cast<Smi*>(this)->value())
     : reinterpret_cast<HeapNumber*>(this)->value();
+}
+
+
+bool Object::IsNaN() {
+  return this->IsHeapNumber() && isnan(HeapNumber::cast(this)->value());
 }
 
 
@@ -1339,11 +1345,12 @@ void JSObject::set_map_and_elements(Map* new_map,
     }
   }
   ASSERT((map()->has_fast_elements() ||
-          map()->has_fast_smi_only_elements()) ==
+          map()->has_fast_smi_only_elements() ||
+          (value == GetHeap()->empty_fixed_array())) ==
          (value->map() == GetHeap()->fixed_array_map() ||
           value->map() == GetHeap()->fixed_cow_array_map()));
-  ASSERT(map()->has_fast_double_elements() ==
-         value->IsFixedDoubleArray());
+  ASSERT((value == GetHeap()->empty_fixed_array()) ||
+         (map()->has_fast_double_elements() == value->IsFixedDoubleArray()));
   WRITE_FIELD(this, kElementsOffset, value);
   CONDITIONAL_WRITE_BARRIER(GetHeap(), this, kElementsOffset, value, mode);
 }
@@ -1424,6 +1431,8 @@ int JSObject::GetHeaderSize() {
       return JSFunction::kSize;
     case JS_VALUE_TYPE:
       return JSValue::kSize;
+    case JS_DATE_TYPE:
+      return JSDate::kSize;
     case JS_ARRAY_TYPE:
       return JSArray::kSize;
     case JS_WEAK_MAP_TYPE:
@@ -1987,7 +1996,8 @@ AccessorDescriptor* DescriptorArray::GetCallbacks(int descriptor_number) {
 
 
 bool DescriptorArray::IsProperty(int descriptor_number) {
-  return IsRealProperty(GetType(descriptor_number));
+  Entry entry(this, descriptor_number);
+  return IsPropertyDescriptor(&entry);
 }
 
 
@@ -2049,16 +2059,6 @@ void DescriptorArray::Set(int descriptor_number,
   NoIncrementalWriteBarrierSet(content_array,
                                ToDetailsIndex(descriptor_number),
                                desc->GetDetails().AsSmi());
-}
-
-
-void DescriptorArray::CopyFrom(int index,
-                               DescriptorArray* src,
-                               int src_index,
-                               const WhitenessWitness& witness) {
-  Descriptor desc;
-  src->Get(src_index, &desc);
-  Set(index, &desc, witness);
 }
 
 
@@ -3098,6 +3098,21 @@ void Code::set_compiled_optimizable(bool value) {
 }
 
 
+bool Code::has_self_optimization_header() {
+  ASSERT(kind() == FUNCTION);
+  byte flags = READ_BYTE_FIELD(this, kFullCodeFlags);
+  return FullCodeFlagsHasSelfOptimizationHeader::decode(flags);
+}
+
+
+void Code::set_self_optimization_header(bool value) {
+  ASSERT(kind() == FUNCTION);
+  byte flags = READ_BYTE_FIELD(this, kFullCodeFlags);
+  flags = FullCodeFlagsHasSelfOptimizationHeader::update(flags, value);
+  WRITE_BYTE_FIELD(this, kFullCodeFlags, flags);
+}
+
+
 int Code::allow_osr_at_loop_nesting_level() {
   ASSERT(kind() == FUNCTION);
   return READ_BYTE_FIELD(this, kAllowOSRAtLoopNestingLevelOffset);
@@ -3340,7 +3355,7 @@ void Map::set_prototype(Object* value, WriteBarrierMode mode) {
 DescriptorArray* Map::instance_descriptors() {
   Object* object = READ_FIELD(this, kInstanceDescriptorsOrBitField3Offset);
   if (object->IsSmi()) {
-    return HEAP->empty_descriptor_array();
+    return GetHeap()->empty_descriptor_array();
   } else {
     return DescriptorArray::cast(object);
   }
@@ -3654,7 +3669,7 @@ BOOL_ACCESSORS(SharedFunctionInfo,
 
 
 bool SharedFunctionInfo::IsInobjectSlackTrackingInProgress() {
-  return initial_map() != HEAP->undefined_value();
+  return initial_map() != GetHeap()->undefined_value();
 }
 
 
@@ -3715,8 +3730,9 @@ BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints,
                kNameShouldPrintAsAnonymous)
 BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, bound, kBoundFunction)
 BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, is_anonymous, kIsAnonymous)
-BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, dont_crankshaft,
-               kDontCrankshaft)
+BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, is_function, kIsFunction)
+BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, dont_optimize,
+               kDontOptimize)
 BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, dont_inline, kDontInline)
 
 ACCESSORS(CodeCache, default_cache, FixedArray, kDefaultCacheOffset)
@@ -3946,13 +3962,17 @@ MaybeObject* JSFunction::set_initial_map_and_cache_transitions(
     Map* new_double_map = NULL;
     if (!maybe_map->To<Map>(&new_double_map)) return maybe_map;
     new_double_map->set_elements_kind(FAST_DOUBLE_ELEMENTS);
-    initial_map->AddElementsTransition(FAST_DOUBLE_ELEMENTS, new_double_map);
+    maybe_map = initial_map->AddElementsTransition(FAST_DOUBLE_ELEMENTS,
+                                                   new_double_map);
+    if (maybe_map->IsFailure()) return maybe_map;
 
     maybe_map = new_double_map->CopyDropTransitions();
     Map* new_object_map = NULL;
     if (!maybe_map->To<Map>(&new_object_map)) return maybe_map;
     new_object_map->set_elements_kind(FAST_ELEMENTS);
-    new_double_map->AddElementsTransition(FAST_ELEMENTS, new_object_map);
+    maybe_map = new_double_map->AddElementsTransition(FAST_ELEMENTS,
+                                                      new_object_map);
+    if (maybe_map->IsFailure()) return maybe_map;
 
     global_context->set_smi_js_array_map(initial_map);
     global_context->set_double_js_array_map(new_double_map);
@@ -4107,6 +4127,24 @@ JSValue* JSValue::cast(Object* obj) {
 }
 
 
+ACCESSORS(JSDate, value, Object, kValueOffset)
+ACCESSORS(JSDate, cache_stamp, Object, kCacheStampOffset)
+ACCESSORS(JSDate, year, Object, kYearOffset)
+ACCESSORS(JSDate, month, Object, kMonthOffset)
+ACCESSORS(JSDate, day, Object, kDayOffset)
+ACCESSORS(JSDate, weekday, Object, kWeekdayOffset)
+ACCESSORS(JSDate, hour, Object, kHourOffset)
+ACCESSORS(JSDate, min, Object, kMinOffset)
+ACCESSORS(JSDate, sec, Object, kSecOffset)
+
+
+JSDate* JSDate::cast(Object* obj) {
+  ASSERT(obj->IsJSDate());
+  ASSERT(HeapObject::cast(obj)->Size() == JSDate::kSize);
+  return reinterpret_cast<JSDate*>(obj);
+}
+
+
 ACCESSORS(JSMessageObject, type, String, kTypeOffset)
 ACCESSORS(JSMessageObject, arguments, JSArray, kArgumentsOffset)
 ACCESSORS(JSMessageObject, script, Object, kScriptOffset)
@@ -4127,8 +4165,7 @@ INT_ACCESSORS(Code, instruction_size, kInstructionSizeOffset)
 ACCESSORS(Code, relocation_info, ByteArray, kRelocationInfoOffset)
 ACCESSORS(Code, handler_table, FixedArray, kHandlerTableOffset)
 ACCESSORS(Code, deoptimization_data, FixedArray, kDeoptimizationDataOffset)
-ACCESSORS(Code, type_feedback_cells, TypeFeedbackCells,
-          kTypeFeedbackCellsOffset)
+ACCESSORS(Code, type_feedback_info, Object, kTypeFeedbackInfoOffset)
 ACCESSORS(Code, gc_metadata, Object, kGCMetadataOffset)
 
 
@@ -4802,6 +4839,16 @@ Handle<Object> TypeFeedbackCells::MegamorphicSentinel(Isolate* isolate) {
 Object* TypeFeedbackCells::RawUninitializedSentinel(Heap* heap) {
   return heap->raw_unchecked_the_hole_value();
 }
+
+
+SMI_ACCESSORS(TypeFeedbackInfo, ic_total_count, kIcTotalCountOffset)
+SMI_ACCESSORS(TypeFeedbackInfo, ic_with_typeinfo_count,
+              kIcWithTypeinfoCountOffset)
+ACCESSORS(TypeFeedbackInfo, type_feedback_cells, TypeFeedbackCells,
+          kTypeFeedbackCellsOffset)
+
+
+SMI_ACCESSORS(AliasedArgumentsEntry, aliased_context_slot, kAliasedContextSlot)
 
 
 Relocatable::Relocatable(Isolate* isolate) {

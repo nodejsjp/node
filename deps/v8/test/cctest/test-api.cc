@@ -450,8 +450,7 @@ THREADED_TEST(ScriptMakingExternalString) {
     CHECK_EQ(0, dispose_count);
   }
   i::Isolate::Current()->compilation_cache()->Clear();
-  // TODO(1608): This should use kAbortIncrementalMarking.
-  HEAP->CollectAllGarbage(i::Heap::kMakeHeapIterableMask);
+  HEAP->CollectAllGarbage(i::Heap::kAbortIncrementalMarkingMask);
   CHECK_EQ(1, dispose_count);
 }
 
@@ -477,8 +476,7 @@ THREADED_TEST(ScriptMakingExternalAsciiString) {
     CHECK_EQ(0, dispose_count);
   }
   i::Isolate::Current()->compilation_cache()->Clear();
-  // TODO(1608): This should use kAbortIncrementalMarking.
-  HEAP->CollectAllGarbage(i::Heap::kMakeHeapIterableMask);
+  HEAP->CollectAllGarbage(i::Heap::kAbortIncrementalMarkingMask);
   CHECK_EQ(1, dispose_count);
 }
 
@@ -2253,9 +2251,8 @@ THREADED_TEST(ApiObjectGroups) {
     V8::AddObjectGroup(g2_objects, 2);
     V8::AddImplicitReferences(g2s2, g2_children, 1);
   }
-  // Do a single full GC. Use kMakeHeapIterableMask to ensure that
-  // incremental garbage collection is stopped.
-  HEAP->CollectAllGarbage(i::Heap::kMakeHeapIterableMask);
+  // Do a single full GC, ensure incremental marking is stopped.
+  HEAP->CollectAllGarbage(i::Heap::kAbortIncrementalMarkingMask);
 
   // All object should be alive.
   CHECK_EQ(0, counter.NumberOfWeakCalls());
@@ -2279,7 +2276,7 @@ THREADED_TEST(ApiObjectGroups) {
     V8::AddImplicitReferences(g2s2, g2_children, 1);
   }
 
-  HEAP->CollectAllGarbage(i::Heap::kMakeHeapIterableMask);
+  HEAP->CollectAllGarbage(i::Heap::kAbortIncrementalMarkingMask);
 
   // All objects should be gone. 5 global handles in total.
   CHECK_EQ(5, counter.NumberOfWeakCalls());
@@ -2288,7 +2285,7 @@ THREADED_TEST(ApiObjectGroups) {
   g1c1.MakeWeak(reinterpret_cast<void*>(&counter), &WeakPointerCallback);
   g2c1.MakeWeak(reinterpret_cast<void*>(&counter), &WeakPointerCallback);
 
-  HEAP->CollectAllGarbage(i::Heap::kMakeHeapIterableMask);
+  HEAP->CollectAllGarbage(i::Heap::kAbortIncrementalMarkingMask);
   CHECK_EQ(7, counter.NumberOfWeakCalls());
 }
 
@@ -2344,7 +2341,7 @@ THREADED_TEST(ApiObjectGroupsCycle) {
     V8::AddImplicitReferences(g3s1, g3_children, 1);
   }
   // Do a single full GC
-  HEAP->CollectAllGarbage(i::Heap::kMakeHeapIterableMask);
+  HEAP->CollectAllGarbage(i::Heap::kAbortIncrementalMarkingMask);
 
   // All object should be alive.
   CHECK_EQ(0, counter.NumberOfWeakCalls());
@@ -2368,7 +2365,7 @@ THREADED_TEST(ApiObjectGroupsCycle) {
     V8::AddImplicitReferences(g3s1, g3_children, 1);
   }
 
-  HEAP->CollectAllGarbage(i::Heap::kMakeHeapIterableMask);
+  HEAP->CollectAllGarbage(i::Heap::kAbortIncrementalMarkingMask);
 
   // All objects should be gone. 7 global handles in total.
   CHECK_EQ(7, counter.NumberOfWeakCalls());
@@ -11050,14 +11047,18 @@ THREADED_TEST(TurnOnAccessCheck) {
 }
 
 
-v8::Handle<v8::String> a;
-v8::Handle<v8::String> h;
+static const char* kPropertyA = "a";
+static const char* kPropertyH = "h";
 
 static bool NamedGetAccessBlockAandH(Local<v8::Object> obj,
                                        Local<Value> name,
                                        v8::AccessType type,
                                        Local<Value> data) {
-  return !(name->Equals(a) || name->Equals(h));
+  if (!name->IsString()) return false;
+  i::Handle<i::String> name_handle =
+      v8::Utils::OpenHandle(String::Cast(*name));
+  return !name_handle->IsEqualTo(i::CStrVector(kPropertyA))
+      && !name_handle->IsEqualTo(i::CStrVector(kPropertyH));
 }
 
 
@@ -11066,9 +11067,7 @@ THREADED_TEST(TurnOnAccessCheckAndRecompile) {
 
   // Create an environment with access check to the global object disabled by
   // default. When the registered access checker will block access to properties
-  // a and h
-  a = v8_str("a");
-  h = v8_str("h");
+  // a and h.
   v8::Handle<v8::ObjectTemplate> global_template = v8::ObjectTemplate::New();
   global_template->SetAccessCheckCallbacks(NamedGetAccessBlockAandH,
                                            IndexedGetAccessBlocker,
@@ -12329,18 +12328,21 @@ THREADED_TEST(PixelArray) {
 
   i::Handle<i::Smi> value(i::Smi::FromInt(2));
   i::Handle<i::Object> no_failure;
-  no_failure = i::JSObject::SetElement(jsobj, 1, value, i::kNonStrictMode);
+  no_failure =
+      i::JSObject::SetElement(jsobj, 1, value, NONE, i::kNonStrictMode);
   ASSERT(!no_failure.is_null());
   i::USE(no_failure);
   CHECK_EQ(2, i::Smi::cast(jsobj->GetElement(1)->ToObjectChecked())->value());
   *value.location() = i::Smi::FromInt(256);
-  no_failure = i::JSObject::SetElement(jsobj, 1, value, i::kNonStrictMode);
+  no_failure =
+      i::JSObject::SetElement(jsobj, 1, value, NONE, i::kNonStrictMode);
   ASSERT(!no_failure.is_null());
   i::USE(no_failure);
   CHECK_EQ(255,
            i::Smi::cast(jsobj->GetElement(1)->ToObjectChecked())->value());
   *value.location() = i::Smi::FromInt(-1);
-  no_failure = i::JSObject::SetElement(jsobj, 1, value, i::kNonStrictMode);
+  no_failure =
+      i::JSObject::SetElement(jsobj, 1, value, NONE, i::kNonStrictMode);
   ASSERT(!no_failure.is_null());
   i::USE(no_failure);
   CHECK_EQ(0, i::Smi::cast(jsobj->GetElement(1)->ToObjectChecked())->value());
@@ -12902,8 +12904,15 @@ static void ExternalArrayTestHelper(v8::ExternalArrayType array_type,
                       "}"
                       "ext_array[7];");
   CHECK_EQ(0, result->Int32Value());
-  CHECK_EQ(
-      0, static_cast<int>(jsobj->GetElement(7)->ToObjectChecked()->Number()));
+  if (array_type == v8::kExternalDoubleArray ||
+      array_type == v8::kExternalFloatArray) {
+    CHECK_EQ(
+        static_cast<int>(i::OS::nan_value()),
+        static_cast<int>(jsobj->GetElement(7)->ToObjectChecked()->Number()));
+  } else {
+    CHECK_EQ(0, static_cast<int>(
+        jsobj->GetElement(7)->ToObjectChecked()->Number()));
+  }
 
   result = CompileRun("for (var i = 0; i < 8; i++) {"
                       "  ext_array[6] = '2.3';"
@@ -13711,58 +13720,65 @@ TEST(SourceURLInStackTrace) {
 THREADED_TEST(IdleNotification) {
   v8::HandleScope scope;
   LocalContext env;
-  CompileRun("function binom(n, m) {"
-             "  var C = [[1]];"
-             "  for (var i = 1; i <= n; ++i) {"
-             "    C[i] = [1];"
-             "    for (var j = 1; j < i; ++j) {"
-             "      C[i][j] = C[i-1][j-1] + C[i-1][j];"
-             "    }"
-             "    C[i][i] = 1;"
-             "  }"
-             "  return C[n][m];"
-             "};"
-             "binom(1000, 500)");
-  bool rv = false;
-  for (int i = 0; i < 100; i++) {
-    rv = v8::V8::IdleNotification();
-    if (rv)
-      break;
+  {
+    // Create garbage in old-space to generate work for idle notification.
+    i::AlwaysAllocateScope always_allocate;
+    for (int i = 0; i < 100; i++) {
+      FACTORY->NewFixedArray(1000, i::TENURED);
+    }
   }
-  CHECK(rv == true);
+  bool finshed_idle_work = false;
+  for (int i = 0; i < 100 && !finshed_idle_work; i++) {
+    finshed_idle_work = v8::V8::IdleNotification();
+  }
+  CHECK(finshed_idle_work);
 }
 
 // Test that idle notification can be handled and eventually returns true.
 // This just checks the contract of the IdleNotification() function,
 // and does not verify that it does reasonable work.
-TEST(IdleNotificationWithHint) {
+TEST(IdleNotificationWithSmallHint) {
   v8::HandleScope scope;
   LocalContext env;
   {
+    // Create garbage in old-space to generate work for idle notification.
     i::AlwaysAllocateScope always_allocate;
-    CompileRun("function binom(n, m) {"
-               "  var C = [[1]];"
-               "  for (var i = 1; i <= n; ++i) {"
-               "    C[i] = [1];"
-               "    for (var j = 1; j < i; ++j) {"
-               "      C[i][j] = C[i-1][j-1] + C[i-1][j];"
-               "    }"
-               "    C[i][i] = 1;"
-               "  }"
-               "  return C[n][m];"
-               "};"
-               "binom(1000, 500)");
+    for (int i = 0; i < 100; i++) {
+      FACTORY->NewFixedArray(1000, i::TENURED);
+    }
   }
-  bool rv = false;
   intptr_t old_size = HEAP->SizeOfObjects();
+  bool finshed_idle_work = false;
   bool no_idle_work = v8::V8::IdleNotification(10);
-  for (int i = 0; i < 200; i++) {
-    rv = v8::V8::IdleNotification(10);
-    if (rv)
-      break;
+  for (int i = 0; i < 200 && !finshed_idle_work; i++) {
+    finshed_idle_work = v8::V8::IdleNotification(10);
   }
-  CHECK(rv == true);
   intptr_t new_size = HEAP->SizeOfObjects();
+  CHECK(finshed_idle_work);
+  CHECK(no_idle_work || new_size < old_size);
+}
+
+
+// This just checks the contract of the IdleNotification() function,
+// and does not verify that it does reasonable work.
+TEST(IdleNotificationWithLargeHint) {
+  v8::HandleScope scope;
+  LocalContext env;
+  {
+    // Create garbage in old-space to generate work for idle notification.
+    i::AlwaysAllocateScope always_allocate;
+    for (int i = 0; i < 100; i++) {
+      FACTORY->NewFixedArray(1000, i::TENURED);
+    }
+  }
+  intptr_t old_size = HEAP->SizeOfObjects();
+  bool finshed_idle_work = false;
+  bool no_idle_work = v8::V8::IdleNotification(900);
+  for (int i = 0; i < 200 && !finshed_idle_work; i++) {
+    finshed_idle_work = v8::V8::IdleNotification(900);
+  }
+  intptr_t new_size = HEAP->SizeOfObjects();
+  CHECK(finshed_idle_work);
   CHECK(no_idle_work || new_size < old_size);
 }
 
@@ -16083,3 +16099,72 @@ TEST(CallCompletedCallbackTwoExceptions) {
   v8::V8::AddCallCompletedCallback(CallCompletedCallbackException);
   CompileRun("throw 'first exception';");
 }
+
+
+static int probes_counter = 0;
+static int misses_counter = 0;
+static int updates_counter = 0;
+
+
+static int* LookupCounter(const char* name) {
+  if (strcmp(name, "c:V8.MegamorphicStubCacheProbes") == 0) {
+    return &probes_counter;
+  } else if (strcmp(name, "c:V8.MegamorphicStubCacheMisses") == 0) {
+    return &misses_counter;
+  } else if (strcmp(name, "c:V8.MegamorphicStubCacheUpdates") == 0) {
+    return &updates_counter;
+  }
+  return NULL;
+}
+
+
+static const char* kMegamorphicTestProgram =
+    "function ClassA() { };"
+    "function ClassB() { };"
+    "ClassA.prototype.foo = function() { };"
+    "ClassB.prototype.foo = function() { };"
+    "function fooify(obj) { obj.foo(); };"
+    "var a = new ClassA();"
+    "var b = new ClassB();"
+    "for (var i = 0; i < 10000; i++) {"
+    "  fooify(a);"
+    "  fooify(b);"
+    "}";
+
+
+static void StubCacheHelper(bool primary) {
+  V8::SetCounterFunction(LookupCounter);
+  USE(kMegamorphicTestProgram);
+#ifdef DEBUG
+  i::FLAG_native_code_counters = true;
+  if (primary) {
+    i::FLAG_test_primary_stub_cache = true;
+  } else {
+    i::FLAG_test_secondary_stub_cache = true;
+  }
+  i::FLAG_crankshaft = false;
+  v8::HandleScope scope;
+  LocalContext env;
+  int initial_probes = probes_counter;
+  int initial_misses = misses_counter;
+  int initial_updates = updates_counter;
+  CompileRun(kMegamorphicTestProgram);
+  int probes = probes_counter - initial_probes;
+  int misses = misses_counter - initial_misses;
+  int updates = updates_counter - initial_updates;
+  CHECK_LT(updates, 10);
+  CHECK_LT(misses, 10);
+  CHECK_GE(probes, 10000);
+#endif
+}
+
+
+TEST(SecondaryStubCache) {
+  StubCacheHelper(true);
+}
+
+
+TEST(PrimaryStubCache) {
+  StubCacheHelper(false);
+}
+

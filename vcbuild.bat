@@ -23,6 +23,7 @@ set test=
 set test_args=
 set msi=
 set upload=
+set jslint=
 
 :next-arg
 if "%1"=="" goto args-done
@@ -45,6 +46,7 @@ if /i "%1"=="test-all"      set test=test-all&goto arg-ok
 if /i "%1"=="test"          set test=test&goto arg-ok
 if /i "%1"=="msi"           set msi=1&goto arg-ok
 if /i "%1"=="upload"        set upload=1&goto arg-ok
+if /i "%1"=="jslint"        set jslint=1&goto arg-ok
 
 echo Warning: ignoring invalid command line option `%1`.
 
@@ -53,6 +55,7 @@ shift
 goto next-arg
 :args-done
 if defined upload goto upload
+if defined jslint goto jslint
 
 
 :project-gen
@@ -126,6 +129,9 @@ if "%test%"=="test-all" set test_args=%test_args%
 
 echo running 'python tools/test.py %test_args%'
 python tools/test.py %test_args%
+
+if "%test%"=="test" goto jslint
+
 goto exit
 
 :create-msvs-files-failed
@@ -145,10 +151,17 @@ scp Release\node.pdb node@nodejs.org:~/web/nodejs.org/dist/v%NODE_VERSION%/node.
 @echo off
 goto exit
 
+:jslint
+echo running jslint
+set PYTHONPATH=tools/closure_linter/
+python tools/closure_linter/closure_linter/gjslint.py --unix_mode --strict --nojsdoc -r lib/ -r src/ -r test/ --exclude_files lib/punycode.js
+goto exit
+
 :help
 echo vcbuild.bat [debug/release] [msi] [test-all/test-uv/test-internet/test-pummel/test-simple/test-message] [clean] [noprojgen] [nobuild] [nosign]
 echo Examples:
-echo   vcbuild.bat                : builds debug build
+echo   vcbuild.bat                : builds release build
+echo   vcbuild.bat debug          : builds debug build
 echo   vcbuild.bat release msi    : builds release build and MSI installer package
 echo   vcbuild.bat test           : builds debug build and runs tests
 goto exit

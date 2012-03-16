@@ -19,13 +19,13 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#include <node.h>
+#include "node.h"
 
-#include <uv.h>
+#include "uv.h"
 
-#include <v8-debug.h>
+#include "v8-debug.h"
 #ifdef HAVE_DTRACE
-# include <node_dtrace.h>
+# include "node_dtrace.h"
 #endif
 
 #include <locale.h>
@@ -55,31 +55,32 @@ typedef int mode_t;
 #endif
 #include <errno.h>
 #include <sys/types.h>
+#include "zlib.h"
 
 #ifdef __POSIX__
 # include <pwd.h> /* getpwnam() */
 # include <grp.h> /* getgrnam() */
 #endif
 
-#include <node_buffer.h>
+#include "node_buffer.h"
 #ifdef __POSIX__
-# include <node_io_watcher.h>
+# include "node_io_watcher.h"
 #endif
-#include <node_file.h>
-#include <node_http_parser.h>
+#include "node_file.h"
+#include "node_http_parser.h"
 #ifdef __POSIX__
-# include <node_signal_watcher.h>
-# include <node_stat_watcher.h>
+# include "node_signal_watcher.h"
+# include "node_stat_watcher.h"
 #endif
-#include <node_constants.h>
-#include <node_javascript.h>
-#include <node_version.h>
-#include <node_string.h>
+#include "node_constants.h"
+#include "node_javascript.h"
+#include "node_version.h"
+#include "node_string.h"
 #if HAVE_OPENSSL
-# include <node_crypto.h>
+# include "node_crypto.h"
 #endif
-#include <node_script.h>
-#include <v8_typed_array.h>
+#include "node_script.h"
+#include "v8_typed_array.h"
 
 using namespace v8;
 
@@ -811,6 +812,20 @@ static const char* get_uv_errno_message(int errorno) {
   memset(&err, 0, sizeof err);
   err.code = (uv_err_code)errorno;
   return uv_strerror(err);
+}
+
+
+static bool get_uv_dlerror_message(uv_lib_t lib, char* error_msg, int size) {
+  int r;
+  const char *msg;
+  if ((msg = uv_dlerror(lib)) == NULL) {
+    r = snprintf(error_msg, size, "%s", "Unable to load shared library ");
+  } else {
+    r = snprintf(error_msg, size, "%s", msg);
+    uv_dlerror_free(lib, msg);
+  }
+  // return bool if the error message be written correctly
+  return (0 < r && r < size);
 }
 
 
@@ -1557,6 +1572,34 @@ Handle<Value> Kill(const Arguments& args) {
   return Undefined();
 }
 
+// used in Hrtime() below
+#define NANOS_PER_SEC 1000000000
+
+// Hrtime exposes libuv's uv_hrtime() high-resolution timer.
+// The value returned by uv_hrtime() is a 64-bit int representing nanoseconds,
+// so this function instead returns an Array with 2 entries representing seconds
+// and nanoseconds, to avoid any integer overflow possibility.
+// Pass in an Array from a previous hrtime() call to instead get a time diff.
+Handle<Value> Hrtime(const v8::Arguments& args) {
+  HandleScope scope;
+
+  uint64_t t = uv_hrtime();
+
+  if (args.Length() > 0) {
+    // return a time diff tuple
+    Local<Array> inArray = Local<Array>::Cast(args[0]);
+    uint64_t seconds = inArray->Get(0)->Uint32Value();
+    uint64_t nanos = inArray->Get(1)->Uint32Value();
+    t -= (seconds * NANOS_PER_SEC) + nanos;
+  }
+
+  Local<Array> tuple = Array::New(2);
+  tuple->Set(0, Integer::NewFromUnsigned(t / NANOS_PER_SEC));
+  tuple->Set(1, Integer::NewFromUnsigned(t % NANOS_PER_SEC));
+
+  return scope.Close(tuple);
+}
+
 
 typedef void (UV_DYNAMIC* extInit)(Handle<Object> exports);
 
@@ -1581,9 +1624,19 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
 
   err = uv_dlopen(*filename, &lib);
   if (err.code != UV_OK) {
+    // Retrieve uv_dlerror() message and throw exception with it
+    char dlerror_msg[1024];
+    if (!get_uv_dlerror_message(lib, dlerror_msg, sizeof dlerror_msg)) {
+      Local<Value> exception = Exception::Error(
+          String::New("Cannot retrieve an error message in process.dlopen"));
+      return ThrowException(exception);
+    }
+#ifdef __POSIX__
+    Local<Value> exception = Exception::Error(String::New(dlerror_msg));
+#else  // Windows needs to add the filename into the error message
     Local<Value> exception = Exception::Error(
-        String::Concat(String::New("Unable to load shared library "),
-        args[0]->ToString()));
+        String::Concat(String::New(dlerror_msg), args[0]->ToString()));
+#endif
     return ThrowException(exception);
   }
 
@@ -2027,12 +2080,16 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   Local<Object> versions = Object::New();
   char buf[20];
   process->Set(String::NewSymbol("versions"), versions);
+  versions->Set(String::NewSymbol("http_parser"), String::New(
+               NODE_STRINGIFY(HTTP_PARSER_VERSION_MAJOR) "."
+               NODE_STRINGIFY(HTTP_PARSER_VERSION_MINOR)));
   // +1 to get rid of the leading 'v'
   versions->Set(String::NewSymbol("node"), String::New(NODE_VERSION+1));
   versions->Set(String::NewSymbol("v8"), String::New(V8::GetVersion()));
   versions->Set(String::NewSymbol("ares"), String::New(ARES_VERSION_STR));
   snprintf(buf, 20, "%d.%d", UV_VERSION_MAJOR, UV_VERSION_MINOR);
   versions->Set(String::NewSymbol("uv"), String::New(buf));
+  versions->Set(String::NewSymbol("zlib"), String::New(ZLIB_VERSION));
 #if HAVE_OPENSSL
   // Stupid code to slice out the version string.
   int c, l = strlen(OPENSSL_VERSION_TEXT);
@@ -2125,6 +2182,8 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   NODE_SET_METHOD(process, "_debugProcess", DebugProcess);
   NODE_SET_METHOD(process, "_debugPause", DebugPause);
   NODE_SET_METHOD(process, "_debugEnd", DebugEnd);
+
+  NODE_SET_METHOD(process, "hrtime", Hrtime);
 
   NODE_SET_METHOD(process, "dlopen", DLOpen);
 

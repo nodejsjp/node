@@ -1,37 +1,34 @@
-## process
+# process
+
+<!-- type=global -->
 
 <!--
-
 The `process` object is a global object and can be accessed from anywhere.
 It is an instance of `EventEmitter`.
-
 -->
+
 `process` はグローバルオブジェクトで、どこからでもアクセスすることができます。
 それは `EventEmitter` のインスタンスです。
 
 
-### Event: 'exit'
-
-`function () {}`
+## Event: 'exit'
 
 <!--
-
 Emitted when the process is about to exit.  This is a good hook to perform
 constant time checks of the module's state (like for unit tests).  The main
 event loop will no longer be run after the 'exit' callback finishes, so
 timers may not be scheduled.
-
 -->
+
 プロセスが終了しようとしている時に生成されます。
 これは (ユニットテストのように) モジュールの状態を一定の時間でチェックするのに適したフックとなります。
 メインのイベントループは 'exit' コールバックが終了するともはや動作しないので、
 タイマーはスケジュールされないかもしれません。
 
 <!--
-
 Example of listening for `exit`:
-
 -->
+
 `exit` を監視する例:
 
     process.on('exit', function () {
@@ -41,26 +38,22 @@ Example of listening for `exit`:
       console.log('About to exit.');
     });
 
-### Event: 'uncaughtException'
-
-`function (err) { }`
+## Event: 'uncaughtException'
 
 <!--
-
 Emitted when an exception bubbles all the way back to the event loop. If a
 listener is added for this exception, the default action (which is to print
 a stack trace and exit) will not occur.
-
 -->
+
 発生した例外がイベントループまでたどり着いた場合に生成されます。
 もしこの例外に対するリスナーが加えられていれば、
 デフォルトの動作 (それはスタックトレースをプリントして終了します) は起こりません。
 
 <!--
-
 Example of listening for `uncaughtException`:
-
 -->
+
 `uncaughtException` を監視する例:
 
     process.on('uncaughtException', function (err) {
@@ -76,37 +69,35 @@ Example of listening for `uncaughtException`:
     console.log('This will not run.');
 
 <!--
-
 Note that `uncaughtException` is a very crude mechanism for exception
 handling.  Using try / catch in your program will give you more control over
 your program's flow.  Especially for server programs that are designed to
 stay running forever, `uncaughtException` can be a useful safety mechanism.
-
 -->
+
 `uncaughtException` は例外を扱うとても荒削りなメカニズムであることに注意してください。
 プログラムの中で try / catch を使えばもっとプログラムの流れをうまく制御できるでしょう。
 特にサーバプログラムはいつまでも実行し続けるように設計されるので、
 `uncaughtException` は有益で安全なメカニズムになり得ます。
 
 
-### Signal Events
+## Signal Events
 
-`function () {}`
+<!--type=event-->
+<!--name=SIGINT, SIGUSR1, etc.-->
 
 <!--
-
 Emitted when the processes receives a signal. See sigaction(2) for a list of
 standard POSIX signal names such as SIGINT, SIGUSR1, etc.
-
 -->
+
 プロセスがシグナルを受信した場合に生成されます。
 SIGINT、SIGUSR1、その他の POSIX 標準シグナル名の一覧について は sigaction(2) を参照してください。
 
 <!--
-
 Example of listening for `SIGINT`:
-
 -->
+
 `SIGINT`を監視する例:
 
     // Start reading from stdin so we don't exit.
@@ -117,28 +108,25 @@ Example of listening for `SIGINT`:
     });
 
 <!--
-
 An easy way to send the `SIGINT` signal is with `Control-C` in most terminal
 programs.
-
 -->
+
 多くの端末プログラムで簡単に `SIGINT` を送る方法は `Control-C` を押すことです。
 
 
-### process.stdout
+## process.stdout
 
 <!--
-
 A `Writable Stream` to `stdout`.
-
 -->
+
 `stdout` に対する `Writable Stream` です。
 
 <!--
-
 Example: the definition of `console.log`
-
 -->
+
 例: `console.log` の定義
 
     console.log = function (d) {
@@ -146,13 +134,12 @@ Example: the definition of `console.log`
     };
 
 <!--
-
 `process.stderr` and `process.stdout` are unlike other streams in Node in
 that writes to them are usually blocking.  They are blocking in the case
 that they refer to regular files or TTY file descriptors. In the case they
 refer to pipes, they are non-blocking like other streams.
-
 -->
+
 `process.stderr` と `process.stdout` は他のストリームと異なり、
 書き込みは通常ブロックします。
 それらが通常ファイルや TTY のファイル記述子を参照しているケースでは、
@@ -160,18 +147,17 @@ refer to pipes, they are non-blocking like other streams.
 パイプを参照しているケースでは、他のストリームと同様にブロックしません。
 
 
-### process.stderr
+## process.stderr
 
 <!--
-
 A writable stream to stderr.
 
 `process.stderr` and `process.stdout` are unlike other streams in Node in
 that writes to them are usually blocking.  They are blocking in the case
 that they refer to regular files or TTY file descriptors. In the case they
 refer to pipes, they are non-blocking like other streams.
-
 -->
+
 `stderr` に対する `Writable Stream` です。
 
 `process.stderr` と `process.stdout` は他のストリームと異なり、
@@ -181,23 +167,21 @@ refer to pipes, they are non-blocking like other streams.
 パイプを参照しているケースでは、他のストリームと同様にブロックしません。
 
 
-### process.stdin
+## process.stdin
 
 <!--
-
 A `Readable Stream` for stdin. The stdin stream is paused by default, so one
 must call `process.stdin.resume()` to read from it.
-
 -->
+
 標準入力に対する `Readable Stream` です。
 デフォルトでは、標準入力に対するストリームは中断されているため、
 読み込みのためには `process.stdin.resume()` を呼び出さなければなりません。
 
 <!--
-
 Example of opening standard input and listening for both events:
-
 -->
+
 標準入力をオープンして二つのイベントを監視する例:
 
     process.stdin.resume();
@@ -212,15 +196,14 @@ Example of opening standard input and listening for both events:
     });
 
 
-### process.argv
+## process.argv
 
 <!--
-
 An array containing the command line arguments.  The first element will be
 'node', the second element will be the name of the JavaScript file.  The
 next elements will be any additional command line arguments.
-
 -->
+
 コマンドライン引数を含む配列です。
 最初の要素は 'node'、2 番目の要素は JavaScript ファイルの名前になります。
 その後の要素はコマンドラインの追加の引数になります。
@@ -231,10 +214,9 @@ next elements will be any additional command line arguments.
     });
 
 <!--
-
 This will generate:
-
 -->
+
 このように出力されます:
 
     $ node process-2.js one two=three four
@@ -245,43 +227,39 @@ This will generate:
     4: four
 
 
-### process.execPath
+## process.execPath
 
 <!--
-
 This is the absolute pathname of the executable that started the process.
-
 -->
+
 プロセスによって開始された実行可能ファイルの絶対パスです。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     /usr/local/bin/node
 
 
-### process.abort()
+## process.abort()
 
 <!--
-
 This causes node to emit an abort. This will cause node to exit and
 generate a core file.
-
 -->
-これは node がアボートさせます。
+
+これは node をアボートさせます。
 これは node が終了してコアファイルを生成する原因となります。
 
-### process.chdir(directory)
+## process.chdir(directory)
 
 <!--
-
 Changes the current working directory of the process or throws an exception if that fails.
-
 -->
+
 プロセスのカレントワーキングディレクトリを変更します。
 もし失敗した場合は例外をスローします。
 
@@ -296,79 +274,72 @@ Changes the current working directory of the process or throws an exception if t
 
 
 
-### process.cwd()
+## process.cwd()
 
 <!--
-
 Returns the current working directory of the process.
-
 -->
+
 プロセスのカレントワーキングディレクトリを返します。
 
     console.log('Current directory: ' + process.cwd());
 
 
-### process.env
+## process.env
 
 <!--
-
 An object containing the user environment. See environ(7).
-
 -->
+
 ユーザの環境を含むオブジェクトです。environ(7) を参照してください。
 
 
-### process.exit([code])
+## process.exit([code])
 
 <!--
-
 Ends the process with the specified `code`.  If omitted, exit uses the
 'success' code `0`.
-
 -->
+
 指定の `code` でプロセスを終了します。
 もし省略されると、「成功」を示すコード `0` を使って終了します。
 
 <!--
-
 To exit with a 'failure' code:
-
 -->
+
 「失敗」を示すコードで終了する例:
 
     process.exit(1);
 
 <!--
-
 The shell that executed node should see the exit code as 1.
-
 -->
+
 node を実行したシェルで終了コードが 1 であることを見ることができるでしょう。
 
 
-### process.getgid()
+## process.getgid()
 
 <!--
-
 Gets the group identity of the process. (See getgid(2).)
 This is the numerical group id, not the group name.
-
 -->
+
 プロセスのグループ識別子を取得します (getgid(2) 参照)。
 これは数値によるグループ ID で、グループ名ではありません。
 
     console.log('Current gid: ' + process.getgid());
 
 
-### process.setgid(id)
+## process.setgid(id)
 
 <!--
-
 Sets the group identity of the process. (See setgid(2).)  This accepts either
 a numerical ID or a groupname string. If a groupname is specified, this method
 blocks while resolving it to a numerical ID.
-
 -->
+
 プロセスのグループ識別子を設定します (setgid(2) 参照)。
 これは数値による ID もグループ名の文字列のどちらも受け入れます。
 もしグループ名が指定されると、数値による ID が解決できるまでこのメソッドはブロックします。
@@ -383,29 +354,27 @@ blocks while resolving it to a numerical ID.
     }
 
 
-### process.getuid()
+## process.getuid()
 
 <!--
-
 Gets the user identity of the process. (See getuid(2).)
 This is the numerical userid, not the username.
-
 -->
+
 プロセスのユーザ識別子を取得します (getuid(2) 参照)。
 これは数値によるユーザ ID で、ユーザ名ではありません。
 
     console.log('Current uid: ' + process.getuid());
 
 
-### process.setuid(id)
+## process.setuid(id)
 
 <!--
-
 Sets the user identity of the process. (See setuid(2).)  This accepts either
 a numerical ID or a username string.  If a username is specified, this method
 blocks while resolving it to a numerical ID.
-
 -->
+
 プロセスのユーザ識別子を設定します (setuid(2) 参照)。
 これは数値による ID もユーザ名の文字列のどちらも受け入れます。
 もしユーザ名が指定されると、数値による ID が解決できるまでこのメソッドはブロックします。
@@ -420,33 +389,30 @@ blocks while resolving it to a numerical ID.
     }
 
 
-### process.version
+## process.version
 
 <!--
-
 A compiled-in property that exposes `NODE_VERSION`.
-
 -->
+
 `NODE_VERSION` を提示するコンパイル済みプロパティです。
 
     console.log('Version: ' + process.version);
 
-### process.versions
+## process.versions
 
 <!--
-
 A property exposing version strings of node and its dependencies.
-
 -->
+
 node と依存ライブラリのバージョン文字列を提示します。
 
     console.log(process.versions);
 
 <!--
-
 Will output:
-
 -->
+
 は以下を出力します。
 
     { node: '0.4.12',
@@ -456,28 +422,26 @@ Will output:
       openssl: '1.0.0e-fips' }
 
 
-### process.installPrefix
+## process.installPrefix
 
 <!--
-
 A compiled-in property that exposes `NODE_PREFIX`.
-
 -->
+
 `NODE_PREFIX` を提示するコンパイル済みプロパティです。
 
     console.log('Prefix: ' + process.installPrefix);
 
 
-### process.kill(pid, [signal])
+## process.kill(pid, [signal])
 
 <!--
-
 Send a signal to a process. `pid` is the process id and `signal` is the
 string describing the signal to send.  Signal names are strings like
 'SIGINT' or 'SIGUSR1'.  If omitted, the signal will be 'SIGTERM'.
 See kill(2) for more information.
-
 -->
+
 プロセスにシグナルを送ります。
 `pid` はプロセス ID で `signal` は送信されるシグナルを文字列で記述したものです。
 シグナルの名前は 'SIGINT' や 'SIGUSR1' のような文字列です。
@@ -485,21 +449,19 @@ See kill(2) for more information.
 詳細は kill(2) を参照してください。
 
 <!--
-
 Note that just because the name of this function is `process.kill`, it is
 really just a signal sender, like the `kill` system call.  The signal sent
 may do something other than kill the target process.
-
 -->
+
 この関数の名前が `process.kill` であるとおり、
 これは `kill` システムコールのように本当にシグナルを送信することに注意してください。
 対象のプロセスを殺すだけでなく、他のシグナルも送信されます。
 
 <!--
-
 Example of sending a signal to yourself:
-
 -->
+
 自身にシグナルを送信する例:
 
     process.on('SIGHUP', function () {
@@ -514,59 +476,56 @@ Example of sending a signal to yourself:
     process.kill(process.pid, 'SIGHUP');
 
 
-### process.pid
+## process.pid
 
 <!--
-
 The PID of the process.
-
 -->
+
+このプロセスの PID です。
 
     console.log('This process is pid ' + process.pid);
 
-### process.title
+## process.title
 
 <!--
-
 Getter/setter to set what is displayed in 'ps'.
-
 -->
+
 'ps' でどのよう表示されるかを設定するための getter/setter です。
 
 
-### process.arch
+## process.arch
 
 <!--
-
 What processor architecture you're running on: `'arm'`, `'ia32'`, or `'x64'`.
-
 -->
+
 実行しているプロセッサのアーキテクチャ: `'arm'`、`'ia32'`、または
 `'x64'`。
 
     console.log('This processor architecture is ' + process.arch);
 
 
-### process.platform
+## process.platform
 
 <!--
-
 What platform you're running on. `'linux2'`, `'darwin'`, etc.
-
 -->
-どのプラットフォームで動いているかです。`'linux2'`、`'darwin'`、など。
+
+どのプラットフォームで動いているかを示します。
+`'linux2'`、`'darwin'`、など。
 
     console.log('This platform is ' + process.platform);
 
 
-### process.memoryUsage()
+## process.memoryUsage()
 
 <!--
-
 Returns an object describing the memory usage of the Node process
 measured in bytes.
-
 -->
+
 Node プロセスのメモリ使用状況をバイト単位で記述したオブジェクトを返します。
 
     var util = require('util');
@@ -574,10 +533,9 @@ Node プロセスのメモリ使用状況をバイト単位で記述したオブ
     console.log(util.inspect(process.memoryUsage()));
 
 <!--
-
 This will generate:
-
 -->
+
 このように生成されます:
 
     { rss: 4935680,
@@ -585,22 +543,20 @@ This will generate:
       heapUsed: 650472 }
 
 <!--
-
 `heapTotal` and `heapUsed` refer to V8's memory usage.
-
 -->
+
 `heapTotal` と `heapUsed` は V8 のメモリ使用状況を参照します。
 
 
-### process.nextTick(callback)
+## process.nextTick(callback)
 
 <!--
-
 On the next loop around the event loop call this callback.
 This is *not* a simple alias to `setTimeout(fn, 0)`, it's much more
 efficient.
-
 -->
+
 イベントループの次以降のループでコールバックを呼び出します。
 これは `setTimeout(fn, 0)` の単純なエイリアス*ではなく*、
 はるかに効率的です。
@@ -610,15 +566,14 @@ efficient.
     });
 
 
-### process.umask([mask])
+## process.umask([mask])
 
 <!--
-
 Sets or reads the process's file mode creation mask. Child processes inherit
 the mask from the parent process. Returns the old mask if `mask` argument is
 given, otherwise returns the current mask.
-
 -->
+
 プロセスのファイルモード作成マスクを設定または読み込みます。
 子プロセスは親プロセスからマスクを継承します。
 `mask` 引数が与えられると元のマスクが返され、そうでなければ現在のマスクが返されます。
@@ -630,11 +585,41 @@ given, otherwise returns the current mask.
                 ' to ' + newmask.toString(8));
 
 
-### process.uptime()
+## process.uptime()
 
 <!--
-
 Number of seconds Node has been running.
-
 -->
+
 Node が実行されてからの秒数です。
+
+## process.hrtime()
+
+<!--
+Returns the current high-resolution real time in a `[seconds, nanoseconds]`
+tuple Array. It is relative to an arbitrary time in the past. It is not
+related to the time of day and therefore not subject to clock drift. The
+primary use is for measuring performance between intervals.
+
+You may pass in the result of a previous call to `process.hrtime()` to get
+a diff reading, useful for benchmarks and measuring intervals:
+-->
+
+高分解能な現在時刻を `[seconds, nanoseconds]` の配列で返します。
+過去の任意の時間との比較することができます。
+それは一日における時刻には関連が無いため、クロックドリフトに影響されません。
+主な用途はベンチマークやインターバルの測定です。
+
+以前に `process.hrtime()` を呼び出した結果を渡すことにより、
+差分を得ることができます。これはベンチマークやインターバルの測定に便利です。
+
+    var t = process.hrtime();
+    // [ 1800216, 927643717 ]
+
+    setTimeout(function () {
+      t = process.hrtime(t);
+      // [ 1, 6962306 ]
+
+      console.log('benchmark took %d seconds and %d nanoseconds', t[0], t[1]);
+      // benchmark took 1 seconds and 6962306 nanoseconds
+    }, 1000);

@@ -96,6 +96,12 @@ class Mutex;
 double ceiling(double x);
 double modulo(double x, double y);
 
+// Custom implementation of sin, cos, tan and log.
+double fast_sin(double input);
+double fast_cos(double input);
+double fast_tan(double input);
+double fast_log(double input);
+
 // Forward declarations.
 class Socket;
 
@@ -355,6 +361,9 @@ class VirtualMemory {
 
   // Uncommit real memory.  Returns whether the operation succeeded.
   bool Uncommit(void* address, size_t size);
+
+  // Creates a single guard page at the given address.
+  bool Guard(void* address);
 
   void Release() {
     ASSERT(IsReserved());

@@ -32,6 +32,7 @@
 
 #include "v8.h"
 
+#include "codegen.h"
 #include "platform.h"
 #include "vm-state-inl.h"
 
@@ -58,20 +59,25 @@ int localtime_s(tm* out_tm, const time_t* time) {
 }
 
 
-// Not sure this the correct interpretation of _mkgmtime
-time_t _mkgmtime(tm* timeptr) {
-  return mktime(timeptr);
-}
-
-
 int fopen_s(FILE** pFile, const char* filename, const char* mode) {
   *pFile = fopen(filename, mode);
   return *pFile != NULL ? 0 : 1;
 }
 
 
+#ifndef __MINGW64_VERSION_MAJOR
+
+// Not sure this the correct interpretation of _mkgmtime
+time_t _mkgmtime(tm* timeptr) {
+  return mktime(timeptr);
+}
+
+
 #define _TRUNCATE 0
 #define STRUNCATE 80
+
+#endif  // __MINGW64_VERSION_MAJOR
+
 
 int _vsnprintf_s(char* buffer, size_t sizeOfBuffer, size_t count,
                  const char* format, va_list argptr) {
@@ -107,10 +113,15 @@ int strncpy_s(char* dest, size_t dest_size, const char* source, size_t count) {
 }
 
 
+#ifndef __MINGW64_VERSION_MAJOR
+
 inline void MemoryBarrier() {
   int barrier = 0;
   __asm__ __volatile__("xchgl %%eax,%0 ":"=r" (barrier));
 }
+
+#endif  // __MINGW64_VERSION_MAJOR
+
 
 #endif  // __MINGW32__
 
@@ -195,6 +206,30 @@ double modulo(double x, double y) {
 }
 
 #endif  // _WIN64
+
+
+static Mutex* transcendental_function_mutex = OS::CreateMutex();
+
+#define TRANSCENDENTAL_FUNCTION(name, type)                   \
+static TranscendentalFunction fast_##name##_function = NULL;  \
+double fast_##name(double x) {                                \
+  if (fast_##name##_function == NULL) {                       \
+    ScopedLock lock(transcendental_function_mutex);           \
+    TranscendentalFunction temp =                             \
+        CreateTranscendentalFunction(type);                   \
+    MemoryBarrier();                                          \
+    fast_##name##_function = temp;                            \
+  }                                                           \
+  return (*fast_##name##_function)(x);                        \
+}
+
+TRANSCENDENTAL_FUNCTION(sin, TranscendentalCache::SIN)
+TRANSCENDENTAL_FUNCTION(cos, TranscendentalCache::COS)
+TRANSCENDENTAL_FUNCTION(tan, TranscendentalCache::TAN)
+TRANSCENDENTAL_FUNCTION(log, TranscendentalCache::LOG)
+
+#undef TRANSCENDENTAL_FUNCTION
+
 
 // ----------------------------------------------------------------------------
 // The Time class represents time on win32. A timestamp is represented as
@@ -831,43 +866,62 @@ size_t OS::AllocateAlignment() {
 }
 
 
+static void* GetRandomAddr() {
+  Isolate* isolate = Isolate::UncheckedCurrent();
+  // Note that the current isolate isn't set up in a call path via
+  // CpuFeatures::Probe. We don't care about randomization in this case because
+  // the code page is immediately freed.
+  if (isolate != NULL) {
+    // The address range used to randomize RWX allocations in OS::Allocate
+    // Try not to map pages into the default range that windows loads DLLs
+    // Use a multiple of 64k to prevent committing unused memory.
+    // Note: This does not guarantee RWX regions will be within the
+    // range kAllocationRandomAddressMin to kAllocationRandomAddressMax
+#ifdef V8_HOST_ARCH_64_BIT
+    static const intptr_t kAllocationRandomAddressMin = 0x0000000080000000;
+    static const intptr_t kAllocationRandomAddressMax = 0x000003FFFFFF0000;
+#else
+    static const intptr_t kAllocationRandomAddressMin = 0x04000000;
+    static const intptr_t kAllocationRandomAddressMax = 0x3FFF0000;
+#endif
+    uintptr_t address = (V8::RandomPrivate(isolate) << kPageSizeBits)
+        | kAllocationRandomAddressMin;
+    address &= kAllocationRandomAddressMax;
+    return reinterpret_cast<void *>(address);
+  }
+  return NULL;
+}
+
+
+static void* RandomizedVirtualAlloc(size_t size, int action, int protection) {
+  LPVOID base = NULL;
+
+  if (protection == PAGE_EXECUTE_READWRITE || protection == PAGE_NOACCESS) {
+    // For exectutable pages try and randomize the allocation address
+    for (size_t attempts = 0; base == NULL && attempts < 3; ++attempts) {
+      base = VirtualAlloc(GetRandomAddr(), size, action, protection);
+    }
+  }
+
+  // After three attempts give up and let the OS find an address to use.
+  if (base == NULL) base = VirtualAlloc(NULL, size, action, protection);
+
+  return base;
+}
+
+
 void* OS::Allocate(const size_t requested,
                    size_t* allocated,
                    bool is_executable) {
-  // The address range used to randomize RWX allocations in OS::Allocate
-  // Try not to map pages into the default range that windows loads DLLs
-  // Use a multiple of 64k to prevent committing unused memory.
-  // Note: This does not guarantee RWX regions will be within the
-  // range kAllocationRandomAddressMin to kAllocationRandomAddressMax
-#ifdef V8_HOST_ARCH_64_BIT
-  static const intptr_t kAllocationRandomAddressMin = 0x0000000080000000;
-  static const intptr_t kAllocationRandomAddressMax = 0x000003FFFFFF0000;
-#else
-  static const intptr_t kAllocationRandomAddressMin = 0x04000000;
-  static const intptr_t kAllocationRandomAddressMax = 0x3FFF0000;
-#endif
-
   // VirtualAlloc rounds allocated size to page size automatically.
   size_t msize = RoundUp(requested, static_cast<int>(GetPageSize()));
-  intptr_t address = 0;
 
   // Windows XP SP2 allows Data Excution Prevention (DEP).
   int prot = is_executable ? PAGE_EXECUTE_READWRITE : PAGE_READWRITE;
 
-  // For exectutable pages try and randomize the allocation address
-  if (prot == PAGE_EXECUTE_READWRITE &&
-      msize >= static_cast<size_t>(Page::kPageSize)) {
-    address = (V8::RandomPrivate(Isolate::Current()) << kPageSizeBits)
-      | kAllocationRandomAddressMin;
-    address &= kAllocationRandomAddressMax;
-  }
-
-  LPVOID mbase = VirtualAlloc(reinterpret_cast<void *>(address),
-                              msize,
-                              MEM_COMMIT | MEM_RESERVE,
-                              prot);
-  if (mbase == NULL && address != 0)
-    mbase = VirtualAlloc(NULL, msize, MEM_COMMIT | MEM_RESERVE, prot);
+  LPVOID mbase = RandomizedVirtualAlloc(msize,
+                                        MEM_COMMIT | MEM_RESERVE,
+                                        prot);
 
   if (mbase == NULL) {
     LOG(ISOLATE, StringEvent("OS::Allocate", "VirtualAlloc failed"));
@@ -913,12 +967,8 @@ void OS::Sleep(int milliseconds) {
 
 void OS::Abort() {
   if (!IsDebuggerPresent()) {
-#ifdef _MSC_VER
     // Make the MSVCRT do a silent abort.
-    _set_abort_behavior(0, _WRITE_ABORT_MSG);
-    _set_abort_behavior(0, _CALL_REPORTFAULT);
-#endif  // _MSC_VER
-    abort();
+    raise(SIGABRT);
   } else {
     DebugBreak();
   }
@@ -1471,7 +1521,7 @@ bool VirtualMemory::Uncommit(void* address, size_t size) {
 
 
 void* VirtualMemory::ReserveRegion(size_t size) {
-  return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_NOACCESS);
+  return RandomizedVirtualAlloc(size, MEM_RESERVE, PAGE_NOACCESS);
 }
 
 
@@ -1486,6 +1536,17 @@ bool VirtualMemory::CommitRegion(void* base, size_t size, bool is_executable) {
 }
 
 
+bool VirtualMemory::Guard(void* address) {
+  if (NULL == VirtualAlloc(address,
+                           OS::CommitPageSize(),
+                           MEM_COMMIT,
+                           PAGE_READONLY | PAGE_GUARD)) {
+    return false;
+  }
+  return true;
+}
+
+
 bool VirtualMemory::UncommitRegion(void* base, size_t size) {
   return VirtualFree(base, size, MEM_DECOMMIT) != 0;
 }
@@ -1494,7 +1555,6 @@ bool VirtualMemory::UncommitRegion(void* base, size_t size) {
 bool VirtualMemory::ReleaseRegion(void* base, size_t size) {
   return VirtualFree(base, 0, MEM_RELEASE) != 0;
 }
-
 
 
 // ----------------------------------------------------------------------------

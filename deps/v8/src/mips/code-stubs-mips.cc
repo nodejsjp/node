@@ -3580,6 +3580,11 @@ void StackCheckStub::Generate(MacroAssembler* masm) {
 }
 
 
+void InterruptStub::Generate(MacroAssembler* masm) {
+  __ TailCallRuntime(Runtime::kInterrupt, 0, 1);
+}
+
+
 void MathPowStub::Generate(MacroAssembler* masm) {
   CpuFeatures::Scope fpu_scope(FPU);
   const Register base = a1;
@@ -3832,17 +3837,6 @@ void CEntryStub::GenerateAheadOfTime() {
 }
 
 
-void CEntryStub::GenerateThrowTOS(MacroAssembler* masm) {
-  __ Throw(v0);
-}
-
-
-void CEntryStub::GenerateThrowUncatchable(MacroAssembler* masm,
-                                          UncatchableExceptionType type) {
-  __ ThrowUncatchable(type, v0);
-}
-
-
 void CEntryStub::GenerateCore(MacroAssembler* masm,
                               Label* throw_normal_exception,
                               Label* throw_termination_exception,
@@ -4033,13 +4027,27 @@ void CEntryStub::Generate(MacroAssembler* masm) {
                true);
 
   __ bind(&throw_out_of_memory_exception);
-  GenerateThrowUncatchable(masm, OUT_OF_MEMORY);
+  // Set external caught exception to false.
+  Isolate* isolate = masm->isolate();
+  ExternalReference external_caught(Isolate::kExternalCaughtExceptionAddress,
+                                    isolate);
+  __ li(a0, Operand(false, RelocInfo::NONE));
+  __ li(a2, Operand(external_caught));
+  __ sw(a0, MemOperand(a2));
+
+  // Set pending exception and v0 to out of memory exception.
+  Failure* out_of_memory = Failure::OutOfMemoryException();
+  __ li(v0, Operand(reinterpret_cast<int32_t>(out_of_memory)));
+  __ li(a2, Operand(ExternalReference(Isolate::kPendingExceptionAddress,
+                                      isolate)));
+  __ sw(v0, MemOperand(a2));
+  // Fall through to the next label.
 
   __ bind(&throw_termination_exception);
-  GenerateThrowUncatchable(masm, TERMINATION);
+  __ ThrowUncatchable(v0);
 
   __ bind(&throw_normal_exception);
-  GenerateThrowTOS(masm);
+  __ Throw(v0);
 }
 
 
@@ -5133,10 +5141,10 @@ void RegExpExecStub::Generate(MacroAssembler* masm) {
   Label termination_exception;
   __ Branch(&termination_exception, eq, v0, Operand(a0));
 
-  __ Throw(v0);  // Expects thrown value in v0.
+  __ Throw(v0);
 
   __ bind(&termination_exception);
-  __ ThrowUncatchable(TERMINATION, v0);  // Expects thrown value in v0.
+  __ ThrowUncatchable(v0);
 
   __ bind(&failure);
   // For failure and exception return null.
@@ -5355,16 +5363,18 @@ static void GenerateRecordCallTarget(MacroAssembler* masm) {
   // A monomorphic miss (i.e, here the cache is not uninitialized) goes
   // megamorphic.
   __ LoadRoot(at, Heap::kTheHoleValueRootIndex);
-  __ Branch(&done, eq, a3, Operand(at));
+
+  __ Branch(USE_DELAY_SLOT, &done, eq, a3, Operand(at));
+  // An uninitialized cache is patched with the function.
+  // Store a1 in the delay slot. This may or may not get overwritten depending
+  // on the result of the comparison.
+  __ sw(a1, FieldMemOperand(a2, JSGlobalPropertyCell::kValueOffset));
+  // No need for a write barrier here - cells are rescanned.
+
   // MegamorphicSentinel is an immortal immovable object (undefined) so no
   // write-barrier is needed.
   __ LoadRoot(at, Heap::kUndefinedValueRootIndex);
   __ sw(at, FieldMemOperand(a2, JSGlobalPropertyCell::kValueOffset));
-  __ Branch(&done);
-
-  // An uninitialized cache is patched with the function.
-  __ sw(a1, FieldMemOperand(a2, JSGlobalPropertyCell::kValueOffset));
-  // No need for a write barrier here - cells are rescanned.
 
   __ bind(&done);
 }
@@ -6058,25 +6068,23 @@ void SubStringStub::Generate(MacroAssembler* masm) {
 
   // Utilize delay slots. SmiUntag doesn't emit a jump, everything else is
   // safe in this case.
-  __ UntagAndJumpIfSmi(a2, a2, &runtime);
-  __ UntagAndJumpIfSmi(a3, a3, &runtime);
-
+  __ UntagAndJumpIfNotSmi(a2, a2, &runtime);
+  __ UntagAndJumpIfNotSmi(a3, a3, &runtime);
   // Both a2 and a3 are untagged integers.
 
   __ Branch(&runtime, lt, a3, Operand(zero_reg));  // From < 0.
 
-  __ subu(a2, t5, a3);
-  __ Branch(&runtime, gt, a3, Operand(t5));  // Fail if from > to.
+  __ Branch(&runtime, gt, a3, Operand(a2));  // Fail if from > to.
+  __ Subu(a2, a2, a3);
 
   // Make sure first argument is a string.
   __ lw(v0, MemOperand(sp, kStringOffset));
-  __ Branch(&runtime, eq, v0, Operand(kSmiTagMask));
-
+  __ JumpIfSmi(v0, &runtime);
   __ lw(a1, FieldMemOperand(v0, HeapObject::kMapOffset));
   __ lbu(a1, FieldMemOperand(a1, Map::kInstanceTypeOffset));
-  __ And(t4, v0, Operand(kIsNotStringMask));
+  __ And(t0, a1, Operand(kIsNotStringMask));
 
-  __ Branch(&runtime, ne, t4, Operand(zero_reg));
+  __ Branch(&runtime, ne, t0, Operand(zero_reg));
 
   // Short-cut for the case of trivial substring.
   Label return_v0;
@@ -6143,8 +6151,8 @@ void SubStringStub::Generate(MacroAssembler* masm) {
 
   __ bind(&sliced_string);
   // Sliced string.  Fetch parent and correct start index by offset.
-  __ lw(t0, FieldMemOperand(v0, SlicedString::kOffsetOffset));
   __ lw(t1, FieldMemOperand(v0, SlicedString::kParentOffset));
+  __ lw(t0, FieldMemOperand(v0, SlicedString::kOffsetOffset));
   __ sra(t0, t0, 1);  // Add offset to index.
   __ Addu(a3, a3, t0);
   // Update instance type.
@@ -6182,8 +6190,8 @@ void SubStringStub::Generate(MacroAssembler* masm) {
     __ AllocateTwoByteSlicedString(v0, a2, t2, t3, &runtime);
     __ bind(&set_slice_header);
     __ sll(a3, a3, 1);
-    __ sw(a3, FieldMemOperand(v0, SlicedString::kOffsetOffset));
     __ sw(t1, FieldMemOperand(v0, SlicedString::kParentOffset));
+    __ sw(a3, FieldMemOperand(v0, SlicedString::kOffsetOffset));
     __ jmp(&return_v0);
 
     __ bind(&copy_routine);
@@ -6777,15 +6785,15 @@ void ICCompareStub::GenerateHeapNumbers(MacroAssembler* masm) {
   ASSERT(state_ == CompareIC::HEAP_NUMBERS);
 
   Label generic_stub;
-  Label unordered;
+  Label unordered, maybe_undefined1, maybe_undefined2;
   Label miss;
   __ And(a2, a1, Operand(a0));
   __ JumpIfSmi(a2, &generic_stub);
 
   __ GetObjectType(a0, a2, a2);
-  __ Branch(&miss, ne, a2, Operand(HEAP_NUMBER_TYPE));
+  __ Branch(&maybe_undefined1, ne, a2, Operand(HEAP_NUMBER_TYPE));
   __ GetObjectType(a1, a2, a2);
-  __ Branch(&miss, ne, a2, Operand(HEAP_NUMBER_TYPE));
+  __ Branch(&maybe_undefined2, ne, a2, Operand(HEAP_NUMBER_TYPE));
 
   // Inlining the double comparison and falling back to the general compare
   // stub if NaN is involved or FPU is unsupported.
@@ -6817,13 +6825,28 @@ void ICCompareStub::GenerateHeapNumbers(MacroAssembler* masm) {
     __ bind(&fpu_lt);
     __ Ret(USE_DELAY_SLOT);
     __ li(v0, Operand(LESS));  // In delay slot.
-
-    __ bind(&unordered);
   }
+
+  __ bind(&unordered);
 
   CompareStub stub(GetCondition(), strict(), NO_COMPARE_FLAGS, a1, a0);
   __ bind(&generic_stub);
   __ Jump(stub.GetCode(), RelocInfo::CODE_TARGET);
+
+  __ bind(&maybe_undefined1);
+  if (Token::IsOrderedRelationalCompareOp(op_)) {
+    __ LoadRoot(at, Heap::kUndefinedValueRootIndex);
+    __ Branch(&miss, ne, a0, Operand(at));
+    __ GetObjectType(a1, a2, a2);
+    __ Branch(&maybe_undefined2, ne, a2, Operand(HEAP_NUMBER_TYPE));
+    __ jmp(&unordered);
+  }
+
+  __ bind(&maybe_undefined2);
+  if (Token::IsOrderedRelationalCompareOp(op_)) {
+    __ LoadRoot(at, Heap::kUndefinedValueRootIndex);
+    __ Branch(&unordered, eq, a1, Operand(at));
+  }
 
   __ bind(&miss);
   GenerateMiss(masm);
@@ -7064,7 +7087,7 @@ void StringDictionaryLookupStub::GenerateNegativeLookup(MacroAssembler* masm,
   // not equal to the name and kProbes-th slot is not used (its name is the
   // undefined value), it guarantees the hash table doesn't contain the
   // property. It's true even if some slots represent deleted properties
-  // (their names are the null value).
+  // (their names are the hole value).
   for (int i = 0; i < kInlinedProbes; i++) {
     // scratch0 points to properties hash.
     // Compute the masked index: (hash + i + i * i) & mask.
@@ -7093,8 +7116,14 @@ void StringDictionaryLookupStub::GenerateNegativeLookup(MacroAssembler* masm,
     __ Branch(done, eq, entity_name, Operand(tmp));
 
     if (i != kInlinedProbes - 1) {
+      // Load the hole ready for use below:
+      __ LoadRoot(tmp, Heap::kTheHoleValueRootIndex);
+
       // Stop if found the property.
       __ Branch(miss, eq, entity_name, Operand(Handle<String>(name)));
+
+      Label the_hole;
+      __ Branch(&the_hole, eq, entity_name, Operand(tmp));
 
       // Check if the entry name is not a symbol.
       __ lw(entity_name, FieldMemOperand(entity_name, HeapObject::kMapOffset));
@@ -7102,6 +7131,8 @@ void StringDictionaryLookupStub::GenerateNegativeLookup(MacroAssembler* masm,
              FieldMemOperand(entity_name, Map::kInstanceTypeOffset));
       __ And(scratch0, entity_name, Operand(kIsSymbolMask));
       __ Branch(miss, eq, scratch0, Operand(zero_reg));
+
+      __ bind(&the_hole);
 
       // Restore the properties.
       __ lw(properties,
@@ -7326,11 +7357,13 @@ struct AheadOfTimeWriteBarrierStubList kAheadOfTime[] = {
   { a2, a1, a3, EMIT_REMEMBERED_SET },
   { a3, a1, a2, EMIT_REMEMBERED_SET },
   // KeyedStoreStubCompiler::GenerateStoreFastElement.
-  { t0, a2, a3, EMIT_REMEMBERED_SET },
+  { a3, a2, t0, EMIT_REMEMBERED_SET },
+  { a2, a3, t0, EMIT_REMEMBERED_SET },
   // ElementsTransitionGenerator::GenerateSmiOnlyToObject
   // and ElementsTransitionGenerator::GenerateSmiOnlyToDouble
   // and ElementsTransitionGenerator::GenerateDoubleToObject
   { a2, a3, t5, EMIT_REMEMBERED_SET },
+  { a2, a3, t5, OMIT_REMEMBERED_SET },
   // ElementsTransitionGenerator::GenerateDoubleToObject
   { t2, a2, a0, EMIT_REMEMBERED_SET },
   { a2, t2, t5, EMIT_REMEMBERED_SET },

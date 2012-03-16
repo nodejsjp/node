@@ -1,10 +1,13 @@
-## Cluster
+# Cluster
+
+    Stability: 1 - Experimental
 
 <!--
 A single instance of Node runs in a single thread. To take advantage of
 multi-core systems the user will sometimes want to launch a cluster of Node
 processes to handle the load.
 -->
+
 一つの Node インスタンスは一つのスレッドで実行されます。
 マルチコアシステムのメリットを生かすために、
 ユーザは時々 Node プロセスのクラスを起動して負荷を分散したくなります。
@@ -13,6 +16,7 @@ processes to handle the load.
 The cluster module allows you to easily create a network of processes that
 all share server ports.
 -->
+
 クラスタモジュールは、サーバポートを共有するプロセスのネットワークを
 簡単に構築することを可能にします。
 
@@ -41,6 +45,7 @@ all share server ports.
 <!--
 Running node will now share port 8000 between the workers:
 -->
+
 node は 8000 番ポートをワーカ間で共有します。
 
     % node server.js
@@ -48,35 +53,81 @@ node は 8000 番ポートをワーカ間で共有します。
     Worker 2437 online
 
 
-### cluster.isMaster
+<!--
+This feature was introduced recently, and may change in future versions.
+Please try it out and provide feedback.
+-->
+
+この機能は最近導入されたばかりであり、
+将来のバージョンで変更される可能性があります。
+これを試して、フィードバックを行ってください。
+
+## cluster.settings
 
 <!--
-This boolean flag is true if the process is a master. This is determined
-by the `process.env.NODE_UNIQUE_ID`. If `process.env.NODE_UNIQUE_ID` is
-undefined `isMaster` is `true`.
+* {Object}
+  * `exec` {String} file path to worker file.  (Default=`__filename`)
+  * `args` {Array} string arguments passed to worker.
+    (Default=`process.argv.slice(2)`)
+  * `silent` {Boolean} whether or not to send output to parent's stdio.
+    (Default=`false`)
 -->
-現在のプロセスがマスタの場合、この論理値型のフラグは `true` です。
+
+* {Object}
+  * `exec` {String} ワーカで実行するファイルへのパス.
+    (デフォルトは `__filename`)
+  * `args` {Array} ワーカに渡される引数となる文字列。
+    (デフォルトは `process.argv.slice(2)`)
+  * `silent` {Boolean} 出力を親プロセスに送るかどうか。
+    (デフォルトは `false`)
+
+<!--
+All settings set by the `.setupMaster` is stored in this settings object.
+This object is not supposed to be change or set manually, by you.
+-->
+
+`cluster.setupMaster()` によってセットされた全ての情報は設定オブジェクトに
+保存されます。
+このオブジェクトはあなたによって変更されることを想定していません。
+
+## cluster.isMaster
+
+* {Boolean}
+
+<!--
+True if the process is a master. This is determined
+by the `process.env.NODE_UNIQUE_ID`. If `process.env.NODE_UNIQUE_ID` is
+undefined, then `isMaster` is `true`.
+-->
+
+現在のプロセスがマスタの場合は `true` です。
 これは `process.env.NODE_UNIQUE_ID` から決定されます。
 `process.env.NODE_UNIQUE_ID` が未定義だと `isMaster` は `true` になります。
 
-### cluster.isWorker
+## cluster.isWorker
+
+* {Boolean}
 
 <!--
 This boolean flag is true if the process is a worker forked from a master.
-If the `process.env.NODE_UNIQUE_ID` is set to a value different efined
+If the `process.env.NODE_UNIQUE_ID` is set to a value, then
 `isWorker` is `true`.
 -->
+
 現在のプロセスがマスタからフォークされたワーカの場合、
 この論理値型のフラグは `true` です。
-`process.env.NODE_UNIQUE_ID` に値が設定されていると `isWorker` は `true`
-になります。
+`process.env.NODE_UNIQUE_ID` に値が設定されていると、
+`isWorker` は `true` になります。
 
-### Event: 'fork'
+## Event: 'fork'
+
+* `worker` {Worker object}
 
 <!--
 When a new worker is forked the cluster module will emit a 'fork' event.
 This can be used to log worker activity, and create you own timeout.
 -->
+
 新しいワーカがフォークされると、クラスタモジュールは `'fork'` イベントを
 生成します。
 これはワーカの活動をロギングしたり、タイムアウトのために使うことができます。
@@ -97,15 +148,18 @@ This can be used to log worker activity, and create you own timeout.
       errorMsg();
     });
 
-### Event: 'online'
+## Event: 'online'
+
+* `worker` {Worker object}
 
 <!--
 After forking a new worker, the worker should respond with a online message.
 When the master receives a online message it will emit such event.
 The difference between 'fork' and 'online' is that fork is emitted when the
-master tries to fork a worker, and 'online' is emitted when the worker is being
-executed.
+master tries to fork a worker, and 'online' is emitted when the worker is
+being executed.
 -->
+
 新しいワーカをフォークした後、ワーカはオンラインメッセージを応答します。
 マスタがオンラインメッセージを受信すると、このイベントが生成されます。
 `'fork'` と `'online'` の違いは、`'fork'` はマスタがワーカのフォークを
@@ -116,13 +170,16 @@ executed.
       console.log("Yay, the worker responded after it was forked");
     });
 
-### Event: 'listening'
+## Event: 'listening'
+
+* `worker` {Worker object}
 
 <!--
 When calling `listen()` from a worker, a 'listening' event is automatically assigned
 to the server instance. When the server is listening a message is send to the master
 where the 'listening' event is emitted.
 -->
+
 ワーカが `net.Server.listen()` を呼び出すと、`'listening'` イベントは自動的に
 `net.Server` インスタンスに割り当てられます。
 `net.Server` が `'listening'` メッセージをマスタに送信すると、
@@ -132,12 +189,15 @@ where the 'listening' event is emitted.
       console.log("We are now connected");
     });
 
-### Event: 'death'
+## Event: 'death'
+
+* `worker` {Worker object}
 
 <!--
 When any of the workers die the cluster module will emit the 'death' event.
 This can be used to restart the worker by calling `fork()` again.
 -->
+
 どのワーカが死んだ場合でも、クラスタモジュールは `'death'` イベントを
 生成します。
 これは `fork()` を呼び出してワーカを再開する場合に使用することができます。
@@ -147,24 +207,46 @@ This can be used to restart the worker by calling `fork()` again.
       cluster.fork();
     });
 
-### Event 'setup'
+## Event: 'setup'
+
+* `worker` {Worker object}
 
 <!--
-When the `.setupMaster()` function has been executed this event emits. If `.setupMaster()`
-was not executed before `fork()` this function will call `.setupMaster()` with no arguments.
+When the `.setupMaster()` function has been executed this event emits.
+If `.setupMaster()` was not executed before `fork()` this function will
+call `.setupMaster()` with no arguments.
 -->
+
 `setupMaster()` が実行された時、このイベントが生成されます。
 `fork()` の前に`setupMaster()` が呼ばれなかった場合、
 この関数は引数無しで `setupMaster()` を呼び出します。
 
-### cluster.setupMaster([options])
+## cluster.setupMaster([settings])
 
 <!--
-The `setupMaster` is used to change the default 'fork' behavior. It takes one option
-object argument.
+* `settings` {Object}
+  * `exec` {String} file path to worker file.  (Default=`__filename`)
+  * `args` {Array} string arguments passed to worker.
+    (Default=`process.argv.slice(2)`)
+  * `silent` {Boolean} whether or not to send output to parent's stdio.
+    (Default=`false`)
+-->
+
+* `settings` {Object}
+  * `exec` {String} ワーカで実行するファイルへのパス.
+    (デフォルトは `__filename`)
+  * `args` {Array} ワーカに渡される引数となる文字列。
+    (デフォルトは `process.argv.slice(2)`)
+  * `silent` {Boolean} 出力を親プロセスに送るかどうか。
+    (デフォルトは `false`)
+
+<!--
+The `setupMaster` is used to change the default 'fork' behavior. It takes
+one option object argument.
 
 Example:
 -->
+
 `setupMaster()` は 'fork' のデフォルト動作を変更するために使われます。
 引数として一つのオプションオブジェクトを受け取ります。
 
@@ -178,48 +260,59 @@ Example:
     });
     cluster.autoFork();
 
-<!--
-The options argument can contain 3 different properties.
-
-- `exec` are the file path to the worker file, by default this is the same file as the master.
-- `args` are a array of arguments send along with the worker, by default this is `process.argv.slice(2)`.
-- `silent`, if this option is true the output of a worker won't propagate to the master, by default this is false.
--->
-オプション引数は3つのプロパティを含むことができます。
-
-- `exec` はワーカが実行するファイルのパスで、デフォルトはマスタと同じファイルです。
-- `args` は和アー化に渡される引数の配列で、デフォルトは `process.argv.slice(2)` です。
-- `silent` が `true` ならワーカの標準出力および標準エラー出力はマスタに伝播しません。デフォルトは `false` です。
-
-### cluster.settings
+## cluster.fork([env])
 
 <!--
-All settings set by the `.setupMaster` is stored in this settings object.
-This object is not supposed to be change or set manually, by you.
-
-All propertys are `undefined` if they are not yet set.
+* `env` {Object} Key/value pairs to add to child process environment.
+* return {Worker object}
 -->
-`setupMaster()` の設定はこのオブジェクトに保存されます。
-このオブジェクトは変更されることを想定していません。
 
-### cluster.fork([env])
+* `env` {Object} 子プロセスの環境に加えられるキーと値のペア。
+* return {Worker object}
 
 <!--
 Spawn a new worker process. This can only be called from the master process.
-The function takes an optional `env` object. The properties in this object
-will be added to the process environment in the worker.
 -->
-新しいワーカプロセスを起動します。
-これはマスタプロセスから飲み呼び出すことができます。
-この関数はオプションの `env` オブジェクトを受け取ることができます。
-このオブジェクトのプロパティはワーカプロセスの環境変数に加えられます。
 
-### cluster.workers
+新しいワーカプロセスを起動します。
+これはマスタプロセスからのみ呼び出すことができます。
+
+## cluster.settings
+
+<!--
+* {Object}
+  * `exec` {String} file path to worker file.  Default: `__filename`
+  * `args` {Array} string arguments passed to worker.
+    (Default=`process.argv.slice(2)`)
+  * `silent` {Boolean} whether or not to send output to parent's stdio.
+    (Default=`false`)
+-->
+
+* {Object}
+  * `exec` {String} ワーカで実行するファイルへのパス.
+    (デフォルトは `__filename`)
+  * `args` {Array} ワーカに渡される引数となる文字列。
+    (デフォルトは `process.argv.slice(2)`)
+  * `silent` {Boolean} 出力を親プロセスに送るかどうか。
+    (デフォルトは `false`)
+
+<!--
+All settings set by the `.setupMaster` is stored in this settings object.
+This object is not supposed to be change or set manually.
+-->
+
+`setupMaster()` の設定はこのオブジェクトに保存されます。
+このオブジェクトは変更されることを想定していません。
+
+## cluster.workers
+
+* {Object}
 
 <!--
 In the cluster all living worker objects are stored in this object by there
 `uniqueID` as the key. This makes it easy to loop through all living workers.
 -->
+
 このクラスタで生きている全てのワーカオブジェクトを、その `uniqueID`
 をキーとして保存しているオブジェクトです。
 これは全ての生きているワーカに対して繰り返しを行うことを容易にします。
@@ -238,6 +331,7 @@ In the cluster all living worker objects are stored in this object by there
 Should you wish to reference a worker over a communication channel, using
 the worker's uniqueID is the easiest way to find the worker.
 -->
+
 通信チャネルを越えてワーカの参照を渡す場合は、
 ワーカのユニーク ID を使ってワーカを探すのが簡単です。
 
@@ -245,44 +339,80 @@ the worker's uniqueID is the easiest way to find the worker.
       var worker = cluster.workers[uniqueID];
     });
 
-## Worker
+## Class: Worker
 
 <!--
-This object contains all public information and method about a worker.
+A Worker object contains all public information and method about a worker.
 In the master it can be obtained using `cluster.workers`. In a worker
 it can be obtained using `cluster.worker`.
 -->
-このオブジェクトはワーカに関する全ての公開された情報やメソッドを持ちます。
+
+ワーカに関する全ての公開された情報やメソッドを持つオブジェクトです。
 マスタでは `cluster.wrokers` から取得することができます。
 ワーカでは `cluster.worker` から取得することができます。
 
-### Worker.uniqueID
+### worker.uniqueID
+
+* {String}
 
 <!--
-Each new worker is given its own unique id, this id is stored in the `uniqueID`
+Each new worker is given its own unique id, this id is stored in the
+`uniqueID`.
+
+While a worker is alive, this is the key that indexes it in
+cluster.workers
 -->
+
 新しいワーカはいずれもユニークな ID を与えられます。
 この ID は `uniqueID` に保存されます。.
 
-### Worker.process
+ワーカが生きている間、これは `cluseter.workers` のキーとなります。
+
+### worker.process
+
+* {ChildProcess object}
 
 <!--
-All workers are created using `child_process.fork()`, the returned object from this
-function is stored in process.
+All workers are created using `child_process.fork()`, the returned object
+from this function is stored in process.
+
+See: [Child Process module](child_process.html)
 -->
+
 全てのワーカは `child_process.fork()` によって作成されます。
 その戻り値が `process` に設定されます。
 
-### Worker.send(message, [sendHandle])
+参照: [Child Process module](child_process.html)
+
+### worker.suicide
+
+* {Boolean}
 
 <!--
-This function is equal to the send methods provided by `child_process.fork()`.
-In the master you should use this function to send a message to a specific worker.
-However in a worker you can also use `process.send(message)`, since this is the same
-function.
+This property is a boolean. It is set when a worker dies, until then it is
+`undefined`.  It is true if the worker was killed using the `.destroy()`
+method, and false otherwise.
+-->
+
+このプロパティは論理値型です。
+これはワーカが終了すると設定されます。それまでは `undefined` です。
+ワーカが `.destroy()` メソッドで終了した場合は `true` に、その他の場合は
+`false` に設定されます。
+
+### worker.send(message, [sendHandle])
+
+* `message` {Object}
+* `sendHandle` {Handle object}
+
+<!--
+This function is equal to the send methods provided by
+`child_process.fork()`.  In the master you should use this function to
+send a message to a specific worker.  However in a worker you can also use
+`process.send(message)`, since this is the same function.
 
 This example will echo back all messages from the master:
 -->
+
 この関数は `child_process.fork()` が返すオブジェクトの `send()`
 メソッドと同じです．
 マスタは特定のワーカにメッセージを送信するためにこの関数を
@@ -301,12 +431,14 @@ This example will echo back all messages from the master:
       });
     }
 
-### Worker.destroy()
+### worker.destroy()
 
 <!--
-This function will kill the worker, and inform the master to not spawn a new worker.
-To know the difference between suicide and accidentally death a suicide boolean is set to true.
+This function will kill the worker, and inform the master to not spawn a
+new worker.  To know the difference between suicide and accidentally death
+a suicide boolean is set to true.
 -->
+
 この関数はワーカを終了し、マスタに新しいワーカを起動しないように伝えます。
 意図しない終了と区別するために `suicide` プロパティに `true`
 が設定されることを知っておいてください。
@@ -320,18 +452,9 @@ To know the difference between suicide and accidentally death a suicide boolean 
     // destroy worker
     worker.destroy();
 
-### Worker.suicide
-
-<!--
-This property is a boolean. It is set when a worker dies, until then it is `undefined`.
-It is true if the worker was killed using the `.destroy()` method, and false otherwise.
--->
-このプロパティは論理値型です。
-ワーカが終了するまで、これは `undefined` です。
-ワーカが `.destroy()` で終了した場合は `true` に、その他の場合は
-`false` に設定されます。
-
 ### Event: message
+
+* `message` {Object}
 
 <!--
 This event is the same as the one provided by `child_process.fork()`.
@@ -341,6 +464,7 @@ In the master you should use this event, however in a worker you can also use
 As an example, here is a cluster that keeps count of the number of requests
 in the master process using the message system:
 -->
+
 このイベントは `child_process.fork()` が提供するものと同じです。
 マスタではこのイベントを使うべきですが、ワーカでは `process.on('message')`
 を使うこともできます。
@@ -384,12 +508,15 @@ in the master process using the message system:
       }).listen(8000);
     }
 
-### Event: online
+### Event: 'online'
+
+* `worker` {Worker object}
 
 <!--
 Same as the `cluster.on('online')` event, but emits only when the state change
 on the specified worker.
 -->
+
 `cluster.on('online')` と同様ですが，特定のワーカの状態が変化した場合のみ
 イベントを生成します。
 
@@ -397,12 +524,15 @@ on the specified worker.
       // Worker is online
     };
 
-### Event: listening
+### Event: 'listening'
+
+* `worker` {Worker object}
 
 <!--
 Same as the `cluster.on('listening')` event, but emits only when the state change
 on the specified worker.
 -->
+
 `cluster.on('listening')` と同様ですが、特定のワーカの状態が変化した場合のみ
 イベントを生成します。
 
@@ -410,12 +540,15 @@ on the specified worker.
       // Worker is listening
     };
 
-### Event: death
+## Event: 'death'
+
+* `worker` {Worker object}
 
 <!--
 Same as the `cluster.on('death')` event, but emits only when the state change
 on the specified worker.
 -->
+
 `cluster.on('death')` と同様ですが、特定のワーカの状態が変化した場合のみ
 イベントを生成します。
 

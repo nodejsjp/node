@@ -1,21 +1,21 @@
-## HTTP
+# HTTP
+
+    Stability: 3 - Stable
 
 <!--
-
 To use the HTTP server and client one must `require('http')`.
-
 -->
+
 HTTP サーバおよびクライアントを使用するにはいずれも `require('http')` が必要です。
 
 <!--
-
 The HTTP interfaces in Node are designed to support many features
 of the protocol which have been traditionally difficult to use.
 In particular, large, possibly chunk-encoded, messages. The interface is
 careful to never buffer entire requests or responses--the
 user is able to stream data.
-
 -->
+
 Node の HTTP インタフェースは、
 伝統的に扱いが難しかったプロトコルの多くの機能をサポートするように設計されています。
 とりわけ大きくて、場合によってはチャンク化されたメッセージです。
@@ -23,10 +23,9 @@ Node の HTTP インタフェースは、
 － 利用者はストリームデータを使うことができます。
 
 <!--
-
 HTTP message headers are represented by an object like this:
-
 -->
+
 HTTP メッセージヘッダはこのようなオブジェクトとして表現されます:
 
     { 'content-length': '123',
@@ -35,32 +34,44 @@ HTTP メッセージヘッダはこのようなオブジェクトとして表現
       'accept': '*/*' }
 
 <!--
-
 Keys are lowercased. Values are not modified.
-
 -->
+
 キーは小文字化されます。値は変更されません。
 
 <!--
-
 In order to support the full spectrum of possible HTTP applications, Node's
 HTTP API is very low-level. It deals with stream handling and message
 parsing only. It parses a message into headers and body but it does not
 parse the actual headers or the body.
-
 -->
+
 考えられる HTTP アプリケーションを完全にサポートするために、
 Node の HTTP API はとても低水準です。それはストリームのハンドリングとメッセージの解析だけに対処します。
 解析はメッセージをヘッダとボディに分けますが、実際のヘッダとボディは解析しません。
 
 
-## http.Server
+## http.createServer([requestListener])
 
 <!--
-
-This is an `EventEmitter` with the following events:
-
+Returns a new web server object.
 -->
+
+新しい Web サーバオブジェクトを返します。
+
+<!--
+The `requestListener` is a function which is automatically
+added to the `'request'` event.
+-->
+
+`requestListener` は自動的に `'request'` イベントに加えられる関数です。
+
+## Class: http.Server
+
+<!--
+This is an `EventEmitter` with the following events:
+-->
+
 これは以下のイベントを持つ `EventEmitter` です:
 
 ### Event: 'request'
@@ -68,21 +79,19 @@ This is an `EventEmitter` with the following events:
 `function (request, response) { }`
 
 <!--
-
 Emitted each time there is a request. Note that there may be multiple requests
 per connection (in the case of keep-alive connections).
-
 -->
+
 リクエストの度に生成されます。
 コネクションごとに複数のリクエストがあるかもしれないことに注意してください
 (Keep Alive なコネクションの場合)。
 
 <!--
-
  `request` is an instance of `http.ServerRequest` and `response` is
  an instance of `http.ServerResponse`
-
 -->
+
 `request` は `http.ServerRequest` のインスタンス、
 `response` は `http.ServerResponse` のインスタンスです。
 
@@ -91,12 +100,11 @@ per connection (in the case of keep-alive connections).
 `function (socket) { }`
 
 <!--
-
  When a new TCP stream is established. `socket` is an object of type
  `net.Socket`. Usually users will not want to access this event. The
  `socket` can also be accessed at `request.connection`.
-
 -->
+
 新しい TCP ストリームが確立した時。
 `socket` は `net.Socket` 型のオブジェクトです。
 通常の利用者がこのイベントにアクセスしたくなることはないでしょう。
@@ -107,10 +115,9 @@ per connection (in the case of keep-alive connections).
 `function () { }`
 
 <!--
-
  Emitted when the server closes.
-
 -->
+
 サーバがクローズした時に生成されます。
 
 ### Event: 'checkContinue'
@@ -118,34 +125,31 @@ per connection (in the case of keep-alive connections).
 `function (request, response) { }`
 
 <!--
-
 Emitted each time a request with an http Expect: 100-continue is received.
 If this event isn't listened for, the server will automatically respond
 with a 100 Continue as appropriate.
-
 -->
+
 httpの Expect: 100-continue リクエストを受信する度に生成されます。
 このイベントが監視されない場合、サーバは自動的に 100 Continue を応答します。
 
 <!--
-
 Handling this event involves calling `response.writeContinue` if the client
 should continue to send the request body, or generating an appropriate HTTP
 response (e.g., 400 Bad Request) if the client should not continue to send the
 request body.
-
 -->
+
 このイベントを処理する場合、クライアントがリクエストボディを送信し続けるべきなら
 `response.writeContinue` を呼び出す必要があります。
 あるいは、クライアントがリクエストボディを送信し続けるべきでないなら、
 適切な HTTP レスポンス (例えば 400 Bad Request) を生成します。
 
 <!--
-
 Note that when this event is emitted and handled, the `request` event will
 not be emitted.
-
 -->
+
 このイベントが生成されて処理された場合、`request`イベントは生成されないことに注意してください。
 
 ### Event: 'connect'
@@ -153,72 +157,68 @@ not be emitted.
 `function (request, socket, head) { }`
 
 <!--
-
 Emitted each time a client requests a http CONNECT method. If this event isn't
 listened for, then clients requesting a CONNECT method will have their
 connections closed.
-
 -->
+
 クライアントが HTTP の CONNECT メソッドを要求する度に生成されます。
 このイベントが監視されない場合、CONNECT メソッドを要求したクライアントのコネクションはクローズされます。
 
 <!--
-
 * `request` is the arguments for the http request, as it is in the request
   event.
 * `socket` is the network socket between the server and client.
 * `head` is an instance of Buffer, the first packet of the tunneling stream,
   this may be empty.
-
 -->
+
 * `request` はリクエストイベントの引数と同様に HTTP リクエストです。
 * `socket` はサーバとクライアントの間のネットワークソケットです。
 * `head` はトンネリングストリームの最初のパケットを持つ Buffer のインスタンスです。
   空の場合もあります。
 
 <!--
-
 After this event is emitted, the request's socket will not have a `data`
 event listener, meaning you will need to bind to it in order to handle data
 sent to the server on that socket.
-
 -->
+
+このイベントが生成された後、リクエスト元のソケットはもう `data` イベントリスナーを持ちません。
+このソケットでサーバへ送られたデータを扱うためにそれをバインドしなければならないことを意味します。
 
 ### Event: 'upgrade'
 
 `function (request, socket, head) { }`
 
 <!--
-
 Emitted each time a client requests a http upgrade. If this event isn't
 listened for, then clients requesting an upgrade will have their connections
 closed.
-
 -->
+
 クライアントが HTTP のアップグレードを要求する度に生成されます。
 このイベントが監視されない場合、アップグレードを要求したクライアントのコネクションはクローズされます。
 
 <!--
-
 * `request` is the arguments for the http request, as it is in the request
   event.
 * `socket` is the network socket between the server and client.
 * `head` is an instance of Buffer, the first packet of the upgraded stream,
   this may be empty.
-
 -->
+
 * `request` はリクエストイベントの引数と同様に HTTP リクエストです。
 * `socket` はサーバとクライアントの間のネットワークソケットです。
 * `head` はアップグレードストリームの最初のパケットを持つ Buffer のインスタンスです。
   空の場合もあります。
 
 <!--
-
 After this event is emitted, the request's socket will not have a `data`
 event listener, meaning you will need to bind to it in order to handle data
 sent to the server on that socket.
-
 -->
+
 このイベントが生成された後、リクエスト元のソケットはもう `data` イベントリスナーを持ちません。
 このソケットでサーバへ送られたデータを扱うためにそれをバインドしなければならないことを意味します。
 
@@ -227,55 +227,34 @@ sent to the server on that socket.
 `function (exception) { }`
 
 <!--
-
 If a client connection emits an 'error' event - it will forwarded here.
-
 -->
+
 クライアントコネクションが 'error' イベントを発した場合 － ここに転送されます。
-
-### http.createServer([requestListener])
-
-<!--
-
-Returns a new web server object.
-
--->
-新しい Web サーバオブジェクトを返します。
-
-<!--
-
-The `requestListener` is a function which is automatically
-added to the `'request'` event.
-
--->
-`requestListener` は自動的に `'request'` イベントに加えられる関数です。
 
 ### server.listen(port, [hostname], [callback])
 
 <!--
-
 Begin accepting connections on the specified port and hostname.  If the
 hostname is omitted, the server will accept connections directed to any
 IPv4 address (`INADDR_ANY`).
-
 -->
+
 指定されたポートとホスト名でコネクションの受け入れを開始します。
 ホスト名が省略されると、サーバはどんな IPv4 アドレスへの接続も受け入れます (`INADDR_ANY`)。
 
 <!--
-
 To listen to a unix socket, supply a filename instead of port and hostname.
-
 -->
+
 UNIX ドメインソケットを待ち受ける場合、ポートとホスト名ではなくファイル名を提供します。
 
 <!--
-
 This function is asynchronous. The last parameter `callback` will be added as
 a listener for the ['listening'](net.html#event_listening_) event.
 See also [net.Server.listen()](net.html#server.listen).
-
 -->
+
 この関数は非同期です。最後の引数の `callback` は
 ['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
 詳細は [net.Server.listen()](net.html#server.listen) を参照してください。
@@ -284,19 +263,17 @@ See also [net.Server.listen()](net.html#server.listen).
 ### server.listen(path, [callback])
 
 <!--
-
 Start a UNIX socket server listening for connections on the given `path`.
-
 -->
+
 `path` で与えられたコネクションを待ち受ける UNIX ドメインソケットのサーバを開始します。
 
 <!--
-
 This function is asynchronous. The last parameter `callback` will be added as
 a listener for the ['listening'](net.html#event_listening_) event.
 See also [net.Server.listen()](net.html#server.listen).
-
 -->
+
 この関数は非同期です。最後の引数の `callback` は
 ['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
 詳細は [net.Server.listen()](net.html#server.listen) を参照してください。
@@ -305,44 +282,40 @@ See also [net.Server.listen()](net.html#server.listen).
 ### server.close([cb])
 
 <!--
-
 Stops the server from accepting new connections.
 See [net.Server.close()](net.html#server.close).
-
 -->
+
 サーバが新しいコネクションを受け付けるのを終了します。
 
 
 ### server.maxHeadersCount
 
 <!--
-
 Limits maximum incoming headers count, equal to 1000 by default. If set to 0 -
 no limit will be applied.
-
 -->
+
 受け付けるヘッダ数の上限で、デフォルトは 1000 です。
 0 に設定されると、制限しないことになります。
 
 
-## http.ServerRequest
+## Class: http.ServerRequest
 
 <!--
-
 This object is created internally by a HTTP server -- not by
 the user -- and passed as the first argument to a `'request'` listener.
-
 -->
+
 このオブジェクトは HTTP サーバ内部 － ユーザではなく － で作成され、
 `'request'` リスナーの第1引数として渡されます。
 
 <!--
-
-The request implements the [Readable Stream](streams.html#readable_Stream)
+The request implements the [Readable Stream](stream.html#readable_stream)
 interface. This is an `EventEmitter` with the following events:
-
 -->
-リクエストは [Readable Stream](streams.html#readable_Stream)
+
+リクエストは [Readable Stream](stream.html#readable_stream)
 インタフェースを実装します。
 これは以下のイベントを持つ `EventEmitter` です:
 
@@ -351,18 +324,16 @@ interface. This is an `EventEmitter` with the following events:
 `function (chunk) { }`
 
 <!--
-
 Emitted when a piece of the message body is received. The chunk is a string if
 an encoding has been set with `request.setEncoding()`, otherwise it's a
-[Buffer](buffers.html).
-
+[Buffer](buffer.html).
 -->
+
 メッセージボディの断片を受信した場合に生成されます。
 `request.setEncoding()` によってエンコーディングが設定された場合、
-`chunk` は文字列です。それ以外の場合は [Buffer](buffers.html) です。
+`chunk` は文字列です。それ以外の場合は [Buffer](buffer.html) です。
 
 <!--
-
 Example: A chunk of the body is given as the single
 argument. The transfer-encoding has been decoded.  The
 body chunk is a string.  The body encoding is set with
@@ -370,8 +341,8 @@ body chunk is a string.  The body encoding is set with
 
 Note that the __data will be lost__ if there is no listener when a
 `ServerRequest` emits a `'data'` event.
-
 -->
+
 例: 一つの引数としてボディのチャンクが与えられます。
 転送エンコーディングでデコードされます。
 ボディのチャンクは文字列です。
@@ -385,11 +356,10 @@ __データは失われる__ことに注意してください。
 `function () { }`
 
 <!--
-
 Emitted exactly once for each request. After that, no more `'data'` events
 will be emitted on the request.
-
 -->
+
 リクエストごとに厳密に一回生成されます。
 その後、このリクエストで `'data'` イベントが生成されることはありません。
 
@@ -398,39 +368,35 @@ will be emitted on the request.
 `function () { }`
 
 <!--
-
 Indicates that the underlaying connection was terminated before
 `response.end()` was called or able to flush.
-
 -->
+
 `response.end()` が呼び出されたりフラッシュされる前に、
 下層の接続が切断されたことを示します。
 
 <!--
-
 Just like `'end'`, this event occurs only once per request, and no more `'data'`
 events will fire afterwards.
-
 -->
+
 `'end'` と同様、このイベントはリクエスト上で一度だけ発生し、その後ではもう
 `'data'` イベントが発生することはありません。
 
 <!--
-
 Note: `'close'` can fire after `'end'`, but not vice versa.
-
 -->
+
 注意: `'close'` は `'end'` の後で発生することがあります。
 その逆もあります。
 
 ### request.method
 
 <!--
-
 The request method as a string. Read only. Example:
 `'GET'`, `'DELETE'`.
-
 -->
+
 リクエストメソッドを表す文字列です。参照のみ可能です。
 例: `'GET'`、`'DELETE'`
 
@@ -438,11 +404,10 @@ The request method as a string. Read only. Example:
 ### request.url
 
 <!--
-
 Request URL string. This contains only the URL that is
 present in the actual HTTP request. If the request is:
-
 -->
+
 リクエスト URL を表す文字列です。
 これは実際の HTTP リクエストに存在する URL だけを含みます。
 リクエストがこうなら:
@@ -452,20 +417,18 @@ present in the actual HTTP request. If the request is:
     \r\n
 
 <!--
-
 Then `request.url` will be:
-
 -->
+
 この場合の `request.url` はこうなります:
 
     '/status?name=ryan'
 
 <!--
-
 If you would like to parse the URL into its parts, you can use
 `require('url').parse(request.url)`.  Example:
-
 -->
+
 URL の要素を解析したい場合は、
 `require('url').parse(request.url)` を参照してください。例:
 
@@ -476,12 +439,11 @@ URL の要素を解析したい場合は、
       pathname: '/status' }
 
 <!--
-
 If you would like to extract the params from the query string,
 you can use the `require('querystring').parse` function, or pass
 `true` as the second argument to `require('url').parse`.  Example:
-
 -->
+
 問い合わせ文字列からパラメータを取り出したい場合は、
 `require('querystring').parse` 関数を参照するか、
 `require('url').parse` の第 2 引数に `true` を渡してください。例:
@@ -497,31 +459,28 @@ you can use the `require('querystring').parse` function, or pass
 ### request.headers
 
 <!--
-
 Read only.
-
 -->
+
 参照のみ可能です。
 
 ### request.trailers
 
 <!--
-
 Read only; HTTP trailers (if present). Only populated after the 'end' event.
-
 -->
+
 参照のみ可能です; HTTP のトレーラです (もしあれば)。'end' イベントの後にだけ発生します。
 
 ### request.httpVersion
 
 <!--
-
 The HTTP protocol version as a string. Read only. Examples:
 `'1.1'`, `'1.0'`.
 Also `request.httpVersionMajor` is the first integer and
 `request.httpVersionMinor` is the second.
-
 -->
+
 HTTP プロトコルのバージョンを表す文字列です。参照のみ可能です。例:
 `'1.1'`、`'1.0'`。
 同様に `request.httpVersionMajor` は最初の整数、
@@ -531,11 +490,10 @@ HTTP プロトコルのバージョンを表す文字列です。参照のみ可
 ### request.setEncoding([encoding])
 
 <!--
-
 Set the encoding for the request body. Either `'utf8'` or `'binary'`. Defaults
 to `null`, which means that the `'data'` event will emit a `Buffer` object..
-
 -->
+
 リクエストボディのエンコーディングを設定します。
 `'utf8'` または `'binary'` のいずれかです。
 デフォルトは `null` で、`'data'` イベントが
@@ -545,60 +503,55 @@ to `null`, which means that the `'data'` event will emit a `Buffer` object..
 ### request.pause()
 
 <!--
-
 Pauses request from emitting events.  Useful to throttle back an upload.
-
 -->
+
 リクエストによるイベントの生成を中断します。アップロード速度を落とすのに便利です。
 
 
 ### request.resume()
 
 <!--
-
 Resumes a paused request.
-
 -->
+
 中断されたリクエストを再開します。
 
 ### request.connection
 
 <!--
-
 The `net.Socket` object associated with the connection.
-
 -->
+
 コネクションに関連づけられた `net.Socket` オブジェクトです。
 
 
 <!--
-
 With HTTPS support, use request.connection.verifyPeer() and
 request.connection.getPeerCertificate() to obtain the client's
 authentication details.
-
 -->
+
 HTTPS では `request.connection.verifyPeer()` と
 `request.connection.getPeerCertificate()` で
 クライアントの認証の詳細を取得できます。
 
 
 
-## http.ServerResponse
+## Class: http.ServerResponse
 
 <!--
-
 This object is created internally by a HTTP server--not by the user. It is
 passed as the second parameter to the `'request'` event.
 
-The response implements the [Writable  Stream](streams.html#writable_Stream)
+The response implements the [Writable  Stream](stream.html#writable_stream)
 interface. This is an `EventEmitter` with the following events:
-
 -->
+
 このオブジェクトは HTTP サーバ内部 － ユーザではなく － で作成されます。
 `'request'` リスナーの第 2 引数として渡されます。
 
-レスポンスは [Writable  Stream](streams.html#writable_Stream)
+レスポンスは [Writable  Stream](stream.html#writable_stream)
 インタフェースを実装します。
 これは以下のイベントを持つ `EventEmitter` です:
 
@@ -607,23 +560,21 @@ interface. This is an `EventEmitter` with the following events:
 `function () { }`
 
 <!--
-
 Indicates that the underlaying connection was terminated before
 `response.end()` was called or able to flush.
-
 -->
+
 `response.end()` が呼び出されたりフラッシュされる前に、
 下層の接続が切断されたことを示します。
 
 ### response.writeContinue()
 
 <!--
-
 Sends a HTTP/1.1 100 Continue message to the client, indicating that
 the request body should be sent. See the [checkContinue](#event_checkContinue_) event on
 `Server`.
-
 -->
+
 HTTP/1.1 の 100 Continue メッセージをクライアントに送信し、
 リクエストボディを送信してもよいことを示します。
 `Server`の [checkContinue](#event_checkContinue_) イベントを参照してください。
@@ -631,23 +582,21 @@ HTTP/1.1 の 100 Continue メッセージをクライアントに送信し、
 ### response.writeHead(statusCode, [reasonPhrase], [headers])
 
 <!--
-
 Sends a response header to the request. The status code is a 3-digit HTTP
 status code, like `404`. The last argument, `headers`, are the response headers.
 Optionally one can give a human-readable `reasonPhrase` as the second
 argument.
-
 -->
+
 レスポンスヘッダを送信します。
 ステータスコードは `404` のような 3 桁の数字による HTTP ステータスコードです。
 最後の引数 `headers` は、レスポンスヘッダです。
 オプションとして人に読める形式の `reasonPhrase` を第 2 引数で与えることができます。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     var body = 'hello world';
@@ -656,29 +605,27 @@ Example:
       'Content-Type': 'text/plain' });
 
 <!--
-
 This method must only be called once on a message and it must
 be called before `response.end()` is called.
 
 If you call `response.write()` or `response.end()` before calling this, the
 implicit/mutable headers will be calculated and call this function for you.
-
 -->
+
 このメソッドはメッセージごとに 1 回だけ呼び出されなくてはならず、
 `response.end()` の前に呼び出されなければなりません。
 
 もしこのメソッドが呼び出される前に `response.write()` または `response.end()` が呼ばれると、暗黙的で可変のヘッダが算出されてこの関数が呼び出されます。
 
 <!--
-
 Note: that Content-Length is given in bytes not characters. The above example
 works because the string `'hello world'` contains only single byte characters.
 If the body contains higher coded characters then `Buffer.byteLength()`
 should be used to determine the number of bytes in a given encoding.
 And Node does not check whether Content-Length and the length of the body
 which has been transmitted are equal or not.
-
 -->
+
 注意: `Content-Length` は文字数ではなくバイト数で与えられます。
 上の例が動作するのは `'hello world'` という文字列が単一バイト文字だけを含むためです。
 もしボディがより上位にコード化された文字を含む場合は、
@@ -688,70 +635,68 @@ Node は、Content-Length と実際に送信されたレスポンスボディの
 ### response.statusCode
 
 <!--
-
 When using implicit headers (not calling `response.writeHead()` explicitly), this property
 controls the status code that will be send to the client when the headers get
 flushed.
-
 -->
+
 (`response.writeHead()` が明示的に呼ばれないために) 暗黙的なヘッダが使われる場合、このプロパティはヘッダがフラッシュされる時にクライアントへ送信されるステータスコードを制御します。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     response.statusCode = 404;
 
 <!--
-
 After response header was sent to the client, this property indicates the
 status code which was sent out.
-
 -->
+
 レスポンスヘッダがクライアントに送信された後、
 このプロパティは送信されたステータスコードを示します。
 
 ### response.setHeader(name, value)
 
 <!--
-
 Sets a single header value for implicit headers.  If this header already exists
 in the to-be-sent headers, its value will be replaced.  Use an array of strings
 here if you need to send multiple headers with the same name.
-
 -->
+
 暗黙的ヘッダのヘッダ値を設定します。
 送信されようとしているレスポンスヘッダにこのヘッダが既に含まれている場合、
 その値は置き換えられます。
 同じ名前で複数のヘッダを送信したい場合は文字列の配列を使ってください。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     response.setHeader("Content-Type", "text/html");
 
+<!--
 or
+-->
+
+または
 
     response.setHeader("Set-Cookie", ["type=ninja", "language=javascript"]);
 
 ### response.sendDate
 
 <!--
-
 When true, the Date header will be automatically generated and sent in 
 the response if it is not already present in the headers. Defaults to true.
 
 This should only be disabled for testing; HTTP requires the Date header
 in responses.
-
 -->
+
 `true` の場合、Date ヘッダが自動的に生成され、レスポンスとして送信されます
 (`headers` にすでに与えられていない場合)。
 デフォルトは `true` です。
@@ -762,21 +707,19 @@ HTTP はレスポンスに Date ヘッダを要求します。
 ### response.getHeader(name)
 
 <!--
-
 Reads out a header that's already been queued but not sent to the client.  Note
 that the name is case insensitive.  This can only be called before headers get
 implicitly flushed.
-
 -->
+
 すでにキューに入れられているが未送信のヘッダを読み上げます．
 名前は大文字小文字を区別しないことに注意してください。
 これはヘッダが暗黙的にフラッシュされる前だけ呼び出すことができます。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     var contentType = response.getHeader('content-type');
@@ -784,17 +727,15 @@ Example:
 ### response.removeHeader(name)
 
 <!--
-
 Removes a header that's queued for implicit sending.
-
 -->
+
 暗黙的に送信するためキューに入れられたヘッダを削除します。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     response.removeHeader("Content-Encoding");
@@ -803,14 +744,13 @@ Example:
 ### response.write(chunk, [encoding])
 
 <!--
-
 If this method is called and `response.writeHead()` has not been called, it will
 switch to implicit header mode and flush the implicit headers.
 
 This sends a chunk of the response body. This method may
 be called multiple times to provide successive parts of the body.
-
 -->
+
 このメソッドが呼び出され、`response.writeHead()` が呼び出されなければ、
 暗黙的ヘッダモードに切り替わり、暗黙的ヘッダはフラッシュされます。
 
@@ -818,34 +758,31 @@ be called multiple times to provide successive parts of the body.
 このメソッドはボディの連続した部分を提供するために複数回呼び出されるかもしれません。
 
 <!--
-
 `chunk` can be a string or a buffer. If `chunk` is a string,
 the second parameter specifies how to encode it into a byte stream.
 By default the `encoding` is `'utf8'`.
-
 -->
+
 `chunk` は文字列またはバッファにすることができます。
 `chunk` が文字列の場合、どのエンコードでバイトストリームにするかを第 2 引数で指定します。
 デフォルトの `encoding` は `'utf8'` です。
 
 <!--
-
 **Note**: This is the raw HTTP body and has nothing to do with
 higher-level multi-part body encodings that may be used.
-
 -->
+
 **注意**: これは生の HTTP ボディで、
 高水準のマルチパートボディエンコーディングで使われるものとは無関係です。
 
 <!--
-
 The first time `response.write()` is called, it will send the buffered
 header information and the first body to the client. The second time
 `response.write()` is called, Node assumes you're going to be streaming
 data, and sends that separately. That is, the response is buffered up to the
 first chunk of body.
-
 -->
+
 初めて `response.write()` が呼び出されると、
 バッファリングされていたヘッダ情報と最初のボディがクライアントに送信されます。
 2 回目に `response.write()` が呼ばれると、
@@ -855,29 +792,26 @@ Node はストリーミングデータを分割して送信しようとしてい
 ### response.addTrailers(headers)
 
 <!--
-
 This method adds HTTP trailing headers (a header but at the end of the
 message) to the response.
-
 -->
+
 このメソッドは HTTP トレーラヘッダ (メッセージの最後に置かれるヘッダ) をレスポンスに追加します。
 
 <!--
-
 Trailers will **only** be emitted if chunked encoding is used for the
 response; if it is not (e.g., if the request was HTTP/1.0), they will
 be silently discarded.
-
 -->
+
 トレーラはレスポンスがチャンク化されたエンコーディングで**のみ**生成されます;
 そうでなければ (例えばリクエストが HTTP/1.0)、黙って破棄されます。
 
 <!--
-
 Note that HTTP requires the `Trailer` header to be sent if you intend to
 emit trailers, with a list of the header fields in its value. E.g.,
-
 -->
+
 HTTP は、トレーラを生成するならそのヘッダフィールドのリストを値として
 `Trailer` ヘッダを送信することを要求していることに注意してください。
 
@@ -891,23 +825,21 @@ HTTP は、トレーラを生成するならそのヘッダフィールドのリ
 ### response.end([data], [encoding])
 
 <!--
-
 This method signals to the server that all of the response headers and body
 has been sent; that server should consider this message complete.
 The method, `response.end()`, MUST be called on each
 response.
-
 -->
+
 このメソッドはレスポンスの全てのヘッダとボディを送信したことをサーバに伝えます;
 サーバはメッセージが終了したと考えるべきです。
 この `response.end()` メソッドは各レスポンスごとに呼び出さなければ*なりません*。
 
 <!--
-
 If `data` is specified, it is equivalent to calling `response.write(data, encoding)`
 followed by `response.end()`.
-
 -->
+
 `data` が指定された場合、
 `response.write(data, encoding)` に続けて `response.end()` を呼び出すのと等価です。
 
@@ -915,28 +847,26 @@ followed by `response.end()`.
 ## http.request(options, callback)
 
 <!--
-
 Node maintains several connections per server to make HTTP requests.
 This function allows one to transparently issue requests.  `options` align
 with [url.parse()](url.html#url.parse).
-
 -->
+
 Node は HTTP リクエストを行うために、サーバごとにいくつかのコネクションを保持します。
 この関数はその一つを使って透過的にリクエストを発行できるようにします。
 
 <!--
-
 Options:
-
 -->
+
 オプション:
 
 <!--
-
 - `host`: A domain name or IP address of the server to issue the request to.
   Defaults to `'localhost'`.
 - `hostname`: To support `url.parse()` `hostname` is preferred over `host`
 - `port`: Port of remote server. Defaults to 80.
+- `localAddress`: Local interface to bind for network connections.
 - `socketPath`: Unix Domain Socket (use one of host:port or socketPath)
 - `method`: A string specifying the HTTP request method. Defaults to `'GET'`.
 - `path`: Request path. Defaults to `'/'`. Should include query string if any.
@@ -951,18 +881,20 @@ Options:
  - `Agent` object: explicitly use the passed in `Agent`.
  - `false`: opts out of connection pooling with an Agent, defaults request to
    `Connection: close`.
-
 -->
+
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
 - `hostname`: `url.parse()` サポート。`hostname` は `host` を上書きします。
 - `port`: リモートサーバのポート。デフォルトは 80 です。
+- `localAddress`: ネットワーク接続をバインドするローカルインタフェースです。
 - `socketPath`: Unix ドメインソケット (host:port または socketPath のどちらか)
 - `method`: HTTP リクエストのメソッドの文字列。デフォルトは `'GET'` です。
 - `path`: リクエストのパス。デフォルトは `'/'` です。
   必要なら問い合わせ文字列を含めるべきです．
   例 `'/index.html?page=12'`
 - `headers`: リクエストヘッダを含むオブジェクト。
-- `auth`: べーしく認証すなわち Authorization ヘッダのための `'user:password'`。
+- `auth`: ベーシック認証すなわち Authorization ヘッダのための
+  `'user:password'`。
 - `agent`: `Agent` の振る舞いを制御します。
   エージェントが使われる場合、Connection:keep-alive がデフォルトになります。
   可能な値は:
@@ -973,22 +905,20 @@ Options:
      Connection:close の場合のデフォルトです。
 
 <!--
-
 `http.request()` returns an instance of the `http.ClientRequest`
 class. The `ClientRequest` instance is a writable stream. If one needs to
 upload a file with a POST request, then write to the `ClientRequest` object.
-
 -->
+
 `http.request()` は `http.ClientRequest` クラスのインスタンスを返します。
 `http.ClientRequest` のインスタンスは書き込み可能なストリームです。
 もし POST リクエストでファイルのアップロードがしたければ、
 `http.ClientRequest` オブジェクトに出力してください。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     var options = {
@@ -1017,36 +947,32 @@ Example:
     req.end();
 
 <!--
-
 Note that in the example `req.end()` was called. With `http.request()` one
 must always call `req.end()` to signify that you're done with the request -
 even if there is no data being written to the request body.
-
 -->
+
 この例で `req.end()` が呼ばれていることに注意してください。
 `http.request()` では、リクエストが終了したことを示すために、
 常に `req.end()` を呼び出さなければなりません
 - リクエストのボディに出力するデータがなかったとしても。
 
 <!--
-
 If any error is encountered during the request (be that with DNS resolution,
 TCP level errors, or actual HTTP parse errors) an `'error'` event is emitted
 on the returned request object.
-
 -->
+
 リクエスト中に何らかのエラー (DNS 解決、TCP レベルのエラー、HTTP パースエラーなど) が発生すると、戻り値のリクエストオブジェクトで `'error'` イベントが生成されます。
 
 
 <!--
-
 There are a few special headers that should be noted.
-
 -->
+
 いくつかの特別なヘッダに注意が必要です。
 
 <!--
-
 * Sending a 'Connection: keep-alive' will notify Node that the connection to
   the server should be persisted until the next request.
 
@@ -1059,8 +985,8 @@ There are a few special headers that should be noted.
 
 * Sending an Authorization header will override using the `auth` option
   to compute basic authentication.
-
 -->
+
 * 'Connection: keep-alive' の送信は、サーバへのコネクションを次のリクエストまで持続することを Node に通知します。
 
 * 'Content-length' ヘッダの送信は、デフォルトのチャンクエンコーディングを無効にします。
@@ -1074,21 +1000,19 @@ There are a few special headers that should be noted.
 ## http.get(options, callback)
 
 <!--
-
 Since most requests are GET requests without bodies, Node provides this
 convenience method. The only difference between this method and `http.request()` is
 that it sets the method to GET and calls `req.end()` automatically.
-
 -->
+
 ほとんどのリクエストは本文のない GET リクエストであるため、
 Node は便利なメソッドを提供します。
 このメソッドと `http.request()` の間の違いは、メソッドを GET に設定して `req.end()` を自動的に呼び出すことだけです。
 
 <!--
-
 Example:
-
 -->
+
 例:
 
     var options = {
@@ -1104,7 +1028,7 @@ Example:
     });
 
 
-## http.Agent
+## Class: http.Agent
 
 <!--
 In node 0.5.3+ there is a new implementation of the HTTP Agent which is used
@@ -1124,6 +1048,7 @@ Sockets are removed from the agent's pool when the socket emits either a
 to keep one HTTP request open for a long time and don't want it to stay in the
 pool you can do something along the lines of:
 -->
+
 Node 0.5.3 以降には、HTTP クライアントリクエストのソケットを
 プーリングするために新しい HTTP Agent の実装が存在します。
 
@@ -1154,6 +1079,7 @@ keep-alive を使用する HTTP クライアントを開発者が手動でクロ
 <!--
 Alternatively, you could just opt out of pooling entirely using `agent:false`:
 -->
+
 別の方法として、 `agent: false` を指定することで、
 プーリングを使用しないこともできます:
 
@@ -1161,19 +1087,13 @@ Alternatively, you could just opt out of pooling entirely using `agent:false`:
       // Do stuff
     })
 
-## http.globalAgent
-
-<!--
-Global instance of Agent which is used as the default for all http client requests.
--->
-全ての HTTP クライアントリクエストで使用される、デフォルトの Agent のインスタンスです。
-
 ### agent.maxSockets
 
 <!--
 By default set to 5. Determines how many concurrent sockets the agent can have 
 open per host.
 -->
+
 デフォルトでは 5 に設定されます。
 エージェントがいくつのソケットを並行にオープンするかを決定します。
 
@@ -1183,6 +1103,7 @@ open per host.
 An object which contains arrays of sockets currently in use by the Agent. Do not 
 modify.
 -->
+
 エージェントが現在使っているソケットの配列です。
 変更しないでください。
 
@@ -1192,48 +1113,55 @@ modify.
 An object which contains queues of requests that have not yet been assigned to 
 sockets. Do not modify.
 -->
+
 まだソケットが割り当てられていないリクエストのキューを含むオブジェクトです。
 変更しないでください。
 
-
-## http.ClientRequest
+## http.globalAgent
 
 <!--
+Global instance of Agent which is used as the default for all http client
+requests.
+-->
 
+全ての HTTP クライアントリクエストで使用される、デフォルトの Agent のインスタンスです。
+
+
+## Class: http.ClientRequest
+
+<!--
 This object is created internally and returned from `http.request()`.  It
 represents an _in-progress_ request whose header has already been queued.  The
 header is still mutable using the `setHeader(name, value)`, `getHeader(name)`,
 `removeHeader(name)` API.  The actual header will be sent along with the first
 data chunk or when closing the connection.
-
 -->
+
 このオブジェクトは HTTP サーバ内部で作成され、`http.request()` から返されます。
 それはヘッダがキューに入れられた _進行中_ のリクエストを表現します。
 ヘッダは `setHeader(name, value)`, `getHeader(name)`, `removeHeader(name)` API によってまだ可変のままです。
 実際にヘッダが送信されるのは、最初のデータチャンクが送信される時またはコネクションがクローズされる時です。
 
 <!--
-
 To get the response, add a listener for `'response'` to the request object.
 `'response'` will be emitted from the request object when the response
 headers have been received.  The `'response'` event is executed with one
 argument which is an instance of `http.ClientResponse`.
-
 -->
+
 レスポンスを取得するには、`'response'` 用のリスナーをリクエストオブジェクトに加えます。
 `'response'` イベントはレスポンスヘッダを受信するとリクエストオブジェクトによって生成されます。
 `'response'` イベントは `http.ClientResponse` のインスタンスを唯一の引数として実行されます。
 
 <!--
-
 During the `'response'` event, one can add listeners to the
 response object; particularly to listen for the `'data'` event. Note that
 the `'response'` event is called before any part of the response body is received,
 so there is no need to worry about racing to catch the first part of the
 body. As long as a listener for `'data'` is added during the `'response'`
 event, the entire body will be caught.
-
 -->
+
 `'response'` イベントの間、レスポンスオブジェクトにリスナーを加えることができます;
 とりわけ `'data'` イベントのリスナーです。
 `'response'` イベントはレスポンスボディのどの部分を受信するよりも前に呼び出されることに注意してください。
@@ -1259,15 +1187,14 @@ event, the entire body will be caught.
     });
 
 <!--
-
 This is a `Writable Stream`.
 Note: Node does not check whether Content-Length and the length of the body
 which has been transmitted are equal or not.
 
 Note: Node does not check whether Content-Length and the length of the body
 which has been transmitted are equal or not.
-
 -->
+
 これは `Writable Stream` です。
 注意: Node は Content-Length と実際に送信されたリクエストボディの長さが等しいかどうかチェックしません。
 
@@ -1275,12 +1202,11 @@ which has been transmitted are equal or not.
 __データは失われる__ことに注意してください。
 
 <!--
-
-The request implements the [Writable  Stream](streams.html#writable_Stream)
+The request implements the [Writable  Stream](stream.html#writable_stream)
 interface. This is an `EventEmitter` with the following events:
-
 -->
-リクエストは [Writable  Stream](streams.html#writable_Stream)
+
+リクエストは [Writable  Stream](stream.html#writable_stream)
 インタフェースを実装します。
 これは以下のイベントを持つ `EventEmitter` です。
 
@@ -1289,29 +1215,26 @@ interface. This is an `EventEmitter` with the following events:
 `function (response) { }`
 
 <!--
-
 Emitted when a response is received to this request. This event is emitted only once. The
 `response` argument will be an instance of `http.ClientResponse`.
-
 -->
+
 このリクエストに対するレスポンスを受信した時に生成されます。
 このイベントは一回だけ生成されます。
 `response` 引数は `http.ClientResponse` のインスタンスです。
 
 <!--
-
 Options:
-
 -->
+
 オプション:
 
 <!--
-
 - `host`: A domain name or IP address of the server to issue the request to.
 - `port`: Port of remote server.
 - `socketPath`: Unix Domain Socket (use one of host:port or socketPath)
-
 -->
+
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
 - `port`: リモートサーバのポート。
 - `soocketPath`: Unix ドメインソケット (host:port または socketPath のどちらか)
@@ -1321,10 +1244,9 @@ Options:
 `function (socket) { }`
 
 <!--
-
 Emitted after a socket is assigned to this request.
-
 -->
+
 このリクエストにソケットが割り当てられた後に生成されます。
 
 ### Event: 'connect'
@@ -1332,21 +1254,19 @@ Emitted after a socket is assigned to this request.
 `function (response, socket, head) { }`
 
 <!--
-
 Emitted each time a server responds to a request with a CONNECT method. If this
 event isn't being listened for, clients receiving a CONNECT method will have
 their connections closed.
-
 -->
+
 サーバが CONNECT メソッドの要求に応答する度に生成されます。
 このイベントが監視されていない場合、クライアントが CONNECT メソッドへの
 レスポンスを受信すると、そのコネクションはクローズされます。
 
 <!--
-
 A client server pair that show you how to listen for the `connect` event.
-
 -->
+
 どのように `connect` イベントを監視するかを示すクライアントとサーバのペア:
 
 
@@ -1408,20 +1328,18 @@ A client server pair that show you how to listen for the `connect` event.
 `function (response, socket, head) { }`
 
 <!--
-
 Emitted each time a server responds to a request with an upgrade. If this
 event isn't being listened for, clients receiving an upgrade header will have
 their connections closed.
-
 -->
+
 サーバがアップグレード要求に応答する度に生成されます。
 このイベントが監視されていない場合、クライアントがアップグレードヘッダを受信するとそのコネクションはクローズされます。
 
 <!--
-
 A client server pair that show you how to listen for the `upgrade` event.
-
 -->
+
 どのように `upgrade` イベントを監視するかを示すクライアントとサーバのペア:
 
     var http = require('http');
@@ -1469,12 +1387,11 @@ A client server pair that show you how to listen for the `upgrade` event.
 `function () { }`
 
 <!--
-
 Emitted when the server sends a '100 Continue' HTTP response, usually because
 the request contained 'Expect: 100-continue'. This is an instruction that
 the client should send the request body.
-
 -->
+
 通常、リクエストが 'Expect: 100-continue' を含んでいたことにより、
 サーバが '100 Continue' HTTP レスポンスを送信することで生成されます。
 これはクライアントがリクエストボディを送信すべき事を示します。
@@ -1482,32 +1399,28 @@ the client should send the request body.
 ### request.write(chunk, [encoding])
 
 <!--
-
 Sends a chunk of the body.  By calling this method
 many times, the user can stream a request body to a
 server--in that case it is suggested to use the
 `['Transfer-Encoding', 'chunked']` header line when
 creating the request.
-
 -->
+
 ボディのチャンクを送信します。
 このメソッドを何回も呼び出すと、サーバへのリクエストボディをストリーム化できます － 
 このケースは `['Transfer-Encoding', 'chunked']` ヘッダでリクエストを生成したことを意味します。
 
 <!--
-
-The `chunk` argument should be an array of integers
-or a string.
-
+The `chunk` argument should be a [buffer](buffer.html) or a string.
 -->
-`chunk` 引数は整数の配列か文字列になります。
+
+`chunk` 引数は[buffer](buffer.html) または文字列です。
 
 <!--
-
 The `encoding` argument is optional and only applies when `chunk` is a string.
 Defaults to `'utf8'`.
-
 -->
+
 `encoding` 引数はオプションで、`chunk` が文字列の場合だけ適用されます。
 デフォルトは `'utf8'` です。
 
@@ -1515,32 +1428,29 @@ Defaults to `'utf8'`.
 ### request.end([data], [encoding])
 
 <!--
-
 Finishes sending the request. If any parts of the body are
 unsent, it will flush them to the stream. If the request is
 chunked, this will send the terminating `'0\r\n\r\n'`.
-
 -->
+
 リクエストの送信を終了します。
 ボディのいくつかの部分がまだ送信されていない場合、それはストリームにフラッシュされます。
 リクエストがチャンク化されている場合、これは終端の `'0\r\n\r\n'` を送信します。
 
 <!--
-
 If `data` is specified, it is equivalent to calling
 `request.write(data, encoding)` followed by `request.end()`.
-
 -->
+
 `data` が指定された場合は、
 `request.write(data, encoding)` に続けて `request.end()` を呼び出すのと等価です。
 
 ### request.abort()
 
 <!--
-
 Aborts a request.  (New since v0.3.8.)
-
 -->
+
 リクエストをアボートします (v0.3.8 からの新機能)
 
 ### request.setTimeout(timeout, [callback])
@@ -1550,6 +1460,7 @@ Once a socket is assigned to this request and is connected
 [socket.setTimeout(timeout, [callback])](net.html#socket.setTimeout)
 will be called.
 -->
+
 このリクエストにソケットが割り当てられて接続した際に、
 [socket.setTimeout(timeout, [callback])](net.html#socket.setTimeout)
 が呼び出されます。
@@ -1561,6 +1472,7 @@ Once a socket is assigned to this request and is connected
 [socket.setNoDelay(noDelay)](net.html#socket.setNoDelay)
 will be called.
 -->
+
 このリクエストにソケットが割り当てられて接続した際に、
 [socket.setNoDelay(noDelay)](net.html#socket.setNoDelay)
 が呼び出されます。
@@ -1573,6 +1485,7 @@ Once a socket is assigned to this request and is connected
 [socket.setKeepAlive(enable, [initialDelay])](net.html#socket.setKeepAlive)
 will be called.
 -->
+
 このリクエストにソケットが割り当てられて接続した際に、
 [socket.setKeepAlive(enable, [initialDelay])](net.html#socket.setKeepAlive)
 が呼び出されます。
@@ -1581,21 +1494,19 @@ will be called.
 ## http.ClientResponse
 
 <!--
-
 This object is created when making a request with `http.request()`. It is
 passed to the `'response'` event of the request object.
-
 -->
+
 このオブジェクトは `http.request()` によってリクエストと一緒に作成されます。
 これはリクエストオブジェクトの `'response'` イベントに渡されます。
 
 <!--
-
-The response implements the [Readable Stream](streams.html#readable_Stream)
+The response implements the [Readable Stream](stream.html#readable_stream)
 interface. This is an `EventEmitter` with the following events:
-
 -->
-レスポンスは [Readable Stream](streams.html#readable_Stream)
+
+レスポンスは [Readable Stream](stream.html#readable_stream)
 インタフェースを実装します。
 これは以下のイベントを持つ `EventEmitter` です:
 
@@ -1604,13 +1515,12 @@ interface. This is an `EventEmitter` with the following events:
 `function (chunk) { }`
 
 <!--
-
 Emitted when a piece of the message body is received.
 
 Note that the __data will be lost__ if there is no listener when a
 `ClientResponse` emits a `'data'` event.
-
 -->
+
 メッセージボディの断片を受信した場合に生成されます。
 
 `ServerRequest` が `'data'` イベントを生成した時にリスナが存在しなければ、
@@ -1621,11 +1531,10 @@ __データは失われる__ことに注意してください。
 `function () { }`
 
 <!--
-
 Emitted exactly once for each message. No arguments. After
 emitted no other events will be emitted on the response.
-
 -->
+
 メッセージごとに厳密に一回だけ生成されます。
 このイベントが生成された後、このレスポンスはどんなイベントも生成しません。
 
@@ -1634,13 +1543,12 @@ emitted no other events will be emitted on the response.
 `function (err) { }`
 
 <!--
-
 Indicates that the underlaying connection was terminated before
 `end` event was emitted.
 See [http.ServerRequest](#http.ServerRequest)'s `'close'` event for more
 information.
-
 -->
+
 `'end'` イベントが生成される前に下層の接続が切断されたことを示します。
 [http.ServerRequest](#http.ServerRequest) の `'close'`
 イベントにより多くの情報があります。
@@ -1648,22 +1556,20 @@ information.
 ### response.statusCode
 
 <!--
-
 The 3-digit HTTP response status code. E.G. `404`.
-
 -->
+
 3 桁の数字によるレスポンスのステータスコードです。例えば `404`。
 
 ### response.httpVersion
 
 <!--
-
 The HTTP version of the connected-to server. Probably either
 `'1.1'` or `'1.0'`.
 Also `response.httpVersionMajor` is the first integer and
 `response.httpVersionMinor` is the second.
-
 -->
+
 接続しているサーバとの HTTP のバージョンです。
 おそらく `'1.1'` または `'1.0'` のどちらかです。
 同様に `response.httpVersionMajor` は最初の整数、
@@ -1672,31 +1578,28 @@ Also `response.httpVersionMajor` is the first integer and
 ### response.headers
 
 <!--
-
 The response headers object.
-
 -->
+
 レスポンスヘッダオブジェクトです。
 
 ### response.trailers
 
 <!--
-
 The response trailers object. Only populated after the 'end' event.
-
 -->
+
 レスポンスのトレーラオブジェクトです。
 'end' イベントの後にだけ発生します。
 
 ### response.setEncoding([encoding])
 
 <!--
-
 Set the encoding for the response body. Either `'utf8'`, `'ascii'`, or
 `'base64'`. Defaults to `null`, which means that the `'data'` event will emit
 a `Buffer` object.
-
 -->
+
 レスポンスボディのエンコーディングを設定します。
 `'utf8'`、`'ascii'`、あるいは `'base64'` のいずれかです。
 デフォルトは `null` で、
@@ -1705,17 +1608,15 @@ a `Buffer` object.
 ### response.pause()
 
 <!--
-
 Pauses response from emitting events.  Useful to throttle back a download.
-
 -->
+
 イベントの生成によるレスポンスを中断します。ダウンロード速度を落とすのに便利です。
 
 ### response.resume()
 
 <!--
-
 Resumes a paused response.
-
 -->
+
 中断されていたレスポンスを再開します。
