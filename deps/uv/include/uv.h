@@ -80,7 +80,7 @@ typedef intptr_t ssize_t;
   XX(  7, EAFNOSUPPORT, "") \
   XX(  8, EALREADY, "") \
   XX(  9, EBADF, "bad file descriptor") \
-  XX( 10, EBUSY, "mount device busy") \
+  XX( 10, EBUSY, "resource busy or locked") \
   XX( 11, ECONNABORTED, "software caused connection abort") \
   XX( 12, ECONNREFUSED, "connection refused") \
   XX( 13, ECONNRESET, "connection reset by peer") \
@@ -120,7 +120,8 @@ typedef intptr_t ssize_t;
   XX( 49, ENAMETOOLONG, "name too long") \
   XX( 50, EPERM, "operation not permitted") \
   XX( 51, ELOOP, "too many symbolic links encountered") \
-  XX( 52, EXDEV, "cross-device link not permitted")
+  XX( 52, EXDEV, "cross-device link not permitted") \
+  XX( 53, ENOTEMPTY, "directory not empty")
 
 
 #define UV_ERRNO_GEN(val, name, s) UV_##name = val,
@@ -1387,7 +1388,7 @@ UV_EXTERN extern uint64_t uv_hrtime(void);
 
 
 /*
- * Opens a shared library. The filename is in utf-8. On success, -1 is
+ * Opens a shared library. The filename is in utf-8. On success, -1 is returned
  * and the variable pointed by library receives a handle to the library.
  */
 UV_EXTERN uv_err_t uv_dlopen(const char* filename, uv_lib_t* library);
@@ -1398,6 +1399,12 @@ UV_EXTERN uv_err_t uv_dlclose(uv_lib_t library);
  * map to NULL.
  */
 UV_EXTERN uv_err_t uv_dlsym(uv_lib_t library, const char* name, void** ptr);
+
+/*
+ * Retrieves and frees an error message of dynamic linking loaders.
+ */
+UV_EXTERN const char *uv_dlerror(uv_lib_t library);
+UV_EXTERN void uv_dlerror_free(uv_lib_t library, const char *msg);
 
 /*
  * The mutex functions return 0 on success, -1 on error
@@ -1504,6 +1511,8 @@ struct uv_loop_s {
 #undef UV_FS_REQ_PRIVATE_FIELDS
 #undef UV_WORK_PRIVATE_FIELDS
 #undef UV_FS_EVENT_PRIVATE_FIELDS
+#undef UV_LOOP_PRIVATE_FIELDS
+#undef UV_LOOP_PRIVATE_PLATFORM_FIELDS
 
 #ifdef __cplusplus
 }

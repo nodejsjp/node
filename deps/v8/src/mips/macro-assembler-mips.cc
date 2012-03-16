@@ -2679,8 +2679,7 @@ void MacroAssembler::Throw(Register value) {
 }
 
 
-void MacroAssembler::ThrowUncatchable(UncatchableExceptionType type,
-                                      Register value) {
+void MacroAssembler::ThrowUncatchable(Register value) {
   // Adjust this code if not the case.
   STATIC_ASSERT(StackHandlerConstants::kSize == 5 * kPointerSize);
   STATIC_ASSERT(StackHandlerConstants::kNextOffset == 0 * kPointerSize);
@@ -2690,24 +2689,9 @@ void MacroAssembler::ThrowUncatchable(UncatchableExceptionType type,
   STATIC_ASSERT(StackHandlerConstants::kFPOffset == 4 * kPointerSize);
 
   // The exception is expected in v0.
-  if (type == OUT_OF_MEMORY) {
-    // Set external caught exception to false.
-    ExternalReference external_caught(Isolate::kExternalCaughtExceptionAddress,
-                                      isolate());
-    li(a0, Operand(false, RelocInfo::NONE));
-    li(a2, Operand(external_caught));
-    sw(a0, MemOperand(a2));
-
-    // Set pending exception and v0 to out of memory exception.
-    Failure* out_of_memory = Failure::OutOfMemoryException();
-    li(v0, Operand(reinterpret_cast<int32_t>(out_of_memory)));
-    li(a2, Operand(ExternalReference(Isolate::kPendingExceptionAddress,
-                                     isolate())));
-    sw(v0, MemOperand(a2));
-  } else if (!value.is(v0)) {
+  if (!value.is(v0)) {
     mov(v0, value);
   }
-
   // Drop the stack pointer to the top of the top stack handler.
   li(a3, Operand(ExternalReference(Isolate::kHandlerAddress, isolate())));
   lw(sp, MemOperand(a3));
@@ -5106,6 +5090,48 @@ void MacroAssembler::LoadInstanceDescriptors(Register map,
   JumpIfNotSmi(descriptors, &not_smi);
   li(descriptors, Operand(FACTORY->empty_descriptor_array()));
   bind(&not_smi);
+}
+
+
+void MacroAssembler::CheckEnumCache(Register null_value, Label* call_runtime) {
+  Label next;
+  // Preload a couple of values used in the loop.
+  Register  empty_fixed_array_value = t2;
+  LoadRoot(empty_fixed_array_value, Heap::kEmptyFixedArrayRootIndex);
+  Register empty_descriptor_array_value = t3;
+  LoadRoot(empty_descriptor_array_value,
+           Heap::kEmptyDescriptorArrayRootIndex);
+  mov(a1, a0);
+  bind(&next);
+
+  // Check that there are no elements.  Register a1 contains the
+  // current JS object we've reached through the prototype chain.
+  lw(a2, FieldMemOperand(a1, JSObject::kElementsOffset));
+  Branch(call_runtime, ne, a2, Operand(empty_fixed_array_value));
+
+  // Check that instance descriptors are not empty so that we can
+  // check for an enum cache.  Leave the map in a2 for the subsequent
+  // prototype load.
+  lw(a2, FieldMemOperand(a1, HeapObject::kMapOffset));
+  lw(a3, FieldMemOperand(a2, Map::kInstanceDescriptorsOrBitField3Offset));
+  JumpIfSmi(a3, call_runtime);
+
+  // Check that there is an enum cache in the non-empty instance
+  // descriptors (a3).  This is the case if the next enumeration
+  // index field does not contain a smi.
+  lw(a3, FieldMemOperand(a3, DescriptorArray::kEnumerationIndexOffset));
+  JumpIfSmi(a3, call_runtime);
+
+  // For all objects but the receiver, check that the cache is empty.
+  Label check_prototype;
+  Branch(&check_prototype, eq, a1, Operand(a0));
+  lw(a3, FieldMemOperand(a3, DescriptorArray::kEnumCacheBridgeCacheOffset));
+  Branch(call_runtime, ne, a3, Operand(empty_fixed_array_value));
+
+  // Load the prototype from the map and loop if non-null.
+  bind(&check_prototype);
+  lw(a1, FieldMemOperand(a2, Map::kPrototypeOffset));
+  Branch(&next, ne, a1, Operand(null_value));
 }
 
 

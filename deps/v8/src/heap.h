@@ -74,7 +74,6 @@ namespace internal {
   V(Map, hash_table_map, HashTableMap)                                         \
   V(FixedArray, empty_fixed_array, EmptyFixedArray)                            \
   V(ByteArray, empty_byte_array, EmptyByteArray)                               \
-  V(FixedDoubleArray, empty_fixed_double_array, EmptyFixedDoubleArray)         \
   V(String, empty_string, EmptyString)                                         \
   V(DescriptorArray, empty_descriptor_array, EmptyDescriptorArray)             \
   V(Smi, stack_limit, StackLimit)                                              \
@@ -131,6 +130,7 @@ namespace internal {
   V(Map, catch_context_map, CatchContextMap)                                   \
   V(Map, with_context_map, WithContextMap)                                     \
   V(Map, block_context_map, BlockContextMap)                                   \
+  V(Map, module_context_map, ModuleContextMap)                                 \
   V(Map, oddball_map, OddballMap)                                              \
   V(Map, message_object_map, JSMessageObjectMap)                               \
   V(Map, foreign_map, ForeignMap)                                              \
@@ -150,7 +150,8 @@ namespace internal {
   V(Script, empty_script, EmptyScript)                                         \
   V(Smi, real_stack_limit, RealStackLimit)                                     \
   V(StringDictionary, intrinsic_function_names, IntrinsicFunctionNames)        \
-  V(Smi, arguments_adaptor_deopt_pc_offset, ArgumentsAdaptorDeoptPCOffset)
+  V(Smi, arguments_adaptor_deopt_pc_offset, ArgumentsAdaptorDeoptPCOffset)     \
+  V(Smi, construct_stub_deopt_pc_offset, ConstructStubDeoptPCOffset)
 
 #define ROOT_LIST(V)                                  \
   STRONG_ROOT_LIST(V)                                 \
@@ -177,6 +178,7 @@ namespace internal {
   V(eval_symbol, "eval")                                                 \
   V(function_symbol, "function")                                         \
   V(length_symbol, "length")                                             \
+  V(module_symbol, "module")                                             \
   V(name_symbol, "name")                                                 \
   V(native_symbol, "native")                                             \
   V(null_symbol, "null")                                                 \
@@ -205,12 +207,10 @@ namespace internal {
   V(InitializeConstGlobal_symbol, "InitializeConstGlobal")               \
   V(KeyedLoadElementMonomorphic_symbol,                                  \
     "KeyedLoadElementMonomorphic")                                       \
-  V(KeyedLoadElementPolymorphic_symbol,                                  \
-    "KeyedLoadElementPolymorphic")                                       \
   V(KeyedStoreElementMonomorphic_symbol,                                 \
     "KeyedStoreElementMonomorphic")                                      \
-  V(KeyedStoreElementPolymorphic_symbol,                                 \
-    "KeyedStoreElementPolymorphic")                                      \
+  V(KeyedStoreAndGrowElementMonomorphic_symbol,                          \
+    "KeyedStoreAndGrowElementMonomorphic")                               \
   V(stack_overflow_symbol, "kStackOverflowBoilerplate")                  \
   V(illegal_access_symbol, "illegal access")                             \
   V(out_of_memory_symbol, "out-of-memory")                               \
@@ -347,7 +347,7 @@ class PromotionQueue {
           NewSpacePage::FromAddress(reinterpret_cast<Address>(front_));
       ASSERT(!front_page->prev_page()->is_anchor());
       front_ =
-          reinterpret_cast<intptr_t*>(front_page->prev_page()->body_limit());
+          reinterpret_cast<intptr_t*>(front_page->prev_page()->area_end());
     }
     *target = reinterpret_cast<HeapObject*>(*(--front_));
     *size = static_cast<int>(*(--front_));
@@ -485,9 +485,6 @@ class Heap {
   // Heap doesn't guarantee that it can allocate an object that requires
   // all available bytes. Check MaxHeapObjectSize() instead.
   intptr_t Available();
-
-  // Returns the maximum object size in paged space.
-  inline int MaxObjectSizeInPagedSpace();
 
   // Returns of size of all objects residing in the heap.
   intptr_t SizeOfObjects();
@@ -642,6 +639,12 @@ class Heap {
 
   // Allocates a pre-tenured empty AccessorPair.
   MUST_USE_RESULT MaybeObject* AllocateAccessorPair();
+
+  // Allocates an empty TypeFeedbackInfo.
+  MUST_USE_RESULT MaybeObject* AllocateTypeFeedbackInfo();
+
+  // Allocates an AliasedArgumentsEntry.
+  MUST_USE_RESULT MaybeObject* AllocateAliasedArgumentsEntry(int slot);
 
   // Clear the Instanceof cache (used when a prototype changes).
   inline void ClearInstanceofCache();
@@ -1038,8 +1041,14 @@ class Heap {
                              const char* gc_reason = NULL);
 
   static const int kNoGCFlags = 0;
-  static const int kMakeHeapIterableMask = 1;
+  static const int kSweepPreciselyMask = 1;
   static const int kReduceMemoryFootprintMask = 2;
+  static const int kAbortIncrementalMarkingMask = 4;
+
+  // Making the heap iterable requires us to sweep precisely and abort any
+  // incremental marking as well.
+  static const int kMakeHeapIterableMask =
+      kSweepPreciselyMask | kAbortIncrementalMarkingMask;
 
   // Performs a full garbage collection.  If (flags & kMakeHeapIterableMask) is
   // non-zero, then the slower precise sweeper is used, which leaves the heap
@@ -1222,6 +1231,10 @@ class Heap {
   // Verify the heap is in its normal state before or after a GC.
   void Verify();
 
+  // Verify that AccessorPairs are not shared, i.e. make sure that they have
+  // exactly one pointer to them.
+  void VerifyNoAccessorPairSharing();
+
   void OldPointerSpaceCheckStoreBuffer();
   void MapSpaceCheckStoreBuffer();
   void LargeObjectSpaceCheckStoreBuffer();
@@ -1333,6 +1346,10 @@ class Heap {
 
   inline intptr_t OldGenerationSpaceAvailable() {
     return old_gen_allocation_limit_ - PromotedTotalSize();
+  }
+
+  inline intptr_t OldGenerationCapacityAvailable() {
+    return max_old_generation_size_ - PromotedTotalSize();
   }
 
   static const intptr_t kMinimumPromotionLimit = 5 * Page::kPageSize;
@@ -1559,6 +1576,11 @@ class Heap {
   void SetArgumentsAdaptorDeoptPCOffset(int pc_offset) {
     ASSERT(arguments_adaptor_deopt_pc_offset() == Smi::FromInt(0));
     set_arguments_adaptor_deopt_pc_offset(Smi::FromInt(pc_offset));
+  }
+
+  void SetConstructStubDeoptPCOffset(int pc_offset) {
+    ASSERT(construct_stub_deopt_pc_offset() == Smi::FromInt(0));
+    set_construct_stub_deopt_pc_offset(Smi::FromInt(pc_offset));
   }
 
  private:
