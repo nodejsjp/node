@@ -1,5 +1,7 @@
 # Modules
 
+    Stability: 5 - Locked
+
 <!--name=module-->
 
 <!--
