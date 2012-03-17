@@ -117,3 +117,18 @@ change.  Please do not suggest changes in this area; they will be refused.
 
 * **5 - 固定 **  深刻なバグが見つからない限り、コードは変更されません。
 このエリアの変更を提案しないでください; そえは拒否されます。
+
+## JSON Output
+
+    Stability: 1 - Experimental
+
+<!--
+Every HTML file in the markdown has a corresponding JSON file with the
+same data.
+
+This feature is new as of node v0.6.12.  It is experimental.
+-->
+
+markdown から作られる全ての HTML ファイルは、対応する JSON ファイルを持ちます。
+
+これは v0.6.12 からの新機能で、実験的です。

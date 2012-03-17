@@ -1,5 +1,9 @@
 # File System
 
+    Stability: 3 - Stable
+
+<!--name=fs-->
+
 <!--
 File I/O is provided by simple wrappers around standard POSIX functions.  To
 use this module do `require('fs')`. All the methods have asynchronous and
@@ -757,6 +761,8 @@ The synchronous version of `fs.writeFile`.
 
 ## fs.watchFile(filename, [options], listener)
 
+    Stability: 2 - Unstable.  Use fs.watch instead, if available.
+
 <!--
 Watch for changes on `filename`. The callback `listener` will be called each
 time the file is accessed.
@@ -807,6 +813,8 @@ you need to compare `curr.mtime` and `prev.mtime`.
 
 ## fs.unwatchFile(filename)
 
+    Stability: 2 - Unstable.  Use fs.watch instead, if available.
+
 <!--
 Stop watching for changes on `filename`.
 -->
@@ -815,9 +823,11 @@ Stop watching for changes on `filename`.
 
 ## fs.watch(filename, [options], listener)
 
+    Stability: 2 - Unstable.  Not available on all platforms.
+
 <!--
 Watch for changes on `filename`, where `filename` is either a file or a
-directory.  The returned object is [fs.FSWatcher](#fs.FSWatcher).
+directory.  The returned object is a [fs.FSWatcher](#fs_class_fs_fswatcher).
 
 The second argument is optional. The `options` if provided should be an object
 containing a boolean member `persistent`, which indicates whether the process
@@ -827,13 +837,6 @@ should continue to run as long as files are being watched. The default is
 The listener callback gets two arguments `(event, filename)`.  `event` is either
 'rename' or 'change', and `filename` is the name of the file which triggered
 the event.
-
-***Warning:***
-Providing `filename` argument in the callback is not supported
-on every platform (currently it's only supported on Linux and Windows).  Even
-on supported platforms `filename` is not always guaranteed to be provided.
-Therefore, don't assume that `filename` argument is always provided in the
-callback, and have some fallback logic if it is null.
 -->
 
 `filename` の変更を監視します。
@@ -851,7 +854,61 @@ callback, and have some fallback logic if it is null.
 `event` は `'rename'` または `'change'`、そして `filename` はイベントを
 引き起こしたファイルの名前です。
 
-***警告:***
+### Caveats
+
+<!--type=misc-->
+
+<!--
+The `fs.watch` API is not 100% consistent across platforms, and is
+unavailable in some situations.
+-->
+
+`fs.watch` API はプラットフォーム間で 100% 完全ではありmせんし、
+いくつかのシチュエーションで利用不可能です。
+
+#### Availability
+
+<!--type=misc-->
+
+<!--
+This feature depends on the underlying operating system providing a way
+to be notified of filesystem changes.
+
+* On Linux systems, this uses `inotify`.
+* On BSD systems (including OS X), this uses `kqueue`.
+* On SunOS systems (including Solaris and SmartOS), this uses `event ports`.
+* On Windows systems, this feature depends on `ReadDirectoryChangesW`.
+
+If the underlying functionality is not available for some reason, then
+`fs.watch` will not be able to function.  You can still use
+`fs.watchFile`, which uses stat polling, but it is slower and less
+reliable.
+-->
+
+この機能は下層のオペレーティングシステムが提供するファイルシステム変更の
+通知に依存します。
+
+* Linux システムでは `inotify` が使われます。
+* BSD システム (OS X を含みます) では `kqueue` が使われます。
+* SunOS システム (Solaris および SmartOS を含みます) では `event ports`
+  が使われます。
+* Windows システムでは、この機能は `ReadDirectoryChangesW` に依存します。
+
+何らかの理由で下層の機能が使えない場合、`fs.watch` は使えません。
+stat をポーリングする `fs.watchFile` を使うことはできますが、
+それは遅くて信頼性はより低くなります。
+
+#### Filename Argument
+
+<!--type=misc-->
+
+Providing `filename` argument in the callback is not supported
+on every platform (currently it's only supported on Linux and Windows).  Even
+on supported platforms `filename` is not always guaranteed to be provided.
+Therefore, don't assume that `filename` argument is always provided in the
+callback, and have some fallback logic if it is null.
+-->
+
 コールバックに提供される `filename` 引数は、
 全てのプラットフォームでサポートされるわけではありません
 (現時点では Linux と Windows でのみサポートされます)。
@@ -862,11 +919,11 @@ callback, and have some fallback logic if it is null.
 
     fs.watch('somedir', function (event, filename) {
       console.log('event is: ' + event);
-	  if (filename) {
+      if (filename) {
         console.log('filename provided: ' + filename);
-	  } else {
-	    console.log('filename not provided');
-	  }
+      } else {
+        console.log('filename not provided');
+      }
     });
 
 ## Class: fs.Stats
@@ -991,17 +1048,15 @@ An example to read the last 10 bytes of a file which is 100 bytes long:
 
 ### Event: 'open'
 
-`function (fd) { }`
-
 <!--
- `fd` is the file descriptor used by the ReadStream.
+* `fd` {Integer} file descriptor used by the ReadStream.
+
+Emitted when the ReadStream's file is opened.
 -->
 
-`fd` は ReadStream に使われているファイル記述子です。
+* `fd` {Integer} ReadStream で使われる ファイル記述子。
 
-### Event: 'open'
-
-`function (fd) { }`
+ReadStream のファイルがオープンされた場合に生成されます。
 
 ## fs.createWriteStream(path, [options])
 
@@ -1043,13 +1098,15 @@ default mode `w`.
 
 ### Event: 'open'
 
-`function (fd) { }`
-
 <!--
- `fd` is the file descriptor used by the WriteStream.
+* `fd` {Integer} file descriptor used by the ReadStream.
+
+Emitted when the WriteStream's file is opened.
 -->
 
-`fd` は WriteStream に使われているファイル記述子です。
+* `fd` {Integer} WriteStream で使われる ファイル記述子。
+
+WriteStream のファイルがオープンされた場合に生成されます。
 
 ### file.bytesWritten
 
@@ -1099,7 +1156,7 @@ See more details in [fs.watch](#fs.watch).
 
 ### Event: 'error'
 
-`function (exception) {}`
+* `error` {Error object}
 
 <!--
 Emitted when an error occurs.
