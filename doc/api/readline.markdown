@@ -1,14 +1,15 @@
 # Readline
 
-    Stability: 3 - Stable
+    Stability: 2 - Unstable
 
 <!--
 To use this module, do `require('readline')`. Readline allows reading of a
-stream (such as STDIN) on a line-by-line basis.
+stream (such as `process.stdin`) on a line-by-line basis.
 -->
 
 このモジュールを使用するには、`require('readline')` をします。
-Readline はストリーム (たとえば標準入力) を行ごとに読み込むことを可能にします。
+Readline はストリーム (たとえば `process.stdin`)
+を行ごとに読み込むことを可能にします。
 
 <!--
 Note that once you've invoked this module, your node program will not
@@ -22,26 +23,78 @@ program to gracefully pause:
 
     var rl = require('readline');
 
-    var i = rl.createInterface(process.stdin, process.stdout, null);
-    i.question("What do you think of node.js?", function(answer) {
+    var i = rl.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    i.question("What do you think of node.js? ", function(answer) {
       // TODO: Log the answer in a database
-      console.log("Thank you for your valuable feedback.");
+      console.log("Thank you for your valuable feedback:", answer);
 
       i.pause();
     });
 
-## rl.createInterface(input, output, completer)
+## rl.createInterface(options)
 
 <!--
-Takes two streams and creates a readline interface. The `completer` function
-is used for autocompletion. When given a substring, it returns `[[substr1,
-substr2, ...], originalsubstring]`.
+Creates a readline `Interface` instance. Accepts an "options" Object that takes
+the following values:
 -->
 
-二つのストリームを受け取り、readline のインタフェースを作成します。
-`completer` 関数は補完のために使われます。
-それは部分文字列を与えられると、`[[substr1, substr2, ...], originalsubstring]`
-を返します。
+行を読み込む `Interface` のインスタンスを作成します。
+以下の値を含む `options` オブジェクトを受け取ります。
+
+<!--
+ - `input` - the readable stream to listen to (Required).
+
+ - `output` - the writable stream to write readline data to (Required).
+
+ - `completer` - an optional function that is used for Tab autocompletion. See
+   below for an example of using this.
+
+ - `terminal` - pass `true` if the `input` and `output` streams should be treated
+   like a TTY, and have ANSI/VT100 escape codes written to it. Defaults to
+   checking `isTTY` on the `output` stream upon instantiation.
+-->
+
+ - `input` - 監視する入力ストリーム (必須)。
+
+ - `output` - 読み込んだデータを書くための出力ストリーム (必須)。
+
+ - `completer` - タブによる自動補完のための関数 (オプション)。
+   後述の例を参照してください。
+
+ - `terminal` - `input` および `output` ストリームが TTY デバイスで、
+   ANSI/VT100 エスケープコードを出力する場合は `true` を渡します。
+   デフォルトはインスタンス生成時に `output` に対して
+   `isTTY` でチェックします。
+
+<!--
+The `completer` function is given a the current line entered by the user, and
+is supposed to return an Array with 2 entries:
+-->
+
+`completer` 関数にはユーザが入力した現在の行が与えられ、
+2 つのエントリを含む配列を返すことが期待されます:
+
+<!--
+ 1. An Array with matching entries for the completion.
+
+ 2. The substring that was used for the matching.
+-->
+
+ 1. 補完によってマッチするエントリの配列。
+
+ 2. マッチングに使用された部分文字列。
+
+<!--
+Which ends up looking something like:
+`[[substr1, substr2, ...], originalsubstring]`.
+-->
+
+それは次のようになります:
+`[[substr1, substr2, ...], originalsubstring]`。
 
 <!--
 Also `completer` can be run in async mode if it accepts two arguments:
@@ -49,9 +102,9 @@ Also `completer` can be run in async mode if it accepts two arguments:
 
 `completer` が二つの引数を持つなら、それは非同期モードで実行されます。
 
-  function completer(linePartial, callback) {
-    callback(null, [['123'], linePartial]);
-  }
+    function completer(linePartial, callback) {
+      callback(null, [['123'], linePartial]);
+    }
 
 <!--
 `createInterface` is commonly used with `process.stdin` and
@@ -61,17 +114,40 @@ Also `completer` can be run in async mode if it accepts two arguments:
 `createInterface` には通常、ユーザからの入力を受け取るために `process.stdin` と
 `process.stdout` が使用されます。
 
-    var readline = require('readline'),
-      rl = readline.createInterface(process.stdin, process.stdout);
+    var readline = require('readline');
+    var rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+<!--
+Once you have a readline instance, you most commonly listen for the `"line"` event.
+-->
+
+readline のインスタンスを作成すると、ほとんどの場合 `'line'` イベントを
+監視することになります。
+
+<!--
+If `terminal` is `true` for this instance then the `output` stream will get the
+best compatability if it defines an `output.columns` property, and fires
+a `"resize"` event on the `output` if/when the columns ever change
+(`process.stdout` does this automatically when it is a TTY).
+-->
+
+もしこのインスタンスの `terminal` が `true` の場合、
+`output` ストリームはもし `outout.columns` プロパティが定義されていれば
+それに適合し、カラム幅が変更されると `output` 上で
+`'resize'` イベントが生成されます
+(`process.stdout` が TTY の場合、それは自動的に行われます)。
 
 ## Class: Interface
 
 <!--
-The class that represents a readline interface with a stdin and stdout
+The class that represents a readline interface with an input and output
 stream.
 -->
 
-標準入力と標準出力を持つ readline インタフェースを表現するクラスです。
+入力と出力を持つ readline インタフェースを表現するクラスです。
 
 ### rl.setPrompt(prompt, length)
 
@@ -132,32 +208,31 @@ Example usage:
 
 <!--
 Pauses the readline `in` stream, allowing it to be resumed later if needed.
+Pauses the readline `input` stream, allowing it to be resumed later if needed.
 -->
 
-`in` ストリームからの入力を中断します。
+`input` ストリームからの入力を中断します。
 必要なら後で再開することができます。
 
 ### rl.resume()
 
 <!--
-Resumes the readline `in` stream.
+Resumes the readline `input` stream.
 -->
 
-`in` ストリームからの入力を再開します。
+`input` ストリームからの入力を再開します。
 
 ### rl.write()
 
 <!--
-Writes to tty.
+Writes to `output` stream.
 
-This will also resume the `in` stream used with `createInterface` if it has
-been paused.
+This will also resume the `input` stream if it has been paused.
 -->
 
-tty へ出力します。
+`output` へ出力します。
 
-これは、 `createInterface()` によって使われる `in` ストリームが
-中断されていれば再開します。
+これは、`input` ストリームが中断されていれば再開します。
 
 ### Event: 'line'
 
@@ -228,6 +303,20 @@ Example of listening for `resume`:
     rl.on('resume', function() {
       console.log('Readline resumed.');
     });
+
+### Event: 'end'
+
+`function () {}`
+
+<!--
+Emitted when the `input` stream receives its "end" event, or when `^D` is
+pressed by the user. It's generally a good idea to consider this `Interface`
+instance as completed after this is emitted.
+-->
+
+`input` ストリームが `'end'` イベントを受け取った場合、
+またはユーザが `^D` を推した場合に生成されます。
+通常、これが生成された後で `Interface` インスタンスは完了すると考えられます。
 
 ### Event: 'SIGINT'
 

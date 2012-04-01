@@ -1,21 +1,15 @@
 var fs = require('fs'),
     path = require('path'),
     exec = require('child_process').exec,
-    options = fs.readFileSync(process.argv[2]).toString(),
-    cmd = process.argv[3];
+    cmd = process.argv[2];
 
 if (cmd !== 'install' && cmd !== 'uninstall') {
   console.error('Unknown command: ' + cmd);
   process.exit(1);
 }
 
-// Python pprint.pprint() uses single quotes instead of double.
-// awful.
-options = options.replace(/'/gi, '"')
-
-// Parse options file and remove first comment line
-options = JSON.parse(options.split('\n').slice(1).join(''));
-var variables = options.variables,
+// Use the built-in config reported by the current process
+var variables = process.config.variables,
     node_prefix = variables.node_prefix || '/usr/local';
 
 // Execution queue
@@ -124,13 +118,13 @@ if (cmd === 'install') {
   copy('out/Release/node', 'bin/node');
 
   // Install node-waf
-  if (variables.node_install_waf == 'true') {
+  if (variables.node_install_waf) {
     copy('tools/wafadmin', 'lib/node/');
     copy('tools/node-waf', 'bin/node-waf');
   }
 
   // Install npm (eventually)
-  if (variables.node_install_npm == 'true') {
+  if (variables.node_install_npm) {
     copy('deps/npm', 'lib/node_modules/npm');
     queue.push('ln -sf ../lib/node_modules/npm/bin/npm-cli.js ' +
                path.join(node_prefix, 'bin/npm'));

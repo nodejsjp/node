@@ -111,6 +111,7 @@ static Persistent<String> emit_symbol;
 
 
 static bool print_eval = false;
+static bool force_repl = false;
 static char *eval_string = NULL;
 static int option_end_index = 0;
 static bool use_debug_agent = false;
@@ -1019,7 +1020,7 @@ enum encoding ParseEncoding(Handle<Value> encoding_v, enum encoding _default) {
 
   if (!encoding_v->IsString()) return _default;
 
-  String::Utf8Value encoding(encoding_v->ToString());
+  String::Utf8Value encoding(encoding_v);
 
   if (strcasecmp(*encoding, "utf8") == 0) {
     return UTF8;
@@ -1230,8 +1231,8 @@ static void ReportException(TryCatch &try_catch, bool show_line) {
       fprintf(stderr, "%s: ", *name);
     }
 
-    String::Utf8Value msg(!isErrorObject ? er->ToString()
-                         : er->ToObject()->Get(String::New("message"))->ToString());
+    String::Utf8Value msg(!isErrorObject ? er
+                         : er->ToObject()->Get(String::New("message")));
     fprintf(stderr, "%s\n", *msg);
   }
 
@@ -1272,7 +1273,7 @@ static Handle<Value> Chdir(const Arguments& args) {
     return ThrowException(Exception::Error(String::New("Bad argument.")));
   }
 
-  String::Utf8Value path(args[0]->ToString());
+  String::Utf8Value path(args[0]);
 
   uv_err_t r = uv_chdir(*path);
 
@@ -1372,7 +1373,7 @@ static Handle<Value> SetGid(const Arguments& args) {
   if (args[0]->IsNumber()) {
     gid = args[0]->Int32Value();
   } else if (args[0]->IsString()) {
-    String::Utf8Value grpnam(args[0]->ToString());
+    String::Utf8Value grpnam(args[0]);
     struct group grp, *grpp = NULL;
     int err;
 
@@ -1412,7 +1413,7 @@ static Handle<Value> SetUid(const Arguments& args) {
   if (args[0]->IsNumber()) {
     uid = args[0]->Int32Value();
   } else if (args[0]->IsString()) {
-    String::Utf8Value pwnam(args[0]->ToString());
+    String::Utf8Value pwnam(args[0]);
     struct passwd pwd, *pwdp = NULL;
     int err;
 
@@ -1619,7 +1620,7 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
     return ThrowException(exception);
   }
 
-  String::Utf8Value filename(args[0]->ToString()); // Cast
+  String::Utf8Value filename(args[0]); // Cast
   Local<Object> target = args[1]->ToObject(); // Cast
 
   err = uv_dlopen(*filename, &lib);
@@ -1640,7 +1641,7 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
     return ThrowException(exception);
   }
 
-  String::Utf8Value path(args[0]->ToString());
+  String::Utf8Value path(args[0]);
   base = *path;
 
   /* Find the shared library filename within the full path. */
@@ -1667,7 +1668,7 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
 
   /* Add the `_module` suffix to the extension name. */
   r = snprintf(symbol, sizeof symbol, "%s_module", base);
-  if (r <= 0 || r >= sizeof symbol) {
+  if (r <= 0 || static_cast<size_t>(r) >= sizeof symbol) {
     Local<Value> exception =
         Exception::Error(String::New("Out of memory."));
     return ThrowException(exception);
@@ -1776,13 +1777,6 @@ void FatalException(TryCatch &try_catch) {
 }
 
 
-static void DebugBreakMessageHandler(const v8::Debug::Message& message) {
-  // do nothing with debug messages.
-  // The message handler will get changed by DebuggerAgent::CreateSession in
-  // debug-agent.cc of v8/src when a new session is created
-}
-
-
 Persistent<Object> binding_cache;
 Persistent<Array> module_load_list;
 
@@ -1854,7 +1848,7 @@ static void ProcessTitleSetter(Local<String> property,
                                Local<Value> value,
                                const AccessorInfo& info) {
   HandleScope scope;
-  String::Utf8Value title(value->ToString());
+  String::Utf8Value title(value);
   // TODO: protect with a lock
   uv_set_process_title(*title);
 }
@@ -2077,8 +2071,8 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   module_load_list = Persistent<Array>::New(Array::New());
   process->Set(String::NewSymbol("moduleLoadList"), module_load_list);
 
+  // process.versions
   Local<Object> versions = Object::New();
-  char buf[20];
   process->Set(String::NewSymbol("versions"), versions);
   versions->Set(String::NewSymbol("http_parser"), String::New(
                NODE_STRINGIFY(HTTP_PARSER_VERSION_MAJOR) "."
@@ -2087,8 +2081,9 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   versions->Set(String::NewSymbol("node"), String::New(NODE_VERSION+1));
   versions->Set(String::NewSymbol("v8"), String::New(V8::GetVersion()));
   versions->Set(String::NewSymbol("ares"), String::New(ARES_VERSION_STR));
-  snprintf(buf, 20, "%d.%d", UV_VERSION_MAJOR, UV_VERSION_MINOR);
-  versions->Set(String::NewSymbol("uv"), String::New(buf));
+  versions->Set(String::NewSymbol("uv"), String::New(
+               NODE_STRINGIFY(UV_VERSION_MAJOR) "."
+               NODE_STRINGIFY(UV_VERSION_MINOR)));
   versions->Set(String::NewSymbol("zlib"), String::New(ZLIB_VERSION));
 #if HAVE_OPENSSL
   // Stupid code to slice out the version string.
@@ -2125,6 +2120,15 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   // assign it
   process->Set(String::NewSymbol("argv"), arguments);
 
+  // process.execArgv
+  Local<Array> execArgv = Array::New(option_end_index - 1);
+  for (j = 1, i = 0; j < option_end_index; j++, i++) {
+    execArgv->Set(Integer::New(i), String::New(argv[j]));
+  }
+  // assign it
+  process->Set(String::NewSymbol("execArgv"), execArgv);
+
+
   // create process.env
   Local<ObjectTemplate> envTemplate = ObjectTemplate::New();
   envTemplate->SetNamedPropertyHandler(EnvGetter,
@@ -2143,6 +2147,10 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   if (eval_string) {
     process->Set(String::NewSymbol("_eval"), String::New(eval_string));
     process->Set(String::NewSymbol("_print_eval"), Boolean::New(print_eval));
+  }
+
+  if (force_repl) {
+    process->Set(String::NewSymbol("_forceRepl"), True());
   }
 
   size_t size = 2*PATH_MAX;
@@ -2289,6 +2297,8 @@ static void PrintHelp() {
          "  -v, --version        print node's version\n"
          "  -e, --eval script    evaluate script\n"
          "  -p, --print          print result of --eval\n"
+         "  -i, --interactive    always enter the REPL even if stdin\n"
+         "                       does not appear to be a terminal\n"
          "  --v8-options         print v8 command line options\n"
          "  --vars               print various compiled-in variables\n"
          "  --max-stack-size=val set max v8 stack size (bytes)\n"
@@ -2350,6 +2360,9 @@ static void ParseArgs(int argc, char **argv) {
     } else if (strcmp(arg, "--print") == 0 || strcmp(arg, "-p") == 0) {
       print_eval = true;
       argv[i] = const_cast<char*>("");
+    } else if (strcmp(arg, "--interactive") == 0 || strcmp(arg, "-i") == 0) {
+      force_repl = true;
+      argv[i] = const_cast<char*>("");
     } else if (strcmp(arg, "--v8-options") == 0) {
       argv[i] = const_cast<char*>("--help");
     } else if (argv[i][0] != '-') {
@@ -2370,15 +2383,9 @@ static void EnableDebug(bool wait_connect) {
   node_isolate->Enter();
 
   // Start the debug thread and it's associated TCP server on port 5858.
-  bool r = v8::Debug::EnableAgent("node " NODE_VERSION, debug_port);
-
-  if (wait_connect) {
-    // Set up an empty handler so v8 will not continue until a debugger
-    // attaches. This is the same behavior as Debug::EnableAgent(_,_,true)
-    // except we don't break at the beginning of the script.
-    // see Debugger::StartAgent in debug.cc of v8/src
-    v8::Debug::SetMessageHandler2(node::DebugBreakMessageHandler);
-  }
+  bool r = v8::Debug::EnableAgent("node " NODE_VERSION,
+                                  debug_port,
+                                  wait_connect);
 
   // Crappy check that everything went well. FIXME
   assert(r);
@@ -2614,9 +2621,6 @@ char** Init(int argc, char *argv[]) {
   // Initialize prog_start_time to get relative uptime.
   uv_uptime(&prog_start_time);
 
-  // Hack aroung with the argv pointer. Used for process.title = "blah".
-  argv = uv_setup_args(argc, argv);
-
   // Parse a few arguments which are specific to Node.
   node::ParseArgs(argc, argv);
   // Parse the rest of the args (up to the 'option_end_index' (where '--' was
@@ -2712,10 +2716,48 @@ void EmitExit(v8::Handle<v8::Object> process_l) {
   }
 }
 
+static char **copy_argv(int argc, char **argv) {
+  size_t strlen_sum;
+  char **argv_copy;
+  char *argv_data;
+  size_t len;
+  int i;
+
+  strlen_sum = 0;
+  for(i = 0; i < argc; i++) {
+    strlen_sum += strlen(argv[i]) + 1;
+  }
+
+  argv_copy = (char **) malloc(sizeof(char *) * (argc + 1) + strlen_sum);
+  if (!argv_copy) {
+    return NULL;
+  }
+
+  argv_data = (char *) argv_copy + sizeof(char *) * (argc + 1);
+
+  for(i = 0; i < argc; i++) {
+    argv_copy[i] = argv_data;
+    len = strlen(argv[i]) + 1;
+    memcpy(argv_data, argv[i], len);
+    argv_data += len;
+  }
+
+  argv_copy[argc] = NULL;
+
+  return argv_copy;
+}
 
 int Start(int argc, char *argv[]) {
+  // Hack aroung with the argv pointer. Used for process.title = "blah".
+  argv = uv_setup_args(argc, argv);
+
+  // Logic to duplicate argv as Init() modifies arguments
+  // that are passed into it.
+  char **argv_copy = copy_argv(argc, argv);
+
   // This needs to run *before* V8::Initialize()
-  argv = Init(argc, argv);
+  // Use copy here as to not modify the original argv:
+  Init(argc, argv_copy);
 
   V8::Initialize();
   Persistent<Context> context;
@@ -2727,6 +2769,7 @@ int Start(int argc, char *argv[]) {
     Persistent<Context> context = Context::New();
     Context::Scope context_scope(context);
 
+    // Use original argv, as we're just copying values out of it.
     Handle<Object> process_l = SetupProcessObject(argc, argv);
     v8_typed_array::AttachBindings(context->Global());
 
@@ -2751,6 +2794,9 @@ int Start(int argc, char *argv[]) {
   // Clean up.
   V8::Dispose();
 #endif  // NDEBUG
+
+  // Clean up the copy:
+  free(argv_copy);
 
   return 0;
 }

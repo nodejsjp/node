@@ -322,7 +322,7 @@ specifically for multicast traffic.  Each router or gateway that forwards a pack
 decrements the TTL. If the TTL is decremented to 0 by a router, it will not be forwarded.
 
 The argument to `setMulticastTTL()` is a number of hops between 0 and 255.  The default on most
-systems is 64.
+systems is 1.
 -->
 
 `IP_MULTICAST_TTL` ソケットオプションを設定します。
@@ -330,7 +330,7 @@ TTL は「生存期間」を表しますが、この文脈では特にマルチ�
 それぞれのルーターまたはゲートウェイは、パケットを転送する際に TTL をデクリメントします。
 TTL がルーターによって 0 までデクリメントされると、それは転送されません。
 `setMulticastTTL()` の引数はホップを表す数値で、0 から 255 の間です。
-ほとんどのシステムでデフォルトは 64 です。
+ほとんどのシステムでデフォルトは 1 です。
 
 ### dgram.setMulticastLoopback(flag)
 
