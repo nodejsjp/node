@@ -244,13 +244,13 @@ Synchronous lchmod(2).
 
 <!--
 Asynchronous stat(2). The callback gets two arguments `(err, stats)` where
-`stats` is a [fs.Stats](#fs.Stats) object.  See the [fs.Stats](#fs.Stats)
+`stats` is a [fs.Stats](#fs_class_fs_stats) object.  See the [fs.Stats](#fs_class_fs_stats)
 section below for more information.
 -->
 
 非同期の stat(2)。コールバックは 2 つの引数を受け取る `(err, stats)`で、
-`stats` は [fs.Stats](#fs.Stats) オブジェクトです。
-詳細は [fs.Stats](#fs.Stats) の節を参照してください。
+`stats` は [fs.Stats](#fs_class_fs_stats) オブジェクトです。
+詳細は [fs.Stats](#fs_class_fs_stats) の節を参照してください。
 
 <!--
 See the [fs.Stats](#fs.Stats) section below for more information.
@@ -1113,12 +1113,13 @@ Returns a new ReadStream object (See `Readable Stream`).
 <!--
 `options` can include `start` and `end` values to read a range of bytes from
 the file instead of the entire file.  Both `start` and `end` are inclusive and
-start at 0.
+start at 0. The `encoding` can be `'utf8'`, `'ascii'`, or `'base64'`.
 -->
 
 ファイル全体を読み込む代わりに一部の範囲を読み込むため、
 `options` に `start` および `end` を含めることができます。
 `start` と `end` はどちらも包含的で0から始まります。
+`encoding` は `'utf8'`、`'ascii'`、または `'base64'` です。
 
 <!--
 An example to read the last 10 bytes of a file which is 100 bytes long:
@@ -1132,10 +1133,10 @@ An example to read the last 10 bytes of a file which is 100 bytes long:
 ## Class: fs.ReadStream
 
 <!--
-`ReadStream` is a [Readable Stream](stream.html#readable_stream).
+`ReadStream` is a [Readable Stream](stream.html#stream_readable_stream).
 -->
 
-`ReadStream` は [Readable Stream](stream.html#readable_Stream) です。
+`ReadStream` は [Readable Stream](stream.html#stream_readable_stream) です。
 
 ### Event: 'open'
 
@@ -1183,10 +1184,10 @@ default mode `w`.
 ## fs.WriteStream
 
 <!--
-`WriteStream` is a [Writable Stream](stream.html#writable_stream).
+`WriteStream` is a [Writable Stream](stream.html#stream_writable_stream).
 -->
 
-`WriteStream` は [Writable Stream](stream.html#writable_Stream) です。
+`WriteStream` は [Writable Stream](stream.html#stream_writable_stream) です。
 
 ### Event: 'open'
 
@@ -1236,11 +1237,12 @@ Stop watching for changes on the given `fs.FSWatcher`.
 
 <!--
 Emitted when something changes in a watched directory or file.
-See more details in [fs.watch](#fs.watch).
+See more details in [fs.watch](#fs_fs_watch_filename_options_listener).
 -->
 
 監視しているファイルまたはディレクトリに変更があると生成されます。
-詳しくは [fs.watch](#fs.watch) を参照してください。
+詳しくは [fs.watch](#fs_fs_watch_filename_options_listener)
+を参照してください。
 
 ### Event: 'error'
 
