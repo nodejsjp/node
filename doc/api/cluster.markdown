@@ -189,6 +189,34 @@ where the 'listening' event is emitted.
       console.log("We are now connected");
     });
 
+## Event: 'disconnect'
+
+* `worker` {Worker object}
+
+<!--
+When a workers IPC channel has disconnected this event is emitted. This will happen
+when the worker dies, usually after calling `.destroy()`.
+-->
+
+ワーカの IPC チャネルが切断された場合に生成されます。
+それはワーカが終了した場合や、`.destroy()` を呼び出した後に発生します。
+
+<!--
+When calling `.disconnect()`, there may be a delay between the
+`disconnect` and `death` events.  This event can be used to detect if
+the process is stuck in a cleanup or if there are long-living
+connections.
+-->
+
+`.disconnect()` を呼び出した後、`'disconnect'` と `'death'` の間には
+遅延があるかもしれません。このイベントはプロセスがクリーンナップで
+行き詰まったり、長時間生きている接続がないかを検出することに
+使用できます。
+
+    cluster.on('disconnect', function(worker) {
+      console.log('The worker #' + worker.uniqueID + ' has disconnected');
+    });
+
 ## Event: 'death'
 
 * `worker` {Worker object}
@@ -304,6 +332,32 @@ This object is not supposed to be change or set manually.
 `setupMaster()` の設定はこのオブジェクトに保存されます。
 このオブジェクトは変更されることを想定していません。
 
+## cluster.disconnect([callback])
+
+<!--
+* `callback` {Function} called when all workers are disconnected and handlers are closed
+-->
+
+* `callback` {Function} 全てのワーカが切断し、ハンドルがクローズされると
+  呼び出されます。
+
+<!--
+When calling this method, all workers will commit a graceful suicide. When they are
+disconnected all internal handlers will be closed, allowing the master process to
+die graceful if no other event is waiting.
+-->
+
+このメソッドを呼び出すと、全てのワーカは強制的でない終了に向かいます。
+それらの内部的なハンドルが全てクローズされると、
+他に待機しているイベントがなければ、
+マスタプロセスを非強制的に終了することができます。
+
+<!--
+The method takes an optional callback argument which will be called when finished.
+-->
+
+このメソッドはオプションの引数としてコールバックを受け取ります。
+
 ## cluster.workers
 
 * {Object}
@@ -389,15 +443,14 @@ See: [Child Process module](child_process.html)
 * {Boolean}
 
 <!--
-This property is a boolean. It is set when a worker dies, until then it is
-`undefined`.  It is true if the worker was killed using the `.destroy()`
-method, and false otherwise.
+This property is a boolean. It is set when a worker dies after calling `.destroy()`
+or immediately after calling the `.disconnect()` method. Until then it is `undefined`.
 -->
 
 このプロパティは論理値型です。
-これはワーカが終了すると設定されます。それまでは `undefined` です。
-ワーカが `.destroy()` メソッドで終了した場合は `true` に、その他の場合は
-`false` に設定されます。
+これはワーカが `.destroy()` を呼び出して終了するか、
+`.disconnect()` メソッドを呼び出した後に設定されます。
+それまでは `undefined` です。
 
 ### worker.send(message, [sendHandle])
 
@@ -452,7 +505,74 @@ a suicide boolean is set to true.
     // destroy worker
     worker.destroy();
 
-### Event: message
+## Worker.disconnect()
+
+<!--
+When calling this function the worker will no longer accept new connections, but
+they will be handled by any other listening worker. Existing connection will be
+allowed to exit as usual. When no more connections exist, the IPC channel to the worker
+will close allowing it to die graceful. When the IPC channel is closed the `disconnect`
+event will emit, this is then followed by the `death` event, there is emitted when
+the worker finally die.
+-->
+
+この関数を呼び出すと、そのワーカはそれ以上新しい接続
+(それらは他のワーカによって扱われます) を受け付けなくなります。
+既存の接続は通常通りに
+コネクションが無くなると、ワーカを正常に終了するために IPC チャネルは
+閉じられます。
+IPC チャネルが閉じられると `'disconnect'` イベントが生成され、
+その後ワーカが終了すると `'death'` イベントが生成されます。
+
+<!--
+Because there might be long living connections, it is useful to implement a timeout.
+This example ask the worker to disconnect and after 2 seconds it will destroy the
+server. An alternative wound be to execute `worker.destroy()` after 2 seconds, but
+that would normally not allow the worker to do any cleanup if needed.
+-->
+
+長時間にわたる接続があるかもしれないため、これはタイムアウトを実装するために
+有益です。
+この例はワーカが IPC チャネルを閉じた後、2 秒でサーバから終了されます。
+他の方法として `worker.destroy()` を呼び出してから
+2 秒後とすることもできますが、その場合はワーカが必要なクリーンナップを
+行えないかもしれません。
+
+    if (cluster.isMaster) {
+      var worker = cluser.fork();
+      var timeout;
+
+      worker.on('listening', function () {
+        worker.disconnect();
+        timeout = setTimeout(function () {
+          worker.send('force kill');
+        }, 2000);
+      });
+
+      worker.on('disconnect', function () {
+        clearTimeout(timeout);
+      });
+
+    } else if (cluster.isWorker) {
+      var net = require('net');
+      var server = net.createServer(function (socket) {
+        // connection never end
+      });
+
+      server.listen(8000);
+
+      server.on('close', function () {
+        // cleanup
+      });
+
+      process.on('message', function (msg) {
+        if (msg === 'force kill') {
+          server.destroy();
+        }
+      });
+    }
+
+### Event: 'message'
 
 * `message` {Object}
 
@@ -540,7 +660,22 @@ on the specified worker.
       // Worker is listening
     };
 
-## Event: 'death'
+### Event: 'disconnect'
+
+* `worker` {Worker object}
+
+<!--
+Same as the `cluster.on('disconnect')` event, but emits only when the state change
+on the specified worker.
+-->
+`cluster.on('disconnect')` と同じですが、指定されたワーカの状態が
+変更された場合のみ生成されます。
+
+    cluster.fork().on('disconnect', function (worker) {
+      // Worker has disconnected
+    };
+
+### Event: 'death'
 
 * `worker` {Worker object}
 

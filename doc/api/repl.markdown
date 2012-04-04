@@ -1,9 +1,9 @@
 # REPL
 
 <!--
-A Read-Eval-Print-Loop (REPL) is available both as a standalone program and easily
-includable in other programs.  REPL provides a way to interactively run
-JavaScript and see the results.  It can be used for debugging, testing, or
+A Read-Eval-Print-Loop (REPL) is available both as a standalone program and
+easily includable in other programs. The REPL provides a way to interactively
+run JavaScript and see the results.  It can be used for debugging, testing, or
 just trying things out.
 -->
 
@@ -31,12 +31,15 @@ REPL は Emacs 風の簡易な行編集機能を備えています。
     3
 
 <!--
-For advanced line-editors, start node with the environmental variable `NODE_NO_READLINE=1`.
-This will start the REPL in canonical terminal settings which will allow you to use with `rlwrap`.
+For advanced line-editors, start node with the environmental variable
+`NODE_NO_READLINE=1`. This will start the main and debugger REPL in canonical
+terminal settings which will allow you to use with `rlwrap`.
 -->
 
-より進んだ行編集を行うには、環境変数に `NODE_NO_READLINE=1` を設定してnodeを起動してください。
-これによって正規の端末設定で REPL を起動し、`rlwrap` を有効にした状態でREPLを利用することができます。
+より進んだ行編集を行うには、環境変数に `NODE_NO_READLINE=1`
+を設定してnodeを起動してください。
+これによって main とデバッガ REPL を正規の端末設定で起動し、
+`rlwrap` を利用することができます。
 
 <!--
 For example, you could add this to your bashrc file:
@@ -47,35 +50,79 @@ For example, you could add this to your bashrc file:
     alias node="env NODE_NO_READLINE=1 rlwrap node"
 
 
-## repl.start([prompt], [stream], [eval], [useGlobal], [ignoreUndefined])
+## repl.start(options)
 
 <!--
-Starts a REPL with `prompt` as the prompt and `stream` for all I/O.  `prompt`
-is optional and defaults to `> `.  `stream` is optional and defaults to
-`process.stdin`. `eval` is optional too and defaults to async wrapper for
-`eval()`.
+Returns and starts a `REPLServer` instance. Accepts an "options" Object that
+takes the following values:
+-->
+`REPLServer` インスタンスを作成して返します。
+以下の値を含む "options" オブジェクトを受け取ります。
 
-If `useGlobal` is set to true, then the repl will use the global object,
-instead of running scripts in a separate context. Defaults to `false`.
+<!--
+ - `prompt` - the prompt and `stream` for all I/O. Defaults to `> `.
 
-If `ignoreUndefined` is set to true, then the repl will not output return value
-of command if it's `undefined`. Defaults to `false`.
+ - `input` - the readable stream to listen to. Defaults to `process.stdin`.
 
+ - `output` - the writable stream to write readline data to. Defaults to
+   `process.stdout`.
+
+ - `terminal` - pass `true` if the `stream` should be treated like a TTY, and
+   have ANSI/VT100 escape codes written to it. Defaults to checking `isTTY`
+   on the `output` stream upon instantiation.
+
+ - `eval` - function that will be used to eval each given line. Defaults to
+   an async wrapper for `eval()`. See below for an example of a custom `eval`.
+
+ - `useColors` - a boolean which specifies whether or not the `writer` function
+   should output colors. If a different `writer` function is set then this does
+   nothing. Defaults to the repl's `terminal` value.
+
+ - `useGlobal` - if set to `true`, then the repl will use the `global` object,
+   instead of running scripts in a separate context. Defaults to `false`.
+
+ - `ignoreUndefined` - if set to `true`, then the repl will not output the
+   return value of command if it's `undefined`. Defaults to `false`.
+
+ - `writer` - the function to invoke for each command that gets evaluated which
+   returns the formatting (including coloring) to display. Defaults to
+   `util.inspect`.
+-->
+
+ - `prompt` - プロンプト。デフォルトは `> ` です。
+
+ - `input` - 監視する入力ストリーム。デフォルトは `process.stdin` です。
+
+ - `output` - 読み込んだデータを書き込む出力ストリーム。
+   デフォルトは `process.stdout` です。
+
+ - `terminal` - もし `stream` が TTY で、ANSI/VT100 エスケープコードを
+   出力するなら `true`。デフォルトはインスタンス作成時に `output`
+   ストリームを `isTTY` でチェックします。
+
+ - `eval` - 各行を評価するために使われる関数。デフォルトは `eval()` を
+   非同期にラップした関数です。
+   `eval` をカスタマイズする例は下記を参照してください。
+
+ - `useColors` - `write` 関数が色を付けるかどうかを指定するブーリアン値。
+   `writer` に異なる関数が設定された場合、これは何もしません。
+   デフォルトは repl の `terminal` の値です。
+
+ - `useGlobal` - もし `true` に設定されると、repl は独立したコンテキストを
+   使う代わりに `global` オブジェクトを使用します。デフォルトは `false` です。
+
+ - `ignoreUndefined` - もし `true` に設定されると、repl はコマンドの戻り値が
+   `undefined` だった場合にそれを出力しません。デフォルトは `false` です。
+
+ - `writer` - コマンドが評価されるごとに実行される関数で、表示するために
+   フォーマット (色づけも含みます) して返します。
+   デフォルトは `util.inspect` です。
+
+<!--
 You can use your own `eval` function if it has following signature:
 -->
 
-`prompt` でプロンプト記号を、 `stream` で I/O を引数に取って REPL を起動します。
-`prompt` は省略可能で、 デフォルトは `> ` です。
-`stream` は省略可能で、 デフォルトは `process.stdin` です。
-`eval` も省略可能で、デフォルトは `eval()` の非同期ラッパーです。
-
-`useGlobal` を `true` に指定した場合、REPL は別のコンテキストでスクリプトを
-実行するのではなく、グローバルオブジェクトを使用します。
-デフォルトは `false` です。
-
-`ignoreUndefined` を `true` に指定した場合、REPL はコマンドの戻り値が `undefined` だった場合にそれを出力しません。デフォルトは `false` です。
-
-独自の `eval()` 関数は以下のシグネチャを持ちます。
+以下のシグネチャを持つ独自の `eval()` 関数を使うことができます。
 
     function eval(cmd, context, filename, callback) {
       callback(null, result);
@@ -100,16 +147,32 @@ REPL を標準入力、Unix ドメインソケット、TCP ソケットのもと
 
     connections = 0;
 
-    repl.start("node via stdin> ");
+    repl.start({
+      prompt: "node via stdin> ",
+      input: process.stdin,
+      output: process.stdout
+    });
 
     net.createServer(function (socket) {
       connections += 1;
-      repl.start("node via Unix socket> ", socket);
+      repl.start({
+        prompt: "node via Unix socket> ",
+        input: socket,
+        output: socket
+      }).on('exit', function() {
+        socket.end();
+      })
     }).listen("/tmp/node-repl-sock");
 
     net.createServer(function (socket) {
       connections += 1;
-      repl.start("node via TCP socket> ", socket);
+      repl.start({
+        prompt: "node via TCP socket> ",
+        input: socket,
+        output: socket
+      }).on('exit', function() {
+        socket.end();
+      });
     }).listen(5001);
 
 <!--
@@ -127,10 +190,48 @@ TCP sockets.
 <!--
 By starting a REPL from a Unix socket-based server instead of stdin, you can
 connect to a long-running node process without restarting it.
+
+For an example of running a "full-featured" (`terminal`) REPL over
+a `net.Server` and `net.Socket` instance, see: https://gist.github.com/2209310
+
+For an example of running a REPL instance over `curl(1)`,
+see: https://gist.github.com/2053342
 -->
 
 標準入力の代わりに Unix ドメインソケットをベースとしたサーバから REPL を起動することによって、
 再起動することなく node の常駐プロセスへ接続することができます。
+
+`net.Server` および `net.Socket` インスタンス上の "フル機能の" (`terminal`)
+REPL を実行する例は、https://gist.github.com/2209310 を参照してください。
+
+`curl(1)` 上で REPL インスタンスを実行する例は、
+https://gist.github.com/2053342 を参照してください。
+
+### Event: 'exit'
+
+`function () {}`
+
+<!--
+Emitted when the user exits the REPL in any of the defined ways. Namely, typing
+`.exit` at the repl, pressing Ctrl+C twice to signal SIGINT, or pressing Ctrl+D
+to signal "end" on the `input` stream.
+-->
+
+何らかの方法でユーザが REPL を終了した場合に生成されます。
+すなわち、repl で `.exit` をタイプする、Ctrl+C を 2 回推して
+SIGINT を生成する、あるいは Ctrl+D を推して `input` ストリームで `'end'` を
+知らせるなどです。
+
+<!--
+Example of listening for `exit`:
+-->
+
+`'exit'` を監視する例:
+
+    r.on('exit', function () {
+      console.log('Got "exit" event from repl!');
+      process.exit();
+    });
 
 
 ## REPL Features

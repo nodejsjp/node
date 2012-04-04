@@ -78,10 +78,30 @@ of the signal, otherwise `null`.
 それ以外の場合は `null` です。
 
 <!--
+Note that the child process stdio streams might still be open.
+-->
+
+子プロセスの標準入出力ストリームはオープンしたままになっているかも
+しれないことに注意してください。
+
+<!--
 See `waitpid(2)`.
 -->
 
 `waitpid(2)` を参照してください。
+
+### Event: 'close'
+
+<!--
+This event is emitted when the stdio streams of a child process have all
+terminated.  This is distinct from 'exit', since multiple processes
+might share the same stdio streams.
+-->
+
+このイベントは、子プロセスの標準入出力ストリームが全て終了した場合に
+生成されます。
+複数のプロセスが同じ標準入出力ストリームを共有するかもしれないので、
+これは `'exit'` とは明確に異なります。
 
 ### Event: 'disconnect'
 
