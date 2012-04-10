@@ -122,10 +122,22 @@ out/doc/api/%.json: doc/api/%.markdown
 out/doc/api/%.html: doc/api/%.markdown
 	out/Release/node tools/doc/generate.js --format=html --template=doc/template.html $< > $@
 
-out/doc/%:
+email.md: ChangeLog tools/email-footer.md
+	bash tools/changelog-head.sh > $@
+	cat tools/email-footer.md | sed -e 's|__VERSION__|'$(VERSION)'|g' >> $@
+
+blog.html: email.md
+	cat $< | node tools/doc/node_modules/.bin/marked > $@
 
 website-upload: doc
 	rsync -r out/doc/ node@nodejs.org:~/web/nodejs.org/
+	ssh node@nodejs.org '\
+    rm -f ~/web/nodejs.org/dist/latest &&\
+    ln -s $(VERSION) ~/web/nodejs.org/dist/latest &&\
+    rm -f ~/web/nodejs.org/docs/latest &&\
+    ln -s $(VERSION) ~/web/nodejs.org/docs/latest &&\
+    rm -f ~/web/nodejs.org/dist/node-latest.tar.gz &&\
+    ln -s $(VERSION)/node-$(VERSION).tar.gz ~/web/nodejs.org/dist/node-latest.tar.gz'
 
 docopen: out/doc/api/all.html
 	-google-chrome out/doc/api/all.html
@@ -136,11 +148,13 @@ docclean:
 clean:
 	$(WAF) clean
 	-find tools -name "*.pyc" | xargs rm -f
+	-rm -rf blog.html email.md
 
 distclean: docclean
 	-find tools -name "*.pyc" | xargs rm -f
 	-rm -rf dist-osx
 	-rm -rf out/ node node_g
+	-rm -rf blog.html email.md
 
 check:
 	@tools/waf-light check
