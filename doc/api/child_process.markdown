@@ -539,10 +539,6 @@ leaner than `child_process.exec`. It has the same options.
   * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
-* `callback` {Function} called with the output when process terminates
-  * `code` {Integer} Exit code
-  * `stdout` {Buffer}
-  * `stderr` {Buffer}
 * Return: ChildProcess object
 -->
 
@@ -556,10 +552,6 @@ leaner than `child_process.exec`. It has the same options.
   * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
-* `callback` {Function} プロセスが終了するとその出力を伴って呼び出されます
-  * `code` {Integer} 終了コード
-  * `stdout` {Buffer}
-  * `stderr` {Buffer}
 * Return: ChildProcess object
 
 <!--
