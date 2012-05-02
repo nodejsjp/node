@@ -534,16 +534,6 @@ written out - this may not be immediately.
 オプションの `callback` 引数はデータが最終的に出力された時に実行されます
 － これはすぐには起きないでしょう。
 
-### socket.write(data, [encoding], [callback])
-
-<!--
-Write data with the optional encoding. The callback will be made when the
-data is flushed to the kernel.
--->
-
-データを出力します。オプションのエンコーディングを指定することができます。
-コールバックはデータがカーネルにフラッシュされると呼び出されます。
-
 ### socket.end([data], [encoding])
 
 <!--
