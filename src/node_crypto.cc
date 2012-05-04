@@ -82,6 +82,8 @@ static Persistent<String> fingerprint_symbol;
 static Persistent<String> name_symbol;
 static Persistent<String> version_symbol;
 static Persistent<String> ext_key_usage_symbol;
+static Persistent<String> onhandshakestart_sym;
+static Persistent<String> onhandshakedone_sym;
 
 static Persistent<FunctionTemplate> secure_context_constructor;
 
@@ -861,16 +863,13 @@ int Connection::SelectSNIContextCallback_(SSL *s, int *ad, void* arg) {
       Local<Value> argv[1] = {*p->servername_};
       Local<Function> callback = *p->sniCallback_;
 
-      TryCatch try_catch;
-
       // Call it
-      Local<Value> ret = callback->Call(Context::GetCurrent()->Global(),
-                                        1,
-                                        argv);
-
-      if (try_catch.HasCaught()) {
-        FatalException(try_catch);
-      }
+      //
+      // XXX There should be an object connected to this that
+      // we can attach a domain onto.
+      Local<Value> ret;
+      ret = Local<Value>::New(MakeCallback(Context::GetCurrent()->Global(),
+                                           callback, ARRAY_SIZE(argv), argv));
 
       // If ret is SecureContext
       if (secure_context_constructor->HasInstance(ret)) {
@@ -977,12 +976,18 @@ void Connection::SSLInfoCallback(const SSL *ssl, int where, int ret) {
   if (where & SSL_CB_HANDSHAKE_START) {
     HandleScope scope;
     Connection* c = static_cast<Connection*>(SSL_get_app_data(ssl));
-    MakeCallback(c->handle_, "onhandshakestart", 0, NULL);
+    if (onhandshakestart_sym.IsEmpty()) {
+      onhandshakestart_sym = NODE_PSYMBOL("onhandshakestart");
+    }
+    MakeCallback(c->handle_, onhandshakestart_sym, 0, NULL);
   }
   if (where & SSL_CB_HANDSHAKE_DONE) {
     HandleScope scope;
     Connection* c = static_cast<Connection*>(SSL_get_app_data(ssl));
-    MakeCallback(c->handle_, "onhandshakedone", 0, NULL);
+    if (onhandshakedone_sym.IsEmpty()) {
+      onhandshakedone_sym = NODE_PSYMBOL("onhandshakedone");
+    }
+    MakeCallback(c->handle_, onhandshakedone_sym, 0, NULL);
   }
 }
 
@@ -4111,22 +4116,21 @@ EIO_PBKDF2After(uv_work_t* req) {
   pbkdf2_req* request = (pbkdf2_req*)req->data;
   delete req;
 
-  Handle<Value> argv[2];
+  Local<Value> argv[2];
   if (request->err) {
-    argv[0] = Undefined();
+    argv[0] = Local<Value>::New(Undefined());
     argv[1] = Encode(request->key, request->keylen, BINARY);
     memset(request->key, 0, request->keylen);
   } else {
     argv[0] = Exception::Error(String::New("PBKDF2 error"));
-    argv[1] = Undefined();
+    argv[1] = Local<Value>::New(Undefined());
   }
 
-  TryCatch try_catch;
-
-  request->callback->Call(Context::GetCurrent()->Global(), 2, argv);
-
-  if (try_catch.HasCaught())
-    FatalException(try_catch);
+  // XXX There should be an object connected to this that
+  // we can attach a domain onto.
+  MakeCallback(Context::GetCurrent()->Global(),
+               request->callback,
+               ARRAY_SIZE(argv), argv);
 
   delete[] request->pass;
   delete[] request->salt;
@@ -4285,9 +4289,8 @@ void RandomBytesWork(uv_work_t* work_req) {
 }
 
 
-void RandomBytesCheck(RandomBytesRequest* req, Handle<Value> argv[2]) {
-  HandleScope scope;
-
+// don't call this function without a valid HandleScope
+void RandomBytesCheck(RandomBytesRequest* req, Local<Value> argv[2]) {
   if (req->error_) {
     char errmsg[256] = "Operation not supported";
 
@@ -4295,13 +4298,13 @@ void RandomBytesCheck(RandomBytesRequest* req, Handle<Value> argv[2]) {
       ERR_error_string_n(req->error_, errmsg, sizeof errmsg);
 
     argv[0] = Exception::Error(String::New(errmsg));
-    argv[1] = Null();
+    argv[1] = Local<Value>::New(Null());
   }
   else {
     // avoids the malloc + memcpy
     Buffer* buffer = Buffer::New(req->data_, req->size_, RandomBytesFree, NULL);
-    argv[0] = Null();
-    argv[1] = buffer->handle_;
+    argv[0] = Local<Value>::New(Null());
+    argv[1] = Local<Object>::New(buffer->handle_);
   }
 }
 
@@ -4312,14 +4315,14 @@ void RandomBytesAfter(uv_work_t* work_req) {
       container_of(work_req, RandomBytesRequest, work_req_);
 
   HandleScope scope;
-  Handle<Value> argv[2];
+  Local<Value> argv[2];
   RandomBytesCheck(req, argv);
 
-  TryCatch tc;
-  req->callback_->Call(Context::GetCurrent()->Global(), 2, argv);
-
-  if (tc.HasCaught())
-    FatalException(tc);
+  // XXX There should be an object connected to this that
+  // we can attach a domain onto.
+  MakeCallback(Context::GetCurrent()->Global(),
+               req->callback_,
+               ARRAY_SIZE(argv), argv);
 
   delete req;
 }
@@ -4355,7 +4358,7 @@ Handle<Value> RandomBytes(const Arguments& args) {
     return Undefined();
   }
   else {
-    Handle<Value> argv[2];
+    Local<Value> argv[2];
     RandomBytesWork<generator>(&req->work_req_);
     RandomBytesCheck(req, argv);
     delete req;

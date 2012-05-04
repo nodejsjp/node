@@ -109,6 +109,11 @@ static Persistent<String> listeners_symbol;
 static Persistent<String> uncaught_exception_symbol;
 static Persistent<String> emit_symbol;
 
+static Persistent<String> domain_symbol;
+static Persistent<String> enter_symbol;
+static Persistent<String> exit_symbol;
+static Persistent<String> disposed_symbol;
+
 
 static bool print_eval = false;
 static bool force_repl = false;
@@ -231,8 +236,7 @@ static void Tick(void) {
 
   if (tick_callback_sym.IsEmpty()) {
     // Lazily set the symbol
-    tick_callback_sym =
-      Persistent<String>::New(String::NewSymbol("_tickCallback"));
+    tick_callback_sym = NODE_PSYMBOL("_tickCallback");
   }
 
   Local<Value> cb_v = process->Get(tick_callback_sym);
@@ -972,28 +976,96 @@ Handle<Value> FromConstructorTemplate(Persistent<FunctionTemplate>& t,
 //
 // Maybe make this a method of a node::Handle super class
 //
-void MakeCallback(Handle<Object> object,
-                  const char* method,
-                  int argc,
-                  Handle<Value> argv[]) {
+Handle<Value>
+MakeCallback(const Handle<Object> object,
+             const char* method,
+             int argc,
+             Handle<Value> argv[]) {
   HandleScope scope;
 
-  Local<Value> callback_v = object->Get(String::New(method));
+  Handle<Value> ret =
+    MakeCallback(object, String::NewSymbol(method), argc, argv);
+
+  return scope.Close(ret);
+}
+
+Handle<Value>
+MakeCallback(const Handle<Object> object,
+             const Handle<String> symbol,
+             int argc,
+             Handle<Value> argv[]) {
+  HandleScope scope;
+
+  Local<Value> callback_v = object->Get(symbol);
   if (!callback_v->IsFunction()) {
-    fprintf(stderr, "method = %s", method);
+    String::Utf8Value method(symbol);
+    // XXX: If the object has a domain attached, handle it there?
+    // At least, would be good to get *some* sort of indication
+    // of how we got here, even if it's not catchable.
+    fprintf(stderr, "Non-function in MakeCallback. method = %s\n", *method);
+    abort();
   }
-  assert(callback_v->IsFunction());
+
   Local<Function> callback = Local<Function>::Cast(callback_v);
+
+  return scope.Close(MakeCallback(object, callback, argc, argv));
+}
+
+Handle<Value>
+MakeCallback(const Handle<Object> object,
+             const Handle<Function> callback,
+             int argc,
+             Handle<Value> argv[]) {
+  HandleScope scope;
 
   // TODO Hook for long stack traces to be made here.
 
   TryCatch try_catch;
 
-  callback->Call(object, argc, argv);
+  if (domain_symbol.IsEmpty()) {
+    domain_symbol = NODE_PSYMBOL("domain");
+    enter_symbol = NODE_PSYMBOL("enter");
+    exit_symbol = NODE_PSYMBOL("exit");
+    disposed_symbol = NODE_PSYMBOL("_disposed");
+  }
+
+  Local<Value> domain_v = object->Get(domain_symbol);
+  Local<Object> domain;
+  Local<Function> enter;
+  Local<Function> exit;
+  if (!domain_v->IsUndefined()) {
+    domain = domain_v->ToObject();
+    if (domain->Get(disposed_symbol)->BooleanValue()) {
+      // domain has been disposed of.
+      return Undefined();
+    }
+    enter = Local<Function>::Cast(domain->Get(enter_symbol));
+    enter->Call(domain, 0, NULL);
+  }
 
   if (try_catch.HasCaught()) {
     FatalException(try_catch);
+    return Undefined();
   }
+
+  Local<Value> ret = callback->Call(object, argc, argv);
+
+  if (try_catch.HasCaught()) {
+    FatalException(try_catch);
+    return Undefined();
+  }
+
+  if (!domain_v->IsUndefined()) {
+    exit = Local<Function>::Cast(domain->Get(exit_symbol));
+    exit->Call(domain, 0, NULL);
+  }
+
+  if (try_catch.HasCaught()) {
+    FatalException(try_catch);
+    return Undefined();
+  }
+
+  return scope.Close(ret);
 }
 
 
@@ -1724,16 +1796,8 @@ static void OnFatalError(const char* location, const char* message) {
   exit(1);
 }
 
-static int uncaught_exception_counter = 0;
-
 void FatalException(TryCatch &try_catch) {
   HandleScope scope;
-
-  // Check if uncaught_exception_counter indicates a recursion
-  if (uncaught_exception_counter > 0) {
-    ReportException(try_catch, true);
-    exit(1);
-  }
 
   if (listeners_symbol.IsEmpty()) {
     listeners_symbol = NODE_PSYMBOL("listeners");
@@ -1770,10 +1834,13 @@ void FatalException(TryCatch &try_catch) {
   Local<Value> error = try_catch.Exception();
   Local<Value> event_argv[2] = { uncaught_exception_symbol_l, error };
 
-  uncaught_exception_counter++;
+  TryCatch event_try_catch;
   emit->Call(process, 2, event_argv);
-  // Decrement so we know if the next exception is a recursion or not
-  uncaught_exception_counter--;
+  if (event_try_catch.HasCaught()) {
+    // the uncaught exception event threw, so we must exit.
+    ReportException(event_try_catch, true);
+    exit(1);
+  }
 }
 
 
@@ -1937,12 +2004,9 @@ static Handle<Boolean> EnvDeleter(Local<String> property,
   HandleScope scope;
 #ifdef __POSIX__
   String::Utf8Value key(property);
-  // prototyped as `void unsetenv(const char*)` on some platforms
-  if (unsetenv(*key) < 0) {
-    // Deletion failed. Return true if the key wasn't there in the first place,
-    // false if it is still there.
-    return scope.Close(Boolean::New(getenv(*key) == NULL));
-  };
+  if (!getenv(*key)) return False();
+  unsetenv(*key); // can't check return value, it's void on some platforms
+  return True();
 #else
   String::Value key(property);
   WCHAR* key_ptr = reinterpret_cast<WCHAR*>(*key);
@@ -1953,9 +2017,8 @@ static Handle<Boolean> EnvDeleter(Local<String> property,
               GetLastError() != ERROR_SUCCESS;
     return scope.Close(Boolean::New(rv));
   }
+  return True();
 #endif
-  // It worked
-  return v8::True();
 }
 
 
@@ -2759,39 +2822,33 @@ int Start(int argc, char *argv[]) {
   // Use copy here as to not modify the original argv:
   Init(argc, argv_copy);
 
-  V8::Initialize();
-  Persistent<Context> context;
-  {
-    Locker locker;
-    HandleScope handle_scope;
+  v8::V8::Initialize();
+  v8::HandleScope handle_scope;
 
-    // Create the one and only Context.
-    Persistent<Context> context = Context::New();
-    Context::Scope context_scope(context);
+  // Create the one and only Context.
+  Persistent<v8::Context> context = v8::Context::New();
+  v8::Context::Scope context_scope(context);
 
-    // Use original argv, as we're just copying values out of it.
-    Handle<Object> process_l = SetupProcessObject(argc, argv);
-    v8_typed_array::AttachBindings(context->Global());
+  // Use original argv, as we're just copying values out of it.
+  Handle<Object> process_l = SetupProcessObject(argc, argv);
+  v8_typed_array::AttachBindings(context->Global());
 
-    // Create all the objects, load modules, do everything.
-    // so your next reading stop should be node::Load()!
-    Load(process_l);
+  // Create all the objects, load modules, do everything.
+  // so your next reading stop should be node::Load()!
+  Load(process_l);
 
-    // All our arguments are loaded. We've evaluated all of the scripts. We
-    // might even have created TCP servers. Now we enter the main eventloop. If
-    // there are no watchers on the loop (except for the ones that were
-    // uv_unref'd) then this function exits. As long as there are active
-    // watchers, it blocks.
-    uv_run(uv_default_loop());
+  // All our arguments are loaded. We've evaluated all of the scripts. We
+  // might even have created TCP servers. Now we enter the main eventloop. If
+  // there are no watchers on the loop (except for the ones that were
+  // uv_unref'd) then this function exits. As long as there are active
+  // watchers, it blocks.
+  uv_run(uv_default_loop());
 
-    EmitExit(process_l);
-#ifndef NDEBUG
-    context.Dispose();
-#endif
-  }
+  EmitExit(process_l);
 
 #ifndef NDEBUG
   // Clean up.
+  context.Dispose();
   V8::Dispose();
 #endif  // NDEBUG
 

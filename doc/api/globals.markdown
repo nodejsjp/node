@@ -108,6 +108,34 @@ value from this object, the next `require` will reload the module.
 このオブジェクトからキーと値を削除すると、次にそのモジュールが
 `require` されたときにリロードされます。
 
+### require.extensions
+
+* {Array}
+
+<!--
+Instruct `require` on how to handle certain file extensions.
+
+Process files with the extension `.sjs` as `.js`:
+-->
+
+`require` にファイル拡張子を扱う方法を教えます。
+
+拡張子が `.sjs` であるファイルの処理を `.js` と同じにするには:
+
+    require.extensions['.sjs'] = require.extensions['.js'];
+
+<!--
+Write your own extension handler:
+-->
+
+独自の拡張子ハンドラを記述するには:
+
+    require.extensions['.sjs'] = function(module, filename) {
+      var content = fs.readFileSync(filename, 'utf8');
+      // Parse the file content and give to module.exports
+      module.exports = content;
+    };
+
 ## __filename
 
 <!-- type=var -->

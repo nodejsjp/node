@@ -115,6 +115,7 @@ website_files = \
 	out/doc/about/index.html \
 	out/doc/community/index.html \
 	out/doc/logos/index.html \
+	out/doc/changelog.html \
 	$(doc_images)
 
 doc: program $(apidoc_dirs) $(website_files) $(apiassets) $(apidocs) tools/doc/
@@ -124,6 +125,9 @@ $(apidoc_dirs):
 
 out/doc/api/assets/%: doc/api_assets/% out/doc/api/assets/
 	cp $< $@
+
+out/doc/changelog.html: ChangeLog doc/changelog-head.html doc/changelog-foot.html tools/build-changelog.sh
+	bash tools/build-changelog.sh
 
 out/doc/%.html: doc/%.html
 	cat $< | sed -e 's|__VERSION__|'$(VERSION)'|g' > $@
@@ -142,7 +146,7 @@ email.md: ChangeLog tools/email-footer.md
 	cat tools/email-footer.md | sed -e 's|__VERSION__|'$(VERSION)'|g' >> $@
 
 blog.html: email.md
-	cat $< | node tools/doc/node_modules/.bin/marked > $@
+	cat $< | ./node tools/doc/node_modules/.bin/marked > $@
 
 website-upload: doc
 	rsync -r out/doc/ node@nodejs.org:~/web/nodejs.org/

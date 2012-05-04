@@ -30,9 +30,9 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
 * `protocol`: The request protocol, lowercased.
 
   Example: `'http:'`
-* `host`: The full lowercased host portion of the URL, including port and authentication information.
+* `host`: The full lowercased host portion of the URL, including the port.
 
-  Example: `'user:pass@host.com:8080'`
+  Example: `'host.com:8080'`
 * `auth`: The authentication information portion of a URL.
 
   Example: `'user:pass'`
@@ -65,9 +65,9 @@ URL文字列に含まれないフィールドは解析結果のオブジェク�
 * `protocol`: リクエストのプロトコル。小文字化されます。
   
   例: `'http:'`
-* `host`: URL の完全で小文字化されたホスト情報。認証情報を含みます。 
+* `host`: URL の完全で小文字化されたホスト情報。ポート番号を含みます。
   
-  例: `'user:pass@host.com:8080'`
+  Example: `'host.com:8080'`
 * `auth`: URL の認証情報。
   
   例: `'user:pass'`
@@ -140,7 +140,7 @@ URL オブジェクトを引数に取り、フォーマットした URL 文字�
 * `auth` will only be used if `host` is absent.
 * `hostname` will only be used if `host` is absent.
 * `port` will only be used if `host` is absent.
-* `host` will be used in place of `auth`, `hostname`, and `port`
+* `host` will be used in place of `hostname` and `port`
 * `pathname` is treated the same with or without the leading `/` (slash)
 * `search` will be used in place of `query`
 * `query` (object; see `querystring`) will only be used if `search` is absent.
@@ -155,7 +155,7 @@ URL オブジェクトを引数に取り、フォーマットした URL 文字�
 * `auth` は `host` が与えられなかった場合だけ使われます。
 * `hostname` は `host` が与えられなかった場合だけ使われます。
 * `port` は `host` が与えられなかった場合だけ使われます。
-* `host` は `auth`、`hostname`、`port` の位置で使われます。
+* `host` は `hostname`、`port` の位置で使われます。
 * `pathname` の先頭に `/` (スラッシュ) があってもなくても同じように扱われます。
 * `search` は `query` の位置で使われます。
 * `query` (文字列ではなくオブジェクトです; `querystring` を参照してください) は `search` が与えられなかった場合だけ使われます。

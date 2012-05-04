@@ -185,3 +185,10 @@ Get a list of network interfaces:
       vmnet8: [ { address: '10.88.88.1', family: 'IPv4', internal: false } ],
       ppp0: [ { address: '10.2.0.231', family: 'IPv4', internal: false } ] }
 
+## os.EOL
+
+<!--
+A constant defining the appropriate End-of-line marker for the operating system.
+-->
+
+オペレーティングシステムに適した行区切り文字を定義した定数です。
