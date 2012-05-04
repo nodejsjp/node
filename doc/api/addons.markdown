@@ -113,8 +113,9 @@ The `module_name` needs to match the filename of the final binary (minus the
 .node suffix).
 
 The source code needs to be built into `hello.node`, the binary Addon. To
-do this we create a file called `wscript` which is python code and looks
-like this:
+do this we create a file called `binding.gyp` which describes the configuration
+to build your module in a JSON-like format. This file gets compiled by
+[node-gyp](https://github.com/TooTallNate/node-gyp).
 -->
 
 `NODE_MODULE` は関数ではないので、その後にセミコロンを付けてはいけません
@@ -124,45 +125,53 @@ like this:
 とマッチする必要があります。
 
 このソースコードは、`hello.node` というバイナリアドオンとしてビルドされる必要が有ります。
-そのために `wscript` と呼ばれる以下のようなコードを Python で書きました:
+そのために `binding.gyp` と呼ばれる、あなたのモジュールをビルドするための
+構成を JSON 的なフォーマットで記述したファイルを作成します。
+このファイルは [node-gyp](https://github.com/TooTallNate/node-gyp)
+によってコンパイルされます。
 
-    srcdir = '.'
-    blddir = 'build'
-    VERSION = '0.0.1'
-
-    def set_options(opt):
-      opt.tool_options('compiler_cxx')
-
-    def configure(conf):
-      conf.check_tool('compiler_cxx')
-      conf.check_tool('node_addon')
-
-    def build(bld):
-      obj = bld.new_task_gen('cxx', 'shlib', 'node_addon')
-      obj.target = 'hello'
-      obj.source = 'hello.cc'
+    {
+      "targets": [
+        {
+          "target_name": "hello",
+          "sources": [ "hello.cc" ]
+        }
+      ]
+    }
 
 <!--
-Running `node-waf configure build` will create a file
-`build/default/hello.node` which is our Addon.
+The next step is to generate the appropriate project build files for the
+current platform. Use `node-gyp configure` for that.
 -->
 
-`node-waf configure build` を実行すると、`build/default/hello.node` が作成されます。これが作成したアドオンです。
+次のステップは現在のプラットフォームに適したプロジェクトビルドファイルを
+生成することです。
+`node-gyp configure` を使います。
 
 <!--
-`node-waf` is just [WAF](http://code.google.com/p/waf), the python-based build system. `node-waf` is
-provided for the ease of users.
+Now you will have either a `Makefile` (on Unix platforms) or a `vcxproj` file
+(on Windows) in the `build/` directory. Next invoke the `node-gyp build`
+command.
 -->
 
-`node-waf` 単に [WAF](http://code.google.com/p/waf) は Python ベースのビルドシステムです。
-`node-waf` は、ユーザの負担を減らすために提供されています。
+これで、`Makefile` (Unix プラットフォームの場合)、または `vcxproj` ファイル
+(Windows の場合) が `build/` ディレクトリに作られます。
+次に `node-gyp build` コマンドを起動します。
+
+<!--
+Now you have your compiled `.node` bindings file! The compiled bindings end up
+in `build/Release/`.
+-->
+
+これでコンパイルされた `.node` バインディングファイルが作成されます！
+コンパイルされたバインディングファイルは `build/Release/` にあります。
 
 <!--
 You can now use the binary addon in a Node project `hello.js` by pointing `require` to
-the recently built module:
+the recently built `hello.node` module:
 -->
 
-ビルドされたモジュールを `require` で指定することにより、
+ビルドされた `hello.node` モジュールを `require` で指定することにより、
 このバイナリアドオンを Node プロジェクトの `hello.js` から利用することが
 可能になります。
 
@@ -172,11 +181,11 @@ the recently built module:
 
 <!--
 Please see patterns below for further information or
-<https://github.com/pietern/hiredis-node> for an example in production.
+<https://github.com/arturadib/node-qt> for an example in production.
 -->
 
 さらに詳しい情報については下記のパターンか、
-<https://github.com/pietern/hiredis-node> を実際のプロダクトにおける
+<https://github.com/arturadib/node-qt> を実際のプロダクトにおける
 例として参照してください。
 
 ## Addon patterns
@@ -187,9 +196,6 @@ Below are some addon patterns to help you get started. Consult the online
 calls, and v8's [Embedder's Guide](http://code.google.com/apis/v8/embed.html)
 for an explanation of several concepts used such as handles, scopes,
 function templates, etc.
-
-To compile these examples, create the `wscript` file below and run
-`node-waf configure build`:
 -->
 
 以下は初心者に役立つアドオンのパターンです。
@@ -199,31 +205,43 @@ v8 の様々な API についてはオンラインの
 v8 の [Embedder's Guide](http://code.google.com/apis/v8/embed.html) が
 役に立つでしょう。
 
-    srcdir = '.'
-    blddir = 'build'
-    VERSION = '0.0.1'
+<!--
+In order to use these examples you need to compile them using `node-gyp`.
+Create the following `binding.gyp` file:
+-->
 
-    def set_options(opt):
-      opt.tool_options('compiler_cxx')
+このサンプルを利用できるようにするには、`node-gyp` を使用して
+コンパイルする必要があります。
+以下の `binding.gyp` ファイルを作成します。
 
-    def configure(conf):
-      conf.check_tool('compiler_cxx')
-      conf.check_tool('node_addon')
-
-    def build(bld):
-      obj = bld.new_task_gen('cxx', 'shlib', 'node_addon')
-      obj.target = 'addon'
-      obj.source = ['addon.cc']
+    {
+      "targets": [
+        {
+          "target_name": "addon",
+          "sources": [ "addon.cc" ]
+        }
+      ]
+    }
 
 <!--
 In cases where there is more than one `.cc` file, simply add the file name to the
-`obj.source` array, e.g.:
+`sources` array, e.g.:
 -->
 
-一つ以上の `.cc` ファイルがある場合は、単純に `obj.source` 配列にファイル名を
+一つ以上の `.cc` ファイルがある場合は、単純に `sources` 配列にファイル名を
 加えるだけです。例:
 
-    obj.source = ['addon.cc', 'myexample.cc']
+    "sources": ["addon.cc", "myexample.cc"]
+
+<!--
+Now that you have your `binding.gyp` ready, you can configure and build the
+addon:
+-->
+
+これで `binding.gyp` の準備ができました。
+アドオンをコンフィギュアおよびビルドするには:
+
+    $ node-gyp configure build
 
 
 ### Function arguments

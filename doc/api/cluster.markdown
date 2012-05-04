@@ -30,7 +30,7 @@ all share server ports.
         cluster.fork();
       }
 
-      cluster.on('death', function(worker) {
+      cluster.on('exit', function(worker) {
         console.log('worker ' + worker.pid + ' died');
       });
     } else {
@@ -143,7 +143,7 @@ This can be used to log worker activity, and create you own timeout.
     cluster.on('listening', function (worker) {
       clearTimeout(timeouts[worker.uniqueID]);
     });
-    cluster.on('death', function (worker) {
+    cluster.on('exit', function (worker) {
       clearTimeout(timeouts[worker.uniqueID]);
       errorMsg();
     });
@@ -203,12 +203,12 @@ when the worker dies, usually after calling `.destroy()`.
 
 <!--
 When calling `.disconnect()`, there may be a delay between the
-`disconnect` and `death` events.  This event can be used to detect if
+`disconnect` and `exit` events.  This event can be used to detect if
 the process is stuck in a cleanup or if there are long-living
 connections.
 -->
 
-`.disconnect()` を呼び出した後、`'disconnect'` と `'death'` の間には
+`.disconnect()` を呼び出した後、`'disconnect'` と `'exit'` の間には
 遅延があるかもしれません。このイベントはプロセスがクリーンナップで
 行き詰まったり、長時間生きている接続がないかを検出することに
 使用できます。
@@ -217,20 +217,20 @@ connections.
       console.log('The worker #' + worker.uniqueID + ' has disconnected');
     });
 
-## Event: 'death'
+## Event: 'exit'
 
 * `worker` {Worker object}
 
 <!--
-When any of the workers die the cluster module will emit the 'death' event.
+When any of the workers die the cluster module will emit the 'exit' event.
 This can be used to restart the worker by calling `fork()` again.
 -->
 
-どのワーカが死んだ場合でも、クラスタモジュールは `'death'` イベントを
+どのワーカが死んだ場合でも、クラスタモジュールは `'exit'` イベントを
 生成します。
 これは `fork()` を呼び出してワーカを再開する場合に使用することができます。
 
-    cluster.on('death', function(worker) {
+    cluster.on('exit', function(worker) {
       console.log('worker ' + worker.pid + ' died. restart...');
       cluster.fork();
     });
@@ -488,15 +488,14 @@ This example will echo back all messages from the master:
 
 <!--
 This function will kill the worker, and inform the master to not spawn a
-new worker.  To know the difference between suicide and accidentally death
-a suicide boolean is set to true.
+new worker.  The boolean `suicide` lets you distinguish between voluntary
+and accidental exit.
 -->
 
 この関数はワーカを終了し、マスタに新しいワーカを起動しないように伝えます。
-意図しない終了と区別するために `suicide` プロパティに `true`
-が設定されることを知っておいてください。
+boolean の `suicide` により、自発的かアクシデントによる終了かを識別できます。
 
-    cluster.on('death', function (worker) {
+    cluster.on('exit', function (worker) {
       if (worker.suicide === true) {
         console.log('Oh, it was just suicide\' – no need to worry').
       }
@@ -512,7 +511,7 @@ When calling this function the worker will no longer accept new connections, but
 they will be handled by any other listening worker. Existing connection will be
 allowed to exit as usual. When no more connections exist, the IPC channel to the worker
 will close allowing it to die graceful. When the IPC channel is closed the `disconnect`
-event will emit, this is then followed by the `death` event, there is emitted when
+event will emit, this is then followed by the `exit` event, there is emitted when
 the worker finally die.
 -->
 
@@ -522,7 +521,7 @@ the worker finally die.
 コネクションが無くなると、ワーカを正常に終了するために IPC チャネルは
 閉じられます。
 IPC チャネルが閉じられると `'disconnect'` イベントが生成され、
-その後ワーカが終了すると `'death'` イベントが生成されます。
+その後ワーカが終了すると `'exit'` イベントが生成されます。
 
 <!--
 Because there might be long living connections, it is useful to implement a timeout.
@@ -675,18 +674,18 @@ on the specified worker.
       // Worker has disconnected
     };
 
-### Event: 'death'
+### Event: 'exit'
 
 * `worker` {Worker object}
 
 <!--
-Same as the `cluster.on('death')` event, but emits only when the state change
+Same as the `cluster.on('exit')` event, but emits only when the state change
 on the specified worker.
 -->
 
-`cluster.on('death')` と同様ですが、特定のワーカの状態が変化した場合のみ
+`cluster.on('exit')` と同様ですが、特定のワーカの状態が変化した場合のみ
 イベントを生成します。
 
-    cluster.fork().on('death', function (worker) {
+    cluster.fork().on('exit', function (worker) {
       // Worker has died
     };
