@@ -68,7 +68,7 @@ header on responses.
 
 **Note: these examples are drastically simplified to show
 the basic concept.**  Zlib encoding can be expensive, and the results
-ought to be cached.  See [Memory Usage Tuning](#memory_Usage_Tuning)
+ought to be cached.  See [Memory Usage Tuning](#zlib_memory_usage_tuning)
 below for more information on the speed/memory/compression
 tradeoffs involved in zlib usage.
 -->
@@ -83,7 +83,7 @@ tradeoffs involved in zlib usage.
 これらのサンプルは基本コンセプトを見せるためにとても単純化されています。**
 Zlib エンコーディングは高価なので、結果はキャッシュされるべきです。
 zlibの使い方に関する速度／メモリ／圧縮率のトレードオフについてより詳しくは、
-後述の [Memory Usage Tuning](#memory_Usage_Tuning) を参照してください。
+後述の [Memory Usage Tuning](#zlib_memory_usage_tuning) を参照してください。
 
     // client request example
     var zlib = require('zlib');
@@ -155,65 +155,74 @@ zlib.h に定義された定数は `require('zlib')` でも定義されます。
 ## zlib.createGzip([options])
 
 <!--
-Returns a new [Gzip](#zlib.Gzip) object with an [options](#options).
+Returns a new [Gzip](#zlib_class_zlib_gzip) object with an
+[options](#zlib_options).
 -->
 
-[options](#options) によって作られた新しい [Gzip](#zlib.Gzip)
-オブジェクトを返します。
+[options](#zlib_options) によって作られた新しい
+[Gzip](#zlib_class_zlib_gzip) オブジェクトを返します。
 
 ## zlib.createGunzip([options])
 
 <!--
-Returns a new [Gunzip](#zlib.Gunzip) object with an [options](#options).
+Returns a new [Gunzip](#zlib_class_zlib_gunzip) object with an
+[options](#zlib_options).
 -->
 
-[options](#options) によって作られた新しい [Gunzip](#zlib.Gunzip)
-オブジェクトを返します。
+[options](#zlib_options) によって作られた新しい
+[Gunzip](#zlib_class_zlib_gunzip) オブジェクトを返します。
 
 ## zlib.createDeflate([options])
 
 <!--
-Returns a new [Deflate](#zlib.Deflate) object with an [options](#options).
+Returns a new [Deflate](#zlib_class_zlib_deflate) object with an
+[options](#zlib_options).
 -->
 
-[options](#options) によって作られた新しい [Deflate](#zlib.Deflate)
-オブジェクトを返します。
+[options](#zlib_options) によって作られた新しい
+[Deflate](#zlib_class_zlib_deflate) オブジェクトを返します。
 
 ## zlib.createInflate([options])
 
 <!--
-Returns a new [Inflate](#zlib.Inflate) object with an [options](#options).
+Returns a new [Inflate](#zlib_class_zlib_inflate) object with an
+[options](#zlib_options).
 -->
 
-[options](#options) によって作られた新しい [Inflate](#zlib.Inflate)
-オブジェクトを返します。
+[options](#zlib_options) によって作られた新しい
+[Inflate](#zlib_class_zlib_inflate) オブジェクトを返します。
 
 ## zlib.createDeflateRaw([options])
 
 <!--
-Returns a new [DeflateRaw](#zlib.DeflateRaw) object with an [options](#options).
+Returns a new [DeflateRaw](#zlib_class_zlib_deflateraw) object with an
+[options](#zlib_options).
+
 -->
 
-[options](#options) によって作られた新しい [DeflateRaw](#zlib.DeflateRaw)
-オブジェクトを返します。
+[options](#zlib_options) によって作られた新しい
+[DeflateRaw](#zlib_class_zlib_deflateraw) オブジェクトを返します。
 
 ## zlib.createInflateRaw([options])
 
 <!--
-Returns a new [InflateRaw](#zlib.InflateRaw) object with an [options](#options).
+Returns a new [InflateRaw](#zlib_class_zlib_inflateraw) object with an
+[options](#zlib_options).
+
 -->
 
-[options](#options) によって作られた新しい [InflateRaw](#zlib.InflateRaw)
-オブジェクトを返します。
+[options](#zlib_options) によって作られた新しい
+[InflateRaw](#zlib_class_zlib_inflateraw) オブジェクトを返します。
 
 ## zlib.createUnzip([options])
 
 <!--
-Returns a new [Unzip](#zlib.Unzip) object with an [options](#options).
+Returns a new [Unzip](#zlib_class_zlib_unzip) object with an
+[options](#zlib_options).
 -->
 
-[options](#options) によって作られた新しい [Unzip](#zlib.Unzip)
-オブジェクトを返します。
+[options](#zlib_options) によって作られた新しい
+[Unzip](#zlib_class_zlib_unzip) オブジェクトを返します。
 
 
 ## Class: zlib.Gzip

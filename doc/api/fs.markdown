@@ -104,7 +104,7 @@ to `process.cwd()`.
 ファイル名には相対パスを使うことが出来ます。しかし、このパスは
 `process.cwd()` からの相対パスであることを思い出してください。
 
-## fs.rename(path1, path2, [callback])
+## fs.rename(oldPath, newPath, [callback])
 
 <!--
 Asynchronous rename(2). No arguments other than a possible exception are given
@@ -113,7 +113,7 @@ to the completion callback.
 
 非同期の rename(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-## fs.renameSync(path1, path2)
+## fs.renameSync(oldPath, newPath)
 
 <!--
 Synchronous rename(2).
@@ -326,7 +326,7 @@ Synchronous link(2).
 
 同期の link(2)。
 
-## fs.symlink(linkdata, path, [type], [callback])
+## fs.symlink(destination, path, [type], [callback])
 
 <!--
 Asynchronous symlink(2). No arguments other than a possible exception are given
@@ -339,7 +339,7 @@ used on Windows (ignored on other platforms).
 `type` 引数は `'dir'` または `'file'` (デフォルトは `'file'`) です。
 これは Windows でのみ使われます (他のプラットフォームでは無視されます)。
 
-## fs.symlinkSync(linkdata, path, [type])
+## fs.symlinkSync(destination, path, [type])
 
 <!--
 Synchronous symlink(2).
@@ -364,17 +364,34 @@ Synchronous readlink(2). Returns the symbolic link's string value.
 
 同期の readlink(2)。シンボリックリンクの持つ文字列値を返します。
 
-## fs.realpath(path, [callback])
+## fs.realpath(path, [cache], callback)
 
 <!--
-Asynchronous realpath(2).  The callback gets two arguments `(err,
-resolvedPath)`.  May use `process.cwd` to resolve relative paths.
+Asynchronous realpath(2). The `callback` gets two arguments `(err,
+resolvedPath)`. May use `process.cwd` to resolve relative paths. `cache` is an
+object literal of mapped paths that can be used to force a specific path
+resolution or avoid additional `fs.stat` calls for known real paths.
 -->
 
 非同期の realpath(2)。コールバックは 2 つの引数を受け取る `(err, resolvedPath)`です。
 相対パスを解決するために `process.cwd` を使用することができます。
+`cache` はオブジェクトで、パスがキーとして含まれていればその値が
+強制的に解決されたパスとして扱われ、`fs.stat` によってパスが実在するかどうかの
+確認が省かれます。
 
-## fs.realpathSync(path)
+<!--
+Example:
+-->
+
+例:
+
+    var cache = {'/etc':'/private/etc'};
+    fs.realpath('/etc/passwd', cache, function (err, resolvedPath) {
+      if (err) throw err;
+      console.log(resolvedPath);
+    });
+
+## fs.realpathSync(path, [cache])
 
 <!--
 Synchronous realpath(2). Returns the resolved path.
@@ -993,7 +1010,7 @@ callback, and have some fallback logic if it is null.
       }
     });
 
-## fs.exists(p, [callback])
+## fs.exists(path, [callback])
 
 <!--
 Test whether or not the given path exists by checking with the file system.
@@ -1009,7 +1026,7 @@ Then call the `callback` argument with either true or false.  Example:
     });
 
 
-## fs.existsSync(p)
+## fs.existsSync(path)
 
 <!--
 Synchronous version of `fs.exists`.
@@ -1216,6 +1233,7 @@ for writing.
 <!--
 Objects returned from `fs.watch()` are of this type.
 -->
+
 `fs.watch()` が返すオブジェクトはこの型です。
 
 ### watcher.close()
@@ -1223,6 +1241,7 @@ Objects returned from `fs.watch()` are of this type.
 <!--
 Stop watching for changes on the given `fs.FSWatcher`.
 -->
+
 `fs.FSWatcher` に与えられたファイルの監視を終了します。
 
 ### Event: 'change'

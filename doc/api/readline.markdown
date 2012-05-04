@@ -13,13 +13,13 @@ Readline はストリーム (たとえば `process.stdin`)
 
 <!--
 Note that once you've invoked this module, your node program will not
-terminate until you've paused the interface. Here's how to allow your
-program to gracefully pause:
+terminate until you've closed the interface. Here's how to allow your
+program to gracefully exit:
 -->
 
 このモジュールを一度起動すると、このインタフェースを
-中断するまで node プログラムは終了しないことに注意してください。
-プログラムをスムーズに中断する方法を以下に示します:
+クローズするまで node プログラムは終了しないことに注意してください。
+プログラムをスムーズに終了する方法を以下に示します:
 
     var rl = require('readline');
 
@@ -32,7 +32,7 @@ program to gracefully pause:
       // TODO: Log the answer in a database
       console.log("Thank you for your valuable feedback:", answer);
 
-      i.pause();
+      i.close();
     });
 
 ## rl.createInterface(options)
@@ -53,9 +53,9 @@ the following values:
  - `completer` - an optional function that is used for Tab autocompletion. See
    below for an example of using this.
 
- - `terminal` - pass `true` if the `input` and `output` streams should be treated
-   like a TTY, and have ANSI/VT100 escape codes written to it. Defaults to
-   checking `isTTY` on the `output` stream upon instantiation.
+ - `terminal` - pass `true` if the `input` and `output` streams should be
+   treated like a TTY, and have ANSI/VT100 escape codes written to it.
+   Defaults to checking `isTTY` on the `output` stream upon instantiation.
 -->
 
  - `input` - 監視する入力ストリーム (必須)。
@@ -97,6 +97,19 @@ Which ends up looking something like:
 `[[substr1, substr2, ...], originalsubstring]`。
 
 <!--
+Example:
+-->
+
+例:
+
+    function completer(line) {
+      var completions = '.help .error .exit .quit .q'.split(' ')
+      var hits = completions.filter(function(c) { return c.indexOf(line) == 0 })
+      // show all completions if none found
+      return [hits.length ? hits : completions, line]
+    }
+
+<!--
 Also `completer` can be run in async mode if it accepts two arguments:
 -->
 
@@ -121,15 +134,16 @@ Also `completer` can be run in async mode if it accepts two arguments:
     });
 
 <!--
-Once you have a readline instance, you most commonly listen for the `"line"` event.
+Once you have a readline instance, you most commonly listen for the
+`"line"` event.
 -->
 
 readline のインスタンスを作成すると、ほとんどの場合 `'line'` イベントを
 監視することになります。
 
 <!--
-If `terminal` is `true` for this instance then the `output` stream will get the
-best compatability if it defines an `output.columns` property, and fires
+If `terminal` is `true` for this instance then the `output` stream will get
+the best compatability if it defines an `output.columns` property, and fires
 a `"resize"` event on the `output` if/when the columns ever change
 (`process.stdout` does this automatically when it is a TTY).
 -->
@@ -166,7 +180,7 @@ Sets the prompt, for example when you run `node` on the command line, you see
 Readies readline for input from the user, putting the current `setPrompt`
 options on a new line, giving the user a new spot to write.
 
-This will also resume the `in` stream used with `createInterface` if it has
+This will also resume the `input` stream used with `createInterface` if it has
 been paused.
 -->
 
@@ -174,24 +188,24 @@ been paused.
 現在の `setPrompt()` の値を新しい行に出力し、
 ユーザに新しい入力エリアを与えます。
 
-これは、 `createInterface()` によって使われる `in` ストリームが
+これは、 `createInterface()` によって使われる `input` ストリームが
 中断されていれば再開します。
 
 ### rl.question(query, callback)
 
 <!--
 Prepends the prompt with `query` and invokes `callback` with the user's
-response. Displays the query to the user, and then invokes `callback` with the
-user's response after it has been typed.
+response. Displays the query to the user, and then invokes `callback`
+with the user's response after it has been typed.
 
-This will also resume the `in` stream used with `createInterface` if it has
-been paused.
+This will also resume the `input` stream used with `createInterface` if
+it has been paused.
 -->
 
 `query` をプロンプトとして、ユーザが応答すると `callback` を起動します。
 ユーザに質問を表示し、ユーザが応答をタイプすると、`callback` が起動されます。
 
-これは、 `createInterface()` によって使われる `in` ストリームが
+これは、 `createInterface()` によって使われる `input` ストリームが
 中断されていれば再開します。
 
 <!--
@@ -222,6 +236,16 @@ Resumes the readline `input` stream.
 
 `input` ストリームからの入力を再開します。
 
+### rl.close()
+
+<!--
+Closes the `Interface` instance, relinquishing control on the `input` and
+`output` streams. The "close" event will also be emitted.
+-->
+
+`Interface` のインスタンスをクローズし、`input` および `output` ストリームの
+制御を解放します。`'close'` イベントも生成されます。
+
 ### rl.write()
 
 <!--
@@ -234,16 +258,18 @@ This will also resume the `input` stream if it has been paused.
 
 これは、`input` ストリームが中断されていれば再開します。
 
+## Events
+
 ### Event: 'line'
 
 `function (line) {}`
 
 <!--
-Emitted whenever the `in` stream receives a `\n`, usually received when the
+Emitted whenever the `input` stream receives a `\n`, usually received when the
 user hits enter, or return. This is a good hook to listen for user input.
 -->
 
-`in` ストリームから `\n` を読み込むごとに生成されます。
+`input` ストリームから `\n` を読み込むごとに生成されます。
 通常、ユーザがエンターまたはリターンを打つごとに受信します。
 これはユーザ入浴のよいフックとなります。
 
@@ -262,23 +288,22 @@ Example of listening for `line`:
 `function () {}`
 
 <!--
-Emitted whenever the `in` stream is paused or receives `^D`, respectively known
-as `EOT`. This event is also called if there is no `SIGINT` event listener
-present when the `in` stream receives a `^C`, respectively known as `SIGINT`.
-
-Also emitted whenever the `in` stream is not paused and receives the `SIGCONT`
-event. (See events `SIGTSTP` and `SIGCONT`)
-
-Example of listening for `pause`:
+Emitted whenever the `input` stream is paused.
 -->
 
-`in` ストリームが中断された時、または `EOT` として知られる `^D` 
-を受信すると生成されます。
-このイベントは、`in` ストリームが `SIGINT` として知られる `^C` を受信した際に、
-`SIGINT` イベントのリスナが存在しない場合にも生成されます。
+`input` ストリームが中断されたときに生成されます。
 
-`in` ストリームが中断されていない時に `SIGCONT` イベントを受信した際にも
+<!--
+Also emitted whenever the `input` stream is not paused and receives the
+`SIGCONT` event. (See events `SIGTSTP` and `SIGCONT`)
+-->
+
+`input` ストリームが中断されていない時に `SIGCONT` イベントを受信した際にも
 生成されます (`SIGTSTP` および `SIGCONT` も参照してください)。
+
+<!--
+Example of listening for `pause`:
+-->
 
 `'pause'` を監視する例:
 
@@ -291,12 +316,12 @@ Example of listening for `pause`:
 `function () {}`
 
 <!--
-Emitted whenever the `in` stream is resumed.
+Emitted whenever the `input` stream is resumed.
 
 Example of listening for `resume`:
 -->
 
-`in` ストリームが再開された時に生成されます。
+`input` ストリームが再開された時に生成されます。
 
 `'resume'` を監視する例:
 
@@ -304,34 +329,50 @@ Example of listening for `resume`:
       console.log('Readline resumed.');
     });
 
-### Event: 'end'
+### Event: 'close'
 
 `function () {}`
 
 <!--
-Emitted when the `input` stream receives its "end" event, or when `^D` is
-pressed by the user. It's generally a good idea to consider this `Interface`
-instance as completed after this is emitted.
+Emitted when `close()` is called.
 -->
 
-`input` ストリームが `'end'` イベントを受け取った場合、
-またはユーザが `^D` を推した場合に生成されます。
-通常、これが生成された後で `Interface` インスタンスは完了すると考えられます。
+`close()` が呼ばれた場合に生成されます。
+
+<!--
+Also emitted when the `input` stream receives its "end" event. The `Interface`
+instance should be considered "finished" once this is emitted. For example, when
+the `input` stream receives `^D`, respectively known as `EOT`.
+-->
+
+`input` ストリームが `'end'` イベントを受け取った場合にも生成されます。
+これが生成された後、`Interface` インスタンスは完了したと考えられるべきです。
+例えば、`input` ストリームが `EOT` として知られる `^D` を受け取った場合。
+
+<!--
+This event is also called if there is no `SIGINT` event listener present when
+the `input` stream receives a `^C`, respectively known as `SIGINT`.
+-->
+
+このイベントは `SIGINT` イベントリスナが与えられていない場合に、
+`input` ストリームが `SIGINT` として知られる `^C` を受け取った場合にも
+生成されます。
 
 ### Event: 'SIGINT'
 
 `function () {}`
 
 <!--
-Emitted whenever the `in` stream receives a `^C`, respectively known as
-`SIGINT`. If there is no `SIGINT` event listener present when the `in` stream
-receives a `SIGINT`, `pause` will be triggered.
+Emitted whenever the `input` stream receives a `^C`, respectively known as
+`SIGINT`. If there is no `SIGINT` event listener present when the `input`
+stream receives a `SIGINT`, `pause` will be triggered.
 
 Example of listening for `SIGINT`:
 -->
 
-`in` ストリームが `SIGINT` として知られる `^C` を受信した場合に生成されます。
-もし `in` ストリームが `SIGINT` を受信した時に `'SIGINT'` イベントの
+`input` ストリームが `SIGINT` として知られる `^C` を受信した場合に
+生成されます。
+もし `input` ストリームが `SIGINT` を受信した時に `'SIGINT'` イベントの
 リスナが存在しなければ、`'pause'` イベントがトリガされます。
 
 `'SIGINT'` を監視する例:
@@ -349,9 +390,9 @@ Example of listening for `SIGINT`:
 <!--
 **This does not work on Windows.**
 
-Emitted whenever the `in` stream receives a `^Z`, respectively known as
-`SIGTSTP`. If there is no `SIGTSTP` event listener present when the `in` stream
-receives a `SIGTSTP`, the program will be sent to the background.
+Emitted whenever the `input` stream receives a `^Z`, respectively known as
+`SIGTSTP`. If there is no `SIGTSTP` event listener present when the `input`
+stream receives a `SIGTSTP`, the program will be sent to the background.
 
 When the program is resumed with `fg`, the `pause` and `SIGCONT` events will be
 emitted. You can use either to resume the stream.
@@ -364,8 +405,9 @@ Example of listening for `SIGTSTP`:
 
 **これは Windows では動作しません。**
 
-`in` ストリームが `SIGTSTP` として知られる `^Z` を受信した場合に生成されます。
-もし `in` ストリームが `SIGTSTP` を受信した時に `'SIGTSTP'` イベントの
+`input` ストリームが `SIGTSTP` として知られる `^Z` を受信した場合に
+生成されます。
+もし `input` ストリームが `SIGTSTP` を受信した時に `'SIGTSTP'` イベントの
 リスナが存在しなければ、プログラムはバックグラウンドに送られます。
 
 プログラムが `fg` により再開されると、`'pause'` および `'SIGCONT'` イベントが
@@ -389,9 +431,9 @@ Example of listening for `SIGTSTP`:
 <!--
 **This does not work on Windows.**
 
-Emitted whenever the `in` stream is sent to the background with `^Z`,
-respectively known as `SIGTSTP`, and then continued with `fg`. This event only
-emits if the stream was not paused before sending the program to the
+Emitted whenever the `input` stream is sent to the background with `^Z`,
+respectively known as `SIGTSTP`, and then continued with `fg(1)`. This event
+only emits if the stream was not paused before sending the program to the
 background.
 
 Example of listening for `SIGCONT`:
@@ -399,8 +441,8 @@ Example of listening for `SIGCONT`:
 
 **これは Windows では動作しません。**
 
-`in` ストリームが `SIGTSTP` として知られる `^Z` によってバックグラウンドに
-送られた後で、`fg` によって再開されるた場合に生成されます。
+`input` ストリームが `SIGTSTP` として知られる `^Z` によってバックグラウンドに
+送られた後で、`fg(1)` によって再開されるた場合に生成されます。
 このイベントはプログラムがバックグラウンドに送られる前にストリームが中断されていなかった場合にのみ生成されます。
 
 `'SIGCONT'` を監視する例:
@@ -409,6 +451,8 @@ Example of listening for `SIGCONT`:
       // `prompt` will automatically resume the stream
       rl.prompt();
     });
+
+## Example: Tiny CLI
 
 <!--
 Here's an example of how to use all these together to craft a tiny command
@@ -433,7 +477,7 @@ line interface:
           break;
       }
       rl.prompt();
-    }).on('pause', function() {
+    }).on('close', function() {
       console.log('Have a great day!');
       process.exit(0);
     });
