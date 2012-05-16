@@ -33,17 +33,23 @@ Creates a credentials object, with the optional details being a dictionary with 
 認証情報オブジェクトを作成します。オプションの `details` は以下のキーを持つ辞書です:
 
 <!--
+* `pfx` : A string or buffer holding the PFX or PKCS12 encoded private key, certificate and CA certificates
 * `key` : a string holding the PEM encoded private key
 * `cert` : a string holding the PEM encoded certificate
+* `passphrase` : A string of passphrase for the private key or pfx
 * `ca` : either a string or list of strings of PEM encoded CA certificates to trust.
 * `ciphers`: a string describing the ciphers to use or exclude. Consult
   <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for details
   on the format.
 -->
 
-* `key` : PEM でエンコードされた秘密鍵を保持する文字列
-* `cert` : PEM でエンコードされた証明書を保持する文字列
-* `ca` : 信頼できる認証局の証明書が PEM でエンコードされた文字列または文字列の配列
+* `pfx`: PFX または PKCS12 でエンコードされた秘密鍵、証明書、および認証局を
+  表す文字列または `Buffer`。
+* `key` : PEM でエンコードされた秘密鍵を表す文字列。
+* `cert` : PEM でエンコードされた証明書を表す文字列。
+* `passphrase` : 秘密鍵または pfx のパスフレーズを表す文字列。
+* `ca` : 信頼できる認証局の証明書が PEM でエンコードされた文字列または
+  文字列の配列。
 * `ciphers`: 使用または除外する暗号を記述した文字列。
   詳細は <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT>
   を参照してください。

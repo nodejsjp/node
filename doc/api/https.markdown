@@ -52,6 +52,23 @@ Example:
       res.end("hello world\n");
     }).listen(8000);
 
+<!--
+Or
+-->
+
+または
+
+    var https = require('https');
+    var fs = require('fs');
+
+    var options = {
+      pfx: fs.readFileSync('server.pfx')
+    };
+
+    https.createServer(options, function (req, res) {
+      res.writeHead(200);
+      res.end("hello world\n");
+    }).listen(8000);
 
 ## https.request(options, callback)
 
@@ -125,8 +142,9 @@ The options argument has the following options
 The following options from [tls.connect()](tls.html#tls.connect) can also be
 specified. However, a [globalAgent](#https.globalAgent) silently ignores these.
 
+- `pfx`: Certificate, Private key and CA certificates to use for SSL. Default `null`.
 - `key`: Private key to use for SSL. Default `null`.
-- `passphrase`: A string of passphrase for the private key. Default `null`.
+- `passphrase`: A string of passphrase for the private key or pfx. Default `null`.
 - `cert`: Public x509 certificate to use. Default `null`.
 - `ca`: An authority certificate or array of authority certificates to check
   the remote host against.
@@ -159,8 +177,10 @@ Example:
 指定することもできますが、
 グローバル [エージェント](http.html#http.Agent) はこれらを無視します。
 
-- `key`: SSLで使用する秘密鍵。デフォルトは `null` です。
-- `passphrase`: 秘密鍵のパスフレーズを表す文字列。デフォルトは `null` です。
+- `pfx`: SSL で使用する証明書、秘密鍵、および認証局。デフォルトは `null` です。
+- `key`: SSL で使用する秘密鍵。デフォルトは `null` です。
+- `passphrase`: 秘密鍵または pfx のパスフレーズを表す文字列。
+  デフォルトは `null` です。
 - `cert`: x509公開証明書。デフォルトは `null` です。
 - `ca`: リモートホストをチェックする信頼できる認証局または認証局の配列。
 
