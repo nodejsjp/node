@@ -130,13 +130,13 @@ Allocates a new buffer containing the given `str`.
 <!--
 * `string` String - data to be written to buffer
 * `offset` Number, Optional, Default: 0
-* `length` Number, Optional
+* `length` Number, Optional, Default: `buffer.length - offset`
 * `encoding` String, Optional, Default: 'utf8'
 -->
 
 * `string` String - バッファに書き込まれるデータ
 * `offset` Number, Optional, Default: 0
-* `length` Number, Optional
+* `length` Number, Optional, Default: `buffer.length - offset`
 * `encoding` String, Optional, Default: 'utf8'
 
 <!--
@@ -179,7 +179,7 @@ next time `buf.write()` is called.
 
 * `encoding` String, Optional, Default: 'utf8'
 * `start` Number, Optional, Default: 0
-* `end` Number, Optional
+* `end` Number, Optional, Default: `buffer.length`
 
 <!--
 Decodes and returns a string from buffer data encoded with `encoding`
@@ -298,13 +298,13 @@ buffer object.  It does not change when the contents of the buffer are changed.
 * `targetBuffer` Buffer object - Buffer to copy into
 * `targetStart` Number, Optional, Default: 0
 * `sourceStart` Number, Optional, Default: 0
-* `sourceEnd` Number, Optional, Default: 0
+* `sourceEnd` Number, Optional, Default: `buffer.length`
 -->
 
 * `targetBuffer` Buffer object - コピー先の Buffer
 * `targetStart` Number, Optional, Default: 0
 * `sourceStart` Number, Optional, Default: 0
-* `sourceEnd` Number, Optional, Default: 0
+* `sourceEnd` Number, Optional, Default: `buffer.length`
 
 <!--
 Does copy between buffers. The source and target regions can be overlapped.
@@ -342,7 +342,7 @@ into `buf2`, starting at the 8th byte in `buf2`.
 ### buf.slice([start], [end])
 
 * `start` Number, Optional, Default: 0
-* `end` Number, Optional, Default: 0
+* `end` Number, Optional, Default: `buffer.length`
 
 <!--
 Returns a new buffer which references the same memory as the old, but offset
