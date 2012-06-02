@@ -2,6 +2,7 @@
 
 BUILDTYPE ?= Release
 PYTHON ?= python
+DESTDIR ?=
 
 # BUILDTYPE=Debug builds both release and debug builds. If you want to compile
 # just the debug build, run `make -C out BUILDTYPE=Debug` instead.
@@ -33,7 +34,7 @@ out/Makefile: common.gypi deps/uv/uv.gyp deps/http_parser/http_parser.gyp deps/z
 	tools/gyp_node -f make
 
 install: all
-	out/Release/node tools/installer.js install
+	out/Release/node tools/installer.js install $(DESTDIR)
 
 uninstall:
 	out/Release/node tools/installer.js uninstall
@@ -41,12 +42,14 @@ uninstall:
 clean:
 	-rm -rf out/Makefile node node_g out/$(BUILDTYPE)/node blog.html email.md
 	-find out/ -name '*.o' -o -name '*.a' | xargs rm -rf
+	-rm -rf node_modules
 
 distclean:
 	-rm -rf out
 	-rm -f config.gypi
 	-rm -f config.mk
 	-rm -rf node node_g blog.html email.md
+	-rm -rf node_modules
 
 test: all
 	$(PYTHON) tools/test.py --mode=release simple message
@@ -58,9 +61,18 @@ test-http1: all
 test-valgrind: all
 	$(PYTHON) tools/test.py --mode=release --valgrind simple message
 
-test-all: all
-	python tools/test.py --mode=debug,release
-	$(MAKE) test-npm
+node_modules/weak:
+	@if [ ! -f node ]; then make all; fi
+	@if [ ! -d node_modules ]; then mkdir -p node_modules; fi
+	./node deps/npm/bin/npm-cli.js install weak \
+		--prefix="$(shell pwd)" --unsafe-perm # go ahead and run as root.
+
+test-gc: all node_modules/weak
+	$(PYTHON) tools/test.py --mode=release gc
+
+test-all: all node_modules/weak
+	$(PYTHON) tools/test.py --mode=debug,release
+	make test-npm
 
 test-all-http1: all
 	$(PYTHON) tools/test.py --mode=debug,release --use-http1
@@ -142,7 +154,7 @@ out/doc/api/%.html: doc/api/%.markdown
 	out/Release/node tools/doc/generate.js --format=html --template=doc/template.html $< > $@
 
 email.md: ChangeLog tools/email-footer.md
-	bash tools/changelog-head.sh > $@
+	bash tools/changelog-head.sh | sed 's|^\* #|* \\#|g' > $@
 	cat tools/email-footer.md | sed -e 's|__VERSION__|'$(VERSION)'|g' >> $@
 
 blog.html: email.md
@@ -150,6 +162,13 @@ blog.html: email.md
 
 website-upload: doc
 	rsync -r out/doc/ node@nodejs.org:~/web/nodejs.org/
+	ssh node@nodejs.org '\
+    rm -f ~/web/nodejs.org/dist/latest &&\
+    ln -s $(VERSION) ~/web/nodejs.org/dist/latest &&\
+    rm -f ~/web/nodejs.org/docs/latest &&\
+    ln -s $(VERSION) ~/web/nodejs.org/docs/latest &&\
+    rm -f ~/web/nodejs.org/dist/node-latest.tar.gz &&\
+    ln -s $(VERSION)/node-$(VERSION).tar.gz ~/web/nodejs.org/dist/node-latest.tar.gz'
 
 docopen: out/doc/api/all.html
 	-google-chrome out/doc/api/all.html
@@ -222,7 +241,7 @@ bench-idle:
 	./node benchmark/idle_clients.js &
 
 jslint:
-	PYTHONPATH=tools/closure_linter/ $(PYTHON) tools/closure_linter/closure_linter/gjslint.py --unix_mode --strict --nojsdoc -r lib/ -r src/ -r test/ --exclude_files lib/punycode.js
+	PYTHONPATH=tools/closure_linter/ $(PYTHON) tools/closure_linter/closure_linter/gjslint.py --unix_mode --strict --nojsdoc -r lib/ -r src/ --exclude_files lib/punycode.js
 
 cpplint:
 	@$(PYTHON) tools/cpplint.py $(wildcard src/*.cc src/*.h src/*.c)

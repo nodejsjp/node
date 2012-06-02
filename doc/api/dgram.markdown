@@ -268,11 +268,11 @@ Close the underlying socket and stop listening for data on it.
 
 <!--
 Returns an object containing the address information for a socket.  For UDP sockets,
-this object will contain `address` and `port`.
+this object will contain `address` , `family` and `port`.
 -->
 
 オブジェクトが持っているソケットのアドレス情報を返します。
-このオブジェクトは `address` と `port` を持っています。
+このオブジェクトは `address`、`port`、そして `family` を持っています。
 
 ### dgram.setBroadcast(flag)
 

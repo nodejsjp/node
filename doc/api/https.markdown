@@ -52,6 +52,23 @@ Example:
       res.end("hello world\n");
     }).listen(8000);
 
+<!--
+Or
+-->
+
+または:
+
+    var https = require('https');
+    var fs = require('fs');
+
+    var options = {
+      pfx: fs.readFileSync('server.pfx')
+    };
+
+    https.createServer(options, function (req, res) {
+      res.writeHead(200);
+      res.end("hello world\n");
+    }).listen(8000);
 
 ## https.request(options, callback)
 
@@ -121,26 +138,6 @@ The options argument has the following options
  - `Agent` object: explicitly use the passed in `Agent`.
  - `false`: opts out of connection pooling with an Agent, defaults request to
    `Connection: close`.
-
-The following options from [tls.connect()](tls.html#tls.connect) can also be
-specified. However, a [globalAgent](#https.globalAgent) silently ignores these.
-
-- `key`: Private key to use for SSL. Default `null`.
-- `passphrase`: A string of passphrase for the private key. Default `null`.
-- `cert`: Public x509 certificate to use. Default `null`.
-- `ca`: An authority certificate or array of authority certificates to check
-  the remote host against.
-- `ciphers`: A string describing the ciphers to use or exclude. Consult
-  <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for
-  details on the format.
-- `rejectUnauthorized`: If `true`, the server certificate is verified against
-  the list of supplied CAs. An `'error'` event is emitted if verification
-  fails. Verification happens at the connection level, *before* the HTTP
-  request is sent. Default `false`.
-
-In order to specify these options, use a custom `Agent`.
-
-Example:
 -->
 
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
@@ -162,12 +159,36 @@ Example:
   - `false`: Agent によるコネクションプーリングを使用しません。
     `Connection:close` の場合のデフォルトです。
 
+<!--
+The following options from [tls.connect()](tls.html#tls.connect) can also be
+specified. However, a [globalAgent](#https.globalAgent) silently ignores these.
+-->
+
 以下の [tls.connect()](tls.html#tls.connect) 由来のオプションを
 指定することもできますが、
 グローバル [エージェント](http.html#http.Agent) はこれらを無視します。
 
-- `key`: SSLで使用する秘密鍵。デフォルトは `null` です。
-- `passphrase`: 秘密鍵のパスフレーズを表す文字列。デフォルトは `null` です。
+<!--
+- `pfx`: Certificate, Private key and CA certificates to use for SSL. Default `null`.
+- `key`: Private key to use for SSL. Default `null`.
+- `passphrase`: A string of passphrase for the private key or pfx. Default `null`.
+- `cert`: Public x509 certificate to use. Default `null`.
+- `ca`: An authority certificate or array of authority certificates to check
+  the remote host against.
+- `ciphers`: A string describing the ciphers to use or exclude. Consult
+  <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for
+  details on the format.
+- `rejectUnauthorized`: If `true`, the server certificate is verified against
+  the list of supplied CAs. An `'error'` event is emitted if verification
+  fails. Verification happens at the connection level, *before* the HTTP
+  request is sent. Default `false`.
+-->
+
+- `pfx`: SSL で使用する証明書、秘密鍵、認証局の証明書。
+   デフォルトは `null` です。
+- `key`: SSL で使用する秘密鍵。デフォルトは `null` です。
+- `passphrase`: 秘密鍵または pfx のパスフレーズを表す文字列。
+   デフォルトは `null` です。
 - `cert`: x509公開証明書。デフォルトは `null` です。
 - `ca`: リモートホストをチェックする信頼できる認証局または認証局の配列。
 - `ciphers`: 使用または除外する暗号を記述した文字列。
@@ -179,7 +200,15 @@ Example:
   認証は HTTP リクエストが送信される *前* にコネクションレベルで行われます。
   デフォルトは false です。
 
+<!--
+In order to specify these options, use a custom `Agent`.
+-->
+
 これらのオプションを指定するには、カスタムエージェントを使用します。
+
+<!--
+Example:
+-->
 
 例:
 
@@ -199,11 +228,13 @@ Example:
 
 <!--
 Or does not use an `Agent`.
-
-Example:
 -->
 
 あるいは、エージェントを使用しません。
+
+<!--
+Example:
+-->
 
 例:
 

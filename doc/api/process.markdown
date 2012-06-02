@@ -322,6 +322,13 @@ node を実行したシェルで終了コードが 1 であることを見るこ
 ## process.getgid()
 
 <!--
+Note: this function is only available on POSIX platforms (i.e. not Windows)
+-->
+
+注意: この関数は POSIX プラットフォーム (すなわち、非 Windows)
+でのみ利用可能です。
+
+<!--
 Gets the group identity of the process. (See getgid(2).)
 This is the numerical group id, not the group name.
 -->
@@ -329,10 +336,19 @@ This is the numerical group id, not the group name.
 プロセスのグループ識別子を取得します (getgid(2) 参照)。
 これは数値によるグループ ID で、グループ名ではありません。
 
-    console.log('Current gid: ' + process.getgid());
+    if (process.getgid) {
+      console.log('Current gid: ' + process.getgid());
+    }
 
 
 ## process.setgid(id)
+
+<!--
+Note: this function is only available on POSIX platforms (i.e. not Windows)
+-->
+
+注意: この関数は POSIX プラットフォーム (すなわち、非 Windows)
+でのみ利用可能です。
 
 <!--
 Sets the group identity of the process. (See setgid(2).)  This accepts either
@@ -344,17 +360,26 @@ blocks while resolving it to a numerical ID.
 これは数値による ID もグループ名の文字列のどちらも受け入れます。
 もしグループ名が指定されると、数値による ID が解決できるまでこのメソッドはブロックします。
 
-    console.log('Current gid: ' + process.getgid());
-    try {
-      process.setgid(501);
-      console.log('New gid: ' + process.getgid());
-    }
-    catch (err) {
-      console.log('Failed to set gid: ' + err);
+    if (process.getgid && process.setgid) {
+      console.log('Current gid: ' + process.getgid());
+      try {
+        process.setgid(501);
+        console.log('New gid: ' + process.getgid());
+      }
+      catch (err) {
+        console.log('Failed to set gid: ' + err);
+      }
     }
 
 
 ## process.getuid()
+
+<!--
+Note: this function is only available on POSIX platforms (i.e. not Windows)
+-->
+
+注意: この関数は POSIX プラットフォーム (すなわち、非 Windows)
+でのみ利用可能です。
 
 <!--
 Gets the user identity of the process. (See getuid(2).)
@@ -364,10 +389,19 @@ This is the numerical userid, not the username.
 プロセスのユーザ識別子を取得します (getuid(2) 参照)。
 これは数値によるユーザ ID で、ユーザ名ではありません。
 
-    console.log('Current uid: ' + process.getuid());
+    if (process.getuid) {
+      console.log('Current uid: ' + process.getuid());
+    }
 
 
 ## process.setuid(id)
+
+<!--
+Note: this function is only available on POSIX platforms (i.e. not Windows)
+-->
+
+注意: この関数は POSIX プラットフォーム (すなわち、非 Windows)
+でのみ利用可能です。
 
 <!--
 Sets the user identity of the process. (See setuid(2).)  This accepts either
@@ -379,13 +413,15 @@ blocks while resolving it to a numerical ID.
 これは数値による ID もユーザ名の文字列のどちらも受け入れます。
 もしユーザ名が指定されると、数値による ID が解決できるまでこのメソッドはブロックします。
 
-    console.log('Current uid: ' + process.getuid());
-    try {
-      process.setuid(501);
-      console.log('New uid: ' + process.getuid());
-    }
-    catch (err) {
-      console.log('Failed to set uid: ' + err);
+    if (process.getuid && process.setuid) {
+      console.log('Current uid: ' + process.getuid());
+      try {
+        process.setuid(501);
+        console.log('New uid: ' + process.getuid());
+      }
+      catch (err) {
+        console.log('Failed to set uid: ' + err);
+      }
     }
 
 
@@ -546,11 +582,12 @@ What processor architecture you're running on: `'arm'`, `'ia32'`, or `'x64'`.
 ## process.platform
 
 <!--
-What platform you're running on. `'linux2'`, `'darwin'`, etc.
+What platform you're running on:
+`'darwin'`, `'freebsd'`, `'linux'`, `'solaris'` or `'win32'`
 -->
 
-どのプラットフォームで動いているかを示します。
-`'linux2'`、`'darwin'`、など。
+どのプラットフォームで動いているかを示します:
+`'darwin'`、`'freebsd'`、`'linux'`、`'solaris'`、または `'win32'`
 
     console.log('This platform is ' + process.platform);
 

@@ -34,8 +34,9 @@ Creates a credentials object, with the optional details being a dictionary with 
 認証情報オブジェクトを作成します。オプションの `details` は以下のキーを持つ辞書です:
 
 <!--
+* `pfx` : A string or buffer holding the PFX or PKCS12 encoded private key, certificate and CA certificates
 * `key` : A string holding the PEM encoded private key
-* `passphrase` : A string of passphrase for the private key
+* `passphrase` : A string of passphrase for the private key or pfx
 * `cert` : A string holding the PEM encoded certificate
 * `ca` : Either a string or list of strings of PEM encoded CA certificates to trust.
 * `crl` : Either a string or list of strings of PEM encoded CRLs (Certificate Revocation List)
@@ -44,8 +45,10 @@ Creates a credentials object, with the optional details being a dictionary with 
   on the format.
 -->
 
+* `pfx` : PFX または PKCS12 でエンコードされた秘密鍵、証明書、および CA の
+  証明書を含む文字列またはバッファ。
 * `key` : PEM でエンコードされた秘密鍵を保持する文字列。
-* `passphrase`: 秘密鍵のパスフレーズ。
+* `passphrase`: 秘密鍵または pfx のパスフレーズ。
 * `cert` : PEM でエンコードされた証明書を保持する文字列。
 * `ca` : 信頼できる認証局の証明書が PEM でエンコードされた文字列または
   文字列の配列。

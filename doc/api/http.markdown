@@ -51,6 +51,19 @@ Node の HTTP API はとても低水準です。それはストリームのハ�
 解析はメッセージをヘッダとボディに分けますが、実際のヘッダとボディは解析しません。
 
 
+## http.STATUS_CODES
+
+* {Object}
+
+<!--
+A collection of all the standard HTTP response status codes, and the
+short description of each.  For example, `http.STATUS_CODES[404] === 'Not
+Found'`.
+-->
+
+全ての HTTP 標準ステータスコードと短い説明のコレクションです。
+たとえば、`http.STATUS_CODES[404] === 'Not Found'`。
+
 ## http.createServer([requestListener])
 
 <!--
@@ -65,6 +78,19 @@ added to the `'request'` event.
 -->
 
 `requestListener` は自動的に `'request'` イベントに加えられる関数です。
+
+## http.createClient([port], [host])
+
+<!--
+This function is **deprecated**; please use
+[http.request()](#http_http_request_options_callback) instead. Constructs a new
+HTTP client. `port` and `host` refer to the server to be connected to.
+-->
+
+この関数は **deprecated** です; 代わりに
+[http.request()](#http_http_request_options_callback) を使用してください。
+新しい HTTP クライアントを構築します。
+`port` と `host` は接続するサーバを示します。
 
 ## Class: http.Server
 
@@ -232,7 +258,7 @@ If a client connection emits an 'error' event - it will forwarded here.
 
 クライアントコネクションが 'error' イベントを発した場合 － ここに転送されます。
 
-### server.listen(port, [hostname], [callback])
+### server.listen(port, [hostname], [backlog], [callback])
 
 <!--
 Begin accepting connections on the specified port and hostname.  If the
@@ -248,6 +274,18 @@ To listen to a unix socket, supply a filename instead of port and hostname.
 -->
 
 UNIX ドメインソケットを待ち受ける場合、ポートとホスト名ではなくファイル名を提供します。
+
+<!--
+Backlog is the maximum length of the queue of pending connections.
+The actual length will be determined by your OS through sysctl settings such as
+`tcp_max_syn_backlog` and `somaxconn` on linux. The default value of this
+parameter is 511 (not 512).
+-->
+
+バックログは保留された接続のキューの最大長です。
+実際の長さは Linux では `tcp_max_syn_backlog` や `somaxconn` など、
+sysctl の設定を通じて OS によって決定されます。
+このパラメータのデフォルト値は 511 (512 ではありません) です。
 
 <!--
 This function is asynchronous. The last parameter `callback` will be added as
@@ -490,15 +528,14 @@ HTTP プロトコルのバージョンを表す文字列です。参照のみ可
 ### request.setEncoding([encoding])
 
 <!--
-Set the encoding for the request body. Either `'utf8'` or `'binary'`. Defaults
-to `null`, which means that the `'data'` event will emit a `Buffer` object..
+Set the encoding for the request body. See
+[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
+for more information.
 -->
 
-リクエストボディのエンコーディングを設定します。
-`'utf8'` または `'binary'` のいずれかです。
-デフォルトは `null` で、`'data'` イベントが
-`Buffer` を生成することを意味します。
-
+リクエストボディのエンコーディングを設定します。詳細は
+[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
+を参照してください。
 
 ### request.pause()
 
@@ -848,12 +885,21 @@ followed by `response.end()`.
 
 <!--
 Node maintains several connections per server to make HTTP requests.
-This function allows one to transparently issue requests.  `options` align
-with [url.parse()](url.html#url.parse).
+This function allows one to transparently issue requests.
 -->
 
-Node は HTTP リクエストを行うために、サーバごとにいくつかのコネクションを保持します。
+Node は HTTP リクエストを行うために、サーバごとにいくつかのコネクションを
+保持します。
 この関数はその一つを使って透過的にリクエストを発行できるようにします。
+
+<!--
+`options` can be an object or a string. If `options` is a string, it is
+automatically parsed with [url.parse()](url.html#url.parse).
+-->
+
+`options` はオブジェクトまたは文字列です。
+もし `options` が文字列なら、それは [url.parse()](url.html#url.parse)
+によって自動的に解析されます。
 
 <!--
 Options:
@@ -1001,13 +1047,14 @@ There are a few special headers that should be noted.
 
 <!--
 Since most requests are GET requests without bodies, Node provides this
-convenience method. The only difference between this method and `http.request()` is
-that it sets the method to GET and calls `req.end()` automatically.
+convenience method. The only difference between this method and `http.request()`
+is that it sets the method to GET and calls `req.end()` automatically.
 -->
 
 ほとんどのリクエストは本文のない GET リクエストであるため、
 Node は便利なメソッドを提供します。
-このメソッドと `http.request()` の間の違いは、メソッドを GET に設定して `req.end()` を自動的に呼び出すことだけです。
+このメソッドと `http.request()` の間の違いは、メソッドを GET に設定して
+`req.end()` を自動的に呼び出すことだけです。
 
 <!--
 Example:
@@ -1015,13 +1062,7 @@ Example:
 
 例:
 
-    var options = {
-      host: 'www.google.com',
-      port: 80,
-      path: '/index.html'
-    };
-
-    http.get(options, function(res) {
+    http.get("http://www.google.com/index.html", function(res) {
       console.log("Got response: " + res.statusCode);
     }).on('error', function(e) {
       console.log("Got error: " + e.message);
@@ -1034,7 +1075,7 @@ Example:
 In node 0.5.3+ there is a new implementation of the HTTP Agent which is used
 for pooling sockets used in HTTP client requests.
 
-Previously, a single agent instance help the pool for single host+port. The
+Previously, a single agent instance helped pool for a single host+port. The
 current implementation now holds sockets for any number of hosts.
 
 The current HTTP Agent also defaults client requests to using
@@ -1595,15 +1636,14 @@ The response trailers object. Only populated after the 'end' event.
 ### response.setEncoding([encoding])
 
 <!--
-Set the encoding for the response body. Either `'utf8'`, `'ascii'`, or
-`'base64'`. Defaults to `null`, which means that the `'data'` event will emit
-a `Buffer` object.
+Set the encoding for the response body. See
+[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
+for more information.
 -->
 
-レスポンスボディのエンコーディングを設定します。
-`'utf8'`、`'ascii'`、あるいは `'base64'` のいずれかです。
-デフォルトは `null` で、
-`'data'` イベントが `Buffer` を生成することを意味します。
+レスポンスボディのエンコーディングを設定します。詳細は
+[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
+を参照してください。
 
 ### response.pause()
 
