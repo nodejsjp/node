@@ -40,12 +40,10 @@ resolves the IP addresses which are returned.
       addresses.forEach(function (a) {
         dns.reverse(a, function (err, domains) {
           if (err) {
-            console.log('reverse for ' + a + ' failed: ' +
-              err.message);
-          } else {
-            console.log('reverse for ' + a + ': ' +
-              JSON.stringify(domains));
+            throw err;
           }
+
+          console.log('reverse for ' + a + ': ' + JSON.stringify(domains));
         });
       });
     });
@@ -76,6 +74,18 @@ necessarily the value initially passed to `lookup`).
 `family` 引数は整数の 4 または 6 で、`address` のファミリーを意味します
 (この値は必ずしも最初に `lookup` に渡す必要はありません)。
 
+<!--
+On error, `err` is an `Error` object, where `err.code` is the error code.
+Keep in mind that `err.code` will be set to `'ENOENT'` not only when
+the domain does not exist but also when the lookup fails in other ways
+such as no available file descriptors.
+-->
+
+エラー時、`err` は `Error` オブジェクトで、`err.code` はエラーコードです。
+`err.code` が `'ENOENT'` に設定されるのはドメインが存在しない場合だけではなく、
+ファイル記述子が使えないなどルックアップが失敗した場合もあることに
+注意してください。
+
 
 ## dns.resolve(domain, [rrtype], callback)
 
@@ -104,14 +114,12 @@ documentation for the corresponding lookup methods below.
 対応する後述のルックアップメソッドで記述されます。
 
 <!--
-On error, `err` would be an instanceof `Error` object, where `err.errno` is
-one of the error codes listed below and `err.message` is a string describing
-the error in English.
+On error, `err` is an `Error` object, where `err.code` is
+one of the error codes listed below.
 -->
 
-エラー発生時、`err` は `Error` オブジェクトのインスタンスであり、
-`err.errno` は後述するエラーコードのいずれか、
-`err.message` はエラーを英語で説明する文字列となります。
+エラー時、`err` は `Error` オブジェクトで、
+`err.errno` は後述するエラーコードのいずれかです。
 
 
 ## dns.resolve4(domain, callback)
@@ -177,20 +185,6 @@ of SRV records are priority, weight, port, and name (e.g.,
 SRV レコードのプロパティは priority、weight、port、そして name です
 (例 `[{'priority': 10, {'weight': 5, 'port': 21223, 'name': 'service.example.com'}, ...]`)。
 
-## dns.reverse(ip, callback)
-
-<!--
-Reverse resolves an ip address to an array of domain names.
--->
-
-IP アドレスからドメイン名の配列へ逆引きで解決します。
-
-<!--
-The callback has arguments `(err, domains)`.
--->
-
-コールバックは引数 `(err, domains)` を持ちます。
-
 ## dns.resolveNs(domain, callback)
 
 <!--
@@ -217,31 +211,84 @@ records). `addresses` is an array of the canonical name records available for
 `address` は `domain` で利用可能な別名レコードの配列です
 `domain` (e.g., `['bar.example.com']`)。
 
-<!--
-If there an an error, `err` will be non-null and an instanceof the Error
-object.
--->
-
-エラーがあった場合、`err` は非 null で Error オブジェクトのインスタンスとなります。
+## dns.reverse(ip, callback)
 
 <!--
-Each DNS query can return an error code.
+Reverse resolves an ip address to an array of domain names.
 -->
 
-どの DNS 問い合わせもエラーコードを返せます。
+IP アドレスからドメイン名の配列へ逆引きで解決します。
 
 <!--
-- `dns.TEMPFAIL`: timeout, SERVFAIL or similar.
-- `dns.PROTOCOL`: got garbled reply.
-- `dns.NXDOMAIN`: domain does not exists.
-- `dns.NODATA`: domain exists but no data of reqd type.
-- `dns.NOMEM`: out of memory while processing.
-- `dns.BADQUERY`: the query is malformed.
+The callback has arguments `(err, domains)`.
 -->
 
-- `dns.TEMPFAIL`: タイムアウト、SERVFAIL あるいは同様のもの。
-- `dns.PROTOCOL`: 応答が不正。
-- `dns.NXDOMAIN`: ドメインが存在しない。
-- `dns.NODATA`: ドメインは存在するが、要求された種類のデータがない。
-- `dns.NOMEM`: 処理中にメモリが不足。
-- `dns.BADQUERY`: 問い合わせが不正な形式。
+コールバックは引数 `(err, domains)` を持ちます。
+
+<!--
+On error, `err` is an `Error` object, where `err.code` is
+one of the error codes listed below.
+-->
+
+エラー時、`err` は `Error` オブジェクトで、
+`err.errno` は後述するエラーコードのいずれかです。
+
+## Error codes
+
+<!--
+Each DNS query can return one of the following error codes:
+-->
+
+どの DNS 問い合わせも以下のエラーコードの一つを返します:
+
+<!--
+- `dns.NODATA`: DNS server returned answer with no data.
+- `dns.FORMERR`: DNS server claims query was misformatted.
+- `dns.SERVFAIL`: DNS server returned general failure.
+- `dns.NOTFOUND`: Domain name not found.
+- `dns.NOTIMP`: DNS server does not implement requested operation.
+- `dns.REFUSED`: DNS server refused query.
+- `dns.BADQUERY`: Misformatted DNS query.
+- `dns.BADNAME`: Misformatted domain name.
+- `dns.BADFAMILY`: Unsupported address family.
+- `dns.BADRESP`: Misformatted DNS reply.
+- `dns.CONNREFUSED`: Could not contact DNS servers.
+- `dns.TIMEOUT`: Timeout while contacting DNS servers.
+- `dns.EOF`: End of file.
+- `dns.FILE`: Error reading file.
+- `dns.NOMEM`: Out of memory.
+- `dns.DESTRUCTION`: Channel is being destroyed.
+- `dns.BADSTR`: Misformatted string.
+- `dns.BADFLAGS`: Illegal flags specified.
+- `dns.NONAME`: Given hostname is not numeric.
+- `dns.BADHINTS`: Illegal hints flags specified.
+- `dns.NOTINITIALIZED`: c-ares library initialization not yet performed.
+- `dns.LOADIPHLPAPI`: Error loading iphlpapi.dll.
+- `dns.ADDRGETNETWORKPARAMS`: Could not find GetNetworkParams function.
+- `dns.CANCELLED`: DNS query cancelled.
+-->
+
+- `dns.NODATA`: DNS サーバがデータがないと応答した。
+- `dns.FORMERR`: DNS サーバが問い合わせフォーマットが不正だと主張した。
+- `dns.SERVFAIL`: DNS サーバが一般的な失敗を返した。
+- `dns.NOTFOUND`: ドメイン名が見つからない。
+- `dns.NOTIMP`: DNS サーバは要求された操作を実装していない。
+- `dns.REFUSED`: DNS サーバが問い合わせを拒否した。
+- `dns.BADQUERY`: DNS 問い合わせのフォーマットが不正。
+- `dns.BADNAME`: ドメイン名のフォーマットが不正。
+- `dns.BADFAMILY`: サポートされないアドレスファミリー。
+- `dns.BADRESP`: DNS 応答のフォーマットが不正。
+- `dns.CONNREFUSED`: DNS サーバに接続できない。
+- `dns.TIMEOUT`: DNS サーバへの接続がタイムアウトした。
+- `dns.EOF`: エンドオブファイル。
+- `dns.FILE`: ファイルの読み込みがエラー。
+- `dns.NOMEM`: メモリ不足。
+- `dns.DESTRUCTION`: チャネルが壊れている。
+- `dns.BADSTR`: 文字列のフォーマットが不正。
+- `dns.BADFLAGS`: 不正なフラグが指定された。
+- `dns.NONAME`: 与えられたホスト名が数値ではない。
+- `dns.BADHINTS`: 不正なヒントフラグが指定された。
+- `dns.NOTINITIALIZED`: c-ares ライブラリが初期化されていない。
+- `dns.LOADIPHLPAPI`: iphlpapi.dll のローディングでエラー。
+- `dns.ADDRGETNETWORKPARAMS`: GetNetworkParams 関数が見つからない。
+- `dns.CANCELLED`: DNS 問い合わせがキャンセルされた。

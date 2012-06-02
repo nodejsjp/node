@@ -20,6 +20,8 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "node.h"
+#include "req_wrap.h"
+#include "handle_wrap.h"
 
 #include "uv.h"
 
@@ -31,9 +33,6 @@
 #include <locale.h>
 #include <signal.h>
 #include <stdio.h>
-#if defined(_MSC_VER)
-#define snprintf _snprintf
-#endif
 #include <stdlib.h>
 #include <string.h>
 #if !defined(_MSC_VER)
@@ -93,6 +92,12 @@ extern char **environ;
 
 namespace node {
 
+ngx_queue_t handle_wrap_queue = { &handle_wrap_queue, &handle_wrap_queue };
+ngx_queue_t req_wrap_queue = { &req_wrap_queue, &req_wrap_queue };
+
+// declared in req_wrap.h
+Persistent<String> process_symbol;
+Persistent<String> domain_symbol;
 
 static Persistent<Object> process;
 
@@ -109,7 +114,6 @@ static Persistent<String> listeners_symbol;
 static Persistent<String> uncaught_exception_symbol;
 static Persistent<String> emit_symbol;
 
-static Persistent<String> domain_symbol;
 static Persistent<String> enter_symbol;
 static Persistent<String> exit_symbol;
 static Persistent<String> disposed_symbol;
@@ -225,12 +229,9 @@ static void Check(uv_check_t* watcher, int status) {
 static void Tick(void) {
   // Avoid entering a V8 scope.
   if (!need_tick_cb) return;
-
   need_tick_cb = false;
-  if (uv_is_active((uv_handle_t*) &tick_spinner)) {
-    uv_idle_stop(&tick_spinner);
-    uv_unref(uv_default_loop());
-  }
+
+  uv_idle_stop(&tick_spinner);
 
   HandleScope scope;
 
@@ -259,22 +260,20 @@ static void Spin(uv_idle_t* handle, int status) {
   Tick();
 }
 
-
-static Handle<Value> NeedTickCallback(const Arguments& args) {
-  HandleScope scope;
+static void StartTickSpinner() {
   need_tick_cb = true;
   // TODO: this tick_spinner shouldn't be necessary. An ev_prepare should be
   // sufficent, the problem is only in the case of the very last "tick" -
   // there is nothing left to do in the event loop and libev will exit. The
   // ev_prepare callback isn't called before exiting. Thus we start this
   // tick_spinner to keep the event loop alive long enough to handle it.
-  if (!uv_is_active((uv_handle_t*) &tick_spinner)) {
-    uv_idle_start(&tick_spinner, Spin);
-    uv_ref(uv_default_loop());
-  }
-  return Undefined();
+  uv_idle_start(&tick_spinner, Spin);
 }
 
+static Handle<Value> NeedTickCallback(const Arguments& args) {
+  StartTickSpinner();
+  return Undefined();
+}
 
 static void PrepareTick(uv_prepare_t* handle, int status) {
   assert(handle == &prepare_tick_watcher);
@@ -820,20 +819,6 @@ static const char* get_uv_errno_message(int errorno) {
 }
 
 
-static bool get_uv_dlerror_message(uv_lib_t lib, char* error_msg, int size) {
-  int r;
-  const char *msg;
-  if ((msg = uv_dlerror(lib)) == NULL) {
-    r = snprintf(error_msg, size, "%s", "Unable to load shared library ");
-  } else {
-    r = snprintf(error_msg, size, "%s", msg);
-    uv_dlerror_free(lib, msg);
-  }
-  // return bool if the error message be written correctly
-  return (0 < r && r < size);
-}
-
-
 // hack alert! copy of ErrnoException, tuned for uv errors
 Local<Value> UVException(int errorno,
                          const char *syscall,
@@ -1022,8 +1007,7 @@ MakeCallback(const Handle<Object> object,
 
   TryCatch try_catch;
 
-  if (domain_symbol.IsEmpty()) {
-    domain_symbol = NODE_PSYMBOL("domain");
+  if (enter_symbol.IsEmpty()) {
     enter_symbol = NODE_PSYMBOL("enter");
     exit_symbol = NODE_PSYMBOL("exit");
     disposed_symbol = NODE_PSYMBOL("_disposed");
@@ -1267,20 +1251,19 @@ void DisplayExceptionLine (TryCatch &try_catch) {
     // Print wavy underline (GetUnderline is deprecated).
     int start = message->GetStartColumn();
     for (int i = offset; i < start; i++) {
-      fprintf(stderr, " ");
+      fputc((sourceline_string[i] == '\t') ? '\t' : ' ', stderr);
     }
     int end = message->GetEndColumn();
     for (int i = start; i < end; i++) {
-      fprintf(stderr, "^");
+      fputc('^', stderr);
     }
-    fprintf(stderr, "\n");
+    fputc('\n', stderr);
   }
 }
 
 
 static void ReportException(TryCatch &try_catch, bool show_line) {
   HandleScope scope;
-  Handle<Message> message = try_catch.Message();
 
   if (show_line) DisplayExceptionLine(try_catch);
 
@@ -1329,6 +1312,46 @@ Local<Value> ExecuteString(Handle<String> source, Handle<Value> filename) {
   }
 
   return scope.Close(result);
+}
+
+
+static Handle<Value> GetActiveRequests(const Arguments& args) {
+  HandleScope scope;
+
+  Local<Array> ary = Array::New();
+  ngx_queue_t* q = NULL;
+  int i = 0;
+
+  ngx_queue_foreach(q, &req_wrap_queue) {
+    ReqWrap<uv_req_t>* w = container_of(q, ReqWrap<uv_req_t>, req_wrap_queue_);
+    if (w->object_.IsEmpty()) continue;
+    ary->Set(i++, w->object_);
+  }
+
+  return scope.Close(ary);
+}
+
+
+// Non-static, friend of HandleWrap. Could have been a HandleWrap method but
+// implemented here for consistency with GetActiveRequests().
+Handle<Value> GetActiveHandles(const Arguments& args) {
+  HandleScope scope;
+
+  Local<Array> ary = Array::New();
+  ngx_queue_t* q = NULL;
+  int i = 0;
+
+  Local<String> owner_sym = String::New("owner");
+
+  ngx_queue_foreach(q, &handle_wrap_queue) {
+    HandleWrap* w = container_of(q, HandleWrap, handle_wrap_queue_);
+    if (w->object_.IsEmpty() || w->unref_) continue;
+    Local<Value> obj = w->object_->Get(owner_sym);
+    if (obj->IsUndefined()) obj = *w->object_;
+    ary->Set(i++, obj);
+  }
+
+  return scope.Close(ary);
 }
 
 
@@ -1683,7 +1706,6 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
   char symbol[1024], *base, *pos;
   uv_lib_t lib;
   node_module_struct compat_mod;
-  uv_err_t err;
   int r;
 
   if (args.Length() < 2) {
@@ -1695,22 +1717,13 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
   String::Utf8Value filename(args[0]); // Cast
   Local<Object> target = args[1]->ToObject(); // Cast
 
-  err = uv_dlopen(*filename, &lib);
-  if (err.code != UV_OK) {
-    // Retrieve uv_dlerror() message and throw exception with it
-    char dlerror_msg[1024];
-    if (!get_uv_dlerror_message(lib, dlerror_msg, sizeof dlerror_msg)) {
-      Local<Value> exception = Exception::Error(
-          String::New("Cannot retrieve an error message in process.dlopen"));
-      return ThrowException(exception);
-    }
-#ifdef __POSIX__
-    Local<Value> exception = Exception::Error(String::New(dlerror_msg));
-#else  // Windows needs to add the filename into the error message
-    Local<Value> exception = Exception::Error(
-        String::Concat(String::New(dlerror_msg), args[0]->ToString()));
+  if (uv_dlopen(*filename, &lib)) {
+    Local<String> errmsg = String::New(uv_dlerror(&lib));
+#ifdef _WIN32
+    // Windows needs to add the filename into the error message
+    errmsg = String::Concat(errmsg, args[0]->ToString());
 #endif
-    return ThrowException(exception);
+    return ThrowException(Exception::Error(errmsg));
   }
 
   String::Utf8Value path(args[0]);
@@ -1748,26 +1761,17 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
 
   // Get the init() function from the dynamically shared object.
   node_module_struct *mod;
-  err = uv_dlsym(lib, symbol, reinterpret_cast<void**>(&mod));
-
-  if (err.code != UV_OK) {
+  if (uv_dlsym(&lib, symbol, reinterpret_cast<void**>(&mod))) {
     /* Start Compatibility hack: Remove once everyone is using NODE_MODULE macro */
     memset(&compat_mod, 0, sizeof compat_mod);
 
     mod = &compat_mod;
     mod->version = NODE_MODULE_VERSION;
 
-    err = uv_dlsym(lib, "init", reinterpret_cast<void**>(&mod->register_func));
-    if (err.code != UV_OK) {
-      uv_dlclose(lib);
-
-      const char* message;
-      if (err.code == UV_ENOENT)
-        message = "Module entry point not found.";
-      else
-        message = uv_strerror(err);
-
-      return ThrowException(Exception::Error(String::New(message)));
+    if (uv_dlsym(&lib, "init", reinterpret_cast<void**>(&mod->register_func))) {
+      Local<String> errmsg = String::New(uv_dlerror(&lib));
+      uv_dlclose(&lib);
+      return ThrowException(Exception::Error(errmsg));
     }
     /* End Compatibility hack */
   }
@@ -1836,11 +1840,15 @@ void FatalException(TryCatch &try_catch) {
 
   TryCatch event_try_catch;
   emit->Call(process, 2, event_argv);
+
   if (event_try_catch.HasCaught()) {
     // the uncaught exception event threw, so we must exit.
     ReportException(event_try_catch, true);
     exit(1);
   }
+
+  // This makes sure uncaught exceptions don't interfere with process.nextTick
+  StartTickSpinner();
 }
 
 
@@ -2209,9 +2217,14 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   // -e, --eval
   if (eval_string) {
     process->Set(String::NewSymbol("_eval"), String::New(eval_string));
-    process->Set(String::NewSymbol("_print_eval"), Boolean::New(print_eval));
   }
 
+  // -p, --print
+  if (print_eval) {
+    process->Set(String::NewSymbol("_print_eval"), True());
+  }
+
+  // -i, --interactive
   if (force_repl) {
     process->Set(String::NewSymbol("_forceRepl"), True());
   }
@@ -2232,6 +2245,8 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 
 
   // define various internal methods
+  NODE_SET_METHOD(process, "_getActiveRequests", GetActiveRequests);
+  NODE_SET_METHOD(process, "_getActiveHandles", GetActiveHandles);
   NODE_SET_METHOD(process, "_needTickCallback", NeedTickCallback);
   NODE_SET_METHOD(process, "reallyExit", Exit);
   NODE_SET_METHOD(process, "abort", Abort);
@@ -2285,7 +2300,6 @@ void Load(Handle<Object> process_l) {
   // source code.)
 
   // The node.js file returns a function 'f'
-
   atexit(AtExit);
 
   TryCatch try_catch;
@@ -2726,24 +2740,23 @@ char** Init(int argc, char *argv[]) {
 
   uv_prepare_init(uv_default_loop(), &prepare_tick_watcher);
   uv_prepare_start(&prepare_tick_watcher, PrepareTick);
-  uv_unref(uv_default_loop());
+  uv_unref(reinterpret_cast<uv_handle_t*>(&prepare_tick_watcher));
 
   uv_check_init(uv_default_loop(), &check_tick_watcher);
   uv_check_start(&check_tick_watcher, node::CheckTick);
-  uv_unref(uv_default_loop());
+  uv_unref(reinterpret_cast<uv_handle_t*>(&check_tick_watcher));
 
   uv_idle_init(uv_default_loop(), &tick_spinner);
-  uv_unref(uv_default_loop());
 
   uv_check_init(uv_default_loop(), &gc_check);
   uv_check_start(&gc_check, node::Check);
-  uv_unref(uv_default_loop());
+  uv_unref(reinterpret_cast<uv_handle_t*>(&gc_check));
 
   uv_idle_init(uv_default_loop(), &gc_idle);
-  uv_unref(uv_default_loop());
+  uv_unref(reinterpret_cast<uv_handle_t*>(&gc_idle));
 
   uv_timer_init(uv_default_loop(), &gc_timer);
-  uv_unref(uv_default_loop());
+  uv_unref(reinterpret_cast<uv_handle_t*>(&gc_timer));
 
   V8::SetFatalErrorHandler(node::OnFatalError);
 
@@ -2766,14 +2779,46 @@ char** Init(int argc, char *argv[]) {
 }
 
 
+struct AtExitCallback {
+  AtExitCallback* next_;
+  void (*cb_)(void* arg);
+  void* arg_;
+};
+
+static AtExitCallback* at_exit_functions_;
+
+
+void RunAtExit() {
+  AtExitCallback* p = at_exit_functions_;
+  at_exit_functions_ = NULL;
+
+  while (p) {
+    AtExitCallback* q = p->next_;
+    p->cb_(p->arg_);
+    delete p;
+    p = q;
+  }
+}
+
+
+void AtExit(void (*cb)(void* arg), void* arg) {
+  AtExitCallback* p = new AtExitCallback;
+  p->cb_ = cb;
+  p->arg_ = arg;
+  p->next_ = at_exit_functions_;
+  at_exit_functions_ = p;
+}
+
+
 void EmitExit(v8::Handle<v8::Object> process_l) {
   // process.emit('exit')
+  process_l->Set(String::NewSymbol("_exiting"), True());
   Local<Value> emit_v = process_l->Get(String::New("emit"));
   assert(emit_v->IsFunction());
   Local<Function> emit = Local<Function>::Cast(emit_v);
-  Local<Value> args[] = { String::New("exit") };
+  Local<Value> args[] = { String::New("exit"), Integer::New(0) };
   TryCatch try_catch;
-  emit->Call(process_l, 1, args);
+  emit->Call(process_l, 2, args);
   if (try_catch.HasCaught()) {
     FatalException(try_catch);
   }
@@ -2822,33 +2867,43 @@ int Start(int argc, char *argv[]) {
   // Use copy here as to not modify the original argv:
   Init(argc, argv_copy);
 
-  v8::V8::Initialize();
-  v8::HandleScope handle_scope;
+  V8::Initialize();
+  {
+    Locker locker;
+    HandleScope handle_scope;
 
-  // Create the one and only Context.
-  Persistent<v8::Context> context = v8::Context::New();
-  v8::Context::Scope context_scope(context);
+    // Create the one and only Context.
+    Persistent<Context> context = Context::New();
+    Context::Scope context_scope(context);
 
-  // Use original argv, as we're just copying values out of it.
-  Handle<Object> process_l = SetupProcessObject(argc, argv);
-  v8_typed_array::AttachBindings(context->Global());
+    process_symbol = NODE_PSYMBOL("process");
+    domain_symbol = NODE_PSYMBOL("domain");
 
-  // Create all the objects, load modules, do everything.
-  // so your next reading stop should be node::Load()!
-  Load(process_l);
+    // Use original argv, as we're just copying values out of it.
+    Handle<Object> process_l = SetupProcessObject(argc, argv);
+    v8_typed_array::AttachBindings(context->Global());
 
-  // All our arguments are loaded. We've evaluated all of the scripts. We
-  // might even have created TCP servers. Now we enter the main eventloop. If
-  // there are no watchers on the loop (except for the ones that were
-  // uv_unref'd) then this function exits. As long as there are active
-  // watchers, it blocks.
-  uv_run(uv_default_loop());
+    // Create all the objects, load modules, do everything.
+    // so your next reading stop should be node::Load()!
+    Load(process_l);
 
-  EmitExit(process_l);
+    // All our arguments are loaded. We've evaluated all of the scripts. We
+    // might even have created TCP servers. Now we enter the main eventloop. If
+    // there are no watchers on the loop (except for the ones that were
+    // uv_unref'd) then this function exits. As long as there are active
+    // watchers, it blocks.
+    uv_run(uv_default_loop());
+
+    EmitExit(process_l);
+    RunAtExit();
 
 #ifndef NDEBUG
-  // Clean up.
-  context.Dispose();
+    context.Dispose();
+#endif
+  }
+
+#ifndef NDEBUG
+  // Clean up. Not strictly necessary.
   V8::Dispose();
 #endif  // NDEBUG
 

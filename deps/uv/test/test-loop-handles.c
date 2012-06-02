@@ -106,14 +106,10 @@ static int idle_2_close_cb_called = 0;
 static int idle_2_cb_started = 0;
 static int idle_2_is_active = 0;
 
-static int timer_cb_called = 0;
-
 
 static void timer_cb(uv_timer_t* handle, int status) {
   ASSERT(handle == &timer_handle);
   ASSERT(status == 0);
-
-  timer_cb_called++;
 }
 
 
@@ -327,7 +323,7 @@ TEST_IMPL(loop_handles) {
   ASSERT(r == 0);
   r = uv_timer_start(&timer_handle, timer_cb, TIMEOUT, TIMEOUT);
   ASSERT(r == 0);
-  uv_unref(uv_default_loop());
+  uv_unref((uv_handle_t*)&timer_handle);
 
   r = uv_run(uv_default_loop());
   ASSERT(r == 0);
@@ -352,8 +348,6 @@ TEST_IMPL(loop_handles) {
   /* XXX ASSERT(idle_2_cb_called == idle_2_cb_started); */
   ASSERT(idle_2_close_cb_called == idle_2_cb_started);
   ASSERT(idle_2_is_active == 0);
-
-  ASSERT(timer_cb_called > 0);
 
   return 0;
 }

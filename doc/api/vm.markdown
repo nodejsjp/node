@@ -1,6 +1,6 @@
 # Executing JavaScript
 
-    Stability: 3 - Stable
+    Stability: 2 - Unstable. See Caveats, below.
 
 <!--name=vm-->
 
@@ -18,6 +18,88 @@ JavaScript code can be compiled and run immediately or compiled, saved, and run 
 
 JavaScript コードは、コンパイルされてすぐに実行されるか、コンパイルおよび保存されて後から実行されます。
 
+## Caveats
+
+<!--
+The `vm` module has many known issues and edge cases. If you run into
+issues or unexpected behavior, please consult
+[the open issues on GitHub](https://github.com/joyent/node/issues/search?q=vm).
+Some of the biggest problems are described below.
+-->
+
+`vm` モジュールには既知の課題や特殊ケースがたくさんあります。
+もし問題や期待と異なる振る舞いを見つけた場合は、
+[the open issues on GitHub](https://github.com/joyent/node/issues/search?q=vm)
+に相談してください。
+大きな問題のいくつかは以下に示されます。
+
+### Sandboxes
+
+<!--
+The `sandbox` argument to `vm.runInNewContext` and `vm.createContext`,
+along with the `initSandbox` argument to `vm.createContext`, do not
+behave as one might normally expect and their behavior varies
+between different versions of Node.
+-->
+
+`vm.runInNewContext` と、`vm.createContext` に `initSandbox` と共に渡される
+`sandbox` 引数は、通常期待される振る舞いをせず、それは Node のバージョン間で
+異なった振る舞いをします。
+
+<!--
+The key issue to be aware of is that V8 provides no way to directly
+control the global object used within a context. As a result, while
+properties of your `sandbox` object will be available in the context,
+any properties from the `prototype`s of the `sandbox` may not be
+available. Furthermore, the `this` expression within the global scope
+of the context evaluates to the empty object (`{}`) instead of to
+your sandbox.
+-->
+
+知られている重要問題は、コンテキスト内で使用されるグローバルオブジェクトを
+直接制御する方法を V8 が提供しないことです。
+その結果、`sandbox` オブジェクトのプロパティがコンテキストから
+利用可能な間、`sandbox` のプロトタイプのプロパティを利用することが
+できないかもしれません。
+さらには、コンテキスト内のグローバルスコープにおける `this` が
+サンドボックスではなく、空のオブジェクト (`{}`) に評価されます。
+
+<!--
+Your sandbox's properties are also not shared directly with the script.
+Instead, the properties of the sandbox are copied into the context at
+the beginning of execution, and then after execution, the properties
+are copied back out in an attempt to propagate any changes.
+-->
+
+サンドボックスのプロパティはまた、スクリプトに直接共有されません。
+代わりに、サンドボックスのプロパティは実行前にコンテキストにコピーされ、
+実行後、変更を伝播するためにプロパティはサンドボックスにコピーされます。
+
+### Globals
+
+<!--
+Properties of the global object, like `Array` and `String`, have
+different values inside of a context. This means that common
+expressions like `[] instanceof Array` or
+`Object.getPrototypeOf([]) === Array.prototype` may not produce
+expected results when used inside of scripts evaluated via the `vm` module.
+-->
+
+`Array` や `String` などのグローバルオブジェクトのプロパティは、
+コンテキストの中では異なる値を持ちます。
+これは  `[] instanceof Array` や
+`Object.getPrototypeOf([]) === Array.prototype` などのよくある式は、
+`vm` モジュールによって評価されるスクリプトの中で使われると、
+期待した結果にならないことを意味します。
+
+<!--
+Some of these problems have known workarounds listed in the issues for
+`vm` on GitHub. for example, `Array.isArray` works around
+the example problem with `Array`.
+-->
+
+GitHub 上の `vm` に関する課題には、これらの問題に対する回避策があります。
+例えば、`Array.isArray` は `Array` に関する問題の例でもうまく動きます。
 
 ## vm.runInThisContext(code, [filename])
 
@@ -161,7 +243,7 @@ Example: compile and execute code in a existing context.
 
 <!--
 Note that `createContext` will perform a shallow clone of the supplied sandbox object in order to
-initialise the global object of the freshly constructed context.
+initialize the global object of the freshly constructed context.
 
 Note that running untrusted code is a tricky business requiring great care.  To prevent accidental
 global variable leakage, `vm.runInContext` is quite useful, but safely running untrusted code

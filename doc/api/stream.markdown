@@ -74,14 +74,12 @@ Emitted if there was an error receiving data.
 `function () { }`
 
 <!--
-Emitted when the underlying file descriptor has been closed. Not all streams
-will emit this.  (For example, an incoming HTTP request will not emit
-`'close'`.)
+Emitted when the underlying resource (for example, the backing file descriptor)
+has been closed. Not all streams will emit this.
 -->
 
-下層でファイル記述子がクローズされた時に生成されます。
+下層のリソース (例えば背後のファイル記述子) がクローズされた時に生成されます。
 全てのストリームがこのイベントを発生するわけではありません。
-(例えば、インカミングの HTTP リクエストは `'close'` イベントを生成しません。)
 
 ### stream.readable
 
@@ -94,16 +92,17 @@ occurred, the stream came to an `'end'`, or `destroy()` was called.
 ストリームが `'end'` に達した後、または `destroy()` が呼ばれた後で、
 `false` に設定される boolean です。
 
-### stream.setEncoding(encoding)
+### stream.setEncoding([encoding])
 
 <!--
-Makes the data event emit a string instead of a `Buffer`. `encoding` can be
-`'utf8'`, `'ascii'`, or `'base64'`.
+Makes the `'data'` event emit a string instead of a `Buffer`. `encoding` can be
+`'utf8'`, `'utf16le'` (`'ucs2'`), `'ascii'`, or `'hex'`. Defaults to `'utf8'`.
 -->
 
 `'data'` イベントが `Buffer` ではなく文字列を生成するようにします。
-`encoding` には `'utf8'`、`'ascii'`、
-または `'base64'` を指定することができます。
+`encoding` には `'utf8'`、`'utf16le'` (`'ucs2'`)、`'ascii'`、
+または `'hex'` を指定することができます。
+デフォルトは `'utf8'` です。
 
 ### stream.pause()
 
@@ -142,14 +141,6 @@ Closes the underlying file descriptor. Stream will not emit any more events.
 -->
 
 下層のファイル記述子をクローズします。ストリームはそれ以上イベントを生成しなくなります。
-
-### stream.destroySoon()
-
-<!--
-After the write queue is drained, close the file descriptor.
--->
-
-書き込みキューが空になった後、ファイル記述子をクローズします。
 
 ### stream.pipe(destination, [options])
 

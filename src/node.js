@@ -67,15 +67,7 @@
 
     } else if (process._eval != null) {
       // User passed '-e' or '--eval' arguments to Node.
-      var Module = NativeModule.require('module');
-      var path = NativeModule.require('path');
-      var cwd = process.cwd();
-
-      var module = new Module('eval');
-      module.filename = path.join(cwd, 'eval');
-      module.paths = Module._nodeModulePaths(cwd);
-      var result = module._compile('return eval(process._eval)', 'eval');
-      if (process._print_eval) console.log(result);
+      evalScript('eval');
     } else if (process.argv[1]) {
       // make process.argv[1] into a full path
       var path = NativeModule.require('path');
@@ -86,6 +78,9 @@
       if (process.env.NODE_UNIQUE_ID) {
         var cluster = NativeModule.require('cluster');
         cluster._setupWorker();
+
+        // Make sure it's not accidentally inherited by child processes.
+        delete process.env.NODE_UNIQUE_ID;
       }
 
       var Module = NativeModule.require('module');
@@ -147,7 +142,8 @@
         });
 
         process.stdin.on('end', function() {
-          new Module()._compile(code, '[stdin]');
+          process._eval = code;
+          evalScript('[stdin]');
         });
       }
     }
@@ -226,35 +222,27 @@
 
   startup.processNextTick = function() {
     var nextTickQueue = [];
+    var nextTickIndex = 0;
 
     process._tickCallback = function() {
-      var l = nextTickQueue.length;
-      if (l === 0) return;
+      var nextTickLength = nextTickQueue.length;
+      if (nextTickLength === 0) return;
 
-      var q = nextTickQueue;
-      nextTickQueue = [];
-
-      try {
-        for (var i = 0; i < l; i++) {
-          var tock = q[i];
-          var callback = tock.callback;
-          if (tock.domain) {
-            if (tock.domain._disposed) continue;
-            tock.domain.enter();
-          }
-          callback();
-          if (tock.domain) tock.domain.exit();
+      while (nextTickIndex < nextTickLength) {
+        var tock = nextTickQueue[nextTickIndex++];
+        var callback = tock.callback;
+        if (tock.domain) {
+          if (tock.domain._disposed) continue;
+          tock.domain.enter();
+        }
+        callback();
+        if (tock.domain) {
+          tock.domain.exit();
         }
       }
-      catch (e) {
-        if (i + 1 < l) {
-          nextTickQueue = q.slice(i + 1).concat(nextTickQueue);
-        }
-        if (nextTickQueue.length) {
-          process._needTickCallback();
-        }
-        throw e; // process.nextTick error, or 'error' event on first tick
-      }
+
+      nextTickQueue.splice(0, nextTickIndex);
+      nextTickIndex = 0;
     };
 
     process.nextTick = function(callback) {
@@ -264,6 +252,18 @@
       process._needTickCallback();
     };
   };
+
+  function evalScript(name) {
+    var Module = NativeModule.require('module');
+    var path = NativeModule.require('path');
+    var cwd = process.cwd();
+
+    var module = new Module(name);
+    module.filename = path.join(cwd, name);
+    module.paths = Module._nodeModulePaths(cwd);
+    var result = module._compile('return eval(process._eval)', name);
+    if (process._print_eval) console.log(result);
+  }
 
   function errnoException(errorno, syscall) {
     // TODO make this more compatible with ErrnoException from src/node.cc
@@ -404,11 +404,9 @@
   };
 
   startup.processKillAndExit = function() {
-    var exiting = false;
-
     process.exit = function(code) {
-      if (!exiting) {
-        exiting = true;
+      if (!process._exiting) {
+        process._exiting = true;
         process.emit('exit', code || 0);
       }
       process.reallyExit(code || 0);
@@ -485,6 +483,10 @@
     // start parsing data from that stream.
     if (process.env.NODE_CHANNEL_FD) {
       assert(parseInt(process.env.NODE_CHANNEL_FD) >= 0);
+
+      // Make sure it's not accidentally inherited by child processes.
+      delete process.env.NODE_CHANNEL_FD;
+
       var cp = NativeModule.require('child_process');
 
       // Load tcp_wrap to avoid situation where we might immediately receive

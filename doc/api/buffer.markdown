@@ -3,7 +3,7 @@
     Stability: 3 - Stable
 
 <!--
-Pure Javascript is Unicode friendly but not nice to binary data.  When
+Pure JavaScript is Unicode friendly but not nice to binary data.  When
 dealing with TCP streams or the file system, it's necessary to handle octet
 streams. Node has several strategies for manipulating, creating, and
 consuming octet streams.
@@ -47,10 +47,13 @@ encoding method.  Here are the different string encodings.
   `0x20` (character code of a space). If you want to convert a null character
   into `0x00`, you should use `'utf8'`.
 
-* `'utf8'` - Multi byte encoded Unicode characters.  Many web pages and other document formats use UTF-8.
+* `'utf8'` - Multibyte encoded Unicode characters. Many web pages and other
+  document formats use UTF-8.
 
-* `'ucs2'` - 2-bytes, little endian encoded Unicode characters. It can encode
-  only BMP(Basic Multilingual Plane, U+0000 - U+FFFF).
+* `'utf16le'` - 2 or 4 bytes, little endian encoded Unicode characters.
+  Surrogate pairs (U+10000 to U+10FFFF) are supported.
+
+* `'ucs2'` - Alias of `'utf16le'`.
 
 * `'base64'` - Base64 string encoding.
 
@@ -59,7 +62,7 @@ encoding method.  Here are the different string encodings.
   should be avoided in favor of `Buffer` objects where possible. This encoding
   will be removed in future versions of Node.
 
-* `'hex'` - Encode each byte as two hexidecimal characters.
+* `'hex'` - Encode each byte as two hexadecimal characters.
 -->
 
 * `'ascii'` - 7bit の ASCII データ専用です。
@@ -67,14 +70,22 @@ encoding method.  Here are the different string encodings.
 このエンコーディングは、null 文字 (`'\0'` または `'\u0000'`) を `0x20`
 (スペースの文字コード) に変換することに注意してください。
 null 文字を 0x00 に変換したい場合は `'utf8'` を使用してください。
+
 * `'utf8'` - 可変長のバイト単位でエンコードされたUnicode文字。
   多くのWebページやその他のドキュメントは UTF-8 を使っています。
-* `'ucs2'` - 固定長の2バイト（リトルエンディアン）でエンコードされたUnicode文字。
-  BMP (基本多言語面、U+0000～U+FFFF) のみエンコードすることができます。
+
+* `'utf16le'` - 2 または 4 バイトのリトルエンディアンでエンコードされた
+  Unicode 文字。
+  サロゲートペア (U+10000～U+10FFFF) もサポートされます。
+
+* `'ucs2'` - `'utf16le'` の別名です。
+
 * `'base64'` - Base64 文字列エンコーディング.
+
 * `'binary'` - 生のバイナリデータを各文字の最初の 8bit として使用するエンコーディング方式。
 このエンコーディング方式はもはや価値がなく、`Buffer` オブジェクトでは可能な限り使用すべきではありません。
 このエンコーディングは、Node の将来のバージョンで削除される予定です。
+
 * `'hex'` - 各バイトを 2 桁の16進数文字列でエンコードします。
 
 ## Class: Buffer
@@ -130,7 +141,7 @@ Allocates a new buffer containing the given `str`.
 <!--
 * `string` String - data to be written to buffer
 * `offset` Number, Optional, Default: 0
-* `length` Number, Optional
+* `length` Number, Optional, Default: `buffer.length - offset`
 * `encoding` String, Optional, Default: 'utf8'
 -->
 
@@ -179,7 +190,7 @@ next time `buf.write()` is called.
 
 * `encoding` String, Optional, Default: 'utf8'
 * `start` Number, Optional, Default: 0
-* `end` Number, Optional
+* `end` Number, Optional, Default: `buffer.length`
 
 <!--
 Decodes and returns a string from buffer data encoded with `encoding`
@@ -298,13 +309,13 @@ buffer object.  It does not change when the contents of the buffer are changed.
 * `targetBuffer` Buffer object - Buffer to copy into
 * `targetStart` Number, Optional, Default: 0
 * `sourceStart` Number, Optional, Default: 0
-* `sourceEnd` Number, Optional, Default: 0
+* `sourceEnd` Number, Optional, Default: `buffer.length`
 -->
 
 * `targetBuffer` Buffer object - コピー先の Buffer
 * `targetStart` Number, Optional, Default: 0
 * `sourceStart` Number, Optional, Default: 0
-* `sourceEnd` Number, Optional, Default: 0
+* `sourceEnd` Number, Optional, Default: `buffer.length`
 
 <!--
 Does copy between buffers. The source and target regions can be overlapped.
@@ -342,7 +353,7 @@ into `buf2`, starting at the 8th byte in `buf2`.
 ### buf.slice([start], [end])
 
 * `start` Number, Optional, Default: 0
-* `end` Number, Optional, Default: 0
+* `end` Number, Optional, Default: `buffer.length`
 
 <!--
 Returns a new buffer which references the same memory as the old, but offset
