@@ -133,6 +133,73 @@ EventEmitter をシャットダウンしません。
 暗黙的なバインディングはスローされた例外と `'error'` イベントにだけ
 注意を払います。
 
+## Explicit Binding
+
+<!--type=misc-->
+
+<!--
+Sometimes, the domain in use is not the one that ought to be used for a
+specific event emitter.  Or, the event emitter could have been created
+in the context of one domain, but ought to instead be bound to some
+other domain.
+-->
+
+時には、使用中のドメインは特定の EventEmitter に使用されるべきではありません。
+あるいは、EventEmitter はあるドメインのコンテキスト中で作成されますが、
+その他のドメインに結びつけられるべきかもしれません。
+
+<!--
+For example, there could be one domain in use for an HTTP server, but
+perhaps we would like to have a separate domain to use for each request.
+-->
+
+例えば、HTTP サーバで使われるドメインが一つあるとしても、
+おそらくリクエスト毎に独立したドメインを持ちたいでしょう。
+
+<!--
+That is possible via explicit binding.
+-->
+
+これは明示的なバインディングによって可能となります。
+
+<!--
+For example:
+-->
+
+例:
+
+```
+// create a top-level domain for the server
+var serverDomain = domain.create();
+
+serverDomain.run(function() {
+  // server is created in the scope of serverDomain
+  http.createServer(function(req, res) {
+    // req and res are also created in the scope of serverDomain
+    // however, we'd prefer to have a separate domain for each request.
+    // create it first thing, and add req and res to it.
+    var reqd = domain.create();
+    reqd.add(req);
+    reqd.add(res);
+    reqd.on('error', function(er) {
+      console.error('Error', er, req.url);
+      try {
+        res.writeHead(500);
+        res.end('Error occurred, sorry.');
+        res.on('close', function() {
+          // forcibly shut down any other things added to this domain
+          reqd.dispose();
+        });
+      } catch (er) {
+        console.error('Error sending 500', er, req.url);
+        // tried our best.  clean up anything remaining.
+        reqd.dispose();
+      }
+    });
+  }).listen(1337);
+});
+```
+
 ## domain.create()
 
 * return: {Domain}
@@ -160,6 +227,57 @@ catches, listen to its `error` event.
 
 ドメインは EventEmitter の子クラスです。これが捕まえたエラーを扱いたければ、
 `'error'` イベントを監視してください。
+
+### domain.run(fn)
+
+* `fn` {Function}
+
+<!--
+Run the supplied function in the context of the domain, implicitly
+binding all event emitters, timers, and lowlevel requests that are
+created in that context.
+-->
+
+与えられた関数をこのドメインのコンテキストで実行します。
+このコンテキストで作成される全ての EventEmitter、タイマ、そして低水準の要求は
+暗黙的にバインドされます。
+
+<!--
+This is the most basic way to use a domain.
+-->
+
+これはドメインを使用するもっとも一般的な方法です。
+
+<!--
+Example:
+-->
+
+例:
+
+```
+var d = domain.create();
+d.on('error', function(er) {
+  console.error('Caught error!', er);
+});
+d.run(function() {
+  process.nextTick(function() {
+    setTimeout(function() { // simulating some various async stuff
+      fs.open('non-existent file', 'r', function(er, fd) {
+        if (er) throw er;
+        // proceed...
+      });
+    }, 100);
+  });
+});
+```
+
+<!--
+In this example, the `d.on('error')` handler will be triggered, rather
+than crashing the program.
+-->
+
+この例では、プログラムはクラッシュせずに `d.on('error')` ハンドラが
+呼び出されます。
 
 ### domain.members
 

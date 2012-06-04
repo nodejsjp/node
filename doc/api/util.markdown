@@ -11,7 +11,7 @@ them.
 `require('util')` を使うことでこれらにアクセスします。
 
 
-## util.format()
+## util.format(format, [...])
 
 <!--
 Returns a formatted string using the first argument as a `printf`-like format.
@@ -82,10 +82,41 @@ A synchronous output function. Will block the process and
 output `string` immediately to `stderr`.
 -->
 
-同期的な出力関数です。プロセスをブロックして即座に `string` を `stderr` に出力します。
+同期的な出力関数です。
+プロセスをブロックして即座に `string` を `stderr` に出力します。
 
     require('util').debug('message on stderr');
 
+## util.error([...])
+
+<!--
+Same as `util.debug()` except this will output all arguments immediately to
+`stderr`.
+-->
+
+全ての引数をすぐに `stderr` に出力することを除いて `util.debug()` と同じです。
+
+## util.puts([...])
+
+<!--
+A synchronous output function. Will block the process and output all arguments
+to `stdout` with newlines after each argument.
+-->
+
+同期的な出力関数です。
+プロセスをブロックして即座に `stdout` に出力します。
+各引数は改行が付加されます。
+
+## util.print([...])
+
+<!--
+A synchronous output function. Will block the process, cast each argument to a
+string then output to `stdout`. Does not place newlines after each argument.
+-->
+
+同期的な出力関数です。
+プロセスをブロックして、引数を文字列に変換して `stdout` に出力します。
+各引数に改行は付加されません。
 
 ## util.log(string)
 

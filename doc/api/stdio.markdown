@@ -15,8 +15,7 @@ provided by most web browsers, here the output is sent to stdout or stderr.
 ほとんどのブラウザで提供されているコンソールオブジェクトと同様ですが、
 出力は標準出力か標準エラー出力に送られます。
 
-
-## console.log()
+## console.log([data], [...])
 
 <!--
 Prints to stdout with newline. This function can take multiple arguments in a
@@ -38,7 +37,7 @@ See [util.format()](util.html#util.format) for more information.
 `util.inspect` が各引数に使われます。
 より詳細は [util.format()](util.html#util.format) を参照してください。
 
-## console.info()
+## console.info([data], [...])
 
 <!--
 Same as `console.log`.
@@ -46,14 +45,21 @@ Same as `console.log`.
 
 `console.log` と同じです。
 
-## console.warn()
-## console.error()
+## console.error([data], [...])
 
 <!--
 Same as `console.log` but prints to stderr.
 -->
 
 `console.log` と同様ですが、標準エラー出力にプリントします。
+
+## console.warn([data], [...])
+
+<!--
+Same as `console.error`.
+-->
+
+`console.error()` と同じです。
 
 ## console.dir(obj)
 
@@ -71,14 +77,13 @@ Mark a time.
 
 タイマを作成します。
 
-
 ## console.timeEnd(label)
 
 <!--
-Finish timer, record output. Example
+Finish timer, record output. Example:
 -->
 
-タイマを終了し、結果を出力します。例
+タイマを終了し、結果を出力します。例:
 
     console.time('100-elements');
     for (var i = 0; i < 100; i++) {
@@ -86,8 +91,7 @@ Finish timer, record output. Example
     }
     console.timeEnd('100-elements');
 
-
-## console.trace()
+## console.trace(label)
 
 <!--
 Print a stack trace to stderr of the current position.
@@ -95,10 +99,14 @@ Print a stack trace to stderr of the current position.
 
 現在のスタックトレースを標準エラー出力にプリントします。
 
-## console.assert()
+## console.assert(expression, [message])
 
 <!--
-Same as `assert.ok()`.
+Same as [assert.ok()](assert.html#assert_assert_value_message_assert_ok_value_message)
+where if the `expression` evaluates as `false` throw an AssertionError with `message`.
 -->
 
-`assert.ok()` と同じです。
+[assert.ok()](assert.html#assert_assert_value_message_assert_ok_value_message)
+を参照してください。
+もし `expression` が `false` に評価されると、`message` を持つ AssertionError
+がスローされます。

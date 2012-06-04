@@ -21,21 +21,21 @@ program to gracefully exit:
 クローズするまで node プログラムは終了しないことに注意してください。
 プログラムをスムーズに終了する方法を以下に示します:
 
-    var rl = require('readline');
+    var readline = require('readline');
 
-    var i = rl.createInterface({
+    var rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout
     });
 
-    i.question("What do you think of node.js? ", function(answer) {
+    rl.question("What do you think of node.js? ", function(answer) {
       // TODO: Log the answer in a database
       console.log("Thank you for your valuable feedback:", answer);
 
-      i.close();
+      rl.close();
     });
 
-## rl.createInterface(options)
+## readline.createInterface(options)
 
 <!--
 Creates a readline `Interface` instance. Accepts an "options" Object that takes
@@ -143,7 +143,7 @@ readline のインスタンスを作成すると、ほとんどの場合 `'line'
 
 <!--
 If `terminal` is `true` for this instance then the `output` stream will get
-the best compatability if it defines an `output.columns` property, and fires
+the best compatibility if it defines an `output.columns` property, and fires
 a `"resize"` event on the `output` if/when the columns ever change
 (`process.stdout` does this automatically when it is a TTY).
 -->
@@ -174,11 +174,12 @@ Sets the prompt, for example when you run `node` on the command line, you see
 たとえば、コマンドプロンプトで `node` コマンドを実行すると、
 `> ` を見ることができます。これが Node のプロンプトです。
 
-### rl.prompt()
+### rl.prompt([preserveCursor])
 
 <!--
 Readies readline for input from the user, putting the current `setPrompt`
-options on a new line, giving the user a new spot to write.
+options on a new line, giving the user a new spot to write. Set `preserveCursor`
+to `true` to prevent the cursor placement being reset to `0`.
 
 This will also resume the `input` stream used with `createInterface` if it has
 been paused.
@@ -187,6 +188,8 @@ been paused.
 ユーザからの入力を 1 行読み込みます。
 現在の `setPrompt()` の値を新しい行に出力し、
 ユーザに新しい入力エリアを与えます。
+`preserveCursor` を `true` に設定すると、カーソル位置が
+`0` にリセットされなくなります。
 
 これは、 `createInterface()` によって使われる `input` ストリームが
 中断されていれば再開します。
@@ -246,17 +249,32 @@ Closes the `Interface` instance, relinquishing control on the `input` and
 `Interface` のインスタンスをクローズし、`input` および `output` ストリームの
 制御を解放します。`'close'` イベントも生成されます。
 
-### rl.write()
+### rl.write(data, [key])
 
 <!--
-Writes to `output` stream.
+Writes `data` to `output` stream. `key` is an object literal to represent a key
+sequence; available if the terminal is a TTY.
+-->
 
+`data` を `output` ストリームに出力します。
+`key` はキーシーケンスを表現するオブジェクトリテラルです;
+ターミナルが TTY の場合に有効です。
+
+<!--
 This will also resume the `input` stream if it has been paused.
 -->
 
-`output` へ出力します。
-
 これは、`input` ストリームが中断されていれば再開します。
+
+<!--
+Example:
+-->
+
+例:
+
+    rl.write('Delete me!');
+    // Simulate ctrl+u to delete the line written previously
+    rl.write(null, {ctrl: true, name: 'u'});
 
 ## Events
 

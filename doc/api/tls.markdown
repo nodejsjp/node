@@ -63,6 +63,21 @@ Alternatively you can send the CSR to a Certificate Authority for signing.
 (TODO: CA を作るドキュメント、現在は興味あるユーザは Node のソースコードから
 `test/fixtures/keys/Makefile` を見る必要がある)
 
+<!--
+To create .pfx or .p12, do this:
+-->
+
+.pfx または .p12 を作成するには次のようにします:
+
+    openssl pkcs12 -export -in agent5-cert.pem -inkey agent5-key.pem \
+        -certfile ca-cert.pem -out agent5.pfx
+
+  - `in`:  certificate
+  - `inkey`: private key
+  - `certfile`: all CA certs concatenated in one file like
+    `cat ca1-cert.pem ca2-cert.pem > ca-cert.pem`
+
+
 ## Client-initiated renegotiation attack mitigation
 
 <!-- type=misc -->
@@ -148,10 +163,14 @@ The `options` object has these possibilities:
 
 
 <!--
+  - `pfx`: A string or `Buffer` containing the private key, certificate and
+    CA certs of the server in PFX or PKCS12 format. (Mutually exclusive with
+    the `key`, `cert` and `ca` options.)
+
   - `key`: A string or `Buffer` containing the private key of the server in
     PEM format. (Required)
 
-  - `passphrase`: A string of passphrase for the private key.
+  - `passphrase`: A string of passphrase for the private key or pfx.
 
   - `cert`: A string or `Buffer` containing the certificate key of the server in
     PEM format. (Required)
@@ -206,10 +225,14 @@ The `options` object has these possibilities:
 
 -->
 
+  - `pfx` : PFX または PKCS12 でエンコードされた秘密鍵、証明書、および CA の
+    証明書を含む文字列またはバッファ
+    (`key`、`cert`、および `ca` オプションとは相互に排他的です)。
+
   - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または `Buffer` です
     (必須)。
 
-  - `passphrase`: 秘密鍵のパスフレーズを表す文字列です。
+  - `passphrase`: 秘密鍵または pfx のパスフレーズを表す文字列です。
 
   - `cert`: PEM フォーマットによる証明書の鍵を持つ文字列または `Buffer` です
     (必須)。
@@ -264,6 +287,9 @@ The `options` object has these possibilities:
 
 <!--
 Here is a simple example echo server:
+-->
+
+これはシンプルはエコーサーバの例です:
 
     var tls = require('tls');
     var fs = require('fs');
@@ -290,22 +316,21 @@ Here is a simple example echo server:
       console.log('server bound');
     });
 
+<!--
+Or
 -->
 
-これはシンプルはエコーサーバの例です:
+あるいは:
 
     var tls = require('tls');
     var fs = require('fs');
 
     var options = {
-      key: fs.readFileSync('server-key.pem'),
-      cert: fs.readFileSync('server-cert.pem'),
+      pfx: fs.readFileSync('server.pfx'),
 
-      // これはクライアント証明書を用いた認証を行う場合だけ必要です
+      // This is necessary only if using the client certificate authentication.
       requestCert: true,
 
-      // これは自己署名のクライアント証明書を認証する場合だけ必要です
-      ca: [ fs.readFileSync('client-cert.pem') ]
     };
 
     var server = tls.createServer(options, function(cleartextStream) {
@@ -350,10 +375,13 @@ Creates a new client connection to the given `port` and `host` (old API) or
     creating a new socket. If this option is specified, `host` and `port`
     are ignored.
 
+  - `pfx`: A string or `Buffer` containing the private key, certificate and
+    CA certs of the server in PFX or PKCS12 format.
+
   - `key`: A string or `Buffer` containing the private key of the client in
     PEM format.
 
-  - `passphrase`: A string of passphrase for the private key.
+  - `passphrase`: A string of passphrase for the private key or pfx.
 
   - `cert`: A string or `Buffer` containing the certificate key of the client in
     PEM format.
@@ -382,10 +410,13 @@ Creates a new client connection to the given `port` and `host` (old API) or
     セキュアな接続を確立します。
     このオプションが指定された場合、`host` および `port` は無視されます。
 
+  - `pfx` : PFX または PKCS12 でエンコードされた秘密鍵、証明書、
+    およびサーバに対する CA の証明書を含む文字列またはバッファ。
+
   - `key`: PEM フォーマットによるサーバの秘密鍵を持つ文字列または
     `Buffer` です。
 
-  - `passphrase`: 秘密鍵のパスフレーズを表す文字列です。
+  - `passphrase`: 秘密鍵または pfx のパスフレーズを表す文字列です。
 
   - `cert`: PEM フォーマットによる証明書の鍵を持つ文字列または `Buffer` です。
 
@@ -414,6 +445,15 @@ The `secureConnectListener` parameter will be added as a listener for the
 `tls.connect()` returns a [CleartextStream](#tls.CleartextStream) object.
 
 Here is an example of a client of echo server as described previously:
+-->
+
+`secureConnectLister` 引数は ['secureConnect'](#event_secureConnect_)
+イベントのリスナとして加えられます。
+
+`tls.connect()` は [CleartextStream](#tls.CleartextStream)
+オブジェクトを返します。
+
+これは前述のエコーサーバに接続するクライアントの例です:
 
     var tls = require('tls');
     var fs = require('fs');
@@ -441,26 +481,17 @@ Here is an example of a client of echo server as described previously:
       server.close();
     });
 
+<!--
+Or
 -->
 
-`secureConnectLister` 引数は ['secureConnect'](#event_secureConnect_)
-イベントのリスナとして加えられます。
-
-`tls.connect()` は [CleartextStream](#tls.CleartextStream)
-オブジェクトを返します。
-
-これは前述のエコーサーバに接続するクライアントの例です:
+または:
 
     var tls = require('tls');
     var fs = require('fs');
 
     var options = {
-      // これらはクライアント証明書による認証を行う場合だけ必要ですn
-      key: fs.readFileSync('client-key.pem'),
-      cert: fs.readFileSync('client-cert.pem'),
-    
-      // これはサーバが自己署名証明書を使う場合だけ必要です
-      ca: [ fs.readFileSync('server-cert.pem') ]
+      pfx: fs.readFileSync('client.pfx')
     };
 
     var cleartextStream = tls.connect(8000, options, function() {
@@ -476,7 +507,6 @@ Here is an example of a client of echo server as described previously:
     cleartextStream.on('end', function() {
       server.close();
     });
-
 
 ## tls.createSecurePair([credentials], [isServer], [requestCert], [rejectUnauthorized])
 

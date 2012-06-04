@@ -11,6 +11,13 @@ Node 向けにサードパーティ製のモジュールが数多くあります
 [wiki ページ](http://github.com/ry/node/wiki/modules) です。
 
 <!--
+You can also find third party modules via [npm search](http://search.npmjs.org).
+-->
+
+サードパーティ製のモジュールは [npm search](http://search.npmjs.org) から
+探すこともできます。
+
+<!--
 This appendix is intended as a SMALL guide to new-comers to help them
 quickly find what are considered to be quality modules. It is not intended
 to be a complete list.  There may be better more complete modules found

@@ -225,7 +225,7 @@ A server is a `net.Socket` that can listen for new incoming connections.
 このクラスは TCP または UNIX ドメインのサーバを作成するために使われます。
 サーバは `net.Scoket` であり、新たに到着する接続を待ち受けることができます。
 
-### server.listen(port, [host], [listeningListener])
+### server.listen(port, [host], [backlog], [listeningListener])
 
 <!--
 Begin accepting connections on the specified `port` and `host`.  If the
@@ -237,6 +237,18 @@ IPv4 address (`INADDR_ANY`). A port value of zero will assign a random port.
 `host` が省略されると、サーバはどんな IPv4 アドレスへの接続も受け入れます
 (`INADDR_ANY`)。
 ポート番号に 0 を指定すると、ランダムなポートが割り当てられます。
+
+<!--
+Backlog is the maximum length of the queue of pending connections.
+The actual length will be determined by your OS through sysctl settings such as
+`tcp_max_syn_backlog` and `somaxconn` on linux. The default value of this
+parameter is 511 (not 512).
+-->
+
+バックログは保留された接続のキューの最大長です。
+実際の長さは Linux では `tcp_max_syn_backlog` や `somaxconn` など、
+sysctl の設定を通じて OS によって決定されます。
+このパラメータのデフォルト値は 511 (512 ではありません) です。
 
 <!--
 This function is asynchronous.  When the server has been bound,
@@ -361,6 +373,14 @@ high.
 
 サーバの接続数が大きくなった時に接続を拒否するためにこのプロパティを設定します。
 
+<!--
+It is not recommended to use this option once a socket has been sent to a child
+with `child_process.fork()`.
+-->
+
+`child_process.fork()` によって子プロセスに送られたソケットに対して
+このオプションを使用することは推奨されません。
+
 ### server.connections
 
 <!--
@@ -368,6 +388,13 @@ The number of concurrent connections on the server.
 -->
 
 このサーバ上の並行コネクションの数です。
+
+<!--
+This becomes `null` when sending a socket to a child with `child_process.fork()`.
+-->
+
+ソケットが `child_process.fork()` によって子プロセスに送られると、
+これは `null` になります。
 
 <!--
 `net.Server` is an `EventEmitter` with the following events:
@@ -546,12 +573,14 @@ Node は、ソケットに書き込まれるデータを内部のキューに入
 ### socket.setEncoding([encoding])
 
 <!--
-Sets the encoding (either `'ascii'`, `'utf8'`, or `'base64'`) for data that is
-received. Defaults to `null`.
+Set the encoding for the socket as a Readable Stream. See
+[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
+for more information.
 -->
 
-受信したデータのエンコーディングを設定します (`'ascii'`、`'utf8'`、
-あるいは `'base64'` のいずれかです)。デフォルトは `null` です。
+ソケットを入力ストリームとしてエンコーディングを設定します。詳細は
+[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
+を参照してください。
 
 ### socket.write(data, [encoding], [callback])
 

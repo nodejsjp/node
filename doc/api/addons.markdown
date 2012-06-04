@@ -65,7 +65,7 @@ Node は全ての依存ライブラリを実行ファイルに静的にコンパ
 
 <!--
 To get started let's make a small Addon which is the C++ equivalent of
-the following Javascript code:
+the following JavaScript code:
 -->
 
 では、 以下の JavaScript コードと同じ様に動作する小さなアドオンを

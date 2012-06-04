@@ -42,19 +42,6 @@ using v8::Arguments;
 using v8::Integer;
 using v8::Undefined;
 
-#define UNWRAP \
-  assert(!args.Holder().IsEmpty()); \
-  assert(args.Holder()->InternalFieldCount() > 0); \
-  TTYWrap* wrap =  \
-      static_cast<TTYWrap*>(args.Holder()->GetPointerFromInternalField(0)); \
-  if (!wrap) { \
-    uv_err_t err; \
-    err.code = UV_EBADF; \
-    SetErrno(err); \
-    return scope.Close(Integer::New(-1)); \
-  }
-
-
 class TTYWrap : StreamWrap {
  public:
   static void Initialize(Handle<Object> target) {
@@ -69,11 +56,14 @@ class TTYWrap : StreamWrap {
 
     NODE_SET_PROTOTYPE_METHOD(t, "close", HandleWrap::Close);
     NODE_SET_PROTOTYPE_METHOD(t, "unref", HandleWrap::Unref);
-    NODE_SET_PROTOTYPE_METHOD(t, "ref", HandleWrap::Ref);
 
     NODE_SET_PROTOTYPE_METHOD(t, "readStart", StreamWrap::ReadStart);
     NODE_SET_PROTOTYPE_METHOD(t, "readStop", StreamWrap::ReadStop);
-    NODE_SET_PROTOTYPE_METHOD(t, "write", StreamWrap::Write);
+
+    NODE_SET_PROTOTYPE_METHOD(t, "writeBuffer", StreamWrap::WriteBuffer);
+    NODE_SET_PROTOTYPE_METHOD(t, "writeAsciiString", StreamWrap::WriteAsciiString);
+    NODE_SET_PROTOTYPE_METHOD(t, "writeUtf8String", StreamWrap::WriteUtf8String);
+    NODE_SET_PROTOTYPE_METHOD(t, "writeUcs2String", StreamWrap::WriteUcs2String);
 
     NODE_SET_PROTOTYPE_METHOD(t, "getWindowSize", TTYWrap::GetWindowSize);
     NODE_SET_PROTOTYPE_METHOD(t, "setRawMode", SetRawMode);
@@ -118,7 +108,7 @@ class TTYWrap : StreamWrap {
   static Handle<Value> GetWindowSize(const Arguments& args) {
     HandleScope scope;
 
-    UNWRAP
+    UNWRAP(TTYWrap)
 
     int width, height;
     int r = uv_tty_get_winsize(&wrap->handle_, &width, &height);
@@ -138,7 +128,7 @@ class TTYWrap : StreamWrap {
   static Handle<Value> SetRawMode(const Arguments& args) {
     HandleScope scope;
 
-    UNWRAP
+    UNWRAP(TTYWrap)
 
     int r = uv_tty_set_mode(&wrap->handle_, args[0]->IsTrue());
 
