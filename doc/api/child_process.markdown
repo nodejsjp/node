@@ -215,7 +215,6 @@ See `child_process.fork()` for details.
   * `customFds` {Array} **Deprecated** File descriptors for the child to use
     for stdio.  (See below)
   * `env` {Object} Environment key-value pairs
-  * `setsid` {Boolean}
 * return: {ChildProcess object}
 -->
 
@@ -385,7 +384,6 @@ Node のドキュメント化されていない API と同様に、
   * `customFds` {Array} **Deprecated** File descriptors for the child to use
     for stdio.  (See below)
   * `env` {Object} Environment key-value pairs
-  * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
   * `maxBuffer` {Number} (Default: 200*1024)
@@ -485,7 +483,6 @@ the child process is killed.
   * `customFds` {Array} **Deprecated** File descriptors for the child to use
     for stdio.  (See below)
   * `env` {Object} Environment key-value pairs
-  * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
   * `maxBuffer` {Number} (Default: 200*1024)
@@ -536,7 +533,6 @@ leaner than `child_process.exec`. It has the same options.
   * `customFds` {Array} **Deprecated** File descriptors for the child to use
     for stdio.  (See below)
   * `env` {Object} Environment key-value pairs
-  * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
 * Return: ChildProcess object
