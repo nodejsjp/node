@@ -147,6 +147,15 @@ UNARY_MATH_FUNCTION(sqrt, CreateSqrtFunction())
 #undef MATH_FUNCTION
 
 
+void MathSetup() {
+  init_fast_sin_function();
+  init_fast_cos_function();
+  init_fast_tan_function();
+  init_fast_log_function();
+  init_fast_sqrt_function();
+}
+
+
 double OS::nan_value() {
   // NAN from math.h is defined in C99 and not in POSIX.
   return NAN;
@@ -304,11 +313,20 @@ int OS::VSNPrintF(Vector<char> str,
 
 #if defined(V8_TARGET_ARCH_IA32)
 static OS::MemCopyFunction memcopy_function = NULL;
+static LazyMutex memcopy_function_mutex = LAZY_MUTEX_INITIALIZER;
 // Defined in codegen-ia32.cc.
 OS::MemCopyFunction CreateMemCopyFunction();
 
 // Copy memory area to disjoint memory area.
 void OS::MemCopy(void* dest, const void* src, size_t size) {
+  if (memcopy_function == NULL) {
+    ScopedLock lock(memcopy_function_mutex.Pointer());
+    if (memcopy_function == NULL) {
+      OS::MemCopyFunction temp = CreateMemCopyFunction();
+      MemoryBarrier();
+      memcopy_function = temp;
+    }
+  }
   // Note: here we rely on dependent reads being ordered. This is true
   // on all architectures we currently support.
   (*memcopy_function)(dest, src, size);
@@ -317,18 +335,6 @@ void OS::MemCopy(void* dest, const void* src, size_t size) {
 #endif
 }
 #endif  // V8_TARGET_ARCH_IA32
-
-
-void POSIXPostSetUp() {
-#if defined(V8_TARGET_ARCH_IA32)
-  memcopy_function = CreateMemCopyFunction();
-#endif
-  init_fast_sin_function();
-  init_fast_cos_function();
-  init_fast_tan_function();
-  init_fast_log_function();
-  init_fast_sqrt_function();
-}
 
 // ----------------------------------------------------------------------------
 // POSIX string support.
@@ -421,11 +427,7 @@ Socket* POSIXSocket::Accept() const {
     return NULL;
   }
 
-  int socket;
-  do
-    socket = accept(socket_, NULL, NULL);
-  while (socket == -1 && errno == EINTR);
-
+  int socket = accept(socket_, NULL, NULL);
   if (socket == -1) {
     return NULL;
   } else {
@@ -452,10 +454,7 @@ bool POSIXSocket::Connect(const char* host, const char* port) {
   }
 
   // Connect.
-  do
-    status = connect(socket_, result->ai_addr, result->ai_addrlen);
-  while (status == -1 && errno == EINTR);
-
+  status = connect(socket_, result->ai_addr, result->ai_addrlen);
   freeaddrinfo(result);
   return status == 0;
 }
@@ -474,32 +473,13 @@ bool POSIXSocket::Shutdown() {
 
 
 int POSIXSocket::Send(const char* data, int len) const {
-  int written;
-
-  for (written = 0; written < len; /* empty */) {
-    int status = send(socket_, data + written, len - written, 0);
-    if (status == 0) {
-      break;
-    } else if (status > 0) {
-      written += status;
-    } else if (errno == EINTR) {
-      /* interrupted by signal, retry */
-    } else {
-      return -1;
-    }
-  }
-
-  return written;
+  int status = send(socket_, data, len, 0);
+  return status;
 }
 
 
 int POSIXSocket::Receive(char* data, int len) const {
-  int status;
-
-  do
-    status = recv(socket_, data, len, 0);
-  while (status == -1 && errno == EINTR);
-
+  int status = recv(socket_, data, len, 0);
   return status;
 }
 

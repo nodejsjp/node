@@ -1741,11 +1741,11 @@ void CompareIC::UpdateCaches(Handle<Object> x, Handle<Object> y) {
 
   // Activate inlined smi code.
   if (previous_state == UNINITIALIZED) {
-    PatchInlinedSmiCode(address(), ENABLE_INLINED_SMI_CHECK);
+    PatchInlinedSmiCode(address());
   }
 }
 
-void PatchInlinedSmiCode(Address address, InlinedSmiCheck check) {
+void PatchInlinedSmiCode(Address address) {
   // The address of the instruction following the call.
   Address test_instruction_address =
       address + Assembler::kCallTargetAddressOffset;
@@ -1766,18 +1766,14 @@ void PatchInlinedSmiCode(Address address, InlinedSmiCheck check) {
            address, test_instruction_address, delta);
   }
 
-  // Patch with a short conditional jump. Enabling means switching from a short
-  // jump-if-carry/not-carry to jump-if-zero/not-zero, whereas disabling is the
-  // reverse operation of that.
+  // Patch with a short conditional jump. There must be a
+  // short jump-if-carry/not-carry at this position.
   Address jmp_address = test_instruction_address - delta;
-  ASSERT((check == ENABLE_INLINED_SMI_CHECK)
-         ? (*jmp_address == Assembler::kJncShortOpcode ||
-            *jmp_address == Assembler::kJcShortOpcode)
-         : (*jmp_address == Assembler::kJnzShortOpcode ||
-            *jmp_address == Assembler::kJzShortOpcode));
-  Condition cc = (check == ENABLE_INLINED_SMI_CHECK)
-      ? (*jmp_address == Assembler::kJncShortOpcode ? not_zero : zero)
-      : (*jmp_address == Assembler::kJnzShortOpcode ? not_carry : carry);
+  ASSERT(*jmp_address == Assembler::kJncShortOpcode ||
+         *jmp_address == Assembler::kJcShortOpcode);
+  Condition cc = *jmp_address == Assembler::kJncShortOpcode
+      ? not_zero
+      : zero;
   *jmp_address = static_cast<byte>(Assembler::kJccShortPrefix | cc);
 }
 
