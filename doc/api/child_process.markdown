@@ -450,10 +450,11 @@ there is no IPC channel keeping it alive. When calling this method the
 * `args` {Array} List of string arguments
 * `options` {Object}
   * `cwd` {String} Current working directory of the child process
+  * `stdio` {Array|String} Child's stdio configuration. (See below)
   * `customFds` {Array} **Deprecated** File descriptors for the child to use
     for stdio.  (See below)
   * `env` {Object} Environment key-value pairs
-  * `setsid` {Boolean}
+  * `detached` {Boolean} The child will be a process group leader.  (See below)
 * return: {ChildProcess object}
 -->
 
@@ -461,10 +462,12 @@ there is no IPC channel keeping it alive. When calling this method the
 * `args` {Array} 文字列による引数の配列
 * `options` {Object}
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
+  * `stdio` {Array|String} 子プロセスの標準入出力の設定 (後述)。
   * `customFds` {Array} **Deprecated** 子プロセスが標準入出力として使用する
-   ファイル記述子の配列 (後述)
+    ファイル記述子の配列 (後述)
   * `env` {Object} 環境変数として与えるキー・値のペア
-  * `setsid` {Boolean}
+  * `detached` {Boolean} 子プロセスがプロセスグループのリーダになるかどうか
+    (後述)。
 * return: {ChildProcess object}
 
 <!--
@@ -585,6 +588,160 @@ API.
 これは廃止された API との互換性のためです。
 
 <!--
+The 'stdio' option to `child_process.spawn()` is an array where each
+index corresponds to a fd in the child.  The value is one of the following:
+-->
+
+`child_process.spawn()` の `stdio` オプションは配列で、
+それぞれのインデックスは子プロセスの fd に対応します。
+要素の値は以下のいずれかです:
+
+<!--
+1. `'pipe'` - Create a pipe between the child process and the parent process.
+   The parent end of the pipe is exposed to the parent as a property on the
+   `child_process` object as `ChildProcess.stdio[fd]`. Pipes created for
+   fds 0 - 2 are also available as ChildProcess.stdin, ChildProcess.stdout
+   and ChildProcess.stderr, respectively.
+2. `'ipc'` - Create an IPC channel for passing messages/file descriptors
+   between parent and child. A ChildProcess may have at most *one* IPC stdio
+   file descriptor. Setting this option enables the ChildProcess.send() method.
+   If the child writes JSON messages to this file descriptor, then this will
+   trigger ChildProcess.on('message').  If the child is a Node.js program, then
+   the presence of an IPC channel will enable process.send() and
+   process.on('message').
+3. `'ignore'` - Do not set this file descriptor in the child. Note that Node
+   will always open fd 0 - 2 for the processes it spawns. When any of these is
+   ignored node will open `/dev/null` and attach it to the child's fd.
+4. `Stream` object - Share a readable or writable stream that refers to a tty,
+   file, socket, or a pipe with the child process. The stream's underlying
+   file descriptor is duplicated in the child process to the fd that 
+   corresponds to the index in the `stdio` array.
+5. Positive integer - The integer value is interpreted as a file descriptor 
+   that is is currently open in the parent process. It is shared with the child
+   process, similar to how `Stream` objects can be shared.
+6. `null`, `undefined` - Use default value. For stdio fds 0, 1 and 2 (in other
+   words, stdin, stdout, and stderr) a pipe is created. For fd 3 and up, the
+   default is `'ignore'`.
+-->
+
+1. `'pipe'` - 子プロセスと親プロセスの間でパイプを作成します。
+   パイプの親側の端点は `child_process` オブジェクトのプロパティ
+   `ChildProcess.stdio[fd]` として親プロセスに公開されます。
+   fd 0～2 はそれぞれ、`ChildProcess.stdin`、`ChildProcess.stdout`、
+   `ChildProcess.stderr` としても参照可能です。
+2. `'ipc'` - 親プロセスと子プロセスの間でメッセージパッシングのための
+   IPC チャネル／ファイル記述子を作成します。
+   `ChildProcess` は標準入出力に高々一つの IPC ファイル記述子を持ちます。
+   このオプションを設定すると、`ChildProcess.send()` メソッドが有効になります。
+   子プロセスがこのファイル記述子に JSON メッセージを書き込むと、
+   それは `ChildProcess.on('message')` を引き起こします。
+   子プロセスが Node.js プログラムなら、IPC チャネルの存在は `process.send()`
+   および `process.on('message')` を有効にします。
+3. `'ignore'` - 子プロセスにファイル記述子を設定しません。
+   Node は子プロセスを起動する際、常に fd 0～2 をオープンすることに
+   注意してください。これらのうちのどれかが `'ignore'` の場合、node は
+   `/dev/null` をオープンして、それを子プロセスの fd に割り当てます。
+4. `Stream` オブジェクト - tty、ファイル、ソケット、またはパイプを参照する
+   読み込みまたは書き込み可能なストリームを子プロセスと共有します。
+   ストリームの下層にあるファイル記述子は、子プロセスの `stdio` 配列の
+   対応する位置にコピーされます。
+5. 非負整数 - 整数の値を親プロセスが現在オープンしているファイル記述子として
+   解釈されます。
+   それは `Stream` オブジェクトの場合と同様に子プロセスに共有されます。
+6. `null`、`undefined` - デフォルト値を使用します。
+   `stdio` の `fd` が 0、1、または 2 (言い換えると stdin、stdout、または
+   stderr) の場合はパイプが作成されます。fd が 3 以上の場合、デフォルトは
+   `'ignore'` です。
+
+<!--
+As a shorthand, the `stdio` argument may also be one of the following
+strings, rather than an array:
+-->
+
+簡易な記法として、`stdio` に配列ではなく以下の文字列の一つを指定することも
+できます。
+
+<!--
+* `ignore` - `['ignore', 'ignore', 'ignore']`
+* `pipe` - `['pipe', 'pipe', 'pipe']`
+* `inherit` - `[process.stdin, process.stdout, process.stderr]` or `[0,1,2]`
+-->
+
+* `ignore` - `['ignore', 'ignore', 'ignore']`
+* `pipe` - `['pipe', 'pipe', 'pipe']`
+* `inherit` - `[process.stdin, process.stdout, process.stderr]` または `[0,1,2]`
+
+<!--
+Example:
+-->
+
+例:
+
+    var spawn = require('child_process').spawn;
+
+    // Child will use parent's stdios
+    spawn('prg', [], { stdio: 'inherit' });
+
+    // Spawn child sharing only stderr
+    spawn('prg', [], { stdio: ['pipe', 'pipe', process.stderr] });
+
+    // Open an extra fd=4, to interact with programs present a
+    // startd-style interface.
+    spawn('prg', [], { stdio: ['pipe', null, null, null, 'pipe'] });
+
+<!--
+If the `detached` option is set, the child process will be made the leader of a
+new process group.  This makes it possible for the child to continue running 
+after the parent exits.
+-->
+
+`detached` オプションが設定されると、子プロセスは新しいプロセスグループの
+リーダになります。
+これは親プロセスが終了しても子プロセスの実行が継続することを可能にします。
+
+<!--
+By default, the parent will wait for the detached child to exit.  To prevent
+the parent from waiting for a given `child`, use the `child.unref()` method,
+and the parent's event loop will not include the child in its reference count.
+-->
+
+デフォルトでは、親プロセスは切り離された子プロセスの終了を待機します。
+親プロセスが `child` を待機することを防ぐには、`child.unref()` メソッドを
+使用し、親のイベントループに子のリファレンスカウントが含まれないようにします。
+
+<!--
+Example of detaching a long-running process and redirecting its output to a
+file:
+-->
+
+長時間実行する子プロセスを切り離し、出力をファイルにリダイレクトする例:
+
+     var fs = require('fs'),
+         spawn = require('child_process').spawn,
+         out = fs.openSync('./out.log', 'a'),
+         err = fs.openSync('./out.log', 'a');
+
+     var child = spawn('prg', [], {
+       detached: 'true',
+       stdio: [ 'ignore', out, err ]
+     });
+
+     child.unref();
+
+<!--
+When using the `detached` option to start a long-running process, the process
+will not stay running in the background unless it is provided with a `stdio`
+configuration that is not connected to the parent.  If the parent's `stdio` is
+inherited, the child will remain attached to the controlling terminal.
+-->
+
+長時間実行されるプロセスを開始するために `detached` オプションを使用する場合、
+その `stdio` が親と接続するような構成を与えられない限り、そのプロセスは
+バックグラウンドにとどまりません。
+親の `stdio` が継承されるなら、子プロセスは制御しているターミナルに
+接続されたままです。
+
+<!--
 There is a deprecated option called `customFds` which allows one to specify
 specific file descriptors for the stdio of the child process. This API was
 not portable to all platforms and therefore removed.
@@ -620,10 +777,10 @@ Node のドキュメント化されていない API と同様に、
 * `command` {String} The command to run, with space-separated arguments
 * `options` {Object}
   * `cwd` {String} Current working directory of the child process
+  * `stdio` {Array|String} Child's stdio configuration. (See above)
   * `customFds` {Array} **Deprecated** File descriptors for the child to use
-    for stdio.  (See below)
+    for stdio.  (See above)
   * `env` {Object} Environment key-value pairs
-  * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
   * `maxBuffer` {Number} (Default: 200*1024)
@@ -638,10 +795,10 @@ Node のドキュメント化されていない API と同様に、
 * `command` {String} 実行するコマンド、空白で区切られた引数を持ちます
 * `options` {Object}
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
+  * `stdio` {Array|String} 子プロセスの標準入出力の設定 (前述)。
   * `customFds` {Array} **Deprecated** 子プロセスが標準入出力として使用する
-   ファイル記述子の配列 (後述)
+   ファイル記述子の配列 (前述)
   * `env` {Object} 環境変数として与えるキー・値のペア
-  * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
   * `maxBuffer` {Number} (Default: 200*1024)
@@ -720,10 +877,10 @@ the child process is killed.
 * `args` {Array} List of string arguments
 * `options` {Object}
   * `cwd` {String} Current working directory of the child process
+  * `stdio` {Array|String} Child's stdio configuration. (See above)
   * `customFds` {Array} **Deprecated** File descriptors for the child to use
-    for stdio.  (See below)
+    for stdio.  (See above)
   * `env` {Object} Environment key-value pairs
-  * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
   * `maxBuffer` {Number} (Default: 200*1024)
@@ -739,10 +896,10 @@ the child process is killed.
 * `args` {Array} 文字列による引数の配列
 * `options` {Object}
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
+  * `stdio` {Array|String} 子プロセスの標準入出力の設定 (前述)。
   * `customFds` {Array} **Deprecated** 子プロセスが標準入出力として使用する
-   ファイル記述子の配列 (後述)
+   ファイル記述子の配列 (前述)
   * `env` {Object} 環境変数として与えるキー・値のペア
-  * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
   * `maxBuffer` {Number} (Default: 200*1024)
@@ -771,10 +928,7 @@ leaner than `child_process.exec`. It has the same options.
 * `args` {Array} List of string arguments
 * `options` {Object}
   * `cwd` {String} Current working directory of the child process
-  * `customFds` {Array} **Deprecated** File descriptors for the child to use
-    for stdio.  (See below)
   * `env` {Object} Environment key-value pairs
-  * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
 * Return: ChildProcess object
@@ -784,10 +938,7 @@ leaner than `child_process.exec`. It has the same options.
 * `args` {Array} 文字列による引数の配列
 * `options` {Object}
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
-  * `customFds` {Array} **Deprecated** 子プロセスが標準入出力として使用する
-   ファイル記述子の配列 (後述)
   * `env` {Object} 環境変数として与えるキー・値のペア
-  * `setsid` {Boolean}
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
 * Return: ChildProcess object

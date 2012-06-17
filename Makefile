@@ -65,6 +65,7 @@ node_modules/weak:
 	@if [ ! -f node ]; then make all; fi
 	@if [ ! -d node_modules ]; then mkdir -p node_modules; fi
 	./node deps/npm/bin/npm-cli.js install weak \
+		--nodedir="$(shell pwd)" \
 		--prefix="$(shell pwd)" --unsafe-perm # go ahead and run as root.
 
 test-gc: all node_modules/weak
@@ -218,11 +219,12 @@ $(TARBALL): node out/doc
 		exit 1 ; \
 	fi
 	git archive --format=tar --prefix=$(TARNAME)/ HEAD | tar xf -
-	mkdir -p $(TARNAME)/doc
+	mkdir -p $(TARNAME)/doc/api
 	cp doc/node.1 $(TARNAME)/doc/node.1
-	cp -r out/doc/api $(TARNAME)/doc/api
+	cp -r out/doc/api/* $(TARNAME)/doc/api/
 	rm -rf $(TARNAME)/deps/v8/test # too big
 	rm -rf $(TARNAME)/doc/images # too big
+	find $(TARNAME)/ -type l | xargs rm # annoying on windows
 	tar -cf $(TARNAME).tar $(TARNAME)
 	rm -rf $(TARNAME)
 	gzip -f -9 $(TARNAME).tar

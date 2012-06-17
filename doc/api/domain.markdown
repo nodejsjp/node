@@ -417,13 +417,16 @@ with a single error handler in a single place.
     var d = domain.create();
 
     function readSomeFile(filename, cb) {
-      fs.readFile(filename, d.intercept(function(er, data) {
+      fs.readFile(filename, d.intercept(function(data) {
+        // note, the first argument is never passed to the
+        // callback since it is assumed to be the 'Error' argument
+        // and thus intercepted by the domain.
+
         // if this throws, it will also be passed to the domain
-        // additionally, we know that 'er' will always be null,
         // so the error-handling logic can be moved to the 'error'
         // event on the domain instead of being repeated throughout
         // the program.
-        return cb(er, JSON.parse(data));
+        return cb(null, JSON.parse(data));
       }));
     }
 
@@ -457,6 +460,12 @@ error state.
 
 `dispose()` を呼び出す意図は通常、エラー状態の中でドメインコンテキストの
 クリティカルな部分が見つかった場合に、カスケードしたエラーを防ぐことです。
+
+<!--
+Once the domain is disposed the `dispose` event will emit.
+-->
+
+ドメインが破棄されると、`'dispose'` イベントが生成されます。
 
 <!--
 Note that IO might still be performed.  However, to the highest degree
