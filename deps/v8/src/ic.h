@@ -794,9 +794,6 @@ class CompareIC: public IC {
   // Helper function for determining the state of a compare IC.
   static State ComputeState(Code* target);
 
-  // Helper function for determining the operation a compare IC is for.
-  static Token::Value ComputeOperation(Code* target);
-
   static const char* GetStateName(State state);
 
  private:
@@ -807,13 +804,7 @@ class CompareIC: public IC {
   Condition GetCondition() const { return ComputeCondition(op_); }
   State GetState() { return ComputeState(target()); }
 
-  static Code* GetRawUninitialized(Token::Value op);
-
-  static void Clear(Address address, Code* target);
-
   Token::Value op_;
-
-  friend class IC;
 };
 
 
@@ -826,8 +817,7 @@ class ToBooleanIC: public IC {
 
 
 // Helper for BinaryOpIC and CompareIC.
-enum InlinedSmiCheck { ENABLE_INLINED_SMI_CHECK, DISABLE_INLINED_SMI_CHECK };
-void PatchInlinedSmiCode(Address address, InlinedSmiCheck check);
+void PatchInlinedSmiCode(Address address);
 
 } }  // namespace v8::internal
 

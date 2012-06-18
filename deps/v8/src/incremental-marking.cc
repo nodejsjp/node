@@ -830,19 +830,6 @@ void IncrementalMarking::Step(intptr_t allocated_bytes,
         MarkObjectGreyDoNotEnqueue(ctx->normalized_map_cache());
 
         VisitGlobalContext(ctx, &marking_visitor);
-      } else if (map->instance_type() == JS_FUNCTION_TYPE) {
-        marking_visitor.VisitPointers(
-            HeapObject::RawField(obj, JSFunction::kPropertiesOffset),
-            HeapObject::RawField(obj, JSFunction::kCodeEntryOffset));
-
-        marking_visitor.VisitCodeEntry(
-            obj->address() + JSFunction::kCodeEntryOffset);
-
-        marking_visitor.VisitPointers(
-            HeapObject::RawField(obj,
-                                 JSFunction::kCodeEntryOffset + kPointerSize),
-            HeapObject::RawField(obj,
-                                 JSFunction::kNonWeakFieldsEndOffset));
       } else {
         obj->IterateBody(map->instance_type(), size, &marking_visitor);
       }
@@ -951,7 +938,7 @@ void IncrementalMarking::ResetStepCounters() {
 
 
 int64_t IncrementalMarking::SpaceLeftInOldSpace() {
-  return heap_->MaxOldGenerationSize() - heap_->PromotedSpaceSizeOfObjects();
+  return heap_->MaxOldGenerationSize() - heap_->PromotedSpaceSize();
 }
 
 } }  // namespace v8::internal

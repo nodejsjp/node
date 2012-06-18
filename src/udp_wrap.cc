@@ -24,6 +24,7 @@
 #include "slab_allocator.h"
 #include "req_wrap.h"
 #include "handle_wrap.h"
+#include "udp_wrap.h"
 
 #include <stdlib.h>
 
@@ -57,46 +58,13 @@ Local<Object> AddressToJS(const sockaddr* addr);
 static Persistent<String> buffer_sym;
 static Persistent<String> oncomplete_sym;
 static Persistent<String> onmessage_sym;
-static SlabAllocator slab_allocator(SLAB_SIZE);
+static SlabAllocator* slab_allocator;
 
 
-class UDPWrap: public HandleWrap {
-public:
-  static void Initialize(Handle<Object> target);
-  static Handle<Value> New(const Arguments& args);
-  static Handle<Value> Bind(const Arguments& args);
-  static Handle<Value> Send(const Arguments& args);
-  static Handle<Value> Bind6(const Arguments& args);
-  static Handle<Value> Send6(const Arguments& args);
-  static Handle<Value> RecvStart(const Arguments& args);
-  static Handle<Value> RecvStop(const Arguments& args);
-  static Handle<Value> GetSockName(const Arguments& args);
-  static Handle<Value> AddMembership(const Arguments& args);
-  static Handle<Value> DropMembership(const Arguments& args);
-  static Handle<Value> SetMulticastTTL(const Arguments& args);
-  static Handle<Value> SetMulticastLoopback(const Arguments& args);
-  static Handle<Value> SetBroadcast(const Arguments& args);
-  static Handle<Value> SetTTL(const Arguments& args);
-
-private:
-  UDPWrap(Handle<Object> object);
-  virtual ~UDPWrap();
-
-  static Handle<Value> DoBind(const Arguments& args, int family);
-  static Handle<Value> DoSend(const Arguments& args, int family);
-  static Handle<Value> SetMembership(const Arguments& args,
-                                     uv_membership membership);
-
-  static uv_buf_t OnAlloc(uv_handle_t* handle, size_t suggested_size);
-  static void OnSend(uv_udp_send_t* req, int status);
-  static void OnRecv(uv_udp_t* handle,
-                     ssize_t nread,
-                     uv_buf_t buf,
-                     struct sockaddr* addr,
-                     unsigned flags);
-
-  uv_udp_t handle_;
-};
+static void DeleteSlabAllocator(void*) {
+  delete slab_allocator;
+  slab_allocator = NULL;
+}
 
 
 UDPWrap::UDPWrap(Handle<Object> object): HandleWrap(object,
@@ -113,6 +81,9 @@ UDPWrap::~UDPWrap() {
 
 void UDPWrap::Initialize(Handle<Object> target) {
   HandleWrap::Initialize(target);
+
+  slab_allocator = new SlabAllocator(SLAB_SIZE);
+  AtExit(DeleteSlabAllocator, NULL);
 
   HandleScope scope;
 
@@ -390,7 +361,7 @@ void UDPWrap::OnSend(uv_udp_send_t* req, int status) {
 
 uv_buf_t UDPWrap::OnAlloc(uv_handle_t* handle, size_t suggested_size) {
   UDPWrap* wrap = static_cast<UDPWrap*>(handle->data);
-  char* buf = slab_allocator.Allocate(wrap->object_, suggested_size);
+  char* buf = slab_allocator->Allocate(wrap->object_, suggested_size);
   return uv_buf_init(buf, suggested_size);
 }
 
@@ -403,9 +374,9 @@ void UDPWrap::OnRecv(uv_udp_t* handle,
   HandleScope scope;
 
   UDPWrap* wrap = reinterpret_cast<UDPWrap*>(handle->data);
-  Local<Object> slab = slab_allocator.Shrink(wrap->object_,
-                                             buf.base,
-                                             nread < 0 ? 0 : nread);
+  Local<Object> slab = slab_allocator->Shrink(wrap->object_,
+                                              buf.base,
+                                              nread < 0 ? 0 : nread);
   if (nread == 0) return;
 
   if (nread < 0) {
@@ -423,6 +394,18 @@ void UDPWrap::OnRecv(uv_udp_t* handle,
     AddressToJS(addr)
   };
   MakeCallback(wrap->object_, onmessage_sym, ARRAY_SIZE(argv), argv);
+}
+
+
+UDPWrap* UDPWrap::Unwrap(Local<Object> obj) {
+  assert(!obj.IsEmpty());
+  assert(obj->InternalFieldCount() > 0);
+  return static_cast<UDPWrap*>(obj->GetPointerFromInternalField(0));
+}
+
+
+uv_udp_t* UDPWrap::UVHandle() {
+  return &handle_;
 }
 
 
