@@ -137,21 +137,6 @@ zlibの使い方に関する速度／メモリ／圧縮率のトレードオフ�
       }
     }).listen(1337);
 
-## Constants
-
-<!--type=misc-->
-
-<!--
-All of the constants defined in zlib.h are also defined on
-`require('zlib')`.  They are described in more detail in the zlib
-documentation.  See <http://zlib.net/manual.html#Constants>
-for more details.
--->
-
-zlib.h に定義された定数は `require('zlib')` でも定義されます。
-それらは zlib のドキュメントでより詳しく説明されます。
-詳細は <http://zlib.net/manual.html#Constants> を参照してください。
-
 ## zlib.createGzip([options])
 
 <!--
@@ -373,8 +358,8 @@ relevant when compressing, and are ignored by the decompression classes.
 * strategy (compression only)
 * dictionary (deflate/inflate only, empty dictionary by default)
 
-See the description of `deflateInit2` and `inflateInit2` at
-<http://zlib.net/manual.html#Advanced> for more information on these.
+See the description of `deflateInit2` and `inflateInit2`
+at <http://zlib.net/manual.html#Advanced> for more information on these.
 -->
 
 どのクラスもオプションオブジェクトを受け取ります。
@@ -467,3 +452,108 @@ zlib の圧縮速度は `level` の設定で劇的に変化します
 少なくなることを意味し、
 一回の `write` 操作でより多くのデータを処理できることになります。
 これはあスピードに影響するもう一つのファクタで、メモリ使用量を犠牲にします。
+
+## Constants
+
+<!--type=misc-->
+
+<!--
+All of the constants defined in zlib.h are also defined on
+`require('zlib')`.
+In the normal course of operations, you will not need to ever set any of
+these.  They are documented here so that their presence is not
+surprising.  This section is taken almost directly from the [zlib
+documentation](http://zlib.net/manual.html#Constants).  See
+<http://zlib.net/manual.html#Constants> for more details.
+-->
+
+zlib.h に定義された定数は `require('zlib')` でも定義されます。
+通常の使い方ではこれらを設定する必要はありません。
+それが存在することで驚かれないように、これらはドキュメント化されます。
+このセクションのほとんどは
+[zlib documentation](http://zlib.net/manual.html#Constants)
+から直接得ることができます。
+より詳細は <http://zlib.net/manual.html#Constants> を参照してください。
+
+<!--
+Allowed flush values.
+-->
+
+利用可能なフラッシュ値。
+
+* `zlib.Z_NO_FLUSH`
+* `zlib.Z_PARTIAL_FLUSH`
+* `zlib.Z_SYNC_FLUSH`
+* `zlib.Z_FULL_FLUSH`
+* `zlib.Z_FINISH`
+* `zlib.Z_BLOCK`
+* `zlib.Z_TREES`
+
+<!--
+Return codes for the compression/decompression functions. Negative
+values are errors, positive values are used for special but normal
+events.
+-->
+
+圧縮／解凍関数のリターンコード。
+負数はエラー、正数は正常なイベントの特別な場合に使われます。
+
+* `zlib.Z_OK`
+* `zlib.Z_STREAM_END`
+* `zlib.Z_NEED_DICT`
+* `zlib.Z_ERRNO`
+* `zlib.Z_STREAM_ERROR`
+* `zlib.Z_DATA_ERROR`
+* `zlib.Z_MEM_ERROR`
+* `zlib.Z_BUF_ERROR`
+* `zlib.Z_VERSION_ERROR`
+
+<!--
+Compression levels.
+-->
+
+圧縮レベル。
+
+* `zlib.Z_NO_COMPRESSION`
+* `zlib.Z_BEST_SPEED`
+* `zlib.Z_BEST_COMPRESSION`
+* `zlib.Z_DEFAULT_COMPRESSION`
+
+<!--
+Compression strategy.
+-->
+
+圧縮ストラテジ。
+
+* `zlib.Z_FILTERED`
+* `zlib.Z_HUFFMAN_ONLY`
+* `zlib.Z_RLE`
+* `zlib.Z_FIXED`
+* `zlib.Z_DEFAULT_STRATEGY`
+
+<!--
+Possible values of the data_type field.
+-->
+
+data_type フィールドで利用可能な値。
+
+* `zlib.Z_BINARY`
+* `zlib.Z_TEXT`
+* `zlib.Z_ASCII`
+* `zlib.Z_UNKNOWN`
+
+<!--
+The deflate compression method (the only one supported in this version).
+-->
+
+deflate の圧縮方法 (このバージョンでは一つだけがサポートされます)。
+
+* `zlib.Z_DEFLATED`
+
+<!--
+For initializing zalloc, zfree, opaque.
+-->
+
+zalloc、zfree、opaque の初期化用。
+
+* `zlib.Z_NULL`

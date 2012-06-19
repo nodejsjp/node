@@ -32,10 +32,10 @@ different, and explained below.
 ## Class: ChildProcess
 
 <!--
-`ChildProcess` is an `EventEmitter`.
+`ChildProcess` is an [EventEmitter][].
 -->
 
-`ChildProcess` は `EventEmitter` です。
+`ChildProcess` は [EventEmitter][] です。
 
 <!--
 Child processes always have three streams associated with them. `child.stdin`,
@@ -883,7 +883,7 @@ the child process is killed.
   * `env` {Object} Environment key-value pairs
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
-  * `maxBuffer` {Number} (Default: 200*1024)
+  * `maxBuffer` {Number} (Default: 200\*1024)
   * `killSignal` {String} (Default: 'SIGTERM')
 * `callback` {Function} called with the output when process terminates
   * `error` {Error}
@@ -902,7 +902,7 @@ the child process is killed.
   * `env` {Object} 環境変数として与えるキー・値のペア
   * `encoding` {String} (Default: 'utf8')
   * `timeout` {Number} (Default: 0)
-  * `maxBuffer` {Number} (Default: 200*1024)
+  * `maxBuffer` {Number} (Default: 200\*1024)
   * `killSignal` {String} (Default: 'SIGTERM')
 * `callback` {Function} プロセスが終了するとその出力を伴って呼び出されます
   * `error` {Error}
@@ -921,7 +921,7 @@ leaner than `child_process.exec`. It has the same options.
 これは `child_process.exec` より若干効率的で、同じオプションを持ちます。
 
 
-## child_process.fork(modulePath, [args], [options])
+## child\_process.fork(modulePath, [args], [options])
 
 <!--
 * `modulePath` {String} The module to run in the child
@@ -975,3 +975,5 @@ thousands of them.
 新しい Node ごとに少なくとも 30 ミリ秒の起動時間と 
 10MB のメモリを前提としてください。
 つまり、数千の子プロセスを作ることは出来ません。
+
+[EventEmitter]: events.html#events_class_events_eventemitter

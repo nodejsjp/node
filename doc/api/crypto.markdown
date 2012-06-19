@@ -221,8 +221,8 @@ Creates and returns a cipher object, with the given algorithm and password.
 `algorithm` is dependent on OpenSSL, examples are `'aes192'`, etc.
 On recent releases, `openssl list-cipher-algorithms` will display the
 available cipher algorithms.
-`password` is used to derive key and IV, which must be `'binary'` encoded
-string (See the [Buffer section](buffer.html) for more information).
+`password` is used to derive key and IV, which must be a `'binary'` encoded
+string or a [buffer](buffer.html).
 -->
 
 与えられたアルゴリズムとパスワードを使用する暗号オブジェクトを作成して返します。
@@ -230,26 +230,32 @@ string (See the [Buffer section](buffer.html) for more information).
 最近のリリースでは、`openssl list-cipher-algorithms`
 で利用可能な暗号アルゴリズムが表示されます。
 `password` はキーと IV の生成に使用されます。
-これは `'binary'` でエンコードされた文字列でなければなりません
-(より詳細は [Buffer のセクション](buffer.html) を参照してください)。
+これは `'binary'` でエンコードされた文字列または [buffer](buffer.html)
+でなければなりません
 
 ## crypto.createCipheriv(algorithm, key, iv)
 
 <!--
 Creates and returns a cipher object, with the given algorithm, key and iv.
 
-`algorithm` is the same as the `createCipher()`. `key` is a raw key used in
-algorithm. `iv` is an Initialization vector. `key` and `iv` must be `'binary'`
-encoded string (See the [Buffer section](buffer.html) for more information).
+`algorithm` is the same as the argument to `createCipher()`.
+`key` is the raw key used by the algorithm.
+`iv` is an [initialization
+vector](http://en.wikipedia.org/wiki/Initialization_vector).
+
+`key` and `iv` must be `'binary'` encoded strings or [buffers](buffer.html).
 -->
 
 与えられたアルゴリズムとキーおよび IV を使用する暗号オブジェクトを作成して
 返します。
 
-`algorithm` は `createCipher()` と同じです。
-`key` はアルゴリズムで使用される生のキーです。 `iv` は初期化ベクトルです。
-`key` と `iv` は `'binary'` でエンコードされた文字列でなければなりません
-(より詳細は [Buffer のセクション](buffer.html) を参照してください)。
+`algorithm` は `createCipher()` の引数と同じです。
+`key` はアルゴリズムで使用される生のキーです。
+`iv` は[initialization
+vector](http://en.wikipedia.org/wiki/Initialization_vector) です。
+
+`key` と `iv` は `'binary'` でエンコードされた文字列または
+[buffers](buffer.html) でなければなりません
 
 ## Class: Cipher
 
@@ -326,21 +332,21 @@ Useful for non-standard padding, e.g. using `0x0` instead of PKCS padding. You m
 
 <!--
 Creates and returns a decipher object, with the given algorithm and key.
-This is the mirror of the [createCipher()](#crypto.createCipher) above.
+This is the mirror of the [createCipher()][] above.
 -->
 
 与えられたアルゴリズムとパスワードを使用する復号オブジェクトを作成して返します。
-これは前述の [createCipher()](#crypto.createCipher) の鏡写しです。
+これは前述の [createCipher()][] の鏡写しです。
 
 ## crypto.createDecipheriv(algorithm, key, iv)
 
 <!--
 Creates and returns a decipher object, with the given algorithm, key and iv.
-This is the mirror of the [createCipheriv()](#crypto.createCipheriv) above.
+This is the mirror of the [createCipheriv()][] above.
 -->
 
 与えられたアルゴリズムとキー、IV を使用する復号オブジェクトを作成して返します。
-これは前述の [createCipheriv()](#crypto.createCipheriv) の鏡写しです。
+これは前述の [createCipheriv()][] の鏡写しです。
 
 ## Class: Decipher
 
@@ -659,13 +665,13 @@ or `'base64'`. Defaults to `'binary'`.
 <!--
 Creates a predefined Diffie-Hellman key exchange object.
 The supported groups are: `'modp1'`, `'modp2'`, `'modp5'`
-(defined in [RFC 2412](http://www.rfc-editor.org/rfc/rfc2412.txt ))
+(defined in [RFC 2412][])
 and `'modp14'`, `'modp15'`, `'modp16'`, `'modp17'`, `'modp18'`
-(defined in [RFC 3526](http://www.rfc-editor.org/rfc/rfc3526.txt )).
+(defined in [RFC 3526][]).
 The returned object mimics the interface of objects created by
-[crypto.createDiffieHellman()](#crypto.createDiffieHellman) above, but
+[crypto.createDiffieHellman()][] above, but
 will not allow to change the keys (with
-[diffieHellman.setPublicKey()](#diffieHellman.setPublicKey) for example).
+[diffieHellman.setPublicKey()][] for example).
 The advantage of using this routine is that the parties don't have to
 generate nor exchange group modulus beforehand, saving both processor and
 communication time.
@@ -673,14 +679,14 @@ communication time.
 
 事前に定義された Diffie-Hellman 鍵交換オブジェクトを作成します。
 サポートされるグループは、`'modp1'`, `'modp2'`, `'modp5'`
-([RFC 2412](http://www.rfc-editor.org/rfc/rfc2412.txt ) で定義される)、
+([RFC 2412][] で定義される)、
 および `'modp14'`, `'modp15'`, `'modp16'`, `'modp17'`, `'modp18'`
-([RFC 3526](http://www.rfc-editor.org/rfc/rfc3526.txt ) で定義される) です。
+([RFC 3526][] で定義される) です。
 返されるオブジェクトは、前述の
-[crypto.createDiffieHellman()](#crypto.createDiffieHellman)
+[crypto.createDiffieHellman()][]
 によって作成されたオブジェクトのインタフェースを模倣します。
 しかし、
-(たとえば [diffieHellman.setPublicKey()](#diffieHellman.setPublicKey) で)
+(たとえば [diffieHellman.setPublicKey()][] で)
 鍵を交換することはできません。
 このルーチンを使うことによるアドバンテージは、
 事前にグループ係数を生成することも交換する必要もないため、
@@ -739,3 +745,10 @@ Generates cryptographically strong pseudo-random data. Usage:
     } catch (ex) {
       // handle error
     }
+
+[createCipher()]: #crypto_crypto_createcipher_algorithm_password
+[createCipheriv()]: #crypto_crypto_createcipheriv_algorithm_key_iv
+[crypto.createDiffieHellman()]: #crypto_crypto_creatediffiehellman_prime_encoding
+[diffieHellman.setPublicKey()]: #crypto_diffiehellman_setpublickey_public_key_encoding
+[RFC 2412]: http://www.rfc-editor.org/rfc/rfc2412.txt
+[RFC 3526]: http://www.rfc-editor.org/rfc/rfc3526.txt

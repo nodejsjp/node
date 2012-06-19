@@ -40,10 +40,10 @@ Node のモジュール内での `var something` はそのモジュールでロ�
 * {Object}
 
 <!--
-The process object. See the [process object](process.html#process) section.
+The process object. See the [process object][] section.
 -->
 
-プロセスオブジェクトです。[process object](process.html#process) の節を参照してください。
+プロセスオブジェクトです。[process オブジェクト][] の節を参照してください。
 
 ## console
 
@@ -52,11 +52,11 @@ The process object. See the [process object](process.html#process) section.
 * {Object}
 
 <!--
-Used to print to stdout and stderr. See the [stdio](stdio.html) section.
+Used to print to stdout and stderr. See the [stdio][] section.
 -->
 
 標準出力および標準エラー出力へのプリントに使われます。
-[標準入出力](stdio.html) を参照してください。
+[標準入出力][] を参照してください。
 
 ## Class: Buffer
 
@@ -65,11 +65,11 @@ Used to print to stdout and stderr. See the [stdio](stdio.html) section.
 * {Function}
 
 <!--
-Used to handle binary data. See the [buffer section](buffer.html).
+Used to handle binary data. See the [buffer section][]
 -->
 
 バイナリデータを扱うために使われます。
-[buffer セクション](buffers.html) を参照してください。
+[バッファセクション][] を参照してください。
 
 ## require()
 
@@ -78,11 +78,11 @@ Used to handle binary data. See the [buffer section](buffer.html).
 * {Function}
 
 <!--
-To require modules. See the [Modules](modules.html#modules) section.
-`require` isn't actually a global but rather local to each module.
+To require modules. See the [Modules][] section.  `require` isn't actually a
+global but rather local to each module.
 -->
 
-require モジュールを指します。[モジュール](modules.html#modules) の節を参照してください。
+require モジュールを指します。[モジュール][] の節を参照してください。
 `require` は実際はグローバルではなく、各モジュール毎のローカルです。
 
 ### require.resolve()
@@ -208,16 +208,14 @@ A reference to the current module. In particular
 `module.exports` is the same as the `exports` object.
 `module` isn't actually a global but rather local to each module.
 
-See the [module system documentation](modules.html) for more
-information.
+See the [module system documentation][] for more information.
 -->
 
 現在のモジュールへの参照です。
 特に `module.exports` は `exports` オブジェクトと同じです。
 `module` は実際はグローバルではなく、各モジュール毎のローカルです。
 
-より詳しくは [モジュールシステムのドキュメント](modules.html)
-を参照してください。
+より詳しくは [モジュールシステムのドキュメント][] を参照してください。
 
 ## exports
 
@@ -229,8 +227,9 @@ made accessible through `require()`.
 `exports` is the same as the `module.exports` object.
 `exports` isn't actually a global but rather local to each module.
 
-See the [module system documentation](modules.html) for more
-information.
+See the [module system documentation][] for more information.
+
+See the [module section][] for more information.
 -->
 
 現在のモジュールの全てのインスタンス間で共有されるオブジェクトで、
@@ -238,8 +237,7 @@ information.
 `exports` は `module.exports` と同じオブジェクトです。
 `exports` は実際はグローバルではなく、各モジュール毎のローカルです。
 
-より詳しくは [モジュールシステムのドキュメント](modules.html)
-を参照してください。
+より詳しくは [モジュールシステムのドキュメント][] を参照してください。
 
 ## setTimeout(cb, ms)
 ## clearTimeout(t)
@@ -249,7 +247,25 @@ information.
 <!--type=global-->
 
 <!--
-The timer functions are global variables. See the [timers](timers.html) section.
+The timer functions are global variables. See the [timers][] section.
 -->
 
-タイマー関数はグローバル変数です。[タイマー](timers.html) を参照してください。
+タイマー関数はグローバル変数です。[タイマー][] を参照してください。
+
+<!--
+[buffer section]: buffer.html
+[module section]: modules.html
+[module system documentation]: modules.html
+[Modules]: modules.html#modules_modules
+[process object]: process.html#process_process
+[stdio]: stdio.html
+[timers]: timers.html
+-->
+
+[バッファセクション]: buffer.html
+[モジュールセクション]: modules.html
+[モジュールシステムのドキュメント]: modules.html
+[モジュール]: modules.html#modules_modules
+[process オブジェクト]: process.html#process_process
+[標準入出力]: stdio.html
+[タイマー]: timers.html

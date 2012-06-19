@@ -280,6 +280,54 @@ Example:
 
     // ½ + ¼ = ¾: 9 characters, 12 bytes
 
+### Class Method: Buffer.concat(list, [totalLength])
+
+<!--
+* `list` {Array} List of Buffer objects to concat
+* `totalLength` {Number} Total length of the buffers when concatenated
+-->
+
+* `list` {Array} 結合するバッファのリスト
+* `totalLength` {Number} 結合されるバッファ全体の長さ
+
+<!--
+Returns a buffer which is the result of concatenating all the buffers in
+the list together.
+-->
+
+リストに含まれるバッファ全体を結合した結果のバッファを返します。
+
+<!--
+If the list has no items, or if the totalLength is 0, then it returns a
+zero-length buffer.
+-->
+
+リストが空の場合、または `totalLength` が 0 の場合は長さが
+0 のバッファを返します。
+
+<!--
+If the list has exactly one item, then the first item of the list is
+returned.
+-->
+
+リストが一つだけの要素を持つ場合、リストの先頭要素が返されます。
+
+<!--
+If the list has more than one item, then a new Buffer is created.
+-->
+
+リストが複数の要素を持つ場合、新しいバッファが作成されます。
+
+<!--
+If totalLength is not provided, it is read from the buffers in the list.
+However, this adds an additional loop to the function, so it is faster
+to provide the length explicitly.
+-->
+
+`totalLength` が与えられない場合はリスト中のバッファから求められます。
+しかし、これは余計なループが必要になるため、明示的に長さを指定する方が
+高速です。
+
 ### buf.length
 
 * Number
