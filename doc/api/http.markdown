@@ -82,23 +82,23 @@ added to the `'request'` event.
 ## http.createClient([port], [host])
 
 <!--
-This function is **deprecated**; please use
-[http.request()](#http_http_request_options_callback) instead. Constructs a new
-HTTP client. `port` and `host` refer to the server to be connected to.
+This function is **deprecated**; please use [http.request()][] instead.
+Constructs a new HTTP client. `port` and `host` refer to the server to be
+connected to.
 -->
 
 この関数は **deprecated** です; 代わりに
-[http.request()](#http_http_request_options_callback) を使用してください。
+[http.request()][] を使用してください。
 新しい HTTP クライアントを構築します。
 `port` と `host` は接続するサーバを示します。
 
 ## Class: http.Server
 
 <!--
-This is an `EventEmitter` with the following events:
+This is an [EventEmitter][] with the following events:
 -->
 
-これは以下のイベントを持つ `EventEmitter` です:
+これは以下のイベントを持つ [EventEmitter][] です:
 
 ### Event: 'request'
 
@@ -289,13 +289,12 @@ sysctl の設定を通じて OS によって決定されます。
 
 <!--
 This function is asynchronous. The last parameter `callback` will be added as
-a listener for the ['listening'](net.html#event_listening_) event.
-See also [net.Server.listen()](net.html#server.listen).
+a listener for the ['listening'][] event.  See also [net.Server.listen(port)][].
 -->
 
 この関数は非同期です。最後の引数の `callback` は
-['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
-詳細は [net.Server.listen()](net.html#server.listen) を参照してください。
+['listening'][] イベントのリスナとして加えられます。
+詳細は [net.Server.listen(port)][] を参照してください。
 
 
 ### server.listen(path, [callback])
@@ -308,24 +307,61 @@ Start a UNIX socket server listening for connections on the given `path`.
 
 <!--
 This function is asynchronous. The last parameter `callback` will be added as
+a listener for the ['listening'][] event.  See also [net.Server.listen(path)][].
+-->
+
+この関数は非同期です。最後の引数の `callback` は
+['listening'][] イベントのリスナとして加えられます。
+詳細は [net.Server.listen(path)][] を参照してください。
+
+
+### server.listen(handle, [listeningListener])
+
+* `handle` {Object}
+* `listeningListener` {Function}
+
+<!--
+The `handle` object can be set to either a server or socket (anything
+with an underlying `_handle` member), or a `{fd: <n>}` object.
+-->
+
+`handle` オブジェクトには、サーバまたはソケット (下層の `_handle` メンバなら
+なんでも) または、 `{fd: <n>}` オブジェクトを設定することができます。
+
+<!--
+This will cause the server to accept connections on the specified
+handle, but it is presumed that the file descriptor or handle has
+already been bound to a port or domain socket.
+-->
+
+これによりサーバは指定したハンドルへの接続を受け付けることになりますが、
+ファイル記述子またはハンドルは既にポートまたはドメインソケットに
+バインドされているものと見なされます。
+
+<!--
+Listening on a file descriptor is not supported on Windows.
+-->
+
+ファイル記述子へのリスニングは Windows ではサポートされません。
+
+<!--
+This function is asynchronous. The last parameter `callback` will be added as
 a listener for the ['listening'](net.html#event_listening_) event.
 See also [net.Server.listen()](net.html#server.listen).
 -->
 
 この関数は非同期です。最後の引数の `callback` は
-['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
-詳細は [net.Server.listen()](net.html#server.listen) を参照してください。
-
+['listening'][] イベントのリスナとして加えられます。
+詳細は [net.Server.listen(path)][] を参照してください。
 
 ### server.close([cb])
 
 <!--
-Stops the server from accepting new connections.
-See [net.Server.close()](net.html#server.close).
+Stops the server from accepting new connections.  See [net.Server.close()][].
 -->
 
 サーバが新しいコネクションを受け付けるのを終了します。
-
+[net.Server.close()][] を参照してください。
 
 ### server.maxHeadersCount
 
@@ -349,13 +385,12 @@ the user -- and passed as the first argument to a `'request'` listener.
 `'request'` リスナーの第1引数として渡されます。
 
 <!--
-The request implements the [Readable Stream](stream.html#readable_stream)
-interface. This is an `EventEmitter` with the following events:
+The request implements the [Readable Stream][] interface. This is an
+[EventEmitter][] with the following events:
 -->
 
-リクエストは [Readable Stream](stream.html#readable_stream)
-インタフェースを実装します。
-これは以下のイベントを持つ `EventEmitter` です:
+リクエストは [Readable Stream][] インタフェースを実装します。
+これは以下のイベントを持つ [EventEmitter][] です:
 
 ### Event: 'data'
 
@@ -364,12 +399,12 @@ interface. This is an `EventEmitter` with the following events:
 <!--
 Emitted when a piece of the message body is received. The chunk is a string if
 an encoding has been set with `request.setEncoding()`, otherwise it's a
-[Buffer](buffer.html).
+[Buffer][].
 -->
 
 メッセージボディの断片を受信した場合に生成されます。
 `request.setEncoding()` によってエンコーディングが設定された場合、
-`chunk` は文字列です。それ以外の場合は [Buffer](buffer.html) です。
+`chunk` は文字列です。それ以外の場合は [Buffer][] です。
 
 <!--
 Example: A chunk of the body is given as the single
@@ -528,14 +563,12 @@ HTTP プロトコルのバージョンを表す文字列です。参照のみ可
 ### request.setEncoding([encoding])
 
 <!--
-Set the encoding for the request body. See
-[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
-for more information.
+Set the encoding for the request body. See [stream.setEncoding()][] for more
+information.
 -->
 
 リクエストボディのエンコーディングを設定します。詳細は
-[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
-を参照してください。
+[stream.setEncoding()][] を参照してください。
 
 ### request.pause()
 
@@ -581,16 +614,15 @@ HTTPS では `request.connection.verifyPeer()` と
 This object is created internally by a HTTP server--not by the user. It is
 passed as the second parameter to the `'request'` event.
 
-The response implements the [Writable  Stream](stream.html#writable_stream)
-interface. This is an `EventEmitter` with the following events:
+The response implements the [Writable Stream][] interface. This is an
+[EventEmitter][] with the following events:
 -->
 
 このオブジェクトは HTTP サーバ内部 － ユーザではなく － で作成されます。
 `'request'` リスナーの第 2 引数として渡されます。
 
-レスポンスは [Writable  Stream](stream.html#writable_stream)
-インタフェースを実装します。
-これは以下のイベントを持つ `EventEmitter` です:
+レスポンスは [Writable  Stream][] インタフェースを実装します。
+これは以下のイベントを持つ [EventEmitter][] です:
 
 ### Event: 'close'
 
@@ -608,13 +640,12 @@ Indicates that the underlaying connection was terminated before
 
 <!--
 Sends a HTTP/1.1 100 Continue message to the client, indicating that
-the request body should be sent. See the [checkContinue](#event_checkContinue_) event on
-`Server`.
+the request body should be sent. See the ['checkContinue'][] event on `Server`.
 -->
 
 HTTP/1.1 の 100 Continue メッセージをクライアントに送信し、
 リクエストボディを送信してもよいことを示します。
-`Server`の [checkContinue](#event_checkContinue_) イベントを参照してください。
+`Server`の ['checkContinue'][] イベントを参照してください。
 
 ### response.writeHead(statusCode, [reasonPhrase], [headers])
 
@@ -894,12 +925,12 @@ Node は HTTP リクエストを行うために、サーバごとにいくつか
 
 <!--
 `options` can be an object or a string. If `options` is a string, it is
-automatically parsed with [url.parse()](url.html#url.parse).
+automatically parsed with [url.parse()][].
 -->
 
 `options` はオブジェクトまたは文字列です。
-もし `options` が文字列なら、それは [url.parse()](url.html#url.parse)
-によって自動的に解析されます。
+もし `options` が文字列なら、それは [url.parse()][] によって自動的に
+解析されます。
 
 <!--
 Options:
@@ -920,10 +951,9 @@ Options:
 - `headers`: An object containing request headers.
 - `auth`: Basic authentication i.e. `'user:password'` to compute an
   Authorization header.
-- `agent`: Controls [Agent](#http.Agent) behavior. When an Agent is used
-  request will default to `Connection: keep-alive`. Possible values:
- - `undefined` (default): use [global Agent](#http.globalAgent) for this host
-   and port.
+- `agent`: Controls [Agent][] behavior. When an Agent is used request will
+  default to `Connection: keep-alive`. Possible values:
+ - `undefined` (default): use [global Agent][] for this host and port.
  - `Agent` object: explicitly use the passed in `Agent`.
  - `false`: opts out of connection pooling with an Agent, defaults request to
    `Connection: close`.
@@ -941,11 +971,10 @@ Options:
 - `headers`: リクエストヘッダを含むオブジェクト。
 - `auth`: ベーシック認証すなわち Authorization ヘッダのための
   `'user:password'`。
-- `agent`: `Agent` の振る舞いを制御します。
+- `agent`: [Agent][] の振る舞いを制御します。
   エージェントが使われる場合、Connection:keep-alive がデフォルトになります。
   可能な値は:
-  - `undefined` (デフォルト): ホストとポートで
-    [グローバル Agent](#http.globalAgent) を使用します。
+  - `undefined` (デフォルト): ホストとポートで [global Agent][] を使用します。
   - `Agent` オブジェクト: 明示的に渡された `Agent` を使用します。
   - `false`: Agent によるコネクションプーリングを使用しません。
      Connection:close の場合のデフォルトです。
@@ -1243,21 +1272,20 @@ which has been transmitted are equal or not.
 __データは失われる__ことに注意してください。
 
 <!--
-The request implements the [Writable  Stream](stream.html#writable_stream)
-interface. This is an `EventEmitter` with the following events:
+The request implements the [Writable Stream][] interface. This is an
+[EventEmitter][] with the following events:
 -->
 
-リクエストは [Writable  Stream](stream.html#writable_stream)
-インタフェースを実装します。
-これは以下のイベントを持つ `EventEmitter` です。
+リクエストは [Writable  Stream][] インタフェースを実装します。
+これは以下のイベントを持つ [EventEmitter][] です。
 
 ### Event 'response'
 
 `function (response) { }`
 
 <!--
-Emitted when a response is received to this request. This event is emitted only once. The
-`response` argument will be an instance of `http.ClientResponse`.
+Emitted when a response is received to this request. This event is emitted only
+once. The `response` argument will be an instance of `http.ClientResponse`.
 -->
 
 このリクエストに対するレスポンスを受信した時に生成されます。
@@ -1452,10 +1480,10 @@ creating the request.
 このケースは `['Transfer-Encoding', 'chunked']` ヘッダでリクエストを生成したことを意味します。
 
 <!--
-The `chunk` argument should be a [buffer](buffer.html) or a string.
+The `chunk` argument should be a [Buffer][] or a string.
 -->
 
-`chunk` 引数は[buffer](buffer.html) または文字列です。
+`chunk` 引数は [Buffer][] または文字列です。
 
 <!--
 The `encoding` argument is optional and only applies when `chunk` is a string.
@@ -1497,40 +1525,33 @@ Aborts a request.  (New since v0.3.8.)
 ### request.setTimeout(timeout, [callback])
 
 <!--
-Once a socket is assigned to this request and is connected 
-[socket.setTimeout(timeout, [callback])](net.html#socket.setTimeout)
-will be called.
+Once a socket is assigned to this request and is connected
+[socket.setTimeout()][] will be called.
 -->
 
 このリクエストにソケットが割り当てられて接続した際に、
-[socket.setTimeout(timeout, [callback])](net.html#socket.setTimeout)
-が呼び出されます。
+[socket.setTimeout()][] が呼び出されます。
 
 ### request.setNoDelay([noDelay])
 
 <!--
-Once a socket is assigned to this request and is connected 
-[socket.setNoDelay(noDelay)](net.html#socket.setNoDelay)
-will be called.
+Once a socket is assigned to this request and is connected
+[socket.setNoDelay()][] will be called.
 -->
 
 このリクエストにソケットが割り当てられて接続した際に、
-[socket.setNoDelay(noDelay)](net.html#socket.setNoDelay)
-が呼び出されます。
+[socket.setNoDelay()][] が呼び出されます。
 
 
 ### request.setSocketKeepAlive([enable], [initialDelay])
 
 <!--
-Once a socket is assigned to this request and is connected 
-[socket.setKeepAlive(enable, [initialDelay])](net.html#socket.setKeepAlive)
-will be called.
+Once a socket is assigned to this request and is connected
+[socket.setKeepAlive()][] will be called.
 -->
 
 このリクエストにソケットが割り当てられて接続した際に、
-[socket.setKeepAlive(enable, [initialDelay])](net.html#socket.setKeepAlive)
-が呼び出されます。
-
+[socket.setKeepAlive()][] が呼び出されます。
 
 ## http.ClientResponse
 
@@ -1543,13 +1564,12 @@ passed to the `'response'` event of the request object.
 これはリクエストオブジェクトの `'response'` イベントに渡されます。
 
 <!--
-The response implements the [Readable Stream](stream.html#readable_stream)
-interface. This is an `EventEmitter` with the following events:
+The response implements the [Readable Stream][] interface. This is an
+[EventEmitter][] with the following events:
 -->
 
-レスポンスは [Readable Stream](stream.html#readable_stream)
-インタフェースを実装します。
-これは以下のイベントを持つ `EventEmitter` です:
+レスポンスは [Readable Stream][] インタフェースを実装します。
+これは以下のイベントを持つ [EventEmitter][] です:
 
 ### Event: 'data'
 
@@ -1586,13 +1606,11 @@ emitted no other events will be emitted on the response.
 <!--
 Indicates that the underlaying connection was terminated before
 `end` event was emitted.
-See [http.ServerRequest](#http.ServerRequest)'s `'close'` event for more
-information.
+See [http.ServerRequest][]'s `'close'` event for more information.
 -->
 
 `'end'` イベントが生成される前に下層の接続が切断されたことを示します。
-[http.ServerRequest](#http.ServerRequest) の `'close'`
-イベントにより多くの情報があります。
+[http.ServerRequest][] の `'close'` イベントにより多くの情報があります。
 
 ### response.statusCode
 
@@ -1636,14 +1654,12 @@ The response trailers object. Only populated after the 'end' event.
 ### response.setEncoding([encoding])
 
 <!--
-Set the encoding for the response body. See
-[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
-for more information.
+Set the encoding for the response body. See [stream.setEncoding()][] for more
+information.
 -->
 
 レスポンスボディのエンコーディングを設定します。詳細は
-[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
-を参照してください。
+[stream.setEncoding()][] を参照してください。
 
 ### response.pause()
 
@@ -1660,3 +1676,22 @@ Resumes a paused response.
 -->
 
 中断されていたレスポンスを再開します。
+
+[Agent]: #http_class_http_agent
+['checkContinue']: #http_event_checkcontinue
+[Buffer]: buffer.html#buffer_buffer
+[EventEmitter]: events.html#events_class_events_eventemitter
+[global Agent]: #http_http_globalagent
+[http.request()]: #http_http_request_options_callback
+[http.ServerRequest]: #http_class_http_serverrequest
+['listening']: net.html#net_event_listening
+[net.Server.close()]: net.html#net_server_close_cb
+[net.Server.listen(path)]: net.html#net_server_listen_path_listeninglistener
+[net.Server.listen(port)]: net.html#net_server_listen_port_host_backlog_listeninglistener
+[Readable Stream]: stream.html#stream_readable_stream
+[socket.setKeepAlive()]: net.html#net_socket_setkeepalive_enable_initialdelay
+[socket.setNoDelay()]: net.html#net_socket_setnodelay_nodelay
+[socket.setTimeout()]: net.html#net_socket_settimeout_timeout_callback
+[stream.setEncoding()]: stream.html#stream_stream_setencoding_encoding
+[url.parse()]: url.html#url_url_parse_urlstr_parsequerystring_slashesdenotehost
+[Writable Stream]: stream.html#stream_writable_stream

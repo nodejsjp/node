@@ -16,14 +16,13 @@ this module with `require('net');`
 
 <!--
 Creates a new TCP server. The `connectionListener` argument is
-automatically set as a listener for the ['connection'](#event_connection_)
-event.
+automatically set as a listener for the ['connection'][] event.
 
 `options` is an object with the following defaults:
 -->
 
 新しい TCP サーバを作成します。
-`connectionListener` 引数は ['connection'](#event_connection_)
+`connectionListener` 引数は ['connection'][]
 イベントに対するリスナーとして自動的に加えられます。
 
 `options` は以下のデフォルト値を持つオブジェクトです:
@@ -35,13 +34,13 @@ event.
 If `allowHalfOpen` is `true`, then the socket won't automatically send a FIN
 packet when the other end of the socket sends a FIN packet. The socket becomes
 non-readable, but still writable. You should call the `end()` method explicitly.
-See ['end'](#event_end_) event for more information.
+See ['end'][] event for more information.
 -->
 
 `allowHalfOpen` が `true` だと、反対側のソケットが FIN パケットを送信してきても自動的に FIN を送信しなくなります。
 ソケットは読み込み可能ではなくなりますが、書き込み可能のままです。
 明示的に `end()` を呼び出す必要があります。
-['end'](#event_end_) イベントにより多くの情報があります。
+['end'][] イベントにより多くの情報があります。
 
 <!--
 Here is an example of a echo server which listens for connections
@@ -93,13 +92,12 @@ Use `nc` to connect to a UNIX domain socket server:
 
 <!--
 Constructs a new socket object and opens the socket to the given location.
-When the socket is established, the ['connect'](#event_connect_) event will be
-emitted.
+When the socket is established, the ['connect'][] event will be emitted.
 -->
 
 新しいソケットオブジェクトを構築し、与えられたロケーションへのソケットを
 オープンします。
-ソケットが確立されると、['connect'](#event_connect_) イベントが生成されます。
+ソケットが確立されると、['connect'][] イベントが生成されます。
 
 <!--
 For TCP sockets, `options` argument should be an object which specifies:
@@ -142,21 +140,20 @@ Common options are:
 <!--
   - `allowHalfOpen`: if `true`, the socket won't automatically send
     a FIN packet when the other end of the socket sends a FIN packet.
-    Defaults to `false`.
-    See ['end'](#event_end_) event for more information.
+    Defaults to `false`.  See ['end'][] event for more information.
 -->
 
   - `allowHalfOpen`: `true` の場合、反対側のソケットが FIN
     パケットを送信してきても自動的に FIN を送信しなくなります。
-    ['end'](#event_end_) イベントにより多くの情報があります。
+    デフォルトは `false` です。
+    ['end'][] イベントにより多くの情報があります。
 
 <!--
 The `connectListener` parameter will be added as an listener for the
-['connect'](#event_connect_) event.
+['connect'][] event.
 -->
 
-`connectListener` 引数は ['connect'](#event_connect_)
-イベントのリスナとして追加されます。
+`connectListener` 引数は ['connect'][] イベントのリスナとして追加されます。
 
 <!--
 Here is an example of a client of echo server as described previously:
@@ -194,13 +191,12 @@ changed to
 Creates a TCP connection to `port` on `host`. If `host` is omitted,
 `'localhost'` will be assumed.
 The `connectListener` parameter will be added as an listener for the
-['connect'](#event_connect_) event.
+['connect'][] event.
 -->
 
 `host` 上の `port` に対する TCP コネクションを作成します。
 `host` が省略されると `localhost` が仮定されます。
-`connectListener` 引数は ['connect'](#event_connect_)
-イベントのリスナとして追加されます。
+`connectListener` 引数は ['connect'][] イベントのリスナとして追加されます。
 
 ## net.connect(path, [connectListener])
 ## net.createConnection(path, [connectListener])
@@ -208,12 +204,11 @@ The `connectListener` parameter will be added as an listener for the
 <!--
 Creates unix socket connection to `path`.
 The `connectListener` parameter will be added as an listener for the
-['connect'](#event_connect_) event.
+['connect'][] event.
 -->
 
 `path` に対する UNIX ドメインソケットを作成します。
-`connectListener` 引数は ['connect'](#event_connect_)
-イベントのリスナとして追加されます。
+`connectListener` 引数は ['connect'][] イベントのリスナとして追加されます。
 
 ## Class: net.Server
 
@@ -252,16 +247,13 @@ sysctl の設定を通じて OS によって決定されます。
 
 <!--
 This function is asynchronous.  When the server has been bound,
-['listening'](#event_listening_) event will be emitted.
-the last parameter `listeningListener` will be added as an listener for the
-['listening'](#event_listening_) event.
+['listening'][] event will be emitted.  The last parameter `listeningListener`
+will be added as an listener for the ['listening'][] event.
 -->
 
 この関数は非同期です。
-サーバがバインドされると、['listening'](#event_listening_)
-イベントが生成されます。
-最後の引数 `listeningListener` は ['listening'](#event_listening_)
-のリスナとして加えられます。
+サーバがバインドされると、['listening'][] イベントが生成されます。
+最後の引数 `listeningListener` は ['listening'][] のリスナとして加えられます。
 
 <!--
 One issue some users run into is getting `EADDRINUSE` errors. This means that
@@ -301,15 +293,53 @@ Start a UNIX socket server listening for connections on the given `path`.
 
 <!--
 This function is asynchronous.  When the server has been bound,
+['listening'][] event will be emitted.  The last parameter `listeningListener`
+will be added as an listener for the ['listening'][] event.
+-->
+
+この関数は非同期です。
+サーバがバインドされると、['listening'][] イベントが生成されます。
+最後の引数 `listeningListener` は ['listening'][] のリスナとして加えられます。
+
+### server.listen(handle, [listeningListener])
+
+* `handle` {Object}
+* `listeningListener` {Function}
+
+<!--
+The `handle` object can be set to either a server or socket (anything
+with an underlying `_handle` member), or a `{fd: <n>}` object.
+-->
+
+`handle` オブジェクトには、サーバまたはソケット (下層の `_handle` メンバなら
+なんでも) または、 `{fd: <n>}` オブジェクトを設定することができます。
+
+<!--
+This will cause the server to accept connections on the specified
+handle, but it is presumed that the file descriptor or handle has
+already been bound to a port or domain socket.
+-->
+
+これによりサーバは指定したハンドルへの接続を受け付けることになりますが、
+ファイル記述子またはハンドルは既にポートまたはドメインソケットに
+バインドされているものと見なされます。
+
+<!--
+Listening on a file descriptor is not supported on Windows.
+-->
+
+ファイル記述子へのリスニングは Windows ではサポートされません。
+
+<!--
+This function is asynchronous.  When the server has been bound,
 ['listening'](#event_listening_) event will be emitted.
 the last parameter `listeningListener` will be added as an listener for the
 ['listening'](#event_listening_) event.
 -->
 
 この関数は非同期です。
-サーバがバインドされると、`'listening'` イベントが生成されます。
-最後の引数 `listeningListener` は ['listening'](#event_listening_)
-のリスナとして加えられます。
+サーバがバインドされると、['listening'][] イベントが生成されます。
+最後の引数 `listeningListener` は ['listening'][] のリスナとして加えられます。
 
 ### server.close([cb])
 
@@ -397,10 +427,10 @@ This becomes `null` when sending a socket to a child with `child_process.fork()`
 これは `null` になります。
 
 <!--
-`net.Server` is an `EventEmitter` with the following events:
+`net.Server` is an [EventEmitter][] with the following events:
 -->
 
-`net.Server` は以下のイベントを持つ `EventEmitter` です:
+`net.Server` は以下のイベントを持つ [EventEmitter][] です:
 
 ### Event: 'listening'
 
@@ -518,24 +548,22 @@ Socket is closed and you want to reuse it to connect to another server.
 ソケットがクローズされた後にコネクションを再利用して別のサーバに接続する場合だけです。
 
 <!--
-This function is asynchronous. When the ['connect'](#event_connect_) event is
-emitted the socket is established. If there is a problem connecting, the
-`'connect'` event will not be emitted, the `'error'` event will be emitted with
-the exception.
+This function is asynchronous. When the ['connect'][] event is emitted the
+socket is established. If there is a problem connecting, the `'connect'` event
+will not be emitted, the `'error'` event will be emitted with the exception.
 -->
 
-この関数は非同期です。ソケットが確立されると ['connect'](#event_connect_)
+この関数は非同期です。ソケットが確立されると ['connect'][]
 イベントが生成されます。
 接続で問題があった場合は `'connect'` イベントは生成されず、
 例外とともに `'error'` イベントが生成されます。
 
 <!--
 The `connectListener` parameter will be added as an listener for the
-['connect'](#event_connect_) event.
+['connect'][] event.
 -->
 
-`connectListener` 引数は ['connect'](#event_connect_)
-イベントのリスナに加えられます。
+`connectListener` 引数は ['connect'][] イベントのリスナに加えられます。
 
 
 ### socket.bufferSize
@@ -574,13 +602,11 @@ Node は、ソケットに書き込まれるデータを内部のキューに入
 
 <!--
 Set the encoding for the socket as a Readable Stream. See
-[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
-for more information.
+[stream.setEncoding()][] for more information.
 -->
 
-ソケットを入力ストリームとしてエンコーディングを設定します。詳細は
-[stream.setEncoding()](stream.html#stream_stream_setencoding_encoding)
-を参照してください。
+ソケットを入力ストリームとしてエンコーディングを設定します。
+詳細は [stream.setEncoding()][] を参照してください。
 
 ### socket.write(data, [encoding], [callback])
 
@@ -782,10 +808,10 @@ The amount of bytes sent.
 送信したバイトの合計です。
 
 <!--
-`net.Socket` instances are EventEmitters with the following events:
+`net.Socket` instances are [EventEmitter][] with the following events:
 -->
 
-`net.Socket` のインスタンスは以下のイベントを持つ EventEmitter です:
+`net.Socket` のインスタンスは以下のイベントを持つ [EventEmitter][] です:
 
 ### Event: 'connect'
 
@@ -804,8 +830,7 @@ See `connect()`.
 <!--
 Emitted when data is received.  The argument `data` will be a `Buffer` or
 `String`.  Encoding of data is set by `socket.setEncoding()`.
-(See the [Readable Stream](stream.html#readable_stream) section for more
-information.)
+(See the [Readable Stream][] section for more information.)
 
 Note that the __data will be lost__ if there is no listener when a `Socket`
 emits a `'data'` event.
@@ -814,7 +839,7 @@ emits a `'data'` event.
 データを受信した場合に生成されます。
 `data` 引数は `Buffer` または `String` です。
 データのエンコーディングは `socket.setEncoding()` で設定されます。
-(より詳しい情報は [Readable Stream](stream.html#readable_stream) を参照してください)。
+(より詳しい情報は [Readable Stream][] を参照してください)。
 
 `Socket` が `'data'` イベントを生成した時にリスナが存在しなければ、
 __データは失われる__ことに注意してください。
@@ -923,3 +948,11 @@ Returns true if input is a version 6 IP address, otherwise returns false.
 -->
 
 `input` が バージョン 6 の IP アドレスなら true、そうでなければ false を返します。
+
+['connect']: #net_event_connect
+['connection']: #net_event_connection
+['end']: #net_event_end
+[EventEmitter]: events.html#events_class_events_eventemitter
+['listening']: #net_event_listening
+[Readable Stream]: stream.html#stream_readable_stream
+[stream.setEncoding()]: stream.html#stream_stream_setencoding_encoding

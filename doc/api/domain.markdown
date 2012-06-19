@@ -221,12 +221,12 @@ uncaught exceptions to the active Domain object.
 ドメインにルーティングする機能をカプセル化します。
 
 <!--
-Domain is a child class of EventEmitter.  To handle the errors that it
+Domain is a child class of [EventEmitter][].  To handle the errors that it
 catches, listen to its `error` event.
 -->
 
-ドメインは EventEmitter の子クラスです。これが捕まえたエラーを扱いたければ、
-`'error'` イベントを監視してください。
+ドメインは [EventEmitter][] の子クラスです。
+これが捕まえたエラーを扱いたければ、`'error'` イベントを監視してください。
 
 ### domain.run(fn)
 
@@ -479,3 +479,5 @@ I/O がまだ行われているかもしれないことに注意してくださ�
 その集合の中の EventEmitter からのさらなるエラーは無視されます。
 そのため、たとえ残りのアクションがまだ実行中だとしても、
 Node.js はそれらとコミュニケートしません。
+
+[EventEmitter]: events.html#events_class_events_eventemitter

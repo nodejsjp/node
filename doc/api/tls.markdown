@@ -89,8 +89,8 @@ server-side resources, which makes it a potential vector for denial-of-service
 attacks.
 
 To mitigate this, renegotiations are limited to three times every 10 minutes. An
-error is emitted on the [CleartextStream](#tls.CleartextStream) instance when
-the threshold is exceeded. The limits are configurable:
+error is emitted on the [CleartextStream][] instance when the threshold is
+exceeded. The limits are configurable:
 
   - `tls.CLIENT_RENEG_LIMIT`: renegotiation limit, default is 3.
 
@@ -111,7 +111,7 @@ TLS プロトコルでは、クライアントに TLS セッションの再ネ�
 要求するため、それは潜在的なサーバ強制停止攻撃となります。
 
 これを軽減するために、再ネゴシエーションは 10 分当たり 3 回までに
-制限されています。この制限を超えると、[CleartextStream](#tls.CleartextStream)
+制限されています。この制限を超えると、[CleartextStream][]
 のインスタンス上でエラーが生成されます。この制限は変更可能です:
 
   - `tls.CLIENT_RENEG_LIMIT`: 再ネゴシエーションの上限、デフォルトは 3 です。
@@ -150,15 +150,14 @@ TLS の拡張で、以下を可能にします。
 ## tls.createServer(options, [secureConnectionListener])
 
 <!--
-Creates a new [tls.Server](#tls.Server).
-The `connectionListener` argument is automatically set as a listener for the
-[secureConnection](#event_secureConnection_) event.
-The `options` object has these possibilities:
+Creates a new [tls.Server][].  The `connectionListener` argument is
+automatically set as a listener for the [secureConnection][] event.  The
+`options` object has these possibilities:
 -->
 
-新しい [tls.Server](#tls.Server) を作成します。
-`connectionListener` は [secureConnection](#event_secureConnection_)
-イベントのリスナとして自動的に登録されます。
+新しい [tls.Server][] を作成します。
+`connectionListener` は [secureConnection][] イベントのリスナとして
+自動的に登録されます。
 `options` は以下を持つことができます:
 
 
@@ -440,18 +439,17 @@ Creates a new client connection to the given `port` and `host` (old API) or
 
 <!--
 The `secureConnectListener` parameter will be added as a listener for the
-['secureConnect'](#event_secureConnect_) event.
+['secureConnect'][] event.
 
-`tls.connect()` returns a [CleartextStream](#tls.CleartextStream) object.
+`tls.connect()` returns a [CleartextStream][] object.
 
 Here is an example of a client of echo server as described previously:
 -->
 
-`secureConnectLister` 引数は ['secureConnect'](#event_secureConnect_)
-イベントのリスナとして加えられます。
+`secureConnectLister` 引数は ['secureConnect'][] イベントのリスナとして
+加えられます。
 
-`tls.connect()` は [CleartextStream](#tls.CleartextStream)
-オブジェクトを返します。
+`tls.connect()` は [CleartextStream][] オブジェクトを返します。
 
 これは前述のエコーサーバに接続するクライアントの例です:
 
@@ -527,8 +525,8 @@ and the cleartext one is used as a replacement for the initial encrypted stream.
    automatically reject clients with invalid certificates. Only applies to
    servers with `requestCert` enabled.
 
-`tls.createSecurePair()` returns a SecurePair object with
-[cleartext](#tls.CleartextStream) and `encrypted` stream properties.
+`tls.createSecurePair()` returns a SecurePair object with [cleartext][] and
+`encrypted` stream properties.
 -->
 
 二つのストリームを持つセキュアペアオブジェクトを作成します。
@@ -550,7 +548,7 @@ and the cleartext one is used as a replacement for the initial encrypted stream.
    自動的にクライアントを破棄するかどうかを示すブーリアン値。
    `requestCert` が有効なサーバにのみ適用されます。
 
-`tls.createSequrePair()` は、[cleartext](#tls.CleartextStream) と `encrypted`
+`tls.createSequrePair()` は、[cleartext][] と `encrypted`
 をプロパティとして持つ `SecurePair` オブジェクトを返します。
 
 ## Class: SecurePair
@@ -596,13 +594,12 @@ TLS または SSL を使った暗号化されたコネクションを受け付�
 
 <!--
 This event is emitted after a new connection has been successfully
-handshaked. The argument is a instance of
-[CleartextStream](#tls.CleartextStream). It has all the common stream methods
-and events.
+handshaked. The argument is a instance of [CleartextStream][]. It has all the
+common stream methods and events.
 -->
 
 このイベントは、新しい接続のハンドシェークが成功した場合に生成されます。
-引数は [CleartextStream](#tls.CleartextStream) のインスタンスです。
+引数は [CleartextStream][] のインスタンスです。
 これはストリームに共通する全てのメソッドとイベントを持っています。
 
 <!--
@@ -681,14 +678,13 @@ event.
 
 <!--
 Returns the bound address, the address family name and port of the
-server as reported by the operating system.
-See [net.Server.address()](net.html#server.address) for more information.
+server as reported by the operating system.  See [net.Server.address()][] for
+more information.
 -->
 
 オペレーティングシステムから報告された、サーバにバインドされたアドレスと
 アドレスファミリ名、ポートを返します。 
-より詳しくは [net.Server.address()](net.html#server.address)
-を参照してください。
+より詳しくは [net.Server.address()][] を参照してください。
 
 ### server.addContext(hostname, credentials)
 
@@ -724,15 +720,14 @@ The number of concurrent connections on the server.
 This is a stream on top of the *Encrypted* stream that makes it possible to
 read/write an encrypted data as a cleartext data.
 
-This instance implements a duplex [Stream](stream.html) interfaces.
-It has all the common stream methods and events.
+This instance implements a duplex [Stream][] interfaces.  It has all the
+common stream methods and events.
 -->
 
 暗号化されたストリーム上で、暗号化されたデータを平文のデータとして
 読み書きすることができるストリームです。
 
-このインスタンスは双方向の [Stream](stream.html) インタフェースを
-実装します。
+このインスタンスは双方向の [Stream][] インタフェースを実装します。
 ストリームに共通な全てのメソッドとイベントを持ちます。
 
 A ClearTextStream is the `clear` member of a SecurePair object.
@@ -882,3 +877,10 @@ The numeric representation of the remote port. For example, `443`.
 
 リモートポートの数値表現です。
 例えば、`443`。
+
+[CleartextStream]: #tls_class_tls_cleartextstream
+[net.Server.address()]: net.html#net_server_address
+['secureConnect']: #tls_event_secureconnect
+[secureConnection]: #tls_event_secureconnection
+[Stream]: stream.html#stream_stream
+[tls.Server]: #tls_class_tls_server

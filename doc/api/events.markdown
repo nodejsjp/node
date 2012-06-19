@@ -115,6 +115,14 @@ Removes all listeners, or those of the specified event.
 
 全てのリスナーまたは指定されたイベントに対するリスナーを削除します。
 
+<!--
+Note that this will **invalidate** any arrays that have previously been
+returned by `emitter.listeners(event)`.
+-->
+
+これは `emitter.listeners(event)` から返された以前の配列を **無効化**
+することに注意してください。
+
 
 ### emitter.setMaxListeners(n)
 
@@ -134,17 +142,50 @@ that to be increased. Set to zero for unlimited.
 ### emitter.listeners(event)
 
 <!--
-Returns an array of listeners for the specified event. This array can be
-manipulated, e.g. to remove listeners.
+Returns an array of listeners for the specified event.
 -->
 
 指定されたイベントに対するリスナー配列を返します。
-この配列は変更することができます、例えばリスナーを削除するなど。
 
     server.on('connection', function (stream) {
       console.log('someone connected!');
     });
     console.log(util.inspect(server.listeners('connection'))); // [ [Function] ]
+
+<!--
+This array **may** be a mutable reference to the same underlying list of
+listeners that is used by the event subsystem.  However, certain
+actions (specifically, removeAllListeners) will invalidate this
+reference.
+-->
+
+この配列は下層でイベントサブシステムによって使われる、リスナの可変な
+リストを参照する **場合が** あります。
+しかしながら、特定のアクション (特に `removeAllListeners`) は
+その参照を無効にすることがあります。
+
+<!--
+If you would like to get a copy of the listeners at a specific point in
+time that is guaranteed not to change, make a copy, for example by doing
+`emitter.listeners(event).slice(0)`.
+-->
+
+もしある特定の時点におけるリスナの変更されないことが保証されたコピーが
+必要であるなら、`emitter.listeners(event).slice(0)` などによって
+コピーを作成してください。
+
+<!--
+In a future release of node, this behavior **may** change to always
+return a copy, for consistency.  In your programs, please do not rely on
+being able to modify the EventEmitter listeners using array methods.
+Always use the 'on' method to add new listeners.
+-->
+
+将来リリースされる Node では、この振る舞いは一貫性のため常にコピーを返すように
+変更される **かも** しれません。
+配列のメソッドを使って EventEmitter のリスナを変更できることに
+頼らないでください。
+新しいリスナの追加は常に `on()` メソッドを使ってください。
 
 ### emitter.emit(event, [arg1], [arg2], [...])
 
