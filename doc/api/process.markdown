@@ -4,11 +4,11 @@
 
 <!--
 The `process` object is a global object and can be accessed from anywhere.
-It is an instance of `EventEmitter`.
+It is an instance of [EventEmitter][].
 -->
 
 `process` はグローバルオブジェクトで、どこからでもアクセスすることができます。
-それは `EventEmitter` のインスタンスです。
+それは [EventEmitter][] のインスタンスです。
 
 
 ## Event: 'exit'
@@ -696,3 +696,5 @@ a diff reading, useful for benchmarks and measuring intervals:
       console.log('benchmark took %d seconds and %d nanoseconds', t[0], t[1]);
       // benchmark took 1 seconds and 6962306 nanoseconds
     }, 1000);
+
+[EventEmitter]: events.html#events_class_events_eventemitter

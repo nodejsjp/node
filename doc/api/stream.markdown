@@ -5,7 +5,7 @@
 <!--
 A stream is an abstract interface implemented by various objects in Node.
 For example a request to an HTTP server is a stream, as is stdout. Streams
-are readable, writable, or both. All streams are instances of `EventEmitter`.
+are readable, writable, or both. All streams are instances of [EventEmitter][]
 
 You can load up the Stream base class by doing `require('stream')`.
 -->
@@ -13,7 +13,7 @@ You can load up the Stream base class by doing `require('stream')`.
 ストリームは Node の様々なオブジェクトで実装される抽象的なインタフェースです。
 例えば HTTP サーバへのリクエストは標準出力と同様にストリームです。
 ストリームは読み込み可能、書き込み可能、またはその両方です。
-全てのストリームは `EventEmitter` のインスタンスです。
+全てのストリームは [EventEmitter][] のインスタンスです。
 
 Stream のベースクラスは `require('stream')` でロードすることができます。
 
@@ -352,3 +352,5 @@ for writes.
 
 出力キューが空になった後、ファイル記述子をクローズします。
 出力キューにデータが存在しない場合、`destroySoon()` はすぐに破棄します。
+
+[EventEmitter]: events.html#events_class_events_eventemitter

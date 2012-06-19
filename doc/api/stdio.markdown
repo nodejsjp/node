@@ -29,13 +29,12 @@ Prints to stdout with newline. This function can take multiple arguments in a
 
 <!--
 If formatting elements are not found in the first string then `util.inspect`
-is used on each argument.
-See [util.format()](util.html#util.format) for more information.
+is used on each argument.  See [util.format()][] for more information.
 -->
 
 最初の引数文字列からフォーマット要素が見つからなかった場合は、
 `util.inspect` が各引数に使われます。
-より詳細は [util.format()](util.html#util.format) を参照してください。
+より詳細は [util.format()][] を参照してください。
 
 ## console.info([data], [...])
 
@@ -102,11 +101,12 @@ Print a stack trace to stderr of the current position.
 ## console.assert(expression, [message])
 
 <!--
-Same as [assert.ok()](assert.html#assert_assert_value_message_assert_ok_value_message)
-where if the `expression` evaluates as `false` throw an AssertionError with `message`.
+Same as [assert.ok()][] where if the `expression` evaluates as `false` throw an
+AssertionError with `message`.
 -->
 
-[assert.ok()](assert.html#assert_assert_value_message_assert_ok_value_message)
-を参照してください。
-もし `expression` が `false` に評価されると、`message` を持つ AssertionError
-がスローされます。
+[assert.ok()][] と同様に、もし `expression` が `false` に評価されると、
+`message` を持つ AssertionError がスローされます。
+
+[assert.ok()]: assert.html#assert_assert_value_message_assert_ok_value_message
+[util.format()]: util.html#util_util_format_format
