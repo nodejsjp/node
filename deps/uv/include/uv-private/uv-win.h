@@ -165,6 +165,8 @@ typedef struct uv_buf_t {
 
 typedef int uv_file;
 
+typedef struct _stati64 uv_statbuf_t;
+
 typedef SOCKET uv_os_sock_t;
 
 typedef HANDLE uv_thread_t;
@@ -353,6 +355,7 @@ RB_HEAD(uv_timer_tree_s, uv_timer_s);
   uv_write_t ipc_header_write_req;        \
   int ipc_pid;                            \
   uint64_t remaining_ipc_rawdata_bytes;   \
+  unsigned char reserved[sizeof(void*)];  \
   struct {                                \
     WSAPROTOCOL_INFOW* socket_info;       \
     int tcp_connection;                   \

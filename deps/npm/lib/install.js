@@ -127,7 +127,15 @@ function install (args, cb_) {
                       , explicit: false
                       , parent: data
                       , wrap: null }
-        context.family[data.name] = context.ancestors[data.name] = data.version
+
+        if (data.name === path.basename(where) &&
+            path.basename(path.dirname(where)) === "node_modules") {
+          // Only include in ancestry if it can actually be required.
+          // Otherwise, it does not count.
+          context.family[data.name] =
+            context.ancestors[data.name] = data.version
+        }
+
         installManyTop(deps.map(function (dep) {
           var target = data.dependencies[dep]
             , parsed = url.parse(target.replace(/^git\+/, "git"))
@@ -177,6 +185,7 @@ function readDependencies (context, where, opts, cb) {
     if (er)  return cb(er)
 
     if (opts && opts.dev) {
+      if (!data.dependencies) data.dependencies = {};
       Object.keys(data.devDependencies || {}).forEach(function (k) {
         data.dependencies[k] = data.devDependencies[k]
       })
@@ -239,6 +248,8 @@ function save (where, installed, tree, pretty, cb) {
     return cb(null, installed, tree, pretty)
   }
 
+  var saveBundle = npm.config.get('save-bundle')
+
   // each item in the tree is a top-level thing that should be saved
   // to the package.json file.
   // The relevant tree shape is { <folder>: {what:<pkg>} }
@@ -276,10 +287,22 @@ function save (where, installed, tree, pretty, cb) {
              : npm.config.get("save-dev") ? "devDependencies"
              : "dependencies"
 
+    if (saveBundle) {
+      var bundle = data.bundleDependencies || data.bundledDependencies
+      delete data.bundledDependencies
+      if (!Array.isArray(bundle)) bundle = []
+      data.bundleDependencies = bundle
+    }
+
     data[deps] = data[deps] || {}
     Object.keys(things).forEach(function (t) {
       data[deps][t] = things[t]
+      if (saveBundle) {
+        var i = bundle.indexOf(t)
+        if (i === -1) bundle.push(t)
+      }
     })
+
     data = JSON.stringify(data, null, 2) + "\n"
     fs.writeFile(saveTarget, data, function (er) {
       cb(er, installed, tree, pretty)

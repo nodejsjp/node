@@ -19,10 +19,12 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#ifndef NODE_CONFIG_H
-#define NODE_CONFIG_H
+var common = require('../common');
+var assert = require('assert');
+var net = require('net');
 
-#define NODE_CFLAGS "@CCFLAGS@ @CPPFLAGS@ -I@PREFIX@/include/node"
-#define NODE_PREFIX "@PREFIX@"
-
-#endif /* NODE_CONFIG_H */
+var sock = net.connect(1234, 'localhost');
+sock.pause();
+sock.resume();
+console.log('ok');
+process.exit(0);
