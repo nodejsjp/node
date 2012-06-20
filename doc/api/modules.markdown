@@ -594,7 +594,7 @@ node は他で見つからなかったモジュールをそれらのパスから
 
 <!--
 Where `$HOME` is the user's home directory, and `$PREFIX` is node's
-configured `installPrefix`.
+configured `node_prefix`.
 
 These are mostly for historic reasons.  You are highly encouraged to
 place your dependencies locally in `node_modules` folders.  They will be
@@ -602,7 +602,7 @@ loaded faster, and more reliably.
 -->
 
 `$HOME` はユーザのホームディレクトリ、`$PREFIX` は node を
-configure した時の `installPrefix` です。
+configure した時の `node_prefix` です。
 
 これらは主に歴史的な理由によるものです。
 あなたが依存するものはローカルの `node_modules` フォルダに置くことが

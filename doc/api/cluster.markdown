@@ -62,6 +62,14 @@ Please try it out and provide feedback.
 将来のバージョンで変更される可能性があります。
 これを試して、フィードバックを行ってください。
 
+<!--
+Also note that, on Windows, it is not yet possible to set up a named pipe
+server in a worker.
+-->
+
+Windows では、ワーカが名前付きパイプによるサーバをセットアップすることは
+まだできないことにも注意してください。
+
 ## How It Works
 
 <!--type=misc-->
@@ -99,7 +107,7 @@ This causes potentially surprising behavior in three edge cases:
 これは三つの極端なケースで驚くような振る舞いを引き起こすかもしれません。
 
 <!--
-1. `server.listen({fd: 7})` Because the message is passed to the worker,
+1. `server.listen({fd: 7})` Because the message is passed to the master,
    file descriptor 7 **in the parent** will be listened on, and the
    handle passed to the worker, rather than listening to the worker's
    idea of what the number 7 file descriptor references.
@@ -115,7 +123,7 @@ This causes potentially surprising behavior in three edge cases:
    cluster worker ID.
 -->
 
-1. `server.listen({fd: 7})` メッセージはワーカに渡されてるため、
+1. `server.listen({fd: 7})` メッセージはマスタに渡されてるため、
    ワーカのファイル記述子 7 が参照するものではなく、
    **親プロセスの** ファイル記述子 7 がリスニングされてそのハンドルがワーカに
    渡されます。
