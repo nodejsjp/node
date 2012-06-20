@@ -21,12 +21,27 @@
 
 var common = require('../common');
 var assert = require('assert');
-var fork = require('child_process').fork;
+var net = require('net');
+var accessedProperties = false;
 
-var filename = common.fixturesDir + '/destroy-stdin.js';
+var server = net.createServer(function(socket) {
+  socket.end();
+});
 
-// Ensure that we don't accidentally close fd 0 and
-// reuse it for something else, it causes all kinds
-// of obscure bugs.
-process.stdin.destroy();
-fork(filename).stdin.on('end', process.exit);
+server.listen(common.PORT, function() {
+  var client = net.createConnection(common.PORT);
+  server.close();
+  // server connection event has not yet fired
+  // client is still attempting to connect
+  assert.doesNotThrow(function() {
+    client.remoteAddress;
+    client.remotePort;
+  });
+  accessedProperties = true;
+  // exit now, do not wait for the client error event
+  process.exit(0);
+});
+
+process.on('exit', function() {
+  assert(accessedProperties);
+});

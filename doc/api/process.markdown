@@ -494,17 +494,6 @@ JavaScript で表現したオブジェクトを保持します。
          target_arch: 'x64',
          v8_use_snapshot: 'true' } }
 
-## process.installPrefix
-
-<!--
-A compiled-in property that exposes `NODE_PREFIX`.
--->
-
-`NODE_PREFIX` を提示するコンパイル済みプロパティです。
-
-    console.log('Prefix: ' + process.installPrefix);
-
-
 ## process.kill(pid, [signal])
 
 <!--

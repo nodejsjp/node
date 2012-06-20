@@ -2441,9 +2441,7 @@ class DescriptorArray: public FixedArray {
 
   // Returns the number of descriptors in the array.
   int number_of_descriptors() {
-    ASSERT(length() > kFirstIndex ||
-           length() == kTransitionsIndex ||
-           IsEmpty());
+    ASSERT(length() >= kFirstIndex || IsEmpty());
     int len = length();
     return len <= kFirstIndex ? 0 : (len - kFirstIndex) / kDescriptorSize;
   }
@@ -2615,8 +2613,8 @@ class DescriptorArray: public FixedArray {
   static const int kNotFound = -1;
 
   static const int kBitField3StorageIndex = 0;
-  static const int kTransitionsIndex = 1;
-  static const int kEnumerationIndexIndex = 2;
+  static const int kEnumerationIndexIndex = 1;
+  static const int kTransitionsIndex = 2;
   static const int kFirstIndex = 3;
 
   // The length of the "bridge" to the enum cache.
@@ -2627,9 +2625,10 @@ class DescriptorArray: public FixedArray {
 
   // Layout description.
   static const int kBitField3StorageOffset = FixedArray::kHeaderSize;
-  static const int kTransitionsOffset = kBitField3StorageOffset + kPointerSize;
-  static const int kEnumerationIndexOffset = kTransitionsOffset + kPointerSize;
-  static const int kFirstOffset = kEnumerationIndexOffset + kPointerSize;
+  static const int kEnumerationIndexOffset =
+      kBitField3StorageOffset + kPointerSize;
+  static const int kTransitionsOffset = kEnumerationIndexOffset + kPointerSize;
+  static const int kFirstOffset = kTransitionsOffset + kPointerSize;
 
   // Layout description for the bridge array.
   static const int kEnumCacheBridgeEnumOffset = FixedArray::kHeaderSize;
@@ -4749,14 +4748,6 @@ class Map: public HeapObject {
   inline void set_is_shared(bool value);
   inline bool is_shared();
 
-  // Tells whether the map is used for an object that is a prototype for another
-  // object or is the prototype on a function.  Such maps are made faster by
-  // tweaking the heuristics that distinguish between regular object-oriented
-  // objects and the objects that are being used as hash maps.  This flag is
-  // for optimization, not correctness.
-  inline void set_used_for_prototype(bool value);
-  inline bool used_for_prototype();
-
   // Tells whether the instance needs security checks when accessing its
   // properties.
   inline void set_is_access_check_needed(bool access_check_needed);
@@ -4944,9 +4935,7 @@ class Map: public HeapObject {
   // the original map.  That way we can transition to the same map if the same
   // prototype is set, rather than creating a new map every time.  The
   // transitions are in the form of a map where the keys are prototype objects
-  // and the values are the maps the are transitioned to.  The special key
-  // the_hole denotes the map we should transition to when the
-  // used_for_prototype flag is set.
+  // and the values are the maps the are transitioned to.
   static const int kMaxCachedPrototypeTransitions = 256;
 
   Map* GetPrototypeTransition(Object* prototype);
@@ -5042,7 +5031,6 @@ class Map: public HeapObject {
   // Bit positions for bit field 3
   static const int kIsShared = 0;
   static const int kFunctionWithPrototype = 1;
-  static const int kUsedForPrototype = 2;
 
   typedef FixedBodyDescriptor<kPointerFieldsBeginOffset,
                               kPointerFieldsEndOffset,
