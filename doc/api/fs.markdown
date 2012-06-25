@@ -896,8 +896,7 @@ The second argument is optional. The `options` if provided should be an object
 containing two members a boolean, `persistent`, and `interval`. `persistent`
 indicates whether the process should continue to run as long as files are
 being watched. `interval` indicates how often the target should be polled,
-in milliseconds. (On Linux systems with inotify, `interval` is ignored.) The
-default is `{ persistent: true, interval: 0 }`.
+in milliseconds. The default is `{ persistent: true, interval: 5007 }`.
 -->
 
 第 2 引数はオプションです．
@@ -906,8 +905,7 @@ default is `{ persistent: true, interval: 0 }`.
 `persistent` はファイルが監視されている間、
 プロセスが実行し続けることを示します。
 `interval` は対象をポーリングする間隔をミリ秒で示します
-(inotify を備えた Linux システムでは `interval` は無視されます)。
-デフォルトは `{ persistent: true, interval: 0}` です。
+デフォルトは `{ persistent: true, interval: 5007 }` です。
 
 <!--
 The `listener` gets two arguments the current stat object and the previous
