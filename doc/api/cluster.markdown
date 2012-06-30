@@ -419,7 +419,7 @@ Example:
       args : ["--use", "https"],
       silent : true
     });
-    cluster.autoFork();
+    cluster.fork();
 
 ## cluster.fork([env])
 
@@ -744,7 +744,11 @@ in the master process using the message system:
       }
 
       // Start workers and listen for messages containing notifyRequest
-      cluster.autoFork();
+      var numCPUs = require('os').cpus().length;
+      for (var i = 0; i < numCPUs; i++) {
+        cluster.fork();
+      }
+
       Object.keys(cluster.workers).forEach(function(id) {
         cluster.workers[id].on('message', messageHandler);
       });

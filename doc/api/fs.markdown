@@ -696,21 +696,10 @@ without waiting for the callback. For this scenario,
 ## fs.writeSync(fd, buffer, offset, length, position)
 
 <!--
-Synchronous version of buffer-based `fs.write()`. Returns the number of bytes
-written.
--->
-同期版のバッファに基づく `fs.write()`。書き込まれたバイト数を返します。
-
-## fs.writeSync(fd, str, position, [encoding])
-
-<!--
-Synchronous version of string-based `fs.write()`. `encoding` defaults to
-`'utf8'`. Returns the number of _bytes_ written.
+Synchronous version of `fs.write()`. Returns the number of bytes written.
 -->
 
-同期版の文字列に基づく `fs.write()`。
-`encoding` のデフォルトは `'utf8'` です。
-書き込まれたバイト数を返します。
+同期版の `fs.write()`。書き込まれたバイト数を返します。
 
 ## fs.read(fd, buffer, offset, length, position, [callback])
 
@@ -755,22 +744,10 @@ The callback is given the three arguments, `(err, bytesRead, buffer)`.
 ## fs.readSync(fd, buffer, offset, length, position)
 
 <!--
-Synchronous version of buffer-based `fs.read`. Returns the number of
-`bytesRead`.
+Synchronous version of `fs.read`. Returns the number of `bytesRead`.
 -->
 
-同期版のバッファに基づく `fs.read`。`bytesRead` の数を返します。
-
-## fs.readSync(fd, length, position, encoding)
-
-<!--
-Legacy synchronous version of string-based `fs.read`. Returns an array with the
-data from the file specified and number of bytes read, `[string, bytesRead]`.
--->
-
-文字列に基づく古い `fs.read` の同期版。
-指定されたファイルのデータと読み込んだバイト数の配列、`[string, bytesRead]`
-を返します。
+同期版の `fs.read`。`bytesRead` の数を返します。
 
 ## fs.readFile(filename, [encoding], [callback])
 
