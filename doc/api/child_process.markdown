@@ -722,7 +722,7 @@ file:
          err = fs.openSync('./out.log', 'a');
 
      var child = spawn('prg', [], {
-       detached: 'true',
+       detached: true,
        stdio: [ 'ignore', out, err ]
      });
 
