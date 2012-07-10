@@ -240,9 +240,79 @@ See the [module section][] for more information.
 より詳しくは [モジュールシステムのドキュメント][] を参照してください。
 
 ## setTimeout(cb, ms)
+
+<!--
+Run callback `cb` after *at least* `ms` milliseconds. The actual delay depends
+on external factors like OS timer granularity and system load.
+-->
+
+*少なくとも* `ms` ミリ秒が経過した後、コールバック `cb` を実行します。
+実際の遅延は OS のタイマ分解能やシステムの負荷など外部要因に依存します。
+
+<!--
+The timeout must be in the range of 1-2,147,483,647 inclusive. If the value is
+outside that range, it's changed to 1 millisecond. Broadly speaking, a timer
+cannot span more than 24.8 days.
+-->
+
+タイムアウト値は 1～2,147,483,647 の範囲内でなければなりません。
+もし値がこの範囲外だった場合は 1 ミリ秒となります。
+大雑把に言って、タイマは 24.8 日を越えることはできません。
+
+<!--
+Returns an opaque value that represents the timer.
+-->
+
+タイマを表現する不透明な値を返します。
+
 ## clearTimeout(t)
+
+<!--
+Stop a timer that was previously created with `setTimeout()`. The callback will
+not execute.
+-->
+
+`setTimeout()` によって以前に作成されたタイマを終了します。
+コールバックは実行されなくなります。
+
 ## setInterval(cb, ms)
+
+<!--
+Run callback `cb` repeatedly every `ms` milliseconds. Note that the actual
+interval may vary, depending on external factors like OS timer granularity and
+system load. It's never less than `ms` but it may be longer.
+-->
+
+`ms` ミリ秒ごとにコールバック `cb` を繰り返し実行します。
+OS のタイマ分解能やシステムの負荷など外部要因によって、
+実際のインターバルが異なるかもしれないことに注意してください。
+それは決して `ms` より短いことはありませんが、より長いことがあります。
+
+<!--
+The interval must be in the range of 1-2,147,483,647 inclusive. If the value is
+outside that range, it's changed to 1 millisecond. Broadly speaking, a timer
+cannot span more than 24.8 days.
+-->
+
+インターバル値は 1～2,147,483,647 の範囲内でなければなりません。
+もし値がこの範囲外だった場合は 1 ミリ秒となります。
+大雑把に言って、タイマは 24.8 日を越えることはできません。
+
+<!--
+Returns an opaque value that represents the timer.
+-->
+
+タイマを表現する不透明な値を返します。
+
 ## clearInterval(t)
+
+<!--
+Stop a timer that was previously created with `setInterval()`. The callback
+will not execute.
+-->
+
+`setInterval()` によって以前に作成されたタイマを終了します。
+コールバックは実行されなくなります。
 
 <!--type=global-->
 

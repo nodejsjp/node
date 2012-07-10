@@ -3,9 +3,10 @@
     Stability: 2 - Unstable
 
 <!--
-A stream is an abstract interface implemented by various objects in Node.
-For example a request to an HTTP server is a stream, as is stdout. Streams
-are readable, writable, or both. All streams are instances of [EventEmitter][]
+A stream is an abstract interface implemented by various objects in
+Node.  For example a request to an HTTP server is a stream, as is
+stdout. Streams are readable, writable, or both. All streams are
+instances of [EventEmitter][]
 
 You can load up the Stream base class by doing `require('stream')`.
 -->
@@ -51,8 +52,8 @@ __データは失われる__ことに注意してください。
 
 <!--
 Emitted when the stream has received an EOF (FIN in TCP terminology).
-Indicates that no more `'data'` events will happen. If the stream is also
-writable, it may be possible to continue writing.
+Indicates that no more `'data'` events will happen. If the stream is
+also writable, it may be possible to continue writing.
 -->
 
 ストリームが EOF (TCP 用語では FIN) を受信した時に生成されます。
@@ -74,8 +75,8 @@ Emitted if there was an error receiving data.
 `function () { }`
 
 <!--
-Emitted when the underlying resource (for example, the backing file descriptor)
-has been closed. Not all streams will emit this.
+Emitted when the underlying resource (for example, the backing file
+descriptor) has been closed. Not all streams will emit this.
 -->
 
 下層のリソース (例えば背後のファイル記述子) がクローズされた時に生成されます。
@@ -84,8 +85,9 @@ has been closed. Not all streams will emit this.
 ### stream.readable
 
 <!--
-A boolean that is `true` by default, but turns `false` after an `'error'`
-occurred, the stream came to an `'end'`, or `destroy()` was called.
+A boolean that is `true` by default, but turns `false` after an
+`'error'` occurred, the stream came to an `'end'`, or `destroy()` was
+called.
 -->
 
 デフォルトでは `true` ですが、`'error'` が発生した後、
@@ -95,8 +97,9 @@ occurred, the stream came to an `'end'`, or `destroy()` was called.
 ### stream.setEncoding([encoding])
 
 <!--
-Makes the `'data'` event emit a string instead of a `Buffer`. `encoding` can be
-`'utf8'`, `'utf16le'` (`'ucs2'`), `'ascii'`, or `'hex'`. Defaults to `'utf8'`.
+Makes the `'data'` event emit a string instead of a `Buffer`. `encoding`
+can be `'utf8'`, `'utf16le'` (`'ucs2'`), `'ascii'`, or `'hex'`. Defaults
+to `'utf8'`.
 -->
 
 `'data'` イベントが `Buffer` ではなく文字列を生成するようにします。
@@ -107,18 +110,18 @@ Makes the `'data'` event emit a string instead of a `Buffer`. `encoding` can be
 ### stream.pause()
 
 <!--
-Issues an advisory signal to the underlying communication layer, requesting
-that no further data be sent until `resume()` is called.
+Issues an advisory signal to the underlying communication layer,
+requesting that no further data be sent until `resume()` is called.
 -->
 
 アドバイス的なシグナルを下層の通信レイヤに発し、`resume()` が呼ばれるまで
 データが送られないように要求します。
 
 <!--
-Note that, due to the advisory nature, certain streams will not be paused
-immediately, and so `'data'` events may be emitted for some indeterminate
-period of time even after `pause()` is called. You may wish to buffer such
-`'data'` events.
+Note that, due to the advisory nature, certain streams will not be
+paused immediately, and so `'data'` events may be emitted for some
+indeterminate period of time even after `pause()` is called. You may
+wish to buffer such `'data'` events.
 -->
 
 アドバイス的な性質のために、ストリームによっては即座に中断しないこと、
@@ -137,10 +140,17 @@ Resumes the incoming `'data'` events after a `pause()`.
 ### stream.destroy()
 
 <!--
-Closes the underlying file descriptor. Stream will not emit any more events.
+Closes the underlying file descriptor. Stream is no longer `writable`
+nor `readable`.  The stream will not emit any more 'data', or 'end'
+events. Any queued write data will not be sent.  The stream should emit
+'close' event once its resources have been disposed of.
 -->
 
-下層のファイル記述子をクローズします。ストリームはそれ以上イベントを生成しなくなります。
+下層のファイル記述子をクローズします。
+ストリームはもう `writable` でも `readable` でもなくなります。
+ストリームはそれ以上 `'data'` あるいは `'end'` イベントを生成しなくなります。
+キューイングされたデータは送信されません。
+ストリームはそのリソースが破棄されたときに `'close'` イベントを生成すべきです。
 
 ### stream.pipe(destination, [options])
 
@@ -151,8 +161,8 @@ This is a `Stream.prototype` method available on all `Stream`s.
 これは全ての `Stream` で利用可能な `Stream.prototype` メソッドです。
 
 <!--
-Connects this read stream to `destination` WriteStream. Incoming
-data on this stream gets written to `destination`. The destination and source
+Connects this read stream to `destination` WriteStream. Incoming data on
+this stream gets written to `destination`. The destination and source
 streams are kept in sync by pausing and resuming as necessary.
 -->
 
@@ -172,14 +182,13 @@ Emulating the Unix `cat` command:
 
 Unix の `cat` コマンドのエミュレート:
 
-    process.stdin.resume();
-    process.stdin.pipe(process.stdout);
+    process.stdin.resume(); process.stdin.pipe(process.stdout);
 
 
 <!--
-By default `end()` is called on the destination when the source stream emits
-`end`, so that `destination` is no longer writable. Pass `{ end: false }` as
-`options` to keep the destination stream open.
+By default `end()` is called on the destination when the source stream
+emits `end`, so that `destination` is no longer writable. Pass `{ end:
+false }` as `options` to keep the destination stream open.
 -->
 
 デフォルトでは接続元ストリームで `end` イベントが生成されると、
@@ -187,7 +196,8 @@ By default `end()` is called on the destination when the source stream emits
 `option` に `{ end: false }` を渡すと接続先はストリームはオープンされたままとなります。
 
 <!--
-This keeps `process.stdout` open so that "Goodbye" can be written at the end.
+This keeps `process.stdout` open so that "Goodbye" can be written at the
+end.
 -->
 
 これは `process.stdout` をオープンしたままにして最後に "Goodbye" と出力します。
@@ -197,8 +207,7 @@ This keeps `process.stdout` open so that "Goodbye" can be written at the end.
     process.stdin.pipe(process.stdout, { end: false });
 
     process.stdin.on("end", function() {
-      process.stdout.write("Goodbye\n");
-    });
+    process.stdout.write("Goodbye\n"); });
 
 
 ## Writable Stream
@@ -257,8 +266,8 @@ Emitted when the stream is passed to a readable stream's pipe method.
 ### stream.writable
 
 <!--
-A boolean that is `true` by default, but turns `false` after an `'error'`
-occurred or `end()` / `destroy()` was called.
+A boolean that is `true` by default, but turns `false` after an
+`'error'` occurred or `end()` / `destroy()` was called.
 -->
 
 デフォルトでは `true` ですが、`'error'` が発生した後、
@@ -267,11 +276,11 @@ occurred or `end()` / `destroy()` was called.
 ### stream.write(string, [encoding], [fd])
 
 <!--
-Writes `string` with the given `encoding` to the stream.  Returns `true` if
-the string has been flushed to the kernel buffer.  Returns `false` to
-indicate that the kernel buffer is full, and the data will be sent out in
-the future. The `'drain'` event will indicate when the kernel buffer is
-empty again. The `encoding` defaults to `'utf8'`.
+Writes `string` with the given `encoding` to the stream.  Returns `true`
+if the string has been flushed to the kernel buffer.  Returns `false` to
+indicate that the kernel buffer is full, and the data will be sent out
+in the future. The `'drain'` event will indicate when the kernel buffer
+is empty again. The `encoding` defaults to `'utf8'`.
 -->
 
 与えられた `encoding` で `string` を書き込みます。
@@ -282,11 +291,11 @@ empty again. The `encoding` defaults to `'utf8'`.
 `encoding` のデフォルトは `'utf8'` です。
 
 <!--
-If the optional `fd` parameter is specified, it is interpreted as an integral
-file descriptor to be sent over the stream. This is only supported for UNIX
-streams, and is silently ignored otherwise. When writing a file descriptor in
-this manner, closing the descriptor before the stream drains risks sending an
-invalid (closed) FD.
+If the optional `fd` parameter is specified, it is interpreted as an
+integral file descriptor to be sent over the stream. This is only
+supported for UNIX streams, and is silently ignored otherwise. When
+writing a file descriptor in this manner, closing the descriptor before
+the stream drains risks sending an invalid (closed) FD.
 -->
 
 オプションの `fd` 引数が指定されると、
@@ -306,8 +315,8 @@ Same as the above except with a raw buffer.
 ### stream.end()
 
 <!--
-Terminates the stream with EOF or FIN.
-This call will allow queued write data to be sent before closing the stream.
+Terminates the stream with EOF or FIN.  This call will allow queued
+write data to be sent before closing the stream.
 -->
 
 ストリームを EOF または FIN で終了します。
@@ -317,8 +326,8 @@ This call will allow queued write data to be sent before closing the stream.
 ### stream.end(string, encoding)
 
 <!--
-Sends `string` with the given `encoding` and terminates the stream with EOF
-or FIN. This is useful to reduce the number of packets sent.
+Sends `string` with the given `encoding` and terminates the stream with
+EOF or FIN. This is useful to reduce the number of packets sent.
 -->
 
 与えられた `encoding` で `string` を送信してからEOFまたはFINでストリームを終了します。
@@ -335,19 +344,24 @@ Same as above but with a `buffer`.
 ### stream.destroy()
 
 <!--
-Closes the underlying file descriptor. Stream will not emit any more events.
-Any queued write data will not be sent.
+Closes the underlying file descriptor. Stream is no longer `writable`
+nor `readable`.  The stream will not emit any more 'data', or 'end'
+events. Any queued write data will not be sent.  The stream should emit
+'close' event once its resources have been disposed of.
 -->
 
-下層のファイル記述子をクローズします。ストリームはそれ以上イベントを生成しなくなります。
+下層のファイル記述子をクローズします。
+ストリームはもう `writable` でも `readable` でもなくなります。
+ストリームはそれ以上 `'data'` あるいは `'end'` イベントを生成しなくなります。
 キューイングされたデータは送信されません。
+ストリームはそのリソースが破棄されたときに `'close'` イベントを生成すべきです。
 
 ### stream.destroySoon()
 
 <!--
-After the write queue is drained, close the file descriptor. `destroySoon()`
-can still destroy straight away, as long as there is no data left in the queue
-for writes.
+After the write queue is drained, close the file descriptor.
+`destroySoon()` can still destroy straight away, as long as there is no
+data left in the queue for writes.
 -->
 
 出力キューが空になった後、ファイル記述子をクローズします。
