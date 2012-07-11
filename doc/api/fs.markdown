@@ -232,6 +232,12 @@ are given to the completion callback.
 
 非同期の lchmod(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
+<!--
+Only available on Mac OS X.
+-->
+
+Mac OS X でのみ利用可能です。
+
 ## fs.lchmodSync(path, mode)
 
 <!--
@@ -907,15 +913,26 @@ you need to compare `curr.mtime` and `prev.mtime`.
 
 もしファイルがアクセスされただけでなく、変更された時の通知が必要であれば、`curr.mtime` と `prev.mtime` を比較する必要があります。
 
-## fs.unwatchFile(filename)
+## fs.unwatchFile(filename, [listener])
 
     Stability: 2 - Unstable.  Use fs.watch instead, if available.
 
 <!--
-Stop watching for changes on `filename`.
+Stop watching for changes on `filename`. If `listener` is specified, only that
+particular listener is removed. Otherwise, *all* listeners are removed and you
+have effectively stopped watching `filename`.
+
+Calling `fs.unwatchFile()` with a filename that is not being watched is a
+no-op, not an error.
 -->
 
 `filename` の変更に対する監視を終了します。
+`listener` が指定された場合は該当の `listener` だけが取り除かれます。
+そうでなければ、*全ての* リスナが取り除かれ、
+`filenam` の監視は事実上終了します。
+
+監視されていないファイル名を指定した `fs.unwatchFile()` の呼び出しは
+エラーになるのではなく、何もしません。
 
 ## fs.watch(filename, [options], [listener])
 
