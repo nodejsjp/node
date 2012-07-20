@@ -332,7 +332,7 @@ Synchronous link(2).
 
 同期の link(2)。
 
-## fs.symlink(destination, path, [type], [callback])
+## fs.symlink(srcpath, dstpath, [type], [callback])
 
 <!--
 Asynchronous symlink(2). No arguments other than a possible exception are given
@@ -352,7 +352,7 @@ Windows のジャンクションポイントは対象に絶対パスを要求す
 注意してください。
 `'junction'` を使うと、`destination` 引数は自動的に絶対パスに正規化されます。
 
-## fs.symlinkSync(destination, path, [type])
+## fs.symlinkSync(srcpath, dstpath, [type])
 
 <!--
 Synchronous symlink(2).
