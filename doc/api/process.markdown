@@ -70,16 +70,47 @@ Example of listening for `uncaughtException`:
 
 <!--
 Note that `uncaughtException` is a very crude mechanism for exception
-handling.  Using try / catch in your program will give you more control over
-your program's flow.  Especially for server programs that are designed to
-stay running forever, `uncaughtException` can be a useful safety mechanism.
+handling and may be removed in the future.
 -->
 
-`uncaughtException` は例外を扱うとても荒削りなメカニズムであることに注意してください。
-プログラムの中で try / catch を使えばもっとプログラムの流れをうまく制御できるでしょう。
-特にサーバプログラムはいつまでも実行し続けるように設計されるので、
-`uncaughtException` は有益で安全なメカニズムになり得ます。
+`uncaughtException` は例外を扱うとても荒削りなメカニズムであり、
+将来削除されるかもしれないことに注意してください。
 
+<!--
+Don't use it, use [domains](domain.html) instead. If you do use it, restart
+your application after every unhandled exception!
+-->
+
+これを使う代わりに、[ドメイン](domain.html) を使ってください。
+それを使えば、捕まえられない例外が発生した後でもアプリケーションを
+再開することができます！
+
+<!--
+Do *not* use it as the node.js equivalent of `On Error Resume Next`. An
+unhandled exception means your application - and by extension node.js itself -
+is in an undefined state. Blindly resuming means *anything* could happen.
+-->
+
+これを Node.js における `On Error Resume Next` として *使わないで* ください。
+捕まえられなかった例外は、アプリケーション
+- および Node.js 自身の拡張 - が未定義の状態となることを意味します。
+やみくもな再開は *どんなことでも* 起こることを意味します。
+
+<!--
+Think of resuming as pulling the power cord when you are upgrading your system.
+Nine out of ten times nothing happens - but the 10th time, your system is bust.
+-->
+
+電源を引き抜きながらアプリケーションをアップグレードすることを
+想像してください。
+10 回中 9 回は何も起こりません
+- しかし 10 回目にはそのシステムは使えなくなるかもしれません。
+
+<!--
+You have been warned.
+-->
+
+これは警告です。
 
 ## Signal Events
 

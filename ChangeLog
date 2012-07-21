@@ -1,4 +1,37 @@
-2012.07.09, Version 0.8.2 (Stable)
+2012.07.19, Version 0.8.3 (Stable)
+
+* V8: upgrade to 3.11.10.15
+
+* npm: Upgrade to 1.1.43
+
+* net: fix net.Server.listen({fd:x}) error reporting (Ben Noordhuis)
+
+* net: fix bogus errno reporting (Ben Noordhuis)
+
+* build: Move npm shebang logic into an npm script (isaacs)
+
+* build: fix add-on loading on freebsd (Ben Noordhuis)
+
+* build: disable unsafe optimizations (Ben Noordhuis)
+
+* build: fix spurious mksnapshot crashes for good (Ben Noordhuis)
+
+* build: speed up genv8constants (Dave Pacheco)
+
+* fs: make unwatchFile() remove a specific listener (Ben Noordhuis)
+
+* domain: Remove first arg from intercepted fn (Toshihiro Nakamura)
+
+* domain: Fix memory leak on error (isaacs)
+
+* events: Fix memory leak from removeAllListeners (Nathan Rajlich)
+
+* zlib: Fix memory leak in Unzip class. (isaacs)
+
+* crypto: Fix memory leak in DecipherUpdate() (Ben Noordhuis)
+
+
+2012.07.09, Version 0.8.2 (Stable), cc6084b9ac5cf1d4fe5e7165b71e8fc05d11be1f
 
 * npm: Upgrade to 1.1.36
 
@@ -512,6 +545,38 @@
 * Use isolates for internal debugger (Fedor Indutny)
 
 * Bug fixes
+
+
+2012.07.10 Version 0.6.20 (maintenance)
+
+* npm: Upgrade to 1.1.37 (isaacs)
+
+* benchmark: Backport improvements made in master (isaacs)
+
+* build: always link with -lz (Trent Mick)
+
+* core: use proper #include directives (Ben Noordhuis)
+
+* cluster: don't silently drop messages when the write queue gets big (Bert Belder)
+
+* windows: don't print error when GetConsoleTitleW returns an empty string (Bert Belder)
+
+
+2012.06.06 Version 0.6.19 (stable), debf552ed2d4a53957446e82ff3c52a8182d5ff4
+
+* npm: upgrade to 1.1.24
+
+* fs: no end emit after createReadStream.pause() (Andreas Madsen)
+
+* vm: cleanup module memory leakage (Marcel Laverdet)
+
+* unix: fix loop starvation under high network load (Ben Noordhuis)
+
+* unix: remove abort() in ev_unref() (Ben Noordhuis)
+
+* windows/tty: never report error after forcibly aborting line-buffered read (Bert Belder)
+
+* windows: skip GetFileAttributes call when opening a file (Bert Belder)
 
 
 2012.05.15 Version 0.6.18 (stable), 4bc1d395de6abed2cf1e4d0b7b3a1480a21c368f
