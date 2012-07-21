@@ -546,7 +546,7 @@ Example: A very elaborate way to run 'ps ax | grep ssh'
     });
 
     grep.stdout.on('data', function (data) {
-      console.log(data);
+      console.log('' + data);
     });
 
     grep.stderr.on('data', function (data) {
@@ -722,7 +722,7 @@ file:
          err = fs.openSync('./out.log', 'a');
 
      var child = spawn('prg', [], {
-       detached: 'true',
+       detached: true,
        stdio: [ 'ignore', out, err ]
      });
 

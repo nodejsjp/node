@@ -2218,15 +2218,15 @@ void LCodeGen::EmitLoadFieldOrConstantFunction(Register result,
   } else {
     // Negative lookup.
     // Check prototypes.
-    HeapObject* current = HeapObject::cast((*type)->prototype());
+    Handle<HeapObject> current(HeapObject::cast((*type)->prototype()));
     Heap* heap = type->GetHeap();
-    while (current != heap->null_value()) {
-      Handle<HeapObject> link(current);
-      __ LoadHeapObject(result, link);
+    while (*current != heap->null_value()) {
+      __ LoadHeapObject(result, current);
       __ Cmp(FieldOperand(result, HeapObject::kMapOffset),
-                          Handle<Map>(JSObject::cast(current)->map()));
+                          Handle<Map>(current->map()));
       DeoptimizeIf(not_equal, env);
-      current = HeapObject::cast(current->map()->prototype());
+      current =
+          Handle<HeapObject>(HeapObject::cast(current->map()->prototype()));
     }
     __ LoadRoot(result, Heap::kUndefinedValueRootIndex);
   }
@@ -2235,10 +2235,15 @@ void LCodeGen::EmitLoadFieldOrConstantFunction(Register result,
 
 // Check for cases where EmitLoadFieldOrConstantFunction needs to walk the
 // prototype chain, which causes unbounded code generation.
-static bool CompactEmit(
-    SmallMapList* list, Handle<String> name, int i, Isolate* isolate) {
-  LookupResult lookup(isolate);
+static bool CompactEmit(SmallMapList* list,
+                        Handle<String> name,
+                        int i,
+                        Isolate* isolate) {
   Handle<Map> map = list->at(i);
+  // If the map has ElementsKind transitions, we will generate map checks
+  // for each kind in __ CompareMap(..., ALLOW_ELEMENTS_TRANSITION_MAPS).
+  if (map->elements_transition_map() != NULL) return false;
+  LookupResult lookup(isolate);
   map->LookupInDescriptors(NULL, *name, &lookup);
   return lookup.IsFound() &&
       (lookup.type() == FIELD || lookup.type() == CONSTANT_FUNCTION);

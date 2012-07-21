@@ -57,13 +57,13 @@ try {
   npm.version = j.version
   npm.nodeVersionRequired = j.engines.node
   if (!semver.satisfies(process.version, j.engines.node)) {
-    log.error("unsupported version", [""
-              ,"npm requires node version: "+j.engines.node
-              ,"And you have: "+process.version
-              ,"which is not satisfactory."
-              ,""
-              ,"Bad things will likely happen.  You have been warned."
-              ,""].join("\n"))
+    log.warn("unsupported version", [""
+            ,"npm requires node version: "+j.engines.node
+            ,"And you have: "+process.version
+            ,"which is not satisfactory."
+            ,""
+            ,"Bad things will likely happen.  You have been warned."
+            ,""].join("\n"))
   }
 } catch (ex) {
   try {
@@ -98,6 +98,7 @@ var commandCache = {}
               , "apihelp" : "help"
               , "login": "adduser"
               , "add-user": "adduser"
+              , "tst": "test"
               }
 
   , aliasNames = Object.keys(aliases)
@@ -261,10 +262,12 @@ function load (npm, conf, cb) {
     //console.error("about to look up configs")
 
     ini.resolveConfigs(conf, function (er) {
+      var color = npm.config.get("color")
+
       log.level = npm.config.get("loglevel")
       log.heading = "npm"
       log.stream = npm.config.get("logstream")
-      switch (npm.config.get("color")) {
+      switch (color) {
         case "always": log.enableColor(); break
         case false: log.disableColor(); break
       }
@@ -272,14 +275,37 @@ function load (npm, conf, cb) {
 
       if (er) return cb(er)
 
+      // see if we need to color normal output
+      switch (color) {
+        case "always":
+          npm.color = true
+          break
+        case false:
+          npm.color = false
+          break
+        default:
+          var tty = require("tty")
+          if (process.stdout.isTTY) npm.color = true
+          else if (!tty.isatty) npm.color = true
+          else if (tty.isatty(1)) npm.color = true
+          else npm.color = false
+          break
+      }
+
       // at this point the configs are all set.
       // go ahead and spin up the registry client.
+      var token
+      try { token = JSON.parse(npm.config.get("_token")) }
+      catch (er) { token = null }
+
       npm.registry = new RegClient(
         { registry: npm.config.get("registry")
         , cache: npm.config.get("cache")
         , auth: npm.config.get("_auth")
+        , token: token
         , alwaysAuth: npm.config.get("always-auth")
         , email: npm.config.get("email")
+        , proxy: npm.config.get("proxy")
         , tag: npm.config.get("tag")
         , ca: npm.config.get("ca")
         , strictSSL: npm.config.get("strict-ssl")
@@ -287,7 +313,22 @@ function load (npm, conf, cb) {
         , E404: npm.E404
         , EPUBLISHCONFLICT: npm.EPUBLISHCONFLICT
         , log: log
+        , retries: npm.config.get("fetch-retries")
+        , retryFactor: npm.config.get("fetch-retry-factor")
+        , retryMinTimeout: npm.config.get("fetch-retry-mintimeout")
+        , retryMaxTimeout: npm.config.get("fetch-retry-maxtimeout")
+        , cacheMin: npm.config.get("cache-min")
+        , cacheMax: npm.config.get("cache-max")
         })
+
+      // save the token cookie in the config file
+      if (npm.registry.couchLogin) {
+        npm.registry.couchLogin.tokenSet = function (tok, cb) {
+          ini.set("_token", JSON.stringify(tok), "user")
+          // ignore save error.  best effort.
+          ini.save("user", function () {})
+        }
+      }
 
       var umask = parseInt(conf.umask, 8)
       npm.modes = { exec: 0777 & (~umask)
@@ -443,7 +484,7 @@ Object.defineProperty(npm, "cache",
 var tmpFolder
 Object.defineProperty(npm, "tmp",
   { get : function () {
-      if (!tmpFolder) tmpFolder = "npm-"+Date.now()
+      if (!tmpFolder) tmpFolder = "npm-" + process.pid
       return path.resolve(npm.config.get("tmp"), tmpFolder)
     }
   , enumerable : true

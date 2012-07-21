@@ -9,7 +9,7 @@
     'node_shared_v8%': 'false',
     'node_shared_zlib%': 'false',
     'node_use_openssl%': 'true',
-    'node_use_system_openssl%': 'false',
+    'node_shared_openssl%': 'false',
     'library_files': [
       'src/node.js',
       'lib/_debugger.js',
@@ -82,6 +82,7 @@
         'src/node_main.cc',
         'src/node_os.cc',
         'src/node_script.cc',
+        'src/node_stat_watcher.cc',
         'src/node_string.cc',
         'src/node_zlib.cc',
         'src/pipe_wrap.cc',
@@ -136,7 +137,7 @@
           'defines': [ 'HAVE_OPENSSL=1' ],
           'sources': [ 'src/node_crypto.cc' ],
           'conditions': [
-            [ 'node_use_system_openssl=="false"', {
+            [ 'node_shared_openssl=="false"', {
               'dependencies': [ './deps/openssl/openssl.gyp:openssl' ],
             }]]
         }, {
@@ -176,12 +177,7 @@
             '<(SHARED_INTERMEDIATE_DIR)/node_etw_provider.rc',
           ]
         } ],
-        [ 'node_shared_v8=="true"', {
-          'sources': [
-            '<(node_shared_v8_includes)/v8.h',
-            '<(node_shared_v8_includes)/v8-debug.h',
-          ],
-        }, {
+        [ 'node_shared_v8=="false"', {
           'sources': [
             'deps/v8/include/v8.h',
             'deps/v8/include/v8-debug.h',
@@ -204,13 +200,12 @@
             '_UNICODE=1',
           ],
           'libraries': [ '-lpsapi.lib' ]
-        },{ # POSIX
+        }, { # POSIX
           'defines': [ '__POSIX__' ],
           'sources': [
             'src/node_signal_watcher.cc',
-            'src/node_stat_watcher.cc',
             'src/node_io_watcher.cc',
-          ]
+          ],
         }],
         [ 'OS=="mac"', {
           'libraries': [ '-framework Carbon' ],

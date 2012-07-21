@@ -232,6 +232,12 @@ are given to the completion callback.
 
 非同期の lchmod(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
+<!--
+Only available on Mac OS X.
+-->
+
+Mac OS X でのみ利用可能です。
+
 ## fs.lchmodSync(path, mode)
 
 <!--
@@ -326,7 +332,7 @@ Synchronous link(2).
 
 同期の link(2)。
 
-## fs.symlink(destination, path, [type], [callback])
+## fs.symlink(srcpath, dstpath, [type], [callback])
 
 <!--
 Asynchronous symlink(2). No arguments other than a possible exception are given
@@ -346,7 +352,7 @@ Windows のジャンクションポイントは対象に絶対パスを要求す
 注意してください。
 `'junction'` を使うと、`destination` 引数は自動的に絶対パスに正規化されます。
 
-## fs.symlinkSync(destination, path, [type])
+## fs.symlinkSync(srcpath, dstpath, [type])
 
 <!--
 Synchronous symlink(2).
@@ -696,21 +702,10 @@ without waiting for the callback. For this scenario,
 ## fs.writeSync(fd, buffer, offset, length, position)
 
 <!--
-Synchronous version of buffer-based `fs.write()`. Returns the number of bytes
-written.
--->
-同期版のバッファに基づく `fs.write()`。書き込まれたバイト数を返します。
-
-## fs.writeSync(fd, str, position, [encoding])
-
-<!--
-Synchronous version of string-based `fs.write()`. `encoding` defaults to
-`'utf8'`. Returns the number of _bytes_ written.
+Synchronous version of `fs.write()`. Returns the number of bytes written.
 -->
 
-同期版の文字列に基づく `fs.write()`。
-`encoding` のデフォルトは `'utf8'` です。
-書き込まれたバイト数を返します。
+同期版の `fs.write()`。書き込まれたバイト数を返します。
 
 ## fs.read(fd, buffer, offset, length, position, [callback])
 
@@ -755,22 +750,10 @@ The callback is given the three arguments, `(err, bytesRead, buffer)`.
 ## fs.readSync(fd, buffer, offset, length, position)
 
 <!--
-Synchronous version of buffer-based `fs.read`. Returns the number of
-`bytesRead`.
+Synchronous version of `fs.read`. Returns the number of `bytesRead`.
 -->
 
-同期版のバッファに基づく `fs.read`。`bytesRead` の数を返します。
-
-## fs.readSync(fd, length, position, encoding)
-
-<!--
-Legacy synchronous version of string-based `fs.read`. Returns an array with the
-data from the file specified and number of bytes read, `[string, bytesRead]`.
--->
-
-文字列に基づく古い `fs.read` の同期版。
-指定されたファイルのデータと読み込んだバイト数の配列、`[string, bytesRead]`
-を返します。
+同期版の `fs.read`。`bytesRead` の数を返します。
 
 ## fs.readFile(filename, [encoding], [callback])
 
@@ -896,8 +879,7 @@ The second argument is optional. The `options` if provided should be an object
 containing two members a boolean, `persistent`, and `interval`. `persistent`
 indicates whether the process should continue to run as long as files are
 being watched. `interval` indicates how often the target should be polled,
-in milliseconds. (On Linux systems with inotify, `interval` is ignored.) The
-default is `{ persistent: true, interval: 0 }`.
+in milliseconds. The default is `{ persistent: true, interval: 5007 }`.
 -->
 
 第 2 引数はオプションです．
@@ -906,8 +888,7 @@ default is `{ persistent: true, interval: 0 }`.
 `persistent` はファイルが監視されている間、
 プロセスが実行し続けることを示します。
 `interval` は対象をポーリングする間隔をミリ秒で示します
-(inotify を備えた Linux システムでは `interval` は無視されます)。
-デフォルトは `{ persistent: true, interval: 0}` です。
+デフォルトは `{ persistent: true, interval: 5007 }` です。
 
 <!--
 The `listener` gets two arguments the current stat object and the previous
@@ -932,15 +913,26 @@ you need to compare `curr.mtime` and `prev.mtime`.
 
 もしファイルがアクセスされただけでなく、変更された時の通知が必要であれば、`curr.mtime` と `prev.mtime` を比較する必要があります。
 
-## fs.unwatchFile(filename)
+## fs.unwatchFile(filename, [listener])
 
     Stability: 2 - Unstable.  Use fs.watch instead, if available.
 
 <!--
-Stop watching for changes on `filename`.
+Stop watching for changes on `filename`. If `listener` is specified, only that
+particular listener is removed. Otherwise, *all* listeners are removed and you
+have effectively stopped watching `filename`.
+
+Calling `fs.unwatchFile()` with a filename that is not being watched is a
+no-op, not an error.
 -->
 
 `filename` の変更に対する監視を終了します。
+`listener` が指定された場合は該当の `listener` だけが取り除かれます。
+そうでなければ、*全ての* リスナが取り除かれ、
+`filenam` の監視は事実上終了します。
+
+監視されていないファイル名を指定した `fs.unwatchFile()` の呼び出しは
+エラーになるのではなく、何もしません。
 
 ## fs.watch(filename, [options], [listener])
 
