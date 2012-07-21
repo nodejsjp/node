@@ -31,10 +31,10 @@ Example of listening for `exit`:
 
 `exit` を監視する例:
 
-    process.on('exit', function () {
-      process.nextTick(function () {
-       console.log('This will not run');
-      });
+    process.on('exit', function() {
+      setTimeout(function() {
+        console.log('This will not run');
+      }, 0);
       console.log('About to exit.');
     });
 
@@ -56,11 +56,11 @@ Example of listening for `uncaughtException`:
 
 `uncaughtException` を監視する例:
 
-    process.on('uncaughtException', function (err) {
+    process.on('uncaughtException', function(err) {
       console.log('Caught exception: ' + err);
     });
 
-    setTimeout(function () {
+    setTimeout(function() {
       console.log('This will still run.');
     }, 500);
 
@@ -70,16 +70,47 @@ Example of listening for `uncaughtException`:
 
 <!--
 Note that `uncaughtException` is a very crude mechanism for exception
-handling.  Using try / catch in your program will give you more control over
-your program's flow.  Especially for server programs that are designed to
-stay running forever, `uncaughtException` can be a useful safety mechanism.
+handling and may be removed in the future.
 -->
 
-`uncaughtException` は例外を扱うとても荒削りなメカニズムであることに注意してください。
-プログラムの中で try / catch を使えばもっとプログラムの流れをうまく制御できるでしょう。
-特にサーバプログラムはいつまでも実行し続けるように設計されるので、
-`uncaughtException` は有益で安全なメカニズムになり得ます。
+`uncaughtException` は例外を扱うとても荒削りなメカニズムであり、
+将来削除されるかもしれないことに注意してください。
 
+<!--
+Don't use it, use [domains](domain.html) instead. If you do use it, restart
+your application after every unhandled exception!
+-->
+
+これを使う代わりに、[ドメイン](domain.html) を使ってください。
+それを使えば、捕まえられない例外が発生した後でもアプリケーションを
+再開することができます！
+
+<!--
+Do *not* use it as the node.js equivalent of `On Error Resume Next`. An
+unhandled exception means your application - and by extension node.js itself -
+is in an undefined state. Blindly resuming means *anything* could happen.
+-->
+
+これを Node.js における `On Error Resume Next` として *使わないで* ください。
+捕まえられなかった例外は、アプリケーション
+- および Node.js 自身の拡張 - が未定義の状態となることを意味します。
+やみくもな再開は *どんなことでも* 起こることを意味します。
+
+<!--
+Think of resuming as pulling the power cord when you are upgrading your system.
+Nine out of ten times nothing happens - but the 10th time, your system is bust.
+-->
+
+電源を引き抜きながらアプリケーションをアップグレードすることを
+想像してください。
+10 回中 9 回は何も起こりません
+- しかし 10 回目にはそのシステムは使えなくなるかもしれません。
+
+<!--
+You have been warned.
+-->
+
+これは警告です。
 
 ## Signal Events
 
@@ -103,7 +134,7 @@ Example of listening for `SIGINT`:
     // Start reading from stdin so we don't exit.
     process.stdin.resume();
 
-    process.on('SIGINT', function () {
+    process.on('SIGINT', function() {
       console.log('Got SIGINT.  Press Control-D to exit.');
     });
 
@@ -129,7 +160,7 @@ Example: the definition of `console.log`
 
 例: `console.log` の定義
 
-    console.log = function (d) {
+    console.log = function(d) {
       process.stdout.write(d + '\n');
     };
 
@@ -187,11 +218,11 @@ Example of opening standard input and listening for both events:
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
 
-    process.stdin.on('data', function (chunk) {
+    process.stdin.on('data', function(chunk) {
       process.stdout.write('data: ' + chunk);
     });
 
-    process.stdin.on('end', function () {
+    process.stdin.on('end', function() {
       process.stdout.write('end');
     });
 
@@ -209,7 +240,7 @@ next elements will be any additional command line arguments.
 その後の要素はコマンドラインの追加の引数になります。
 
     // print process.argv
-    process.argv.forEach(function (val, index, array) {
+    process.argv.forEach(function(val, index, array) {
       console.log(index + ': ' + val);
     });
 
@@ -489,7 +520,7 @@ JavaScript で表現したオブジェクトを保持します。
          node_shared_zlib: 'false',
          node_use_dtrace: 'false',
          node_use_openssl: 'true',
-         node_use_system_openssl: 'false',
+         node_shared_openssl: 'false',
          strict_aliasing: 'true',
          target_arch: 'x64',
          v8_use_snapshot: 'true' } }
@@ -525,11 +556,11 @@ Example of sending a signal to yourself:
 
 自身にシグナルを送信する例:
 
-    process.on('SIGHUP', function () {
+    process.on('SIGHUP', function() {
       console.log('Got SIGHUP signal.');
     });
 
-    setTimeout(function () {
+    setTimeout(function() {
       console.log('Exiting.');
       process.exit(0);
     }, 100);
@@ -616,17 +647,136 @@ This will generate:
 <!--
 On the next loop around the event loop call this callback.
 This is *not* a simple alias to `setTimeout(fn, 0)`, it's much more
-efficient.
+efficient.  It typically runs before any other I/O events fire, but there
+are some exceptions.  See `process.maxTickDepth` below.
 -->
 
 イベントループの次以降のループでコールバックを呼び出します。
 これは `setTimeout(fn, 0)` の単純なエイリアス*ではなく*、
 はるかに効率的です。
+これは通常他の I/O イベントが発生するよりも前に実行されますが、
+いくつかの例外があります。
+後述の `process.maxTickDepth` を参照してください。
 
-    process.nextTick(function () {
+    process.nextTick(function() {
       console.log('nextTick callback');
     });
 
+<!--
+This is important in developing APIs where you want to give the user the
+chance to assign event handlers after an object has been constructed,
+but before any I/O has occurred.
+-->
+
+これは API の開発において、オブジェクトが構築された後で
+どんな I/O イベントが発生するよりも前に、
+イベントハンドラを割り当てるチャンスをユーザに与えたい場合に重要になります。
+
+    function MyThing(options) {
+      this.setupOptions(options);
+
+      process.nextTick(function() {
+        this.startDoingStuff();
+      }.bind(this));
+    }
+
+    var thing = new MyThing();
+    thing.getReadyForStuff();
+
+    // thing.startDoingStuff() gets called now, not before.
+
+<!--
+It is very important for APIs to be either 100% synchronous or 100%
+asynchronous.  Consider this example:
+-->
+
+API は 100% 同期的か、100% 非同期的かのどちらかであることがとても重要です。
+この例を考えてみてください:
+
+    // WARNING!  DO NOT USE!  BAD UNSAFE HAZARD!
+    function maybeSync(arg, cb) {
+      if (arg) {
+        cb();
+        return;
+      }
+
+      fs.stat('file', cb);
+    }
+
+<!--
+This API is hazardous.  If you do this:
+-->
+
+この API は危険です。こうすると:
+
+    maybeSync(true, function() {
+      foo();
+    });
+    bar();
+
+<!--
+then it's not clear whether `foo()` or `bar()` will be called first.
+-->
+
+`foo()` と `bar()` のどちらが先に呼び出されるか不明瞭になります。
+
+<!--
+This approach is much better:
+-->
+
+以下のアプローチはずっと優れています:
+
+    function definitelyAsync(arg, cb) {
+      if (arg) {
+        process.nextTick(cb);
+        return;
+      }
+
+      fs.stat('file', cb);
+    }
+
+## process.maxTickDepth
+
+* {Number} Default = 1000
+
+<!--
+Callbacks passed to `process.nextTick` will *usually* be called at the
+end of the current flow of execution, and are thus approximately as fast
+as calling a function synchronously.  Left unchecked, this would starve
+the event loop, preventing any I/O from occurring.
+-->
+
+`process.nextTick()` に渡されたコールバックは、*通常* 現在の実行フローの
+後で呼び出され、それは関数を同期的に呼び出すのと同じくらい高速です。
+これを放置するとあらゆる I/O が阻まれ、イベントループは飢餓状態となるでしょう。
+
+<!--
+Consider this code:
+-->
+
+以下のコードを考えてみてください。
+
+    process.nextTick(function foo() {
+      process.nextTick(foo);
+    });
+
+<!--
+In order to avoid the situation where Node is blocked by an infinite
+loop of recursive series of nextTick calls, it defers to allow some I/O
+to be done every so often.
+-->
+
+nextTick の再帰が連鎖する無限ループによって Node がブロックする状況を
+避けるには、それを先送りして時々 I/O を可能にします。
+
+<!--
+The `process.maxTickDepth` value is the maximum depth of
+nextTick-calling nextTick-callbacks that will be evaluated before
+allowing other forms of I/O to occur.
+-->
+
+`process.maxTickDepth` の値は、nextTick が nextTick のコールバックを呼び出す
+最大の深さで、他の I/O を可能にする前に評価されます。
 
 ## process.umask([mask])
 
@@ -678,7 +828,7 @@ a diff reading, useful for benchmarks and measuring intervals:
     var t = process.hrtime();
     // [ 1800216, 927643717 ]
 
-    setTimeout(function () {
+    setTimeout(function() {
       t = process.hrtime(t);
       // [ 1, 6962306 ]
 

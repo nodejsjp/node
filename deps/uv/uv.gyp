@@ -29,6 +29,7 @@
         'include',
         'include/uv-private',
         'src/',
+        'src/ares',
       ],
       'direct_dependent_settings': {
         'include_dirs': [ 'include' ],
@@ -85,8 +86,10 @@
         'src/ares/ares_parse_aaaa_reply.c',
         'src/ares/ares_parse_a_reply.c',
         'src/ares/ares_parse_mx_reply.c',
+        'src/ares/ares_parse_naptr_reply.c',
         'src/ares/ares_parse_ns_reply.c',
         'src/ares/ares_parse_ptr_reply.c',
+        'src/ares/ares_parse_soa_reply.c',
         'src/ares/ares_parse_srv_reply.c',
         'src/ares/ares_parse_txt_reply.c',
         'src/ares/ares_platform.h',
@@ -233,7 +236,7 @@
         [ 'OS=="linux"', {
           'include_dirs': [ 'src/ares/config_linux' ],
           'sources': [
-            'src/unix/linux/core.c',
+            'src/unix/linux/linux-core.c',
             'src/unix/linux/inotify.c',
             'src/unix/linux/syscalls.c',
             'src/unix/linux/syscalls.h',
@@ -404,6 +407,9 @@
       'dependencies': [ 'uv' ],
       'sources': [
         'test/benchmark-ares.c',
+        'test/benchmark-async.c',
+        'test/benchmark-async-pummel.c',
+        'test/benchmark-fs-stat.c',
         'test/benchmark-getaddrinfo.c',
         'test/benchmark-list.h',
         'test/benchmark-loop-count.c',

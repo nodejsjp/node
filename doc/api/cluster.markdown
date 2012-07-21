@@ -31,7 +31,7 @@ all share server ports.
       }
 
       cluster.on('exit', function(worker, code, signal) {
-        console.log('worker ' + worker.pid + ' died');
+        console.log('worker ' + worker.process.pid + ' died');
       });
     } else {
       // Workers can share any TCP connection
@@ -364,7 +364,7 @@ This can be used to restart the worker by calling `fork()` again.
 
     cluster.on('exit', function(worker, code, signal) {
       var exitCode = worker.process.exitCode;
-      console.log('worker ' + worker.pid + ' died ('+exitCode+'). restarting...');
+      console.log('worker ' + worker.process.pid + ' died ('+exitCode+'). restarting...');
       cluster.fork();
     });
 
@@ -419,7 +419,7 @@ Example:
       args : ["--use", "https"],
       silent : true
     });
-    cluster.autoFork();
+    cluster.fork();
 
 ## cluster.fork([env])
 
@@ -744,7 +744,11 @@ in the master process using the message system:
       }
 
       // Start workers and listen for messages containing notifyRequest
-      cluster.autoFork();
+      var numCPUs = require('os').cpus().length;
+      for (var i = 0; i < numCPUs; i++) {
+        cluster.fork();
+      }
+
       Object.keys(cluster.workers).forEach(function(id) {
         cluster.workers[id].on('message', messageHandler);
       });
