@@ -44,6 +44,37 @@ class SmallPointerList {
  public:
   SmallPointerList() : data_(kEmptyTag) {}
 
+  SmallPointerList(int capacity, Zone* zone) : data_(kEmptyTag) {
+    Reserve(capacity, zone);
+  }
+
+  void Reserve(int capacity, Zone* zone) {
+    if (capacity < 2) return;
+    if ((data_ & kTagMask) == kListTag) {
+      if (list()->capacity() >= capacity) return;
+      int old_length = list()->length();
+      list()->AddBlock(NULL, capacity - list()->capacity(), zone);
+      list()->Rewind(old_length);
+      return;
+    }
+    PointerList* list = new(zone) PointerList(capacity, zone);
+    if ((data_ & kTagMask) == kSingletonTag) {
+      list->Add(single_value(), zone);
+    }
+    ASSERT(IsAligned(reinterpret_cast<intptr_t>(list), kPointerAlignment));
+    data_ = reinterpret_cast<intptr_t>(list) | kListTag;
+  }
+
+  void Clear() {
+    data_ = kEmptyTag;
+  }
+
+  void Sort() {
+    if ((data_ & kTagMask) == kListTag) {
+      list()->Sort(compare_value);
+    }
+  }
+
   bool is_empty() const { return length() == 0; }
 
   int length() const {
@@ -52,21 +83,21 @@ class SmallPointerList {
     return list()->length();
   }
 
-  void Add(T* pointer) {
+  void Add(T* pointer, Zone* zone) {
     ASSERT(IsAligned(reinterpret_cast<intptr_t>(pointer), kPointerAlignment));
     if ((data_ & kTagMask) == kEmptyTag) {
       data_ = reinterpret_cast<intptr_t>(pointer) | kSingletonTag;
       return;
     }
     if ((data_ & kTagMask) == kSingletonTag) {
-      PointerList* list = new PointerList(2);
-      list->Add(single_value());
-      list->Add(pointer);
+      PointerList* list = new(zone) PointerList(2, zone);
+      list->Add(single_value(), zone);
+      list->Add(pointer, zone);
       ASSERT(IsAligned(reinterpret_cast<intptr_t>(list), kPointerAlignment));
       data_ = reinterpret_cast<intptr_t>(list) | kListTag;
       return;
     }
-    list()->Add(pointer);
+    list()->Add(pointer, zone);
   }
 
   // Note: returns T* and not T*& (unlike List from list.h).
@@ -133,6 +164,10 @@ class SmallPointerList {
 
  private:
   typedef ZoneList<T*> PointerList;
+
+  static int compare_value(T* const* a, T* const* b) {
+    return Compare<T>(**a, **b);
+  }
 
   static const intptr_t kEmptyTag = 1;
   static const intptr_t kSingletonTag = 0;

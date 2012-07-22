@@ -1,4 +1,4 @@
-// Copyright 2008 the V8 project authors. All rights reserved.
+// Copyright 2012 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -25,13 +25,36 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// Flags: --expose-debug-as debug --allow-natives-syntax
+// Flags: --expose-debug-as debug --expose-gc --allow-natives-syntax --inline-construct
 // Get the Debug object exposed from the debug context global object.
 Debug = debug.Debug
 
-listenerComplete = false;
-exception = false;
+var listenerComplete = false;
+var exception = false;
 
+var testingConstructCall = false;
+
+var input = [
+  {a: 1, b: 2},
+  {a: 3, b: 4},
+  {a: 5, b: 6},
+  {a: 7, b: 8},
+  {a: 9, b: 10}
+];
+
+var expected = [
+  { locals: {a0: 1.01, b0: 2.02}, args: { names: ["i", "x0", "y0"], values: [0, 3.03, 4.04] } },
+  { locals: {a1: 3.03, b1: 4.04}, args: { names: ["i", "x1", "y1"], values: [1, 5.05, 6.06] } },
+  { locals: {a2: 5.05, b2: 6.06}, args: { names: ["i"], values: [2] } },
+  { locals: {a3: 7.07, b3: 8.08}, args: { names: ["i", "x3", "y3", "z3"],
+                                          values: [3, 9.09, 10.10, undefined] }
+  },
+  { locals: {a4: 9.09, b4: 10.10}, args: { names: ["i", "x4", "y4"], values: [4, 11.11, 12.12] } }
+];
+
+function arraySum(arr) {
+  return arr.reduce(function (a, b) { return a + b; }, 0);
+}
 
 function listener(event, exec_state, event_data, data) {
   try {
@@ -41,29 +64,93 @@ function listener(event, exec_state, event_data, data) {
 
       for (var i = 0; i < exec_state.frameCount(); i++) {
         var frame = exec_state.frame(i);
-        // All frames except the bottom one has normal variables a and b.
         if (i < exec_state.frameCount() - 1) {
-          assertEquals('a', frame.localName(0));
-          assertEquals('b', frame.localName(1));
-          assertEquals(i * 2 + 1 + (i * 2 + 1) / 100,
-                       frame.localValue(0).value());
-          assertEquals(i * 2 + 2 + (i * 2 + 2) / 100,
-                       frame.localValue(1).value());
+          var expected_args = expected[i].args;
+          var expected_locals = expected[i].locals;
+
+          // All frames except the bottom one have expected locals.
+          var locals = {};
+          for (var j = 0; j < frame.localCount(); j++) {
+            locals[frame.localName(j)] = frame.localValue(j).value();
+          }
+          assertPropertiesEqual(expected_locals, locals);
+
+          // All frames except the bottom one have expected arguments.
+          for (var j = 0; j < expected_args.names.length; j++) {
+            assertEquals(expected_args.names[j], frame.argumentName(j));
+            assertEquals(expected_args.values[j], frame.argumentValue(j).value());
+          }
+
+          // All frames except the bottom one have two scopes.
+          assertEquals(2, frame.scopeCount());
+          assertEquals(debug.ScopeType.Local, frame.scope(0).scopeType());
+          assertEquals(debug.ScopeType.Global, frame.scope(1).scopeType());
+
+          Object.keys(expected_locals).forEach(function (name) {
+            assertEquals(expected_locals[name], frame.scope(0).scopeObject().value()[name]);
+          });
+
+          for (var j = 0; j < expected_args.names.length; j++) {
+            var arg_name = expected_args.names[j];
+            var arg_value = expected_args.values[j];
+            assertEquals(arg_value, frame.scope(0).scopeObject().value()[arg_name]);
+          }
+
+          // Evaluate in the inlined frame.
+          Object.keys(expected_locals).forEach(function (name) {
+            assertEquals(expected_locals[name], frame.evaluate(name).value());
+          });
+
+          for (var j = 0; j < expected_args.names.length; j++) {
+            var arg_name = expected_args.names[j];
+            var arg_value = expected_args.values[j];
+            assertEquals(arg_value, frame.evaluate(arg_name).value());
+            assertEquals(arg_value, frame.evaluate('arguments['+j+']').value());
+          }
+
+          var expected_args_sum = arraySum(expected_args.values);
+          var expected_locals_sum =
+              arraySum(Object.keys(expected_locals).
+                       map(function (k) { return expected_locals[k]; }));
+
+          assertEquals(expected_locals_sum + expected_args_sum,
+                       frame.evaluate(Object.keys(expected_locals).join('+') + ' + ' +
+                                      expected_args.names.join('+')).value());
+
+          var arguments_sum = expected_args.names.map(function(_, idx) {
+            return "arguments[" + idx + "]";
+          }).join('+');
+          assertEquals(expected_args_sum,
+                       frame.evaluate(arguments_sum).value());
+        } else {
+          // The bottom frame only have the global scope.
+          assertEquals(1, frame.scopeCount());
+          assertEquals(debug.ScopeType.Global, frame.scope(0).scopeType());
         }
 
-        // When function f is optimized (2 means YES, see runtime.cc) we
-        // expect an optimized frame for f with g1, g2 and g3 inlined.
-        if (%GetOptimizationStatus(f) == 2) {
-          if (i == 1 || i == 2 || i == 3) {
-            assertTrue(frame.isOptimizedFrame());
-            assertTrue(frame.isInlinedFrame());
-          } else if (i == 4) {
-            assertTrue(frame.isOptimizedFrame());
-            assertFalse(frame.isInlinedFrame());
-          } else {
-            assertFalse(frame.isOptimizedFrame());
-            assertFalse(frame.isInlinedFrame());
-          }
+        // Check the frame function.
+        switch (i) {
+          case 0: assertEquals(h, frame.func().value()); break;
+          case 1: assertEquals(g3, frame.func().value()); break;
+          case 2: assertEquals(g2, frame.func().value()); break;
+          case 3: assertEquals(g1, frame.func().value()); break;
+          case 4: assertEquals(f, frame.func().value()); break;
+          case 5: break;
+          default: assertUnreachable();
+        }
+
+        // Check for construct call.
+        if (i == 4) {
+          assertEquals(testingConstructCall, frame.isConstructCall());
+        } else if (i == 2) {
+          assertTrue(frame.isConstructCall());
+        } else {
+          assertFalse(frame.isConstructCall());
+        }
+
+        if (i > 4) {
+          assertFalse(frame.isOptimizedFrame());
+          assertFalse(frame.isInlinedFrame());
         }
       }
 
@@ -71,62 +158,70 @@ function listener(event, exec_state, event_data, data) {
       listenerComplete = true;
     }
   } catch (e) {
-    exception = e
+    exception = e.toString() + e.stack;
   };
 };
 
-f();f();f();
+for (var i = 0; i < 4; i++) f(input.length - 1, 11.11, 12.12);
 %OptimizeFunctionOnNextCall(f);
-f();
+f(input.length - 1, 11.11, 12.12);
 
 // Add the debug event listener.
 Debug.setListener(listener);
 
-function h(x, y) {
-  var a = 1;
-  var b = 2;
-  a = a + a / 100;
-  b = b + b / 100;
+function h(i, x0, y0) {
+  var a0 = input[i].a;
+  var b0 = input[i].b;
+  a0 = a0 + a0 / 100;
+  b0 = b0 + b0 / 100;
   debugger;  // Breakpoint.
 };
 
-function g3(x, y) {
-  var a = 3;
-  var b = 4;
-  a = a + a / 100;
-  b = b + b / 100;
-  h(a, b);
-  return a+b;
+function g3(i, x1, y1) {
+  var a1 = input[i].a;
+  var b1 = input[i].b;
+  a1 = a1 + a1 / 100;
+  b1 = b1 + b1 / 100;
+  h(i - 1, a1, b1);
+  return a1+b1;
 };
 
-function g2(x, y) {
-  var a = 5;
-  var b = 6;
-  a = a + a / 100;
-  b = b + b / 100;
-  g3(a, b);
+function g2(i) {
+  var a2 = input[i].a;
+  var b2 = input[i].b;
+  a2 = a2 + a2 / 100;
+  b2 = b2 + b2 / 100;
+  g3(i - 1, a2, b2);
 };
 
-function g1(x, y) {
-  var a = 7;
-  var b = 8;
-  a = a + a / 100;
-  b = b + b / 100;
-  g2(a, b);
+function g1(i, x3, y3, z3) {
+  var a3 = input[i].a;
+  var b3 = input[i].b;
+  a3 = a3 + a3 / 100;
+  b3 = b3 + b3 / 100;
+  new g2(i - 1, a3, b3);
 };
 
-function f(x, y) {
-  var a = 9;
-  var b = 10;
-  a = a + a / 100;
-  b = b + b / 100;
-  g1(a, b);
+function f(i, x4, y4) {
+  var a4 = input[i].a;
+  var b4 = input[i].b;
+  a4 = a4 + a4 / 100;
+  b4 = b4 + b4 / 100;
+  g1(i - 1, a4, b4);
 };
 
-f(11.11, 12.12);
+// Test calling f normally and as a constructor.
+f(input.length - 1, 11.11, 12.12);
+f(input.length - 1, 11.11, 12.12, "");
+testingConstructCall = true;
+new f(input.length - 1, 11.11, 12.12);
+new f(input.length - 1, 11.11, 12.12, "");
 
-// Make sure that the debug event listener vas invoked.
+// Make sure that the debug event listener was invoked.
 assertFalse(exception, "exception in listener " + exception)
 assertTrue(listenerComplete);
+
+//Throw away type information for next run.
+gc();
 
 Debug.setListener(null);

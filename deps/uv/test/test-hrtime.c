@@ -22,33 +22,33 @@
 #include "uv.h"
 #include "task.h"
 
-
-#ifndef MICROSEC
-# define MICROSEC 1000000
+#ifndef MILLISEC
+# define MILLISEC 1000
 #endif
 
 #ifndef NANOSEC
-# define NANOSEC 1000000000
+# define NANOSEC ((uint64_t) 1e9)
 #endif
 
 
-
-/*
- * We expect the amount of time passed to be at least one us plus two system
- * calls. Therefore checking that at least a microsecond has elapsed is safe.
- */
 TEST_IMPL(hrtime) {
   uint64_t a, b, diff;
+  int i = 75;
+  while (i > 0) {
+    a = uv_hrtime();
+    uv_sleep(45);
+    b = uv_hrtime();
 
-  a = uv_hrtime();
-  uv_sleep(100);
-  b = uv_hrtime();
+    diff = b - a;
 
-  diff = b - a;
+    /*  printf("i= %d diff = %llu\n", i, (unsigned long long int) diff); */
 
-  printf("diff = %llu\n", (unsigned long long int)diff);
-
-  ASSERT(diff >= NANOSEC / MICROSEC);
-  ASSERT(diff > MICROSEC);
+    /* The windows Sleep() function has only a resolution of 10-20 ms. */
+    /* Check that the difference between the two hrtime values is somewhat in */
+    /* the range we expect it to be. */
+    ASSERT(diff > (uint64_t) 25 * NANOSEC / MILLISEC);
+    ASSERT(diff < (uint64_t) 80 * NANOSEC / MILLISEC);
+    --i;
+  }
   return 0;
 }

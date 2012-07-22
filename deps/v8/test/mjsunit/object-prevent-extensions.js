@@ -33,7 +33,7 @@ var obj1 = {};
 assertTrue(Object.isExtensible(obj1));
 Object.preventExtensions(obj1);
 
-// Make sure the is_extensible flag is set. 
+// Make sure the is_extensible flag is set.
 assertFalse(Object.isExtensible(obj1));
 obj1.x = 42;
 assertEquals(undefined, obj1.x);
@@ -114,3 +114,15 @@ Object.preventExtensions(foo);
 
 foo.x = 29;
 assertEquals(undefined, foo.x);
+
+// when Object.isExtensible(o) === false
+// assignment should return right hand side value
+var o = Object.preventExtensions({});
+var v = o.v = 50;
+assertEquals(undefined, o.v);
+assertEquals(50, v);
+
+// test same behavior as above, but for integer properties
+var n = o[0] = 100;
+assertEquals(undefined, o[0]);
+assertEquals(100, n);

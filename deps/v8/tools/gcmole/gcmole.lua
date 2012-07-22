@@ -97,8 +97,6 @@ local function MakeClangCommandLine(plugin, plugin_args, triple, arch_define)
       .. (plugin_args or "")
       .. " -triple " .. triple
       .. " -D" .. arch_define
-      .. " -DENABLE_VMSTATE_TRACKING"
-      .. " -DENABLE_LOGGING_AND_PROFILING"
       .. " -DENABLE_DEBUGGER_SUPPORT"
       .. " -Isrc"
 end
@@ -108,7 +106,6 @@ function InvokeClangPluginForEachFile(filenames, cfg, func)
                                          cfg.plugin_args,
                                          cfg.triple,
                                          cfg.arch_define)
-
    for _, filename in ipairs(filenames) do
       log("-- %s", filename)
       local action = cmd_line .. " src/" .. filename .. " 2>&1"
@@ -220,7 +217,13 @@ local WHITELIST = {
    --      Callsites of such functions are safe as long as they are properly 
    --      check return value and propagate the Failure to the caller.
    --      It should be possible to extend GCMole to understand this.
-   "Heap.*AllocateFunctionPrototype"
+   "Heap.*AllocateFunctionPrototype",
+
+   -- Ignore all StateTag methods.
+   "StateTag",
+
+   -- Ignore printing of elements transition.
+   "PrintElementsTransition"
 };
 
 local function AddCause(name, cause)

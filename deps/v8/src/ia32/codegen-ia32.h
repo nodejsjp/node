@@ -53,9 +53,7 @@ class CodeGenerator {
   // Print the code after compiling it.
   static void PrintCode(Handle<Code> code, CompilationInfo* info);
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
   static bool ShouldGenerateLog(Expression* type);
-#endif
 
   static bool RecordPositions(MacroAssembler* masm,
                               int pos,
@@ -73,6 +71,22 @@ class CodeGenerator {
   DISALLOW_COPY_AND_ASSIGN(CodeGenerator);
 };
 
+
+class StringCharLoadGenerator : public AllStatic {
+ public:
+  // Generates the code for handling different string types and loading the
+  // indexed character into |result|.  We expect |index| as untagged input and
+  // |result| as untagged output.
+  static void Generate(MacroAssembler* masm,
+                       Factory* factory,
+                       Register string,
+                       Register index,
+                       Register result,
+                       Label* call_runtime);
+
+ private:
+  DISALLOW_COPY_AND_ASSIGN(StringCharLoadGenerator);
+};
 
 } }  // namespace v8::internal
 

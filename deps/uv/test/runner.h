@@ -22,6 +22,8 @@
 #ifndef RUNNER_H_
 #define RUNNER_H_
 
+#include <stdio.h> /* FILE */
+
 
 /*
  * The maximum number of processes (main + helpers) that a test / benchmark
@@ -38,6 +40,7 @@ typedef struct {
   char *process_name;
   int (*main)();
   int is_helper;
+  int show_output;
 } task_entry_t, bench_entry_t;
 
 
@@ -55,19 +58,22 @@ typedef struct {
   int run_test_##name();
 
 #define TEST_ENTRY(name)                            \
-    { #name, #name, &run_test_##name, 0 },
+    { #name, #name, &run_test_##name, 0, 0 },
+
+#define TEST_OUTPUT_ENTRY(name)                     \
+    { #name, #name, &run_test_##name, 0, 1 },
 
 #define BENCHMARK_DECLARE(name)                     \
   int run_benchmark_##name();
 
 #define BENCHMARK_ENTRY(name)                       \
-    { #name, #name, &run_benchmark_##name, 0 },
+    { #name, #name, &run_benchmark_##name, 0, 0 },
 
 #define HELPER_DECLARE(name)                        \
   int run_helper_##name();
 
 #define HELPER_ENTRY(task_name, name)               \
-    { #task_name, #name, &run_helper_##name, 1 },
+    { #task_name, #name, &run_helper_##name, 1, 0 },
 
 #define TEST_HELPER       HELPER_ENTRY
 #define BENCHMARK_HELPER  HELPER_ENTRY
@@ -102,6 +108,12 @@ int run_test(const char* test, int timeout, int benchmark_output);
  * Run a test part, i.e. the test or one of its helpers.
  */
 int run_test_part(const char* test, const char* part);
+
+
+/*
+ * Print tests in sorted order to `stream`. Used by `./run-tests --list`.
+ */
+void print_tests(FILE* stream);
 
 
 /*

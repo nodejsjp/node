@@ -1,4 +1,4 @@
-// Copyright 2008 the V8 project authors. All rights reserved.
+// Copyright 2012 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -35,7 +35,10 @@
 namespace v8 {
 namespace internal {
 
-RegExpMacroAssembler::RegExpMacroAssembler() : slow_safe_compiler_(false) {
+RegExpMacroAssembler::RegExpMacroAssembler(Zone* zone)
+  : slow_safe_compiler_(false),
+    global_mode_(NOT_GLOBAL),
+    zone_(zone) {
 }
 
 
@@ -54,8 +57,8 @@ bool RegExpMacroAssembler::CanReadUnaligned() {
 
 #ifndef V8_INTERPRETED_REGEXP  // Avoid unused code, e.g., on ARM.
 
-NativeRegExpMacroAssembler::NativeRegExpMacroAssembler()
-    : RegExpMacroAssembler() {
+NativeRegExpMacroAssembler::NativeRegExpMacroAssembler(Zone* zone)
+    : RegExpMacroAssembler(zone) {
 }
 
 
@@ -81,7 +84,7 @@ const byte* NativeRegExpMacroAssembler::StringCharacterPosition(
   if (subject->IsAsciiRepresentation()) {
     const byte* address;
     if (StringShape(subject).IsExternal()) {
-      const char* data = ExternalAsciiString::cast(subject)->resource()->data();
+      const char* data = ExternalAsciiString::cast(subject)->GetChars();
       address = reinterpret_cast<const byte*>(data);
     } else {
       ASSERT(subject->IsSeqAsciiString());
@@ -92,7 +95,7 @@ const byte* NativeRegExpMacroAssembler::StringCharacterPosition(
   }
   const uc16* data;
   if (StringShape(subject).IsExternal()) {
-    data = ExternalTwoByteString::cast(subject)->resource()->data();
+    data = ExternalTwoByteString::cast(subject)->GetChars();
   } else {
     ASSERT(subject->IsSeqTwoByteString());
     data = SeqTwoByteString::cast(subject)->GetChars();
@@ -120,31 +123,36 @@ NativeRegExpMacroAssembler::Result NativeRegExpMacroAssembler::Match(
   String* subject_ptr = *subject;
   // Character offsets into string.
   int start_offset = previous_index;
-  int end_offset = subject_ptr->length();
+  int char_length = subject_ptr->length() - start_offset;
+  int slice_offset = 0;
 
-  // The string has been flattened, so it it is a cons string it contains the
+  // The string has been flattened, so if it is a cons string it contains the
   // full string in the first part.
   if (StringShape(subject_ptr).IsCons()) {
     ASSERT_EQ(0, ConsString::cast(subject_ptr)->second()->length());
     subject_ptr = ConsString::cast(subject_ptr)->first();
+  } else if (StringShape(subject_ptr).IsSliced()) {
+    SlicedString* slice = SlicedString::cast(subject_ptr);
+    subject_ptr = slice->parent();
+    slice_offset = slice->offset();
   }
-  // Ensure that an underlying string has the same ascii-ness.
+  // Ensure that an underlying string has the same ASCII-ness.
   bool is_ascii = subject_ptr->IsAsciiRepresentation();
   ASSERT(subject_ptr->IsExternalString() || subject_ptr->IsSeqString());
   // String is now either Sequential or External
   int char_size_shift = is_ascii ? 0 : 1;
-  int char_length = end_offset - start_offset;
 
   const byte* input_start =
-      StringCharacterPosition(subject_ptr, start_offset);
+      StringCharacterPosition(subject_ptr, start_offset + slice_offset);
   int byte_length = char_length << char_size_shift;
   const byte* input_end = input_start + byte_length;
   Result res = Execute(*regexp_code,
-                       subject_ptr,
+                       *subject,
                        start_offset,
                        input_start,
                        input_end,
                        offsets_vector,
+                       offsets_vector_length,
                        isolate);
   return res;
 }
@@ -152,11 +160,12 @@ NativeRegExpMacroAssembler::Result NativeRegExpMacroAssembler::Match(
 
 NativeRegExpMacroAssembler::Result NativeRegExpMacroAssembler::Execute(
     Code* code,
-    String* input,
+    String* input,  // This needs to be the unpacked (sliced, cons) string.
     int start_offset,
     const byte* input_start,
     const byte* input_end,
     int* output,
+    int output_size,
     Isolate* isolate) {
   ASSERT(isolate == Isolate::Current());
   // Ensure that the minimum stack has been allocated.
@@ -170,10 +179,10 @@ NativeRegExpMacroAssembler::Result NativeRegExpMacroAssembler::Execute(
                                           input_start,
                                           input_end,
                                           output,
+                                          output_size,
                                           stack_base,
                                           direct_call,
                                           isolate);
-  ASSERT(result <= SUCCESS);
   ASSERT(result >= RETRY);
 
   if (result == EXCEPTION && !isolate->has_pending_exception()) {

@@ -35,18 +35,49 @@ assert.equal(path.basename(f, '.js'), 'test-path');
 // c.f. http://www.dwheeler.com/essays/fixing-unix-linux-filenames.html
 if (!isWindows) {
   var controlCharFilename = 'Icon' + String.fromCharCode(13);
-  assert.equal(path.basename('/a/b/' + controlCharFilename), controlCharFilename);
+  assert.equal(path.basename('/a/b/' + controlCharFilename),
+               controlCharFilename);
 }
 
 assert.equal(path.extname(f), '.js');
-assert.equal(path.dirname(f).substr(-11), isWindows ? 'test\\simple' : 'test/simple');
+
+assert.equal(path.dirname(f).substr(-11),
+             isWindows ? 'test\\simple' : 'test/simple');
 assert.equal(path.dirname('/a/b/'), '/a');
 assert.equal(path.dirname('/a/b'), '/a');
 assert.equal(path.dirname('/a'), '/');
 assert.equal(path.dirname('/'), '/');
-path.exists(f, function(y) { assert.equal(y, true) });
 
-assert.equal(path.existsSync(f), true);
+if (isWindows) {
+  assert.equal(path.dirname('c:\\'), 'c:\\');
+  assert.equal(path.dirname('c:\\foo'), 'c:\\');
+  assert.equal(path.dirname('c:\\foo\\'), 'c:\\');
+  assert.equal(path.dirname('c:\\foo\\bar'), 'c:\\foo');
+  assert.equal(path.dirname('c:\\foo\\bar\\'), 'c:\\foo');
+  assert.equal(path.dirname('c:\\foo\\bar\\baz'), 'c:\\foo\\bar');
+  assert.equal(path.dirname('\\'), '\\');
+  assert.equal(path.dirname('\\foo'), '\\');
+  assert.equal(path.dirname('\\foo\\'), '\\');
+  assert.equal(path.dirname('\\foo\\bar'), '\\foo');
+  assert.equal(path.dirname('\\foo\\bar\\'), '\\foo');
+  assert.equal(path.dirname('\\foo\\bar\\baz'), '\\foo\\bar');
+  assert.equal(path.dirname('c:'), 'c:');
+  assert.equal(path.dirname('c:foo'), 'c:');
+  assert.equal(path.dirname('c:foo\\'), 'c:');
+  assert.equal(path.dirname('c:foo\\bar'), 'c:foo');
+  assert.equal(path.dirname('c:foo\\bar\\'), 'c:foo');
+  assert.equal(path.dirname('c:foo\\bar\\baz'), 'c:foo\\bar');
+  assert.equal(path.dirname('\\\\unc\\share'), '\\\\unc\\share');
+  assert.equal(path.dirname('\\\\unc\\share\\foo'), '\\\\unc\\share\\');
+  assert.equal(path.dirname('\\\\unc\\share\\foo\\'), '\\\\unc\\share\\');
+  assert.equal(path.dirname('\\\\unc\\share\\foo\\bar'),
+               '\\\\unc\\share\\foo');
+  assert.equal(path.dirname('\\\\unc\\share\\foo\\bar\\'),
+               '\\\\unc\\share\\foo');
+  assert.equal(path.dirname('\\\\unc\\share\\foo\\bar\\baz'),
+               '\\\\unc\\share\\foo\\bar');
+}
+
 
 assert.equal(path.extname(''), '');
 assert.equal(path.extname('/path/to/file'), '');
@@ -68,6 +99,34 @@ assert.equal(path.extname('/.file.ext'), '.ext');
 assert.equal(path.extname('.path/file.ext'), '.ext');
 assert.equal(path.extname('file.ext.ext'), '.ext');
 assert.equal(path.extname('file.'), '.');
+assert.equal(path.extname('.'), '');
+assert.equal(path.extname('./'), '');
+assert.equal(path.extname('.file.ext'), '.ext');
+assert.equal(path.extname('.file'), '');
+assert.equal(path.extname('.file.'), '.');
+assert.equal(path.extname('.file..'), '.');
+assert.equal(path.extname('..'), '');
+assert.equal(path.extname('../'), '');
+assert.equal(path.extname('..file.ext'), '.ext');
+assert.equal(path.extname('..file'), '.file');
+assert.equal(path.extname('..file.'), '.');
+assert.equal(path.extname('..file..'), '.');
+assert.equal(path.extname('...'), '.');
+assert.equal(path.extname('...ext'), '.ext');
+assert.equal(path.extname('....'), '.');
+assert.equal(path.extname('file.ext/'), '');
+
+if (isWindows) {
+  // On windows, backspace is a path separator.
+  assert.equal(path.extname('.\\'), '');
+  assert.equal(path.extname('..\\'), '');
+  assert.equal(path.extname('file.ext\\'), '');
+} else {
+  // On unix, backspace is a valid name component like any other character.
+  assert.equal(path.extname('.\\'), '');
+  assert.equal(path.extname('..\\'), '.\\');
+  assert.equal(path.extname('file.ext\\'), '.ext\\');
+}
 
 // path.join tests
 var failures = [];
@@ -135,6 +194,8 @@ if (isWindows) {
   assert.equal(path.normalize('a//b//../b'), 'a\\b');
   assert.equal(path.normalize('a//b//./c'), 'a\\b\\c');
   assert.equal(path.normalize('a//b//.'), 'a\\b');
+  assert.equal(path.normalize('//server/share/dir/file.ext'),
+               '\\\\server\\share\\dir\\file.ext');
 } else {
   assert.equal(path.normalize('./fixtures///b/../b/c.js'),
                'fixtures/b/c.js');
@@ -148,24 +209,24 @@ if (isWindows) {
 if (isWindows) {
   // windows
   var resolveTests =
-    // arguments                                    result
-    [[['c:/blah\\blah', 'd:/games', 'c:../a'     ], 'c:\\blah\\a'    ],
-     [['c:/ignore', 'd:\\a/b\\c/d', '\\e.exe'    ], 'd:\\e.exe'      ],
-     [['c:/ignore', 'c:/some/file'               ], 'c:\\some\\file' ],
-     [['d:/ignore', 'd:some/dir//'               ], 'd:\\ignore\\some\\dir' ],
-     [['.'                                       ], process.cwd()    ],
-     [['//server/share', '..', 'relative\\'      ], '\\\\server\\share\\relative' ]];
+      // arguments                                    result
+      [[['c:/blah\\blah', 'd:/games', 'c:../a'], 'c:\\blah\\a'],
+       [['c:/ignore', 'd:\\a/b\\c/d', '\\e.exe'], 'd:\\e.exe'],
+       [['c:/ignore', 'c:/some/file'], 'c:\\some\\file'],
+       [['d:/ignore', 'd:some/dir//'], 'd:\\ignore\\some\\dir'],
+       [['.'], process.cwd()],
+       [['//server/share', '..', 'relative\\'], '\\\\server\\share\\relative']];
 } else {
   // Posix
   var resolveTests =
-    // arguments                                    result
-    [[['/var/lib', '../', 'file/'                ], '/var/file'      ],
-     [['/var/lib', '/../', 'file/'               ], '/file'          ],
-     [['a/b/c/', '../../..'                      ], process.cwd()    ],
-     [['.'                                       ], process.cwd()    ],
-     [['/some/dir', '.', '/absolute/'            ], '/absolute'      ]];
+      // arguments                                    result
+      [[['/var/lib', '../', 'file/'], '/var/file'],
+       [['/var/lib', '/../', 'file/'], '/file'],
+       [['a/b/c/', '../../..'], process.cwd()],
+       [['.'], process.cwd()],
+       [['/some/dir', '.', '/absolute/'], '/absolute']];
 }
-var failures = []
+var failures = [];
 resolveTests.forEach(function(test) {
   var actual = path.resolve.apply(path, test[0]);
   var expected = test[1];
@@ -181,34 +242,44 @@ assert.equal(failures.length, 0, failures.join(''));
 if (isWindows) {
   // windows
   var relativeTests =
-   // arguments                     result
-   [['c:/blah\\blah', 'd:/games',   'd:\\games'],
-    ['c:/aaaa/bbbb', 'c:/aaaa',     '..'],
-    ['c:/aaaa/bbbb', 'c:/cccc',     '..\\..\\cccc'],
-    ['c:/aaaa/bbbb', 'c:/aaaa/bbbb',''],
-    ['c:/aaaa/bbbb', 'c:/aaaa/cccc','..\\cccc'],
-    ['c:/aaaa/', 'c:/aaaa/cccc',    'cccc'],
-    ['c:/', 'c:\\aaaa\\bbbb',       'aaaa\\bbbb'],
-    ['c:/aaaa/bbbb', 'd:\\',        'd:\\']];
+      // arguments                     result
+      [['c:/blah\\blah', 'd:/games', 'd:\\games'],
+       ['c:/aaaa/bbbb', 'c:/aaaa', '..'],
+       ['c:/aaaa/bbbb', 'c:/cccc', '..\\..\\cccc'],
+       ['c:/aaaa/bbbb', 'c:/aaaa/bbbb', ''],
+       ['c:/aaaa/bbbb', 'c:/aaaa/cccc', '..\\cccc'],
+       ['c:/aaaa/', 'c:/aaaa/cccc', 'cccc'],
+       ['c:/', 'c:\\aaaa\\bbbb', 'aaaa\\bbbb'],
+       ['c:/aaaa/bbbb', 'd:\\', 'd:\\']];
 } else {
   // posix
   var relativeTests =
-    // arguments                    result
-    [['/var/lib', '/var',           '..'],
-     ['/var/lib', '/bin',           '../../bin'],
-     ['/var/lib', '/var/lib',       ''],
-     ['/var/lib', '/var/apache',    '../apache'],
-     ['/var/', '/var/lib',          'lib'],
-     ['/', '/var/lib',              'var/lib']];
+      // arguments                    result
+      [['/var/lib', '/var', '..'],
+       ['/var/lib', '/bin', '../../bin'],
+       ['/var/lib', '/var/lib', ''],
+       ['/var/lib', '/var/apache', '../apache'],
+       ['/var/', '/var/lib', 'lib'],
+       ['/', '/var/lib', 'var/lib']];
 }
 var failures = [];
 relativeTests.forEach(function(test) {
   var actual = path.relative(test[0], test[1]);
   var expected = test[2];
-  var message = 'path.relative(' + test.slice(0, 2).map(JSON.stringify).join(',') + ')' +
+  var message = 'path.relative(' +
+                test.slice(0, 2).map(JSON.stringify).join(',') +
+                ')' +
                 '\n  expect=' + JSON.stringify(expected) +
                 '\n  actual=' + JSON.stringify(actual);
   if (actual !== expected) failures.push('\n' + message);
 });
 assert.equal(failures.length, 0, failures.join(''));
 
+// path.sep tests
+if (isWindows) {
+    // windows
+    assert.equal(path.sep, '\\');
+} else {
+    // posix
+    assert.equal(path.sep, '/');
+}

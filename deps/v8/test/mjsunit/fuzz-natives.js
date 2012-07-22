@@ -146,6 +146,7 @@ var knownProblems = {
   "NewStrictArgumentsFast": true,
   "PushWithContext": true,
   "PushCatchContext": true,
+  "PushBlockContext": true,
   "LazyCompile": true,
   "LazyRecompile": true,
   "NotifyDeoptimized": true,
@@ -162,6 +163,12 @@ var knownProblems = {
   "PromoteScheduledException": true,
   "DeleteHandleScopeExtensions": true,
 
+  // Vararg with minimum number > 0.
+  "Call": true,
+
+  // Requires integer arguments to be non-negative.
+  "Apply": true,
+
   // That can only be invoked on Array.prototype.
   "FinishArrayPrototypeSetup": true,
 
@@ -177,8 +184,9 @@ var knownProblems = {
   "RegExpConstructResult": true,
   "_RegExpConstructResult": true,
 
-  // This function performs some checks compile time (it requires its first
-  // argument to be a compile time smi).
+  // This functions perform some checks compile time (they require one of their
+  // arguments to be a compile time smi).
+  "_DateField": true,
   "_GetFromCache": true,
 
   // This function expects its first argument to be a non-smi.

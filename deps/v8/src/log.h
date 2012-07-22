@@ -1,4 +1,4 @@
-// Copyright 2011 the V8 project authors. All rights reserved.
+// Copyright 2012 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -29,6 +29,7 @@
 #define V8_LOG_H_
 
 #include "allocation.h"
+#include "objects.h"
 #include "platform.h"
 #include "log-utils.h"
 
@@ -70,7 +71,6 @@ namespace internal {
 // tick profiler requires code events, so --prof implies --log-code.
 
 // Forward declarations.
-class HashMap;
 class LogMessageBuilder;
 class Profiler;
 class Semaphore;
@@ -78,7 +78,6 @@ class SlidingStateWindow;
 class Ticker;
 
 #undef LOG
-#ifdef ENABLE_LOGGING_AND_PROFILING
 #define LOG(isolate, Call)                          \
   do {                                              \
     v8::internal::Logger* logger =                  \
@@ -86,9 +85,6 @@ class Ticker;
     if (logger->is_logging())                       \
       logger->Call;                                 \
   } while (false)
-#else
-#define LOG(isolate, Call) ((void) 0)
-#endif
 
 #define LOG_EVENTS_AND_TAGS_LIST(V)                                     \
   V(CODE_CREATION_EVENT,            "code-creation")                    \
@@ -153,15 +149,17 @@ class Logger {
 #undef DECLARE_ENUM
 
   // Acquires resources for logging if the right flags are set.
-  bool Setup();
+  bool SetUp();
 
   void EnsureTickerStarted();
   void EnsureTickerStopped();
 
   Sampler* sampler();
 
-  // Frees resources acquired in Setup.
-  void TearDown();
+  // Frees resources acquired in SetUp.
+  // When a temporary file is used for the log, returns its stream descriptor,
+  // leaving the file open.
+  FILE* TearDown();
 
   // Enable the computation of a sliding window of states.
   void EnableSlidingStateWindow();
@@ -272,7 +270,6 @@ class Logger {
   // Log an event reported from generated code
   void LogRuntime(Vector<const char> format, JSArray* args);
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
   bool is_logging() {
     return logging_nesting_ > 0;
   }
@@ -284,10 +281,8 @@ class Logger {
   void ResumeProfiler();
   bool IsProfilerPaused();
 
-  // If logging is performed into a memory buffer, allows to
-  // retrieve previously written messages. See v8.h.
-  int GetLogLines(int from_pos, char* dest_buf, int max_size);
-
+  void LogExistingFunction(Handle<SharedFunctionInfo> shared,
+                           Handle<Code> code);
   // Logs all compiled functions found in the heap.
   void LogCompiledFunctions();
   // Logs all accessor callbacks found in the heap.
@@ -299,7 +294,13 @@ class Logger {
   INLINE(static LogEventsAndTags ToNativeByScript(LogEventsAndTags, Script*));
 
   // Profiler's sampling interval (in milliseconds).
+#if defined(ANDROID)
+  // Phones and tablets have processors that are much slower than desktop
+  // and laptop computers for which current heuristics are tuned.
+  static const int kSamplingIntervalMs = 5;
+#else
   static const int kSamplingIntervalMs = 1;
+#endif
 
   // Callback from Log, stops profiling in case of insufficient resources.
   void LogFailure();
@@ -409,7 +410,7 @@ class Logger {
   NameMap* address_to_name_map_;
 
   // Guards against multiple calls to TearDown() that can happen in some tests.
-  // 'true' between Setup() and TearDown().
+  // 'true' between SetUp() and TearDown().
   bool is_initialized_;
 
   // Support for 'incremental addresses' in compressed logs:
@@ -424,9 +425,6 @@ class Logger {
   Address prev_code_;
 
   friend class CpuProfiler;
-#else
-  bool is_logging() { return false; }
-#endif
 };
 
 
@@ -438,6 +436,8 @@ class SamplerRegistry : public AllStatic {
     HAS_SAMPLERS,
     HAS_CPU_PROFILING_SAMPLERS
   };
+
+  static void SetUp();
 
   typedef void (*VisitSampler)(Sampler*, void*);
 
@@ -456,7 +456,6 @@ class SamplerRegistry : public AllStatic {
     return active_samplers_ != NULL && !active_samplers_->is_empty();
   }
 
-  static Mutex* mutex_;  // Protects the state below.
   static List<Sampler*>* active_samplers_;
 
   DISALLOW_IMPLICIT_CONSTRUCTORS(SamplerRegistry);

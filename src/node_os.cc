@@ -20,20 +20,16 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-#include <node.h>
-#include <node_os.h>
-#include <platform.h>
+#include "node.h"
+#include "node_os.h"
 
-#include <v8.h>
+#include "v8.h"
 
 #include <errno.h>
 #include <string.h>
 
 #ifdef __MINGW32__
 # include <io.h>
-
-# include <platform_win32.h>
-# include <platform_win32_winsock.h>
 #endif
 
 #ifdef __POSIX__
@@ -106,19 +102,45 @@ static Handle<Value> GetOSRelease(const Arguments& args) {
 
 static Handle<Value> GetCPUInfo(const Arguments& args) {
   HandleScope scope;
-  Local<Array> cpus;
-  int r = Platform::GetCPUInfo(&cpus);
+  uv_cpu_info_t* cpu_infos;
+  int count, i;
 
-  if (r < 0) {
+  uv_err_t err = uv_cpu_info(&cpu_infos, &count);
+
+  if (err.code != UV_OK) {
     return Undefined();
   }
+
+  Local<Array> cpus = Array::New();
+
+  for (i = 0; i < count; i++) {
+    Local<Object> times_info = Object::New();
+    times_info->Set(String::New("user"),
+      Integer::New(cpu_infos[i].cpu_times.user));
+    times_info->Set(String::New("nice"),
+      Integer::New(cpu_infos[i].cpu_times.nice));
+    times_info->Set(String::New("sys"),
+      Integer::New(cpu_infos[i].cpu_times.sys));
+    times_info->Set(String::New("idle"),
+      Integer::New(cpu_infos[i].cpu_times.idle));
+    times_info->Set(String::New("irq"),
+      Integer::New(cpu_infos[i].cpu_times.irq));
+
+    Local<Object> cpu_info = Object::New();
+    cpu_info->Set(String::New("model"), String::New(cpu_infos[i].model));
+    cpu_info->Set(String::New("speed"), Integer::New(cpu_infos[i].speed));
+    cpu_info->Set(String::New("times"), times_info);
+    (*cpus)->Set(i,cpu_info);
+  }
+
+  uv_free_cpu_info(cpu_infos, count);
 
   return scope.Close(cpus);
 }
 
 static Handle<Value> GetFreeMemory(const Arguments& args) {
   HandleScope scope;
-  double amount = Platform::GetFreeMemory();
+  double amount = uv_get_free_memory();
 
   if (amount < 0) {
     return Undefined();
@@ -129,7 +151,7 @@ static Handle<Value> GetFreeMemory(const Arguments& args) {
 
 static Handle<Value> GetTotalMemory(const Arguments& args) {
   HandleScope scope;
-  double amount = Platform::GetTotalMemory();
+  double amount = uv_get_total_memory();
 
   if (amount < 0) {
     return Undefined();
@@ -140,9 +162,11 @@ static Handle<Value> GetTotalMemory(const Arguments& args) {
 
 static Handle<Value> GetUptime(const Arguments& args) {
   HandleScope scope;
-  double uptime = Platform::GetUptime();
+  double uptime;
 
-  if (uptime < 0) {
+  uv_err_t err = uv_uptime(&uptime);
+
+  if (err.code != UV_OK) {
     return Undefined();
   }
 
@@ -151,35 +175,69 @@ static Handle<Value> GetUptime(const Arguments& args) {
 
 static Handle<Value> GetLoadAvg(const Arguments& args) {
   HandleScope scope;
-  Local<Array> loads = Array::New(3);
-  int r = Platform::GetLoadAvg(&loads);
+  double loadavg[3];
+  uv_loadavg(loadavg);
 
-  if (r < 0) {
-    return Undefined();
-  }
+  Local<Array> loads = Array::New(3);
+  loads->Set(0, Number::New(loadavg[0]));
+  loads->Set(1, Number::New(loadavg[1]));
+  loads->Set(2, Number::New(loadavg[2]));
 
   return scope.Close(loads);
 }
 
 
 static Handle<Value> GetInterfaceAddresses(const Arguments& args) {
-  return Platform::GetInterfaceAddresses();
-}
-
-
-#ifdef __MINGW32__
-static Handle<Value> OpenOSHandle(const Arguments& args) {
   HandleScope scope;
+  uv_interface_address_t* interfaces;
+  int count, i;
+  char ip[INET6_ADDRSTRLEN];
+  Local<Object> ret, o;
+  Local<String> name, family;
+  Local<Array> ifarr;
 
-  intptr_t handle = args[0]->IntegerValue();
+  uv_err_t err = uv_interface_addresses(&interfaces, &count);
 
-  int fd = _open_osfhandle(handle, 0);
-  if (fd < 0)
-    return ThrowException(ErrnoException(errno, "_open_osfhandle"));
+  if (err.code != UV_OK) {
+    return Undefined();
+  }
 
-  return scope.Close(Integer::New(fd));
+  ret = Object::New();
+
+  for (i = 0; i < count; i++) {
+    name = String::New(interfaces[i].name);
+    if (ret->Has(name)) {
+      ifarr = Local<Array>::Cast(ret->Get(name));
+    } else {
+      ifarr = Array::New();
+      ret->Set(name, ifarr);
+    }
+
+    if (interfaces[i].address.address4.sin_family == AF_INET) {
+      uv_ip4_name(&interfaces[i].address.address4,ip, sizeof(ip));
+      family = String::New("IPv4");
+    } else if (interfaces[i].address.address4.sin_family == AF_INET6) {
+      uv_ip6_name(&interfaces[i].address.address6, ip, sizeof(ip));
+      family = String::New("IPv6");
+    } else {
+      strncpy(ip, "<unknown sa family>", INET6_ADDRSTRLEN);
+      family = String::New("<unknown>");
+    }
+
+    o = Object::New();
+    o->Set(String::New("address"), String::New(ip));
+    o->Set(String::New("family"), family);
+    o->Set(String::New("internal"), interfaces[i].is_internal ?
+	True() : False());
+
+    ifarr->Set(ifarr->Length(), o);
+  }
+
+  uv_free_interface_addresses(interfaces, count);
+
+  return scope.Close(ret);
 }
-#endif // __MINGW32__
+
 
 void OS::Initialize(v8::Handle<v8::Object> target) {
   HandleScope scope;
@@ -193,13 +251,9 @@ void OS::Initialize(v8::Handle<v8::Object> target) {
   NODE_SET_METHOD(target, "getOSType", GetOSType);
   NODE_SET_METHOD(target, "getOSRelease", GetOSRelease);
   NODE_SET_METHOD(target, "getInterfaceAddresses", GetInterfaceAddresses);
-
-#ifdef __MINGW32__
-  NODE_SET_METHOD(target, "openOSHandle", OpenOSHandle);
-#endif
 }
 
 
 }  // namespace node
 
-NODE_MODULE(node_os, node::OS::Initialize);
+NODE_MODULE(node_os, node::OS::Initialize)

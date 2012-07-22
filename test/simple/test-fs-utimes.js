@@ -1,7 +1,30 @@
+// Copyright Joyent, Inc. and other Node contributors.
+//
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to permit
+// persons to whom the Software is furnished to do so, subject to the
+// following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+// NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+// OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+// USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 var common = require('../common');
 var assert = require('assert');
 var util = require('util');
 var fs = require('fs');
+
+var is_windows = process.platform === 'win32';
 
 var tests_ok = 0;
 var tests_run = 0;
@@ -45,7 +68,7 @@ function expect_ok(syscall, resource, err, atime, mtime) {
 // the tests assume that __filename belongs to the user running the tests
 // this should be a fairly safe assumption; testing against a temp file
 // would be even better though (node doesn't have such functionality yet)
-function runTests(atime, mtime, callback) {
+function runTest(atime, mtime, callback) {
 
   var fd, err;
   //
@@ -96,7 +119,11 @@ function runTests(atime, mtime, callback) {
       expect_errno('utimes', 'foobarbaz', err, 'ENOENT');
 
       // don't close this fd
-      fd = fs.openSync(__filename, 'r');
+      if (is_windows) {
+        fd = fs.openSync(__filename, 'r+');
+      } else {
+        fd = fs.openSync(__filename, 'r');
+      }
 
       fs.futimes(fd, atime, mtime, function(err) {
         expect_ok('futimes', fd, err, atime, mtime);
@@ -117,10 +144,10 @@ function runTests(atime, mtime, callback) {
 
 var stats = fs.statSync(__filename);
 
-runTests(new Date('1982-09-10 13:37'), new Date('1982-09-10 13:37'), function() {
-  runTests(new Date(), new Date(), function() {
-    runTests(1234.5678, 1234.5678, function() {
-      runTests(stats.mtime, stats.mtime, function() {
+runTest(new Date('1982-09-10 13:37'), new Date('1982-09-10 13:37'), function() {
+  runTest(new Date(), new Date(), function() {
+    runTest(123456.789, 123456.789, function() {
+      runTest(stats.mtime, stats.mtime, function() {
         // done
       });
     });

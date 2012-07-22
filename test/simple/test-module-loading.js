@@ -19,6 +19,9 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+
+
+
 var common = require('../common');
 var assert = require('assert');
 var path = require('path');
@@ -143,14 +146,13 @@ require.extensions['.test'] = function(module, filename) {
 };
 
 assert.equal(require('../fixtures/registerExt2').custom, 'passed');
-common.debug('load modules by absolute id, then change require.paths, ' +
-             'and load another module with the same absolute id.');
-// this will throw if it fails.
-var foo = require('../fixtures/require-path/p1/foo');
-assert.ok(foo.bar.expect === foo.bar.actual);
 
 assert.equal(require('../fixtures/foo').foo, 'ok',
              'require module with no extension');
+
+assert.throws(function() {
+  require.paths;
+}, /removed/, 'Accessing require.paths should throw.');
 
 // Should not attempt to load a directory
 try {
@@ -174,7 +176,7 @@ try {
   require(loadOrder + 'file3');
 } catch (e) {
   // Not a real .node module, but we know we require'd the right thing.
-  assert.ok(e.message.match(/file3\.node/));
+  assert.ok(e.message.replace(/\\/g, '/').match(/file3\.node/));
 }
 assert.equal(require(loadOrder + 'file4').file4, 'file4.reg', msg);
 assert.equal(require(loadOrder + 'file5').file5, 'file5.reg2', msg);
@@ -182,29 +184,10 @@ assert.equal(require(loadOrder + 'file6').file6, 'file6/index.js', msg);
 try {
   require(loadOrder + 'file7');
 } catch (e) {
-  assert.ok(e.message.match(/file7\/index\.node/));
+  assert.ok(e.message.replace(/\\/g, '/').match(/file7\/index\.node/));
 }
 assert.equal(require(loadOrder + 'file8').file8, 'file8/index.reg', msg);
 assert.equal(require(loadOrder + 'file9').file9, 'file9/index.reg2', msg);
-
-
-// test the async module definition pattern modules
-var amdFolder = '../fixtures/amd-modules';
-var amdreg = require(amdFolder + '/regular.js');
-assert.deepEqual(amdreg.ok, {ok: true}, 'regular amd module failed');
-
-// make sure they all get the same 'ok' object.
-var amdModuleExports = require(amdFolder + '/module-exports.js');
-assert.equal(amdModuleExports.ok, amdreg.ok, 'amd module.exports failed');
-
-var amdReturn = require(amdFolder + '/return.js');
-assert.equal(amdReturn.ok, amdreg.ok, 'amd return failed');
-
-var amdObj = require(amdFolder + '/object.js');
-assert.equal(amdObj.ok, amdreg.ok, 'amd object literal failed');
-
-var amdExtraArgs = require(amdFolder + '/extra-args.js');
-assert.equal(amdExtraArgs.ok, amdreg.ok, 'amd extra args failed');
 
 
 // make sure that module.require() is the same as
@@ -214,7 +197,80 @@ var child = require('../fixtures/module-require/child/');
 assert.equal(child.loaded, parent.loaded);
 
 
-process.addListener('exit', function() {
+// #1357 Loading JSON files with require()
+var json = require('../fixtures/packages/main/package.json');
+assert.deepEqual(json, {
+  name: 'package-name',
+  version: '1.2.3',
+  main: 'package-main-module'
+});
+
+
+// now verify that module.children contains all the different
+// modules that we've required, and that all of them contain
+// the appropriate children, and so on.
+
+var children = module.children.reduce(function red(set, child) {
+  var id = path.relative(path.dirname(__dirname), child.id)
+  id = id.replace(/\\/g, '/');
+  set[id] = child.children.reduce(red, {});
+  return set;
+}, {});
+
+assert.deepEqual(children, {
+  'common.js': {},
+  'fixtures/not-main-module.js': {},
+  'fixtures/a.js': {
+    'fixtures/b/c.js': {
+      'fixtures/b/d.js': {},
+      'fixtures/b/package/index.js': {}
+    }
+  },
+  'fixtures/foo': {},
+  'fixtures/nested-index/one/index.js': {
+    'fixtures/nested-index/one/hello.js': {}
+  },
+  'fixtures/nested-index/two/index.js': {
+    'fixtures/nested-index/two/hello.js': {}
+  },
+  'fixtures/nested-index/three.js': {},
+  'fixtures/nested-index/three/index.js': {},
+  'fixtures/packages/main/package-main-module.js': {},
+  'fixtures/packages/main-index/package-main-module/index.js': {},
+  'fixtures/cycles/root.js': {
+    'fixtures/cycles/folder/foo.js': {}
+  },
+  'fixtures/node_modules/foo.js': {
+    'fixtures/node_modules/baz/index.js': {
+      'fixtures/node_modules/bar.js': {},
+      'fixtures/node_modules/baz/node_modules/asdf.js': {}
+    }
+  },
+  'simple/path.js': {},
+  'fixtures/throws_error.js': {},
+  'fixtures/registerExt.test': {},
+  'fixtures/registerExt.hello.world': {},
+  'fixtures/registerExt2.test': {},
+  'fixtures/empty.js': {},
+  'fixtures/module-load-order/file1': {},
+  'fixtures/module-load-order/file2.js': {},
+  'fixtures/module-load-order/file3.node': {},
+  'fixtures/module-load-order/file4.reg': {},
+  'fixtures/module-load-order/file5.reg2': {},
+  'fixtures/module-load-order/file6/index.js': {},
+  'fixtures/module-load-order/file7/index.node': {},
+  'fixtures/module-load-order/file8/index.reg': {},
+  'fixtures/module-load-order/file9/index.reg2': {},
+  'fixtures/module-require/parent/index.js': {
+    'fixtures/module-require/child/index.js': {
+      'fixtures/module-require/child/node_modules/target.js': {}
+    }
+  },
+  'fixtures/packages/main/package.json': {}
+});
+
+
+process.on('exit', function() {
   assert.ok(common.indirectInstanceOf(a.A, Function));
   assert.equal('A done', a.A());
 
@@ -234,3 +290,8 @@ process.addListener('exit', function() {
 
   console.log('exit');
 });
+
+
+// #1440 Loading files with a byte order marker.
+assert.equal(42, require('../fixtures/utf8-bom.js'));
+assert.equal(42, require('../fixtures/utf8-bom.json'));

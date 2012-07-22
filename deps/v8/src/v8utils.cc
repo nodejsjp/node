@@ -110,11 +110,11 @@ char* ReadLine(const char* prompt) {
 }
 
 
-char* ReadCharsFromFile(const char* filename,
+char* ReadCharsFromFile(FILE* file,
                         int* size,
                         int extra_space,
-                        bool verbose) {
-  FILE* file = OS::FOpen(filename, "rb");
+                        bool verbose,
+                        const char* filename) {
   if (file == NULL || fseek(file, 0, SEEK_END) != 0) {
     if (verbose) {
       OS::PrintError("Cannot read from file %s.\n", filename);
@@ -127,16 +127,26 @@ char* ReadCharsFromFile(const char* filename,
   rewind(file);
 
   char* result = NewArray<char>(*size + extra_space);
-  for (int i = 0; i < *size;) {
+  for (int i = 0; i < *size && feof(file) == 0;) {
     int read = static_cast<int>(fread(&result[i], 1, *size - i, file));
-    if (read <= 0) {
+    if (read != (*size - i) && ferror(file) != 0) {
       fclose(file);
       DeleteArray(result);
       return NULL;
     }
     i += read;
   }
-  fclose(file);
+  return result;
+}
+
+
+char* ReadCharsFromFile(const char* filename,
+                        int* size,
+                        int extra_space,
+                        bool verbose) {
+  FILE* file = OS::FOpen(filename, "rb");
+  char* result = ReadCharsFromFile(file, size, extra_space, verbose, filename);
+  if (file != NULL) fclose(file);
   return result;
 }
 
@@ -147,18 +157,34 @@ byte* ReadBytes(const char* filename, int* size, bool verbose) {
 }
 
 
+static Vector<const char> SetVectorContents(char* chars,
+                                            int size,
+                                            bool* exists) {
+  if (!chars) {
+    *exists = false;
+    return Vector<const char>::empty();
+  }
+  chars[size] = '\0';
+  *exists = true;
+  return Vector<const char>(chars, size);
+}
+
+
 Vector<const char> ReadFile(const char* filename,
                             bool* exists,
                             bool verbose) {
   int size;
   char* result = ReadCharsFromFile(filename, &size, 1, verbose);
-  if (!result) {
-    *exists = false;
-    return Vector<const char>::empty();
-  }
-  result[size] = '\0';
-  *exists = true;
-  return Vector<const char>(result, size);
+  return SetVectorContents(result, size, exists);
+}
+
+
+Vector<const char> ReadFile(FILE* file,
+                            bool* exists,
+                            bool verbose) {
+  int size;
+  char* result = ReadCharsFromFile(file, &size, 1, verbose, "");
+  return SetVectorContents(result, size, exists);
 }
 
 
@@ -290,7 +316,7 @@ bool MemoryMappedExternalResource::EnsureIsAscii(bool abort_if_failed) const {
   for (const char* p = data_; p < end; p++) {
     char c = *p;
     if ((c & 0x80) != 0) {
-      // Non-ascii detected:
+      // Non-ASCII detected:
       is_ascii = false;
 
       // Report the error and abort if appropriate:
@@ -303,7 +329,7 @@ bool MemoryMappedExternalResource::EnsureIsAscii(bool abort_if_failed) const {
                c, filename_, line_no, char_no);
 
         // Allow for some context up to kNumberOfLeadingContextChars chars
-        // before the offending non-ascii char to help the user see where
+        // before the offending non-ASCII char to help the user see where
         // the offending char is.
         const int kNumberOfLeadingContextChars = 10;
         const char* err_context = p - kNumberOfLeadingContextChars;
@@ -319,7 +345,7 @@ bool MemoryMappedExternalResource::EnsureIsAscii(bool abort_if_failed) const {
         OS::Abort();
       }
 
-      break;  // Non-ascii detected.  No need to continue scanning.
+      break;  // Non-ASCII detected.  No need to continue scanning.
     }
     if (c == '\n') {
       start_of_line = p;

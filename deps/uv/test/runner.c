@@ -19,6 +19,7 @@
  * IN THE SOFTWARE.
  */
 
+#include <stdio.h>
 #include <string.h>
 
 #include "runner.h"
@@ -28,7 +29,10 @@ char executable_path[PATHMAX] = { '\0' };
 
 
 static void log_progress(int total, int passed, int failed, const char* name) {
-  LOGF("[%% %3d|+ %3d|- %3d]: %s", (passed + failed) / total * 100,
+  if (total == 0)
+    total = 1;
+
+  LOGF("[%% %3d|+ %3d|- %3d]: %s", (int) ((passed + failed) / ((double) total) * 100.0),
       passed, failed, name);
 }
 
@@ -54,7 +58,9 @@ int run_tests(int timeout, int benchmark_output) {
     }
 
     rewind_cursor();
-    log_progress(total, passed, failed, task->task_name);
+    if (!benchmark_output) {
+      log_progress(total, passed, failed, task->task_name);
+    }
 
     if (run_test(task->task_name, timeout, benchmark_output) == 0) {
       passed++;
@@ -64,9 +70,12 @@ int run_tests(int timeout, int benchmark_output) {
   }
 
   rewind_cursor();
-  log_progress(total, passed, failed, "Done.\n");
 
-  return 0;
+  if (!benchmark_output) {
+    log_progress(total, passed, failed, "Done.\n");
+  }
+
+  return failed;
 }
 
 
@@ -81,7 +90,20 @@ int run_test(const char* test, int timeout, int benchmark_output) {
   int i;
 
   status = 255;
+  main_proc = NULL;
   process_count = 0;
+
+#ifndef _WIN32
+  /* Clean up stale socket from previous run. */
+  remove(TEST_PIPENAME);
+#endif
+
+  /* If it's a helper the user asks for, start it directly. */
+  for (task = TASKS; task->main; task++) {
+    if (task->is_helper && strcmp(test, task->process_name) == 0) {
+      return task->main();
+    }
+  }
 
   /* Start the helpers first. */
   for (task = TASKS; task->main; task++) {
@@ -111,7 +133,7 @@ int run_test(const char* test, int timeout, int benchmark_output) {
   uv_sleep(250);
 
   /* Now start the test itself. */
-  for (main_proc = NULL, task = TASKS; task->main; task++) {
+  for (task = TASKS; task->main; task++) {
     if (strcmp(test, task->task_name) != 0) {
       continue;
     }
@@ -160,6 +182,12 @@ int run_test(const char* test, int timeout, int benchmark_output) {
              sizeof errmsg,
              "exit code %d",
              status);
+    goto out;
+  }
+
+  if (benchmark_output) {
+    /* Give the helpers time to clean up their act. */
+    uv_sleep(1000);
   }
 
 out:
@@ -168,13 +196,18 @@ out:
     process_terminate(&processes[i]);
   }
 
-  if (process_wait(processes, process_count - 1, -1) < 0) {
+  if (process_count > 0 &&
+      process_wait(processes, process_count - 1, -1) < 0) {
     FATAL("process_wait failed");
   }
 
   /* Show error and output from processes if the test failed. */
-  if (status != 0) {
-    LOGF("\n`%s` failed: %s\n", test, errmsg);
+  if (status != 0 || task->show_output) {
+    if (status != 0) {
+      LOGF("\n`%s` failed: %s\n", test, errmsg);
+    } else {
+      LOGF("\n");
+    }
 
     for (i = 0; i < process_count; i++) {
       switch (process_output_size(&processes[i])) {
@@ -200,7 +233,7 @@ out:
   } else if (benchmark_output) {
     switch (process_output_size(main_proc)) {
      case -1:
-      LOGF("%s: (unavailabe)\n", test);
+      LOGF("%s: (unavailable)\n", test);
       break;
 
      case 0:
@@ -239,4 +272,55 @@ int run_test_part(const char* test, const char* part) {
 
   LOGF("No test part with that name: %s:%s\n", test, part);
   return 255;
+}
+
+
+static int compare_task(const void* va, const void* vb) {
+  const task_entry_t* a = va;
+  const task_entry_t* b = vb;
+  return strcmp(a->task_name, b->task_name);
+}
+
+
+static int find_helpers(const task_entry_t* task, const task_entry_t** helpers) {
+  const task_entry_t* helper;
+  int n_helpers;
+
+  for (n_helpers = 0, helper = TASKS; helper->main; helper++) {
+    if (helper->is_helper && strcmp(helper->task_name, task->task_name) == 0) {
+      *helpers++ = helper;
+      n_helpers++;
+    }
+  }
+
+  return n_helpers;
+}
+
+
+void print_tests(FILE* stream) {
+  const task_entry_t* helpers[1024];
+  const task_entry_t* task;
+  int n_helpers;
+  int n_tasks;
+  int i;
+
+  for (n_tasks = 0, task = TASKS; task->main; n_tasks++, task++);
+  qsort(TASKS, n_tasks, sizeof(TASKS[0]), compare_task);
+
+  for (task = TASKS; task->main; task++) {
+    if (task->is_helper) {
+      continue;
+    }
+
+    n_helpers = find_helpers(task, helpers);
+    if (n_helpers) {
+      printf("%-25s (helpers:", task->task_name);
+      for (i = 0; i < n_helpers; i++) {
+        printf(" %s", helpers[i]->process_name);
+      }
+      printf(")\n");
+    } else {
+      printf("%s\n", task->task_name);
+    }
+  }
 }

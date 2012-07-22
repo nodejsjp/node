@@ -1,109 +1,111 @@
-## os Module
+# os
+
+    Stability: 4 - API Frozen
 
 <!--
-
-Use `require('os')` to access this module.
-
+Provides a few basic operating-system related utility functions.
 -->
+オペレーティングシステムに関連する基本的なユーティリティ関数を提供します。
+
+<!--
+Use `require('os')` to access this module.
+-->
+
 `require('os')` によってこのモジュールにアクセスします。
 
-### os.hostname()
+## os.tmpDir()
 
 <!--
-
-Returns the hostname of the operating system.
-
+Returns the operating system's default directory for temp files.
 -->
+
+一時ファイルのためのデフォルトディレクトリを返します。
+
+## os.hostname()
+
+<!--
+Returns the hostname of the operating system.
+-->
+
 オペレーティングシステムのホスト名を返します。
 
-### os.type()
+## os.type()
 
 <!--
-
 Returns the operating system name.
-
 -->
+
 オペレーティングシステムの名前を返します。
 
-### os.platform()
+## os.platform()
 
 <!--
-
 Returns the operating system platform.
-
 -->
+
 プラットフォームのオペレーティングシステムを返します。
 
-### os.arch()
+## os.arch()
 
 <!--
-
 Returns the operating system CPU architecture.
-
 -->
+
 オペレーティングシステムの CPU アーキテクチャを返します。
 
-### os.release()
+## os.release()
 
 <!--
-
 Returns the operating system release.
-
 -->
+
 オペレーティングシステムのリリースを返します。
 
-### os.uptime()
+## os.uptime()
 
 <!--
-
 Returns the system uptime in seconds.
-
 -->
 
 システムが起動してからの秒数を返します。
 
-### os.loadavg()
+## os.loadavg()
 
 <!--
-
 Returns an array containing the 1, 5, and 15 minute load averages.
-
 -->
+
 1 分、5 分、15 分間のロードアベレージを含んだ配列を返します。
 
-### os.totalmem()
+## os.totalmem()
 
 <!--
-
 Returns the total amount of system memory in bytes.
-
 -->
+
 システム全体が使用しているメモリのバイト数を返します。
 
-### os.freemem()
+## os.freemem()
 
 <!--
-
 Returns the amount of free system memory in bytes.
-
 -->
+
 システム全体で空いているメモリのバイト数を返します。
 
-### os.cpus()
+## os.cpus()
 
 <!--
-
 Returns an array of objects containing information about each CPU/core installed: model, speed (in MHz), and times (an object containing the number of CPU ticks spent in: user, nice, sys, idle, and irq).
-
 -->
+
 インストールされている CPU/ コアごとの情報を含んだオブジェクトの配列を返します。
 情報はモデル、スピード (MHz)、そして時間 (CPU が使用した user, nice, sys, idle, irq 時間を含んだオブジェクト) です。
 
 <!--
-
 Example inspection of os.cpus:
-
 -->
+
 os.cpus の例:
 
     [ { model: 'Intel(R) Core(TM) i7 CPU         860  @ 2.80GHz',
@@ -171,13 +173,12 @@ os.cpus の例:
            idle: 1072572010,
            irq: 30 } } ]
 
-### os.getNetworkInterfaces()
+## os.networkInterfaces()
 
 <!--
-
 Get a list of network interfaces:
-
 -->
+
 ネットワークインタフェースの一覧を取得します。
 
     { lo0: 
@@ -192,3 +193,10 @@ Get a list of network interfaces:
       vmnet8: [ { address: '10.88.88.1', family: 'IPv4', internal: false } ],
       ppp0: [ { address: '10.2.0.231', family: 'IPv4', internal: false } ] }
 
+## os.EOL
+
+<!--
+A constant defining the appropriate End-of-line marker for the operating system.
+-->
+
+オペレーティングシステムに適した行区切り文字を定義した定数です。

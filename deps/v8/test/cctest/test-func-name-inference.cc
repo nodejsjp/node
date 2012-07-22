@@ -41,7 +41,7 @@ using ::v8::internal::JSFunction;
 using ::v8::internal::Object;
 using ::v8::internal::Runtime;
 using ::v8::internal::Script;
-using ::v8::internal::SmartPointer;
+using ::v8::internal::SmartArrayPointer;
 using ::v8::internal::SharedFunctionInfo;
 using ::v8::internal::String;
 
@@ -96,7 +96,7 @@ static void CheckFunctionName(v8::Handle<v8::Script> script,
       SharedFunctionInfo::cast(shared_func_info_ptr));
 
   // Verify inferred function name.
-  SmartPointer<char> inferred_name =
+  SmartArrayPointer<char> inferred_name =
       shared_func_info->inferred_name()->ToCString();
   CHECK_EQ(ref_inferred_name, *inferred_name);
 #endif  // ENABLE_DEBUGGER_SUPPORT
@@ -360,4 +360,81 @@ TEST(FactoryHashmapConditional) {
       "}");
   // Can't infer the function name statically.
   CheckFunctionName(script, "return 1", "obj.(anonymous function)");
+}
+
+
+TEST(GlobalAssignmentAndCall) {
+  InitializeVM();
+  v8::HandleScope scope;
+
+  v8::Handle<v8::Script> script = Compile(
+      "var Foo = function() {\n"
+      "  return 1;\n"
+      "}();\n"
+      "var Baz = Bar = function() {\n"
+      "  return 2;\n"
+      "}");
+  // The inferred name is empty, because this is an assignment of a result.
+  CheckFunctionName(script, "return 1", "");
+  // See MultipleAssignments test.
+  CheckFunctionName(script, "return 2", "Bar");
+}
+
+
+TEST(AssignmentAndCall) {
+  InitializeVM();
+  v8::HandleScope scope;
+
+  v8::Handle<v8::Script> script = Compile(
+      "(function Enclosing() {\n"
+      "  var Foo;\n"
+      "  Foo = function() {\n"
+      "    return 1;\n"
+      "  }();\n"
+      "  var Baz = Bar = function() {\n"
+      "    return 2;\n"
+      "  }\n"
+      "})();");
+  // The inferred name is empty, because this is an assignment of a result.
+  CheckFunctionName(script, "return 1", "");
+  // See MultipleAssignments test.
+  CheckFunctionName(script, "return 2", "Enclosing.Bar");
+}
+
+
+TEST(MethodAssignmentInAnonymousFunctionCall) {
+  InitializeVM();
+  v8::HandleScope scope;
+
+  v8::Handle<v8::Script> script = Compile(
+      "(function () {\n"
+      "    var EventSource = function () { };\n"
+      "    EventSource.prototype.addListener = function () {\n"
+      "        return 2012;\n"
+      "    };\n"
+      "    this.PublicEventSource = EventSource;\n"
+      "})();");
+  CheckFunctionName(script, "return 2012", "EventSource.addListener");
+}
+
+
+TEST(ReturnAnonymousFunction) {
+  InitializeVM();
+  v8::HandleScope scope;
+
+  v8::Handle<v8::Script> script = Compile(
+      "(function() {\n"
+      "  function wrapCode() {\n"
+      "    return function () {\n"
+      "      return 2012;\n"
+      "    };\n"
+      "  };\n"
+      "  var foo = 10;\n"
+      "  function f() {\n"
+      "    return wrapCode();\n"
+      "  }\n"
+      "  this.ref = f;\n"
+      "})()");
+  script->Run();
+  CheckFunctionName(script, "return 2012", "");
 }

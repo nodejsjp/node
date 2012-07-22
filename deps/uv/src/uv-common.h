@@ -27,27 +27,145 @@
 #ifndef UV_COMMON_H_
 #define UV_COMMON_H_
 
+#include <assert.h>
+#include <stddef.h>
+#include <stdint.h>
+
 #include "uv.h"
+#include "tree.h"
 
-#define COUNTOF(a) (sizeof(a) / sizeof(a[0]))
 
-/*
- * Subclass of uv_handle_t. Used for integration of c-ares.
- */
-typedef struct uv_ares_task_s uv_ares_task_t;
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
 
-struct uv_ares_task_s {
-  UV_HANDLE_FIELDS
-  UV_ARES_TASK_PRIVATE_FIELDS
-  uv_ares_task_t* ares_prev;
-  uv_ares_task_t* ares_next;
+#define container_of(ptr, type, member) \
+  ((type *) ((char *) (ptr) - offsetof(type, member)))
+
+#ifdef _MSC_VER
+# define UNUSED /* empty */
+# define INLINE __inline
+#else
+# define UNUSED __attribute__((unused))
+# define INLINE inline
+#endif
+
+
+#ifndef _WIN32
+enum {
+  UV__HANDLE_INTERNAL = 0x8000,
+  UV__HANDLE_ACTIVE   = 0x4000,
+  UV__HANDLE_REF      = 0x2000
 };
+#else
+# define UV__HANDLE_INTERNAL  0x80
+# define UV__HANDLE_ACTIVE    0x40
+# define UV__HANDLE_REF       0x20
+#endif
+
+extern const uv_err_t uv_ok_;
+
+uv_err_code uv_translate_sys_error(int sys_errno);
+int uv__set_error(uv_loop_t* loop, uv_err_code code, int sys_error);
+int uv__set_sys_error(uv_loop_t* loop, int sys_error);
+int uv__set_artificial_error(uv_loop_t* loop, uv_err_code code);
+uv_err_t uv__new_sys_error(int sys_error);
+uv_err_t uv__new_artificial_error(uv_err_code code);
+
+int uv__tcp_bind(uv_tcp_t* handle, struct sockaddr_in addr);
+int uv__tcp_bind6(uv_tcp_t* handle, struct sockaddr_in6 addr);
+
+int uv__udp_bind(uv_udp_t* handle, struct sockaddr_in addr, unsigned flags);
+int uv__udp_bind6(uv_udp_t* handle, struct sockaddr_in6 addr, unsigned flags);
+
+int uv__tcp_connect(uv_connect_t* req,
+                   uv_tcp_t* handle,
+                   struct sockaddr_in address,
+                   uv_connect_cb cb);
+
+int uv__tcp_connect6(uv_connect_t* req,
+                    uv_tcp_t* handle,
+                    struct sockaddr_in6 address,
+                    uv_connect_cb cb);
+
+void uv__fs_poll_close(uv_fs_poll_t* handle);
 
 
-void uv_remove_ares_handle(uv_ares_task_t* handle);
-uv_ares_task_t* uv_find_ares_handle(ares_socket_t sock);
-void uv_add_ares_handle(uv_ares_task_t* handle);
-int uv_ares_handles_empty();
+UNUSED static int uv__has_active_reqs(const uv_loop_t* loop) {
+  return !ngx_queue_empty(&loop->active_reqs);
+}
 
+UNUSED static void uv__req_register(uv_loop_t* loop, uv_req_t* req) {
+  ngx_queue_insert_tail(&loop->active_reqs, &req->active_queue);
+}
+
+UNUSED static void uv__req_unregister(uv_loop_t* loop, uv_req_t* req) {
+  assert(uv__has_active_reqs(loop));
+  ngx_queue_remove(&req->active_queue);
+}
+
+
+UNUSED static int uv__has_active_handles(const uv_loop_t* loop) {
+  return loop->active_handles > 0;
+}
+
+UNUSED static void uv__active_handle_add(uv_handle_t* h) {
+  h->loop->active_handles++;
+}
+
+UNUSED static void uv__active_handle_rm(uv_handle_t* h) {
+  h->loop->active_handles--;
+}
+
+
+#define uv__active_handle_add(h) uv__active_handle_add((uv_handle_t*)(h))
+#define uv__active_handle_rm(h) uv__active_handle_rm((uv_handle_t*)(h))
+
+#define uv__req_register(loop, req) uv__req_register((loop), (uv_req_t*)(req))
+#define uv__req_unregister(loop, req) uv__req_unregister((loop), (uv_req_t*)(req))
+
+UNUSED static int uv__is_active(const uv_handle_t* h) {
+  return !!(h->flags & UV__HANDLE_ACTIVE);
+}
+#define uv__is_active(h) uv__is_active((const uv_handle_t*)(h))
+
+UNUSED static void uv__handle_start(uv_handle_t* h) {
+  if (h->flags & UV__HANDLE_ACTIVE) return;
+  if (h->flags & UV__HANDLE_REF) uv__active_handle_add(h);
+  h->flags |= UV__HANDLE_ACTIVE;
+}
+#define uv__handle_start(h) uv__handle_start((uv_handle_t*)(h))
+
+UNUSED static void uv__handle_stop(uv_handle_t* h) {
+  if (!(h->flags & UV__HANDLE_ACTIVE)) return;
+  if (h->flags & UV__HANDLE_REF) uv__active_handle_rm(h);
+  h->flags &= ~UV__HANDLE_ACTIVE;
+}
+#define uv__handle_stop(h) uv__handle_stop((uv_handle_t*)(h))
+
+UNUSED static void uv__handle_ref(uv_handle_t* h) {
+  if (h->flags & UV__HANDLE_REF) return;
+  if (h->flags & UV__HANDLE_ACTIVE) uv__active_handle_add(h);
+  h->flags |= UV__HANDLE_REF;
+}
+#define uv__handle_ref(h) uv__handle_ref((uv_handle_t*)(h))
+
+UNUSED static void uv__handle_unref(uv_handle_t* h) {
+  if (!(h->flags & UV__HANDLE_REF)) return;
+  if (h->flags & UV__HANDLE_ACTIVE) uv__active_handle_rm(h);
+  h->flags &= ~UV__HANDLE_REF;
+}
+#define uv__handle_unref(h) uv__handle_unref((uv_handle_t*)(h))
+
+UNUSED static void uv__handle_init(uv_loop_t* loop,
+                                   uv_handle_t* handle,
+                                   uv_handle_type type) {
+  loop->counters.handle_init++;
+  handle->loop = loop;
+  handle->type = type;
+  handle->flags = UV__HANDLE_REF; /* ref the loop when active */
+  ngx_queue_insert_tail(&loop->handle_queue, &handle->handle_queue);
+#ifndef _WIN32
+  handle->next_closing = NULL;
+#endif
+}
 
 #endif /* UV_COMMON_H_ */

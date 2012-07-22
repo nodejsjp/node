@@ -30,8 +30,6 @@
 
 #include "cpu-profiler.h"
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
-
 #include <new>
 #include "circular-queue-inl.h"
 #include "profile-generator-inl.h"
@@ -50,11 +48,6 @@ void CodeCreateEventRecord::UpdateCodeMap(CodeMap* code_map) {
 
 void CodeMoveEventRecord::UpdateCodeMap(CodeMap* code_map) {
   code_map->MoveCode(from, to);
-}
-
-
-void CodeDeleteEventRecord::UpdateCodeMap(CodeMap* code_map) {
-  code_map->DeleteCode(start);
 }
 
 
@@ -82,7 +75,5 @@ bool ProfilerEventsProcessor::FilterOutCodeCreateEvent(
 }
 
 } }  // namespace v8::internal
-
-#endif  // ENABLE_LOGGING_AND_PROFILING
 
 #endif  // V8_CPU_PROFILER_INL_H_

@@ -1,285 +1,257 @@
-WAF=python tools/waf-light
+-include config.mk
 
-web_root = ryan@nodejs.org:~/web/nodejs.org/
+BUILDTYPE ?= Release
+PYTHON ?= python
+DESTDIR ?=
 
-#
-# Because we recursively call make from waf we need to make sure that we are
-# using the correct make. Not all makes are GNU Make, but this likely only
-# works with gnu make. To deal with this we remember how the user invoked us
-# via a make builtin variable and use that in all subsequent operations
-#
-export NODE_MAKE := $(MAKE)
+# BUILDTYPE=Debug builds both release and debug builds. If you want to compile
+# just the debug build, run `make -C out BUILDTYPE=Debug` instead.
+ifeq ($(BUILDTYPE),Release)
+all: out/Makefile node
+else
+all: out/Makefile node node_g
+endif
 
-all: program
+# The .PHONY is needed to ensure that we recursively use the out/Makefile
+# to check for changes.
+.PHONY: node node_g
 
-all-progress:
-	@$(WAF) -p build
+node: config.gypi
+	$(MAKE) -C out BUILDTYPE=Release
+	ln -fs out/Release/node node
 
-program:
-	@$(WAF) --product-type=program build
+node_g: config.gypi
+	$(MAKE) -C out BUILDTYPE=Debug
+	ln -fs out/Debug/node node_g
 
-staticlib:
-	@$(WAF) --product-type=cstaticlib build
+config.gypi: configure
+	./configure
 
-dynamiclib:
-	@$(WAF) --product-type=cshlib build
+out/Debug/node:
+	$(MAKE) -C out BUILDTYPE=Debug
 
-install:
-	@$(WAF) install
+out/Makefile: common.gypi deps/uv/uv.gyp deps/http_parser/http_parser.gyp deps/zlib/zlib.gyp deps/v8/build/common.gypi deps/v8/tools/gyp/v8.gyp node.gyp config.gypi
+	$(PYTHON) tools/gyp_node -f make
+
+install: all
+	out/Release/node tools/installer.js install $(DESTDIR)
 
 uninstall:
-	@$(WAF) uninstall
+	out/Release/node tools/installer.js uninstall
+
+clean:
+	-rm -rf out/Makefile node node_g out/$(BUILDTYPE)/node blog.html email.md
+	-find out/ -name '*.o' -o -name '*.a' | xargs rm -rf
+	-rm -rf node_modules
+
+distclean:
+	-rm -rf out
+	-rm -f config.gypi
+	-rm -f config.mk
+	-rm -rf node node_g blog.html email.md
+	-rm -rf node_modules
 
 test: all
-	python tools/test.py --mode=release simple message
+	$(PYTHON) tools/test.py --mode=release simple message
+	PYTHONPATH=tools/closure_linter/ $(PYTHON) tools/closure_linter/closure_linter/gjslint.py --unix_mode --strict --nojsdoc -r lib/ -r src/ --exclude_files lib/punycode.js
+
+test-http1: all
+	$(PYTHON) tools/test.py --mode=release --use-http1 simple message
 
 test-valgrind: all
-	python tools/test.py --mode=release --valgrind simple message
+	$(PYTHON) tools/test.py --mode=release --valgrind simple message
 
-test-all: all
-	python tools/test.py --mode=debug,release
+test/gc/node_modules/weak/build:
+	@if [ ! -f node ]; then make all; fi
+	./node deps/npm/node_modules/node-gyp/bin/node-gyp rebuild \
+		--directory="$(shell pwd)/test/gc/node_modules/weak" \
+		--nodedir="$(shell pwd)"
+
+test-gc: all test/gc/node_modules/weak/build
+	$(PYTHON) tools/test.py --mode=release gc
+
+test-all: all test/gc/node_modules/weak/build
+	$(PYTHON) tools/test.py --mode=debug,release
+	make test-npm
+
+test-all-http1: all
+	$(PYTHON) tools/test.py --mode=debug,release --use-http1
 
 test-all-valgrind: all
-	python tools/test.py --mode=debug,release --valgrind
+	$(PYTHON) tools/test.py --mode=debug,release --valgrind
 
 test-release: all
-	python tools/test.py --mode=release
+	$(PYTHON) tools/test.py --mode=release
 
 test-debug: all
-	python tools/test.py --mode=debug
+	$(PYTHON) tools/test.py --mode=debug
 
 test-message: all
-	python tools/test.py message
+	$(PYTHON) tools/test.py message
 
 test-simple: all
-	python tools/test.py simple
+	$(PYTHON) tools/test.py simple
 
 test-pummel: all
-	python tools/test.py pummel
+	$(PYTHON) tools/test.py pummel
 
 test-internet: all
-	python tools/test.py internet
+	$(PYTHON) tools/test.py internet
 
-test-uv: all
-	NODE_USE_UV=1 python tools/test.py \
-		simple/test-assert \
-		simple/test-buffer \
-		simple/test-c-ares \
-		simple/test-chdir \
-		simple/test-delayed-require \
-		simple/test-eio-race2 \
-		simple/test-eio-race4 \
-		simple/test-event-emitter-add-listeners \
-		simple/test-event-emitter-modify-in-emit \
-		simple/test-event-emitter-num-args \
-		simple/test-event-emitter-once \
-		simple/test-event-emitter-remove-all-listeners \
-		simple/test-event-emitter-remove-listeners \
-		simple/test-exception-handler \
-		simple/test-exception-handler2 \
-		simple/test-exception-handler \
-		simple/test-file-read-noexist \
-		simple/test-file-write-stream \
-		simple/test-fs-fsync \
-		simple/test-fs-open \
-		simple/test-fs-readfile-empty \
-		simple/test-fs-read-file-sync \
-		simple/test-fs-read-file-sync-hostname \
-		simple/test-fs-sir-writes-alot \
-		simple/test-fs-write \
-		simple/test-fs-write-buffer \
-		simple/test-fs-write-file \
-		simple/test-fs-write-file-buffer \
-		simple/test-fs-write-stream \
-		simple/test-fs-write-stream-end \
-		simple/test-fs-write-sync \
-		simple/test-global \
-		simple/test-http \
-		simple/test-http-1.0 \
-		simple/test-http-allow-req-after-204-res \
-		simple/test-http-blank-header \
-		simple/test-http-buffer-sanity \
-		simple/test-http-cat \
-		simple/test-http-chunked \
-		simple/test-http-client-abort \
-		simple/test-http-client-race \
-		simple/test-http-client-race-2 \
-		simple/test-http-client-upload \
-		simple/test-http-client-upload-buf \
-		simple/test-http-contentLength0 \
-		simple/test-http-default-encoding \
-		simple/test-http-dns-fail \
-		simple/test-http-eof-on-connect \
-		simple/test-http-exceptions \
-		simple/test-http-expect-continue \
-		simple/test-http-extra-response \
-		simple/test-http-head-request \
-		simple/test-http-head-response-has-no-body \
-		simple/test-http-keep-alive \
-		simple/test-http-keep-alive-close-on-header \
-		simple/test-http-malformed-request \
-		simple/test-http-many-keep-alive-connections \
-		simple/test-http-mutable-headers \
-		simple/test-http-parser \
-		simple/test-http-proxy \
-		simple/test-http-request-end \
-		simple/test-http-response-close \
-		simple/test-http-response-readable \
-		simple/test-http-server \
-		simple/test-http-server-multiheaders \
-		simple/test-http-set-cookies \
-		simple/test-http-set-timeout \
-		simple/test-http-set-trailers \
-		simple/test-http-upgrade-agent \
-		simple/test-http-upgrade-client \
-		simple/test-http-upgrade-client2 \
-		simple/test-http-upgrade-server \
-		simple/test-http-upgrade-server2 \
-		simple/test-http-wget \
-		simple/test-http-write-empty-string \
-		simple/test-http-wget \
-		simple/test-mkdir-rmdir \
-		simple/test-net-binary \
-		simple/test-net-can-reset-timeout \
-		simple/test-net-create-connection \
-		simple/test-net-eaddrinuse \
-		simple/test-net-isip \
-		simple/test-net-keepalive \
-		simple/test-net-pingpong \
-		simple/test-net-reconnect \
-		simple/test-net-remote-address-port \
-		simple/test-net-server-max-connections \
-		simple/test-net-server-try-ports \
-		simple/test-net-stream \
-		simple/test-net-socket-timeout \
-		simple/test-next-tick \
-		simple/test-next-tick-errors \
-		simple/test-next-tick-ordering \
-		simple/test-next-tick-ordering2 \
-		simple/test-path \
-		simple/test-pump-file2tcp \
-		simple/test-pump-file2tcp-noexist \
-		simple/test-punycode \
-		simple/test-querystring \
-		simple/test-readdir \
-		simple/test-readdouble \
-		simple/test-readfloat \
-		simple/test-readint \
-		simple/test-readuint \
-		simple/test-regress-GH-819 \
-		simple/test-regress-GH-897 \
-		simple/test-regression-object-prototype \
-		simple/test-require-cache \
-		simple/test-require-cache-without-stat \
-		simple/test-require-exceptions \
-		simple/test-require-resolve \
-		simple/test-script-context \
-		simple/test-script-new \
-		simple/test-script-static-context \
-		simple/test-script-static-new \
-		simple/test-script-static-this \
-		simple/test-script-this \
-		simple/test-stream-pipe-cleanup \
-		simple/test-stream-pipe-error-handling \
-		simple/test-stream-pipe-event \
-		simple/test-stream-pipe-multi \
-		simple/test-string-decoder \
-		simple/test-sys \
-		simple/test-tcp-wrap \
-		simple/test-tcp-wrap-connect \
-		simple/test-tcp-wrap-listen \
-		simple/test-timers-linked-list \
-		simple/test-tty-stdout-end \
-		simple/test-url \
-		simple/test-utf8-scripts \
-		simple/test-vm-create-context-circular-reference \
-		simple/test-writedouble \
-		simple/test-writefloat \
-		simple/test-writeint \
-		simple/test-writeuint \
-		simple/test-zerolengthbufferbug \
-		pummel/test-http-client-reconnect-bug \
-		pummel/test-http-upload-timeout \
-		pummel/test-net-pause \
-		pummel/test-net-pingpong-delay \
-		pummel/test-net-timeout \
-		pummel/test-timers \
-		pummel/test-timer-wrap \
-		pummel/test-timer-wrap2 \
-		pummel/test-vm-memleak \
-		internet/test-dns \
+test-npm: node
+	./node deps/npm/test/run.js
 
-
-build/default/node: all
+test-npm-publish: node
+	npm_package_config_publishtest=true ./node deps/npm/test/run.js
 
 apidoc_sources = $(wildcard doc/api/*.markdown)
-apidocs = $(addprefix build/,$(apidoc_sources:.markdown=.html))
+apidocs = $(addprefix out/,$(apidoc_sources:.markdown=.html)) \
+          $(addprefix out/,$(apidoc_sources:.markdown=.json))
 
-apidoc_dirs = build/doc build/doc/api/ build/doc/api/assets
+apidoc_dirs = out/doc out/doc/api/ out/doc/api/assets out/doc/about out/doc/community out/doc/logos out/doc/images
 
-apiassets = $(subst api_assets,api/assets,$(addprefix build/,$(wildcard doc/api_assets/*)))
+apiassets = $(subst api_assets,api/assets,$(addprefix out/,$(wildcard doc/api_assets/*)))
+
+doc_images = $(addprefix out/,$(wildcard doc/images/* doc/*.jpg doc/*.png))
 
 website_files = \
-	build/doc/index.html    \
-	build/doc/v0.4_announcement.html   \
-	build/doc/cla.html      \
-	build/doc/sh_main.js    \
-	build/doc/sh_javascript.min.js \
-	build/doc/sh_vim-dark.css \
-	build/doc/logo.png      \
-	build/doc/sponsored.png \
-  build/doc/favicon.ico   \
-	build/doc/pipe.css
+	out/doc/index.html    \
+	out/doc/v0.4_announcement.html   \
+	out/doc/cla.html      \
+	out/doc/sh_main.js    \
+	out/doc/sh_javascript.min.js \
+	out/doc/sh_vim-dark.css \
+	out/doc/sh.css \
+	out/doc/favicon.ico   \
+	out/doc/pipe.css \
+	out/doc/about/index.html \
+	out/doc/community/index.html \
+	out/doc/logos/index.html \
+	out/doc/changelog.html \
+	$(doc_images)
 
-doc: build/default/node $(apidoc_dirs) $(website_files) $(apiassets) $(apidocs)
+doc: program $(apidoc_dirs) $(website_files) $(apiassets) $(apidocs) tools/doc/ blog
+
+blogclean:
+	rm -rf out/blog
+
+blog: doc/blog out/Release/node tools/blog
+	out/Release/node tools/blog/generate.js doc/blog/ out/blog/ doc/blog.html doc/rss.xml
 
 $(apidoc_dirs):
 	mkdir -p $@
 
-build/doc/api/assets/%: doc/api_assets/% build/doc/api/assets/
+out/doc/api/assets/%: doc/api_assets/% out/doc/api/assets/
 	cp $< $@
 
-build/doc/%: doc/%
-	cp $< $@
+out/doc/changelog.html: ChangeLog doc/changelog-head.html doc/changelog-foot.html tools/build-changelog.sh
+	bash tools/build-changelog.sh
 
-build/doc/api/%.html: doc/api/%.markdown build/default/node $(apidoc_dirs) $(apiassets) tools/doctool/doctool.js
-	build/default/node tools/doctool/doctool.js doc/template.html $< > $@
+out/doc/%.html: doc/%.html
+	cat $< | sed -e 's|__VERSION__|'$(VERSION)'|g' > $@
 
-build/doc/%:
+out/doc/%: doc/%
+	cp -r $< $@
+
+out/doc/api/%.json: doc/api/%.markdown
+	out/Release/node tools/doc/generate.js --format=json $< > $@
+
+out/doc/api/%.html: doc/api/%.markdown
+	out/Release/node tools/doc/generate.js --format=html --template=doc/template.html $< > $@
+
+email.md: ChangeLog tools/email-footer.md
+	bash tools/changelog-head.sh | sed 's|^\* #|* \\#|g' > $@
+	cat tools/email-footer.md | sed -e 's|__VERSION__|'$(VERSION)'|g' >> $@
+
+blog.html: email.md
+	cat $< | ./node tools/doc/node_modules/.bin/marked > $@
+
+blog-upload: blog
+	rsync -r out/blog/ node@nodejs.org:~/web/nodejs.org/blog/
 
 website-upload: doc
-	scp -r build/doc/* $(web_root)
+	rsync -r out/doc/ node@nodejs.org:~/web/nodejs.org/
+	ssh node@nodejs.org '\
+    rm -f ~/web/nodejs.org/dist/latest &&\
+    ln -s $(VERSION) ~/web/nodejs.org/dist/latest &&\
+    rm -f ~/web/nodejs.org/docs/latest &&\
+    ln -s $(VERSION) ~/web/nodejs.org/docs/latest &&\
+    rm -f ~/web/nodejs.org/dist/node-latest.tar.gz &&\
+    ln -s $(VERSION)/node-$(VERSION).tar.gz ~/web/nodejs.org/dist/node-latest.tar.gz'
 
-docopen: build/doc/api/all.html
-	-google-chrome build/doc/api/all.html
+docopen: out/doc/api/all.html
+	-google-chrome out/doc/api/all.html
 
 docclean:
-	-rm -rf build/doc
+	-rm -rf out/doc
 
-clean:
-	$(WAF) clean
-	-find tools -name "*.pyc" | xargs rm -f
-
-distclean: docclean
-	-find tools -name "*.pyc" | xargs rm -f
-	-rm -rf build/ node node_g
-
-check:
-	@tools/waf-light check
-
-VERSION=$(shell git describe)
+VERSION=v$(shell $(PYTHON) tools/getnodeversion.py)
 TARNAME=node-$(VERSION)
+TARBALL=$(TARNAME).tar.gz
+PKG=out/$(TARNAME).pkg
+packagemaker=/Developer/Applications/Utilities/PackageMaker.app/Contents/MacOS/PackageMaker
 
-#dist: doc/node.1 doc/api
-dist: doc
+dist: doc $(TARBALL) $(PKG)
+
+PKGDIR=out/dist-osx
+
+pkg: $(PKG)
+
+$(PKG):
+	rm -rf $(PKGDIR)
+	rm -rf out/deps out/Release
+	./configure --prefix=$(PKGDIR)/32/usr/local --without-snapshot --dest-cpu=ia32
+	$(MAKE) install
+	rm -rf out/deps out/Release
+	./configure --prefix=$(PKGDIR)/usr/local --without-snapshot --dest-cpu=x64
+	$(MAKE) install
+	lipo $(PKGDIR)/32/usr/local/bin/node \
+		$(PKGDIR)/usr/local/bin/node \
+		-output $(PKGDIR)/usr/local/bin/node-universal \
+		-create
+	mv $(PKGDIR)/usr/local/bin/node-universal $(PKGDIR)/usr/local/bin/node
+	rm -rf $(PKGDIR)/32
+	$(packagemaker) \
+		--id "org.nodejs.NodeJS-$(VERSION)" \
+		--doc tools/osx-pkg.pmdoc \
+		--out $(PKG)
+
+$(TARBALL): node out/doc
+	@if [ "$(shell git status --porcelain | egrep -v '^\?\? ')" = "" ]; then \
+		exit 0 ; \
+	else \
+	  echo "" >&2 ; \
+		echo "The git repository is not clean." >&2 ; \
+		echo "Please commit changes before building release tarball." >&2 ; \
+		echo "" >&2 ; \
+		git status --porcelain | egrep -v '^\?\?' >&2 ; \
+		echo "" >&2 ; \
+		exit 1 ; \
+	fi
+	@if [ $(shell ./node --version) = "$(VERSION)" ]; then \
+		exit 0; \
+	else \
+	  echo "" >&2 ; \
+		echo "$(shell ./node --version) doesn't match $(VERSION)." >&2 ; \
+	  echo "Did you remember to update src/node_version.cc?" >&2 ; \
+	  echo "" >&2 ; \
+		exit 1 ; \
+	fi
 	git archive --format=tar --prefix=$(TARNAME)/ HEAD | tar xf -
-	mkdir -p $(TARNAME)/doc
+	mkdir -p $(TARNAME)/doc/api
 	cp doc/node.1 $(TARNAME)/doc/node.1
-	cp -r build/doc/api $(TARNAME)/doc/api
+	cp -r out/doc/api/* $(TARNAME)/doc/api/
 	rm -rf $(TARNAME)/deps/v8/test # too big
+	rm -rf $(TARNAME)/doc/images # too big
+	find $(TARNAME)/ -type l | xargs rm # annoying on windows
 	tar -cf $(TARNAME).tar $(TARNAME)
 	rm -rf $(TARNAME)
 	gzip -f -9 $(TARNAME).tar
+
+dist-upload: $(TARBALL) $(PKG)
+	ssh node@nodejs.org mkdir -p web/nodejs.org/dist/$(VERSION)
+	scp $(TARBALL) node@nodejs.org:~/web/nodejs.org/dist/$(VERSION)/$(TARBALL)
+	scp $(PKG) node@nodejs.org:~/web/nodejs.org/dist/$(VERSION)/$(TARNAME).pkg
 
 bench:
 	 benchmark/http_simple_bench.sh
@@ -290,11 +262,11 @@ bench-idle:
 	./node benchmark/idle_clients.js &
 
 jslint:
-	PYTHONPATH=tools/closure_linter/ python tools/closure_linter/closure_linter/gjslint.py --unix_mode --strict --nojsdoc -r lib/ -r src/ -r test/
+	PYTHONPATH=tools/closure_linter/ $(PYTHON) tools/closure_linter/closure_linter/gjslint.py --unix_mode --strict --nojsdoc -r lib/ -r src/ --exclude_files lib/punycode.js
 
 cpplint:
-	@python tools/cpplint.py $(wildcard src/*.cc src/*.h src/*.c)
+	@$(PYTHON) tools/cpplint.py $(wildcard src/*.cc src/*.h src/*.c)
 
 lint: jslint cpplint
 
-.PHONY: lint cpplint jslint bench clean docopen docclean doc dist distclean check uninstall install all program staticlib dynamiclib test test-all website-upload
+.PHONY: lint cpplint jslint bench clean docopen docclean doc dist distclean check uninstall install install-includes install-bin all program staticlib dynamiclib test test-all website-upload pkg blog blogclean

@@ -55,9 +55,43 @@ double modulo(double x, double y) {
 }
 
 
+double fast_sin(double x) {
+  UNIMPLEMENTED();
+  return 0;
+}
+
+
+double fast_cos(double x) {
+  UNIMPLEMENTED();
+  return 0;
+}
+
+
+double fast_tan(double x) {
+  UNIMPLEMENTED();
+  return 0;
+}
+
+
+double fast_log(double x) {
+  UNIMPLEMENTED();
+  return 0;
+}
+
+
 // Initialize OS class early in the V8 startup.
-void OS::Setup() {
+void OS::SetUp() {
   // Seed the random number generator.
+  UNIMPLEMENTED();
+}
+
+
+void OS::PostSetUp() {
+  UNIMPLEMENTED();
+}
+
+
+void OS::TearDown() {
   UNIMPLEMENTED();
 }
 
@@ -217,18 +251,9 @@ void OS::Free(void* buf, const size_t length) {
 }
 
 
-#ifdef ENABLE_HEAP_PROTECTION
-
-void OS::Protect(void* address, size_t size) {
+void OS::Guard(void* address, const size_t size) {
   UNIMPLEMENTED();
 }
-
-
-void OS::Unprotect(void* address, size_t size, bool is_executable) {
-  UNIMPLEMENTED();
-}
-
-#endif
 
 
 void OS::Sleep(int milliseconds) {
@@ -299,6 +324,12 @@ bool VirtualMemory::Commit(void* address, size_t size, bool executable) {
 
 
 bool VirtualMemory::Uncommit(void* address, size_t size) {
+  UNIMPLEMENTED();
+  return false;
+}
+
+
+bool VirtualMemory::Guard(void* address) {
   UNIMPLEMENTED();
   return false;
 }
@@ -437,7 +468,6 @@ Semaphore* OS::CreateSemaphore(int count) {
   return new NullSemaphore(count);
 }
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
 
 class ProfileSampler::PlatformData  : public Malloced {
  public:
@@ -472,6 +502,5 @@ void ProfileSampler::Stop() {
   UNIMPLEMENTED();
 }
 
-#endif  // ENABLE_LOGGING_AND_PROFILING
 
 } }  // namespace v8::internal

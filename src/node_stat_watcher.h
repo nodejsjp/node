@@ -22,29 +22,24 @@
 #ifndef NODE_STAT_WATCHER_H_
 #define NODE_STAT_WATCHER_H_
 
-#include <node.h>
-#include <node_events.h>
-#include <ev.h>
+#include "node.h"
+#include "uv.h"
 
 namespace node {
 
-class StatWatcher : EventEmitter {
+class StatWatcher : ObjectWrap {
  public:
   static void Initialize(v8::Handle<v8::Object> target);
 
  protected:
   static v8::Persistent<v8::FunctionTemplate> constructor_template;
 
-  StatWatcher() : EventEmitter() {
-    persistent_ = false;
-    path_ = NULL;
-    ev_init(&watcher_, StatWatcher::Callback);
-    watcher_.data = this;
+  StatWatcher() : ObjectWrap() {
+    uv_fs_poll_init(uv_default_loop(), &watcher_);
   }
 
   ~StatWatcher() {
     Stop();
-    assert(path_ == NULL);
   }
 
   static v8::Handle<v8::Value> New(const v8::Arguments& args);
@@ -52,13 +47,13 @@ class StatWatcher : EventEmitter {
   static v8::Handle<v8::Value> Stop(const v8::Arguments& args);
 
  private:
-  static void Callback(EV_P_ ev_stat *watcher, int revents);
-
+  static void Callback(uv_fs_poll_t* handle,
+                       int status,
+                       const uv_statbuf_t* prev,
+                       const uv_statbuf_t* curr);
   void Stop();
 
-  ev_stat watcher_;
-  bool persistent_;
-  char *path_;
+  uv_fs_poll_t watcher_;
 };
 
 }  // namespace node

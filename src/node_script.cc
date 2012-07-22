@@ -19,8 +19,8 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#include <node.h>
-#include <node_script.h>
+#include "node.h"
+#include "node_script.h"
 #include <assert.h>
 
 namespace node {
@@ -40,6 +40,7 @@ using v8::Local;
 using v8::Array;
 using v8::Persistent;
 using v8::Integer;
+using v8::Function;
 using v8::FunctionTemplate;
 
 
@@ -96,6 +97,38 @@ class WrappedScript : ObjectWrap {
 
   Persistent<Script> script_;
 };
+
+
+Persistent<Function> cloneObjectMethod;
+
+void CloneObject(Handle<Object> recv,
+                 Handle<Value> source, Handle<Value> target) {
+  HandleScope scope;
+
+  Handle<Value> args[] = {source, target};
+
+  // Init
+  if (cloneObjectMethod.IsEmpty()) {
+    Local<Function> cloneObjectMethod_ = Local<Function>::Cast(
+      Script::Compile(String::New(
+        "(function(source, target) {\n\
+           Object.getOwnPropertyNames(source).forEach(function(key) {\n\
+           try {\n\
+             var desc = Object.getOwnPropertyDescriptor(source, key);\n\
+             if (desc.value === source) desc.value = target;\n\
+             Object.defineProperty(target, key, desc);\n\
+           } catch (e) {\n\
+            // Catch sealed properties errors\n\
+           }\n\
+         });\n\
+        })"
+      ), String::New("binding:script"))->Run()
+    );
+    cloneObjectMethod = Persistent<Function>::New(cloneObjectMethod_);
+  }
+
+  cloneObjectMethod->Call(recv, 2, args);
+}
 
 
 void WrappedContext::Initialize(Handle<Object> target) {
@@ -224,14 +257,13 @@ Handle<Value> WrappedScript::CreateContext(const Arguments& args) {
   Local<Object> context = WrappedContext::NewInstance();
 
   if (args.Length() > 0) {
-    Local<Object> sandbox = args[0]->ToObject();
-    Local<Array> keys = sandbox->GetPropertyNames();
+    if (args[0]->IsObject()) {
+      Local<Object> sandbox = args[0].As<Object>();
 
-    for (uint32_t i = 0; i < keys->Length(); i++) {
-      Handle<String> key = keys->Get(Integer::New(i))->ToString();
-      Handle<Value> value = sandbox->Get(key);
-      if(value == sandbox) { value = context; }
-      context->Set(key, value);
+      CloneObject(args.This(), sandbox, context);
+    } else {
+      return ThrowException(Exception::TypeError(String::New(
+          "createContext() accept only object as first argument.")));
     }
   }
 
@@ -308,7 +340,7 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
   }
 
   const int filename_index = sandbox_index +
-                             (context_flag == newContext ? 1 : 0);
+                             (context_flag == thisContext? 0 : 1);
   Local<String> filename = args.Length() > filename_index
                            ? args[filename_index]->ToString()
                            : String::New("evalmachine.<anonymous>");
@@ -321,36 +353,32 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
     display_error = true;
   }
 
-  Persistent<Context> context;
+  Handle<Context> context = Context::GetCurrent();
 
   Local<Array> keys;
-  unsigned int i;
   if (context_flag == newContext) {
     // Create the new context
-    context = Context::New();
+    // Context::New returns a Persistent<Context>, but we only need it for this
+    // function. Here we grab a temporary handle to the new context, assign it
+    // to a local handle, and then dispose the persistent handle. This ensures
+    // that when this function exits the context will be disposed.
+    Persistent<Context> tmp = Context::New();
+    context = Local<Context>::New(tmp);
+    tmp.Dispose();
 
   } else if (context_flag == userContext) {
     // Use the passed in context
-    Local<Object> contextArg = args[sandbox_index]->ToObject();
     WrappedContext *nContext = ObjectWrap::Unwrap<WrappedContext>(sandbox);
     context = nContext->GetV8Context();
   }
 
+  Context::Scope context_scope(context);
+
   // New and user context share code. DRY it up.
   if (context_flag == userContext || context_flag == newContext) {
-    // Enter the context
-    context->Enter();
-
     // Copy everything from the passed in sandbox (either the persistent
     // context for runInContext(), or the sandbox arg to runInNewContext()).
-    keys = sandbox->GetPropertyNames();
-
-    for (i = 0; i < keys->Length(); i++) {
-      Handle<String> key = keys->Get(Integer::New(i))->ToString();
-      Handle<Value> value = sandbox->Get(key);
-      if (value == sandbox) { value = context->Global(); }
-      context->Global()->Set(key, value);
-    }
+    CloneObject(args.This(), sandbox, context->Global()->GetPrototype());
   }
 
   // Catch errors
@@ -389,11 +417,6 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
   if (output_flag == returnResult) {
     result = script->Run();
     if (result.IsEmpty()) {
-      if (context_flag == newContext) {
-        context->DetachGlobal();
-        context->Exit();
-        context.Dispose();
-      }
       return try_catch.ReThrow();
     }
   } else {
@@ -408,23 +431,7 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
 
   if (context_flag == userContext || context_flag == newContext) {
     // success! copy changes back onto the sandbox object.
-    keys = context->Global()->GetPropertyNames();
-    for (i = 0; i < keys->Length(); i++) {
-      Handle<String> key = keys->Get(Integer::New(i))->ToString();
-      Handle<Value> value = context->Global()->Get(key);
-      if (value == context->Global()) { value = sandbox; }
-      sandbox->Set(key, value);
-    }
-  }
-
-  if (context_flag == newContext) {
-    // Clean up, clean up, everybody everywhere!
-    context->DetachGlobal();
-    context->Exit();
-    context.Dispose();
-  } else if (context_flag == userContext) {
-    // Exit the passed in context.
-    context->Exit();
+    CloneObject(args.This(), context->Global()->GetPrototype(), sandbox);
   }
 
   return result == args.This() ? result : scope.Close(result);
@@ -442,5 +449,5 @@ void InitEvals(Handle<Object> target) {
 }  // namespace node
 
 
-NODE_MODULE(node_evals, node::InitEvals);
+NODE_MODULE(node_evals, node::InitEvals)
 

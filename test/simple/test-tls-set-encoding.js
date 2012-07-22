@@ -31,7 +31,7 @@ var options = {
 };
 
 var connections = 0;
-var message = "hello world\n";
+var message = 'hello world\n';
 
 
 var server = tls.Server(options, function(socket) {
@@ -41,7 +41,7 @@ var server = tls.Server(options, function(socket) {
 
 
 server.listen(common.PORT, function() {
-  var client = tls.connect(common.PORT);
+  var client = tls.connect({port: common.PORT});
 
   var buffer = '';
 

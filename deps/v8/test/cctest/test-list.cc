@@ -1,4 +1,4 @@
-// Copyright 2009 the V8 project authors. All rights reserved.
+// Copyright 2011 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -35,7 +35,7 @@ using namespace v8::internal;
 // Use a testing allocator that clears memory before deletion.
 class ZeroingAllocationPolicy {
  public:
-  static void* New(size_t size) {
+  void* New(size_t size) {
     // Stash the size in the first word to use for Delete.
     size_t true_size = size + sizeof(size_t);
     size_t* result = reinterpret_cast<size_t*>(malloc(true_size));
@@ -130,6 +130,18 @@ TEST(RemoveLast) {
 }
 
 
+TEST(Allocate) {
+  List<int> list(4);
+  list.Add(1);
+  CHECK_EQ(1, list.length());
+  list.Allocate(100);
+  CHECK_EQ(100, list.length());
+  CHECK_LE(100, list.capacity());
+  list[99] = 123;
+  CHECK_EQ(123, list[99]);
+}
+
+
 TEST(Clear) {
   List<int> list(4);
   CHECK_EQ(0, list.length());
@@ -137,4 +149,15 @@ TEST(Clear) {
   CHECK_EQ(4, list.length());
   list.Clear();
   CHECK_EQ(0, list.length());
+}
+
+
+TEST(DeleteEmpty) {
+  {
+    List<int>* list = new List<int>(0);
+    delete list;
+  }
+  {
+    List<int> list(0);
+  }
 }

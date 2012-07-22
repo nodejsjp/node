@@ -19,8 +19,12 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+
+
+
 // This test ensures SourceStream.pipe(DestStream) returns DestStream
 
+var common = require('../common');
 var Stream = require('stream').Stream;
 var assert = require('assert');
 var util = require('util');

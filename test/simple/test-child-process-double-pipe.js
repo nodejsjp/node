@@ -19,6 +19,9 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+var is_windows = process.platform === 'win32';
+
+var common = require('../common');
 var assert = require('assert'),
     util = require('util'),
     spawn = require('child_process').spawn;
@@ -26,9 +29,17 @@ var assert = require('assert'),
 // We're trying to reproduce:
 // $ echo "hello\nnode\nand\nworld" | grep o | sed s/o/a/
 
-var echo = spawn('echo', ['hello\nnode\nand\nworld\n']),
-    grep = spawn('grep', ['o']),
-    sed = spawn('sed', ['s/o/O/']);
+var grep = spawn('grep', ['o']),
+    sed = spawn('sed', ['s/o/O/']),
+    echo;
+
+if (is_windows) {
+  echo = spawn('cmd.exe',
+               ['/c', 'echo', 'hello&&', 'echo',
+                'node&&', 'echo', 'and&&', 'echo', 'world']);
+} else {
+  echo = spawn('echo', ['hello\nnode\nand\nworld\n']);
+}
 
 /*
  * grep and sed hang if the spawn function leaks file descriptors to child
@@ -44,6 +55,7 @@ var echo = spawn('echo', ['hello\nnode\nand\nworld\n']),
 
 // pipe echo | grep
 echo.stdout.on('data', function(data) {
+  console.error('grep stdin write ' + data.length);
   if (!grep.stdin.write(data)) {
     echo.stdout.pause();
   }
@@ -58,10 +70,23 @@ echo.stdout.on('end', function(code) {
   grep.stdin.end();
 });
 
+echo.on('exit', function() {
+  console.error('echo exit');
+});
+
+grep.on('exit', function() {
+  console.error('grep exit');
+});
+
+sed.on('exit', function() {
+  console.error('sed exit');
+});
+
 
 
 // pipe grep | sed
 grep.stdout.on('data', function(data) {
+  console.error('grep stdout ' + data.length);
   if (!sed.stdin.write(data)) {
     grep.stdout.pause();
   }
@@ -73,6 +98,7 @@ sed.stdin.on('drain', function(data) {
 
 // propagate end from grep to sed
 grep.stdout.on('end', function(code) {
+  console.error('grep stdout end');
   sed.stdin.end();
 });
 

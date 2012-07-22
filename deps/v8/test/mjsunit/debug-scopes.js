@@ -1,4 +1,4 @@
-// Copyright 2008 the V8 project authors. All rights reserved.
+// Copyright 2011 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -25,13 +25,12 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-// Flags: --expose-debug-as debug
+// Flags: --expose-debug-as debug --allow-natives-syntax
 // The functions used for testing backtraces. They are at the top to make the
 // testing of source line/column easier.
 
-
 // Get the Debug object exposed from the debug context global object.
-Debug = debug.Debug;
+var Debug = debug.Debug;
 
 var test_name;
 var listener_delegate;
@@ -418,6 +417,47 @@ with_5();
 EndTest();
 
 
+// Nested with blocks using existing object in global code.
+BeginTest("With 6");
+listener_delegate = function(exec_state) {
+  CheckScopeChain([debug.ScopeType.With,
+                   debug.ScopeType.With,
+                   debug.ScopeType.Global], exec_state);
+  CheckScopeContent(with_object, 0, exec_state);
+  CheckScopeContent(with_object, 1, exec_state);
+  assertEquals(exec_state.frame().scope(0).scopeObject(), exec_state.frame().scope(1).scopeObject());
+  assertEquals(with_object, exec_state.frame().scope(1).scopeObject().value());
+};
+
+var with_object = {c:3,d:4};
+with(with_object) {
+  with(with_object) {
+    debugger;
+  }
+}
+EndTest();
+
+
+// With block in function that is marked for optimization while being executed.
+BeginTest("With 7");
+
+function with_7() {
+  with({}) {
+    %OptimizeFunctionOnNextCall(with_7);
+    debugger;
+  }
+}
+
+listener_delegate = function(exec_state) {
+  CheckScopeChain([debug.ScopeType.With,
+                   debug.ScopeType.Local,
+                   debug.ScopeType.Global], exec_state);
+  CheckScopeContent({}, 0, exec_state);
+};
+with_7();
+EndTest();
+
+
 // Simple closure formed by returning an inner function referering the outer
 // functions arguments.
 BeginTest("Closure 1");
@@ -771,6 +811,23 @@ closure_in_with_3();
 EndTest();
 
 
+BeginTest("Closure inside With 4");
+listener_delegate = function(exec_state) {
+  CheckScopeChain([debug.ScopeType.Local,
+                   debug.ScopeType.With,
+                   debug.ScopeType.Global], exec_state);
+  CheckScopeContent({x: 2}, 0, exec_state);
+  CheckScopeContent({x: 1}, 1, exec_state);
+};
+
+with({x:1}) {
+  (function(x) {
+    debugger;
+  })(2);
+}
+EndTest();
+
+
 // Test global scope.
 BeginTest("Global");
 listener_delegate = function(exec_state) {
@@ -872,6 +929,65 @@ listener_delegate = function(exec_state) {
   CheckScopeContent({y:98}, 2, exec_state);
 };
 catch_block_4();
+EndTest();
+
+
+// Test catch in global scope.
+BeginTest("Catch block 5");
+listener_delegate = function(exec_state) {
+  CheckScopeChain([debug.ScopeType.Catch,
+                   debug.ScopeType.Global], exec_state);
+  CheckScopeContent({e:'Exception'}, 0, exec_state);
+};
+
+try {
+  throw 'Exception';
+} catch (e) {
+  debugger;
+}
+
+EndTest();
+
+
+// Closure inside catch in global code.
+BeginTest("Catch block 6");
+listener_delegate = function(exec_state) {
+  CheckScopeChain([debug.ScopeType.Local,
+                   debug.ScopeType.Catch,
+                   debug.ScopeType.Global], exec_state);
+  CheckScopeContent({x: 2}, 0, exec_state);
+  CheckScopeContent({e:'Exception'}, 1, exec_state);
+};
+
+try {
+  throw 'Exception';
+} catch (e) {
+  (function(x) {
+    debugger;
+  })(2);
+}
+EndTest();
+
+
+// Catch block in function that is marked for optimization while being executed.
+BeginTest("Catch block 7");
+function catch_block_7() {
+  %OptimizeFunctionOnNextCall(catch_block_7);
+  try {
+    throw 'Exception';
+  } catch (e) {
+    debugger;
+  }
+};
+
+
+listener_delegate = function(exec_state) {
+  CheckScopeChain([debug.ScopeType.Catch,
+                   debug.ScopeType.Local,
+                   debug.ScopeType.Global], exec_state);
+  CheckScopeContent({e:'Exception'}, 0, exec_state);
+};
+catch_block_7();
 EndTest();
 
 

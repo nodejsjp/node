@@ -1,38 +1,50 @@
-CPPFLAGS?=-Wall -Wextra -Werror -I.
-OPT_DEBUG=$(CPPFLAGS) -O0 -g -DHTTP_PARSER_STRICT=1
-OPT_FAST=$(CPPFLAGS) -O3 -DHTTP_PARSER_STRICT=0
-
 CC?=gcc
 AR?=ar
 
+CPPFLAGS += -I.
+CPPFLAGS_DEBUG = $(CPPFLAGS) -DHTTP_PARSER_STRICT=1 -DHTTP_PARSER_DEBUG=1
+CPPFLAGS_DEBUG += $(CPPFLAGS_DEBUG_EXTRA)
+CPPFLAGS_FAST = $(CPPFLAGS) -DHTTP_PARSER_STRICT=0 -DHTTP_PARSER_DEBUG=0
+CPPFLAGS_FAST += $(CPPFLAGS_FAST_EXTRA)
+
+CFLAGS += -Wall -Wextra -Werror
+CFLAGS_DEBUG = $(CFLAGS) -O0 -g $(CFLAGS_DEBUG_EXTRA)
+CFLAGS_FAST = $(CFLAGS) -O3 $(CFLAGS_FAST_EXTRA)
+CFLAGS_LIB = $(CFLAGS_FAST) -fPIC
 
 test: test_g test_fast
 	./test_g
 	./test_fast
 
 test_g: http_parser_g.o test_g.o
-	$(CC) $(OPT_DEBUG) http_parser_g.o test_g.o -o $@
+	$(CC) $(CFLAGS_DEBUG) $(LDFLAGS) http_parser_g.o test_g.o -o $@
 
 test_g.o: test.c http_parser.h Makefile
-	$(CC) $(OPT_DEBUG) -c test.c -o $@
-
-test.o: test.c http_parser.h Makefile
-	$(CC) $(OPT_FAST) -c test.c -o $@
+	$(CC) $(CPPFLAGS_DEBUG) $(CFLAGS_DEBUG) -c test.c -o $@
 
 http_parser_g.o: http_parser.c http_parser.h Makefile
-	$(CC) $(OPT_DEBUG) -c http_parser.c -o $@
+	$(CC) $(CPPFLAGS_DEBUG) $(CFLAGS_DEBUG) -c http_parser.c -o $@
+
+test_fast: http_parser.o test.o http_parser.h
+	$(CC) $(CFLAGS_FAST) $(LDFLAGS) http_parser.o test.o -o $@
+
+test.o: test.c http_parser.h Makefile
+	$(CC) $(CPPFLAGS_FAST) $(CFLAGS_FAST) -c test.c -o $@
+
+http_parser.o: http_parser.c http_parser.h Makefile
+	$(CC) $(CPPFLAGS_FAST) $(CFLAGS_FAST) -c http_parser.c
+
+test-run-timed: test_fast
+	while(true) do time ./test_fast > /dev/null; done
 
 test-valgrind: test_g
 	valgrind ./test_g
 
-http_parser.o: http_parser.c http_parser.h Makefile
-	$(CC) $(OPT_FAST) -c http_parser.c
+libhttp_parser.o: http_parser.c http_parser.h Makefile
+	$(CC) $(CPPFLAGS_FAST) $(CFLAGS_LIB) -c http_parser.c -o libhttp_parser.o
 
-test_fast: http_parser.o test.c http_parser.h
-	$(CC) $(OPT_FAST) http_parser.o test.c -o $@
-
-test-run-timed: test_fast
-	while(true) do time ./test_fast > /dev/null; done
+library: libhttp_parser.o
+	$(CC) -shared -o libhttp_parser.so libhttp_parser.o
 
 package: http_parser.o
 	$(AR) rcs libhttp_parser.a http_parser.o
@@ -41,6 +53,6 @@ tags: http_parser.c http_parser.h test.c
 	ctags $^
 
 clean:
-	rm -f *.o *.a test test_fast test_g http_parser.tar tags
+	rm -f *.o *.a test test_fast test_g http_parser.tar tags libhttp_parser.so libhttp_parser.o
 
 .PHONY: clean package test-run test-run-timed test-valgrind

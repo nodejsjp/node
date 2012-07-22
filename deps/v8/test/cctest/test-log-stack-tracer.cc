@@ -27,8 +27,6 @@
 //
 // Tests of profiler-related functions from log.h
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
-
 #include <stdlib.h>
 
 #include "v8.h"
@@ -55,8 +53,6 @@ using v8::internal::Isolate;
 using v8::internal::JSFunction;
 using v8::internal::StackTracer;
 using v8::internal::TickSample;
-
-namespace i = v8::internal;
 
 
 static v8::Persistent<v8::Context> env;
@@ -311,6 +307,7 @@ TEST(CFromJSStackTrace) {
   // Stack tracing will start from the first JS function, i.e. "JSFuncDoTrace"
   int base = 0;
   CHECK_GT(sample.frames_count, base + 1);
+
   CHECK(IsAddressWithinFuncCode("JSFuncDoTrace", sample.stack[base + 0]));
   CHECK(IsAddressWithinFuncCode("JSTrace", sample.stack[base + 1]));
 }
@@ -413,5 +410,3 @@ TEST(JsEntrySp) {
   CompileRun("js_entry_sp_level2();");
   CHECK_EQ(0, GetJsEntrySp());
 }
-
-#endif  // ENABLE_LOGGING_AND_PROFILING

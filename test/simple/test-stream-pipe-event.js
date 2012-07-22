@@ -19,17 +19,18 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+var common = require('../common');
 var stream = require('stream');
 var assert = require('assert');
 var util = require('util');
 
-function Writable () {
+function Writable() {
   this.writable = true;
   stream.Stream.call(this);
 }
 util.inherits(Writable, stream.Stream);
 
-function Readable () {
+function Readable() {
   this.readable = true;
   stream.Stream.call(this);
 }
@@ -38,11 +39,11 @@ util.inherits(Readable, stream.Stream);
 var passed = false;
 
 var w = new Writable();
-w.on('pipe', function (src) {
+w.on('pipe', function(src) {
   passed = true;
 });
 
 var r = new Readable();
 r.pipe(w);
 
-assert.ok(passed)
+assert.ok(passed);

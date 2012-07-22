@@ -22,9 +22,9 @@
 #ifndef TASK_H_
 #define TASK_H_
 
-
-#include <stdint.h>
 #include <stdio.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 #define TEST_PORT 9123
@@ -32,19 +32,35 @@
 
 #ifdef _WIN32
 # define TEST_PIPENAME "\\\\.\\pipe\\uv-test"
+# define TEST_PIPENAME_2 "\\\\.\\pipe\\uv-test2"
 #else
-# /* TODO: define unix pipe name */
-# define TEST_PIPENAME ""
+# define TEST_PIPENAME "/tmp/uv-test-sock"
+# define TEST_PIPENAME_2 "/tmp/uv-test-sock2"
 #endif
+
+#define ARRAY_SIZE(a) (sizeof(a) / sizeof((a)[0]))
+
+#define container_of(ptr, type, member) \
+  ((type *) ((char *) (ptr) - offsetof(type, member)))
 
 typedef enum {
   TCP = 0,
+  UDP,
   PIPE
 } stream_type;
 
 /* Log to stderr. */
-#define LOG(...)    fprintf(stderr, "%s", __VA_ARGS__)
-#define LOGF(...)   fprintf(stderr, __VA_ARGS__)
+#define LOG(...)                        \
+  do {                                  \
+    fprintf(stderr, "%s", __VA_ARGS__); \
+    fflush(stderr);                     \
+  } while (0)
+
+#define LOGF(...)                       \
+  do {                                  \
+    fprintf(stderr, __VA_ARGS__);       \
+    fflush(stderr);                     \
+  } while (0)
 
 /* Die with fatal error. */
 #define FATAL(msg)                                        \
@@ -54,6 +70,7 @@ typedef enum {
             __FILE__,                                     \
             __LINE__,                                     \
             msg);                                         \
+    fflush(stderr);                                       \
     abort();                                              \
   } while (0)
 
@@ -85,14 +102,6 @@ typedef enum {
 #define HELPER_IMPL(name)  \
   int run_helper_##name()
 
-
-/* Create a thread. Returns the thread identifier, or 0 on failure. */
-uintptr_t uv_create_thread(void (*entry)(void* arg), void* arg);
-
-/* Wait for a thread to terminate. Should return 0 if the thread ended, -1 on
- * error.
- */
-int uv_wait_thread(uintptr_t thread_id);
 
 /* Pause the calling thread for a number of milliseconds. */
 void uv_sleep(int msec);

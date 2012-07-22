@@ -68,8 +68,8 @@ SafepointTable::SafepointTable(Code* code) {
   entries_ = pc_and_deoptimization_indexes_ +
             (length_ * kPcAndDeoptimizationIndexSize);
   ASSERT(entry_size_ > 0);
-  ASSERT_EQ(SafepointEntry::DeoptimizationIndexField::max(),
-            Safepoint::kNoDeoptimizationIndex);
+  STATIC_ASSERT(SafepointEntry::DeoptimizationIndexField::kMax ==
+                Safepoint::kNoDeoptimizationIndex);
 }
 
 
@@ -116,30 +116,40 @@ void SafepointTable::PrintBits(uint8_t byte, int digits) {
 }
 
 
-void Safepoint::DefinePointerRegister(Register reg) {
-  registers_->Add(reg.code());
+void Safepoint::DefinePointerRegister(Register reg, Zone* zone) {
+  registers_->Add(reg.code(), zone);
 }
 
 
 Safepoint SafepointTableBuilder::DefineSafepoint(
-    Assembler* assembler, Safepoint::Kind kind, int arguments,
-    int deoptimization_index) {
-  ASSERT(deoptimization_index != -1);
+    Assembler* assembler,
+    Safepoint::Kind kind,
+    int arguments,
+    Safepoint::DeoptMode deopt_mode) {
   ASSERT(arguments >= 0);
-  DeoptimizationInfo pc_and_deoptimization_index;
-  pc_and_deoptimization_index.pc = assembler->pc_offset();
-  pc_and_deoptimization_index.deoptimization_index = deoptimization_index;
-  pc_and_deoptimization_index.pc_after_gap = assembler->pc_offset();
-  pc_and_deoptimization_index.arguments = arguments;
-  pc_and_deoptimization_index.has_doubles = (kind & Safepoint::kWithDoubles);
-  deoptimization_info_.Add(pc_and_deoptimization_index);
-  indexes_.Add(new ZoneList<int>(8));
+  DeoptimizationInfo info;
+  info.pc = assembler->pc_offset();
+  info.arguments = arguments;
+  info.has_doubles = (kind & Safepoint::kWithDoubles);
+  deoptimization_info_.Add(info, zone_);
+  deopt_index_list_.Add(Safepoint::kNoDeoptimizationIndex, zone_);
+  if (deopt_mode == Safepoint::kNoLazyDeopt) {
+    last_lazy_safepoint_ = deopt_index_list_.length();
+  }
+  indexes_.Add(new(zone_) ZoneList<int>(8, zone_), zone_);
   registers_.Add((kind & Safepoint::kWithRegisters)
-      ? new ZoneList<int>(4)
-      : NULL);
+      ? new(zone_) ZoneList<int>(4, zone_)
+      : NULL,
+      zone_);
   return Safepoint(indexes_.last(), registers_.last());
 }
 
+
+void SafepointTableBuilder::RecordLazyDeoptimizationIndex(int index) {
+  while (last_lazy_safepoint_ < deopt_index_list_.length()) {
+    deopt_index_list_[last_lazy_safepoint_++] = index;
+  }
+}
 
 unsigned SafepointTableBuilder::GetCodeOffset() const {
   ASSERT(emitted_);
@@ -173,20 +183,20 @@ void SafepointTableBuilder::Emit(Assembler* assembler, int bits_per_entry) {
   assembler->dd(length);
   assembler->dd(bytes_per_entry);
 
-  // Emit sorted table of pc offsets together with deoptimization indexes and
-  // pc after gap information.
+  // Emit sorted table of pc offsets together with deoptimization indexes.
   for (int i = 0; i < length; i++) {
     assembler->dd(deoptimization_info_[i].pc);
-    assembler->dd(EncodeExceptPC(deoptimization_info_[i]));
+    assembler->dd(EncodeExceptPC(deoptimization_info_[i],
+                                 deopt_index_list_[i]));
   }
 
   // Emit table of bitmaps.
-  ZoneList<uint8_t> bits(bytes_per_entry);
+  ZoneList<uint8_t> bits(bytes_per_entry, zone_);
   for (int i = 0; i < length; i++) {
     ZoneList<int>* indexes = indexes_[i];
     ZoneList<int>* registers = registers_[i];
     bits.Clear();
-    bits.AddBlock(0, bytes_per_entry);
+    bits.AddBlock(0, bytes_per_entry, zone_);
 
     // Run through the registers (if any).
     ASSERT(IsAligned(kNumSafepointRegisters, kBitsPerByte));
@@ -222,33 +232,12 @@ void SafepointTableBuilder::Emit(Assembler* assembler, int bits_per_entry) {
 }
 
 
-uint32_t SafepointTableBuilder::EncodeExceptPC(const DeoptimizationInfo& info) {
-  unsigned index = info.deoptimization_index;
-  unsigned gap_size = info.pc_after_gap - info.pc;
+uint32_t SafepointTableBuilder::EncodeExceptPC(const DeoptimizationInfo& info,
+                                               unsigned index) {
   uint32_t encoding = SafepointEntry::DeoptimizationIndexField::encode(index);
-  encoding |= SafepointEntry::GapCodeSizeField::encode(gap_size);
   encoding |= SafepointEntry::ArgumentsField::encode(info.arguments);
   encoding |= SafepointEntry::SaveDoublesField::encode(info.has_doubles);
   return encoding;
-}
-
-
-int SafepointTableBuilder::CountShortDeoptimizationIntervals(unsigned limit) {
-  int result = 0;
-  if (!deoptimization_info_.is_empty()) {
-    unsigned previous_gap_end = deoptimization_info_[0].pc_after_gap;
-    for (int i = 1, n = deoptimization_info_.length(); i < n; i++) {
-      DeoptimizationInfo info = deoptimization_info_[i];
-      if (static_cast<int>(info.deoptimization_index) !=
-          Safepoint::kNoDeoptimizationIndex) {
-        if (previous_gap_end + limit > info.pc) {
-          result++;
-        }
-        previous_gap_end = info.pc_after_gap;
-      }
-    }
-  }
-  return result;
 }
 
 

@@ -1,4 +1,4 @@
-// Copyright 2010 the V8 project authors. All rights reserved.
+// Copyright 2012 the V8 project authors. All rights reserved.
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -28,8 +28,6 @@
 #ifndef V8_CPU_PROFILER_H_
 #define V8_CPU_PROFILER_H_
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
-
 #include "allocation.h"
 #include "atomicops.h"
 #include "circular-queue.h"
@@ -43,14 +41,12 @@ class CodeEntry;
 class CodeMap;
 class CpuProfile;
 class CpuProfilesCollection;
-class HashMap;
 class ProfileGenerator;
 class TokenEnumerator;
 
 #define CODE_EVENTS_TYPE_LIST(V)                                   \
   V(CODE_CREATION,    CodeCreateEventRecord)                       \
   V(CODE_MOVE,        CodeMoveEventRecord)                         \
-  V(CODE_DELETE,      CodeDeleteEventRecord)                       \
   V(SHARED_FUNC_MOVE, SharedFunctionInfoMoveEventRecord)
 
 
@@ -84,14 +80,6 @@ class CodeMoveEventRecord : public CodeEventRecord {
  public:
   Address from;
   Address to;
-
-  INLINE(void UpdateCodeMap(CodeMap* code_map));
-};
-
-
-class CodeDeleteEventRecord : public CodeEventRecord {
- public:
-  Address start;
 
   INLINE(void UpdateCodeMap(CodeMap* code_map));
 };
@@ -206,9 +194,6 @@ class ProfilerEventsProcessor : public Thread {
       v8::internal::CpuProfiler::Call;                        \
     }                                                         \
   } while (false)
-#else
-#define PROFILE(isolate, Call) LOG(isolate, Call)
-#endif  // ENABLE_LOGGING_AND_PROFILING
 
 
 namespace v8 {
@@ -218,10 +203,9 @@ namespace internal {
 // TODO(isolates): isolatify this class.
 class CpuProfiler {
  public:
-  static void Setup();
+  static void SetUp();
   static void TearDown();
 
-#ifdef ENABLE_LOGGING_AND_PROFILING
   static void StartProfiling(const char* title);
   static void StartProfiling(String* title);
   static CpuProfile* StopProfiling(const char* title);
@@ -245,11 +229,11 @@ class CpuProfiler {
                               Code* code, String* name);
   static void CodeCreateEvent(Logger::LogEventsAndTags tag,
                               Code* code,
-                              SharedFunctionInfo *shared,
+                              SharedFunctionInfo* shared,
                               String* name);
   static void CodeCreateEvent(Logger::LogEventsAndTags tag,
                               Code* code,
-                              SharedFunctionInfo *shared,
+                              SharedFunctionInfo* shared,
                               String* source, int line);
   static void CodeCreateEvent(Logger::LogEventsAndTags tag,
                               Code* code, int args_count);
@@ -288,10 +272,6 @@ class CpuProfiler {
   int saved_logging_nesting_;
   bool need_to_stop_sampler_;
   Atomic32 is_profiling_;
-
-#else
-  static INLINE(bool is_profiling(Isolate* isolate)) { return false; }
-#endif  // ENABLE_LOGGING_AND_PROFILING
 
  private:
   DISALLOW_COPY_AND_ASSIGN(CpuProfiler);
