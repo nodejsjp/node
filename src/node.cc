@@ -69,7 +69,6 @@ typedef int mode_t;
 #include "node_http_parser.h"
 #ifdef __POSIX__
 # include "node_signal_watcher.h"
-# include "node_stat_watcher.h"
 #endif
 #include "node_constants.h"
 #include "node_javascript.h"
@@ -114,19 +113,21 @@ static Persistent<String> listeners_symbol;
 static Persistent<String> uncaught_exception_symbol;
 static Persistent<String> emit_symbol;
 
-static Persistent<String> enter_symbol;
-static Persistent<String> exit_symbol;
-static Persistent<String> disposed_symbol;
+static Persistent<Function> process_makeCallback;
 
 
 static bool print_eval = false;
 static bool force_repl = false;
+static bool trace_deprecation = false;
 static char *eval_string = NULL;
 static int option_end_index = 0;
 static bool use_debug_agent = false;
 static bool debug_wait_connect = false;
 static int debug_port=5858;
 static int max_stack_size = 0;
+
+// used by C++ modules as well
+bool no_deprecation = false;
 
 static uv_check_t check_tick_watcher;
 static uv_prepare_t prepare_tick_watcher;
@@ -246,7 +247,9 @@ static void Tick(void) {
 
   TryCatch try_catch;
 
-  cb->Call(process, 0, NULL);
+  // Let the tick callback know that this is coming from the spinner
+  Handle<Value> argv[] = { True() };
+  cb->Call(process, ARRAY_SIZE(argv), argv);
 
   if (try_catch.HasCaught()) {
     FatalException(try_catch);
@@ -1007,42 +1010,27 @@ MakeCallback(const Handle<Object> object,
 
   TryCatch try_catch;
 
-  if (enter_symbol.IsEmpty()) {
-    enter_symbol = NODE_PSYMBOL("enter");
-    exit_symbol = NODE_PSYMBOL("exit");
-    disposed_symbol = NODE_PSYMBOL("_disposed");
-  }
-
-  Local<Value> domain_v = object->Get(domain_symbol);
-  Local<Object> domain;
-  Local<Function> enter;
-  Local<Function> exit;
-  if (!domain_v->IsUndefined()) {
-    domain = domain_v->ToObject();
-    if (domain->Get(disposed_symbol)->BooleanValue()) {
-      // domain has been disposed of.
-      return Undefined();
+  if (process_makeCallback.IsEmpty()) {
+    Local<Value> cb_v = process->Get(String::New("_makeCallback"));
+    if (!cb_v->IsFunction()) {
+      fprintf(stderr, "process._makeCallback assigned to non-function\n");
+      abort();
     }
-    enter = Local<Function>::Cast(domain->Get(enter_symbol));
-    enter->Call(domain, 0, NULL);
+    Local<Function> cb = cb_v.As<Function>();
+    process_makeCallback = Persistent<Function>::New(cb);
   }
 
-  if (try_catch.HasCaught()) {
-    FatalException(try_catch);
-    return Undefined();
+  Local<Array> argArray = Array::New(argc);
+  for (int i = 0; i < argc; i++) {
+    argArray->Set(Integer::New(i), argv[i]);
   }
 
-  Local<Value> ret = callback->Call(object, argc, argv);
+  Local<Value> object_l = Local<Value>::New(object);
+  Local<Value> callback_l = Local<Value>::New(callback);
 
-  if (try_catch.HasCaught()) {
-    FatalException(try_catch);
-    return Undefined();
-  }
+  Local<Value> args[3] = { object_l, callback_l, argArray };
 
-  if (!domain_v->IsUndefined()) {
-    exit = Local<Function>::Cast(domain->Get(exit_symbol));
-    exit->Call(domain, 0, NULL);
-  }
+  Local<Value> ret = process_makeCallback->Call(process, ARRAY_SIZE(args), args);
 
   if (try_catch.HasCaught()) {
     FatalException(try_catch);
@@ -1095,12 +1083,16 @@ enum encoding ParseEncoding(Handle<Value> encoding_v, enum encoding _default) {
   } else if (strcasecmp(*encoding, "hex") == 0) {
     return HEX;
   } else if (strcasecmp(*encoding, "raw") == 0) {
-    fprintf(stderr, "'raw' (array of integers) has been removed. "
-                    "Use 'binary'.\n");
+    if (!no_deprecation) {
+      fprintf(stderr, "'raw' (array of integers) has been removed. "
+                      "Use 'binary'.\n");
+    }
     return BINARY;
   } else if (strcasecmp(*encoding, "raws") == 0) {
-    fprintf(stderr, "'raws' encoding has been renamed to 'binary'. "
-                    "Please update your code.\n");
+    if (!no_deprecation) {
+      fprintf(stderr, "'raws' encoding has been renamed to 'binary'. "
+                      "Please update your code.\n");
+    }
     return BINARY;
   } else {
     return _default;
@@ -1683,6 +1675,11 @@ Handle<Value> Hrtime(const v8::Arguments& args) {
 
   if (args.Length() > 0) {
     // return a time diff tuple
+    if (!args[0]->IsArray()) {
+      Local<Value> exception = Exception::TypeError(
+          String::New("process.hrtime() only accepts an Array tuple."));
+      return ThrowException(exception);
+    }
     Local<Array> inArray = Local<Array>::Cast(args[0]);
     uint64_t seconds = inArray->Get(0)->Uint32Value();
     uint64_t nanos = inArray->Get(1)->Uint32Value();
@@ -1846,9 +1843,6 @@ void FatalException(TryCatch &try_catch) {
     ReportException(event_try_catch, true);
     exit(1);
   }
-
-  // This makes sure uncaught exceptions don't interfere with process.nextTick
-  StartTickSpinner();
 }
 
 
@@ -1952,8 +1946,8 @@ static Handle<Value> EnvGetter(Local<String> property,
     return scope.Close(String::New(reinterpret_cast<uint16_t*>(buffer), result));
   }
 #endif
-  // Not found
-  return Undefined();
+  // Not found.  Fetch from prototype.
+  return scope.Close(info.Data().As<Object>()->Get(property));
 }
 
 
@@ -2203,7 +2197,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
                                        EnvQuery,
                                        EnvDeleter,
                                        EnvEnumerator,
-                                       Undefined());
+                                       Object::New());
   Local<Object> env = envTemplate->NewInstance();
   process->Set(String::NewSymbol("env"), env);
 
@@ -2223,6 +2217,16 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   // -i, --interactive
   if (force_repl) {
     process->Set(String::NewSymbol("_forceRepl"), True());
+  }
+
+  // --no-deprecation
+  if (no_deprecation) {
+    process->Set(String::NewSymbol("noDeprecation"), True());
+  }
+
+  // --trace-deprecation
+  if (trace_deprecation) {
+    process->Set(String::NewSymbol("traceDeprecation"), True());
   }
 
   size_t size = 2*PATH_MAX;
@@ -2372,6 +2376,8 @@ static void PrintHelp() {
          "  -p, --print          print result of --eval\n"
          "  -i, --interactive    always enter the REPL even if stdin\n"
          "                       does not appear to be a terminal\n"
+         "  --no-deprecation     silence deprecation warnings\n"
+         "  --trace-deprecation  show stack traces on deprecations\n"
          "  --v8-options         print v8 command line options\n"
          "  --max-stack-size=val set max v8 stack size (bytes)\n"
          "\n"
@@ -2429,6 +2435,12 @@ static void ParseArgs(int argc, char **argv) {
       argv[i] = const_cast<char*>("");
     } else if (strcmp(arg, "--v8-options") == 0) {
       argv[i] = const_cast<char*>("--help");
+    } else if (strcmp(arg, "--no-deprecation") == 0) {
+      argv[i] = const_cast<char*>("");
+      no_deprecation = true;
+    } else if (strcmp(arg, "--trace-deprecation") == 0) {
+      argv[i] = const_cast<char*>("");
+      trace_deprecation = true;
     } else if (argv[i][0] != '-') {
       break;
     }

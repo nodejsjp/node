@@ -297,7 +297,14 @@ Handle<Value> SecureContext::SetKey(const Arguments& args) {
 
   if (!key) {
     BIO_free(bio);
-    return False();
+    unsigned long err = ERR_get_error();
+    if (!err) {
+      return ThrowException(Exception::Error(
+          String::New("PEM_read_bio_PrivateKey")));
+    }
+    char string[120];
+    ERR_error_string_n(err, string, sizeof string);
+    return ThrowException(Exception::Error(String::New(string)));
   }
 
   SSL_CTX_use_PrivateKey(sc->ctx_, key);
@@ -1540,7 +1547,8 @@ Handle<Value> Connection::VerifyError(const Arguments& args) {
     // We requested a certificate and they did not send us one.
     // Definitely an error.
     // XXX is this the right error message?
-    return scope.Close(String::New("UNABLE_TO_GET_ISSUER_CERT"));
+    return scope.Close(Exception::Error(
+          String::New("UNABLE_TO_GET_ISSUER_CERT")));
   }
   X509_free(peer_cert);
 
@@ -1666,7 +1674,7 @@ Handle<Value> Connection::VerifyError(const Arguments& args) {
       break;
   }
 
-  return scope.Close(s);
+  return scope.Close(Exception::Error(s));
 }
 
 
@@ -2634,10 +2642,8 @@ class Decipher : public ObjectWrap {
         char* complete_hex = new char[len+2];
         memcpy(complete_hex, &cipher->incomplete_hex, 1);
         memcpy(complete_hex+1, buf, len);
-        if (alloc_buf) {
-          delete [] buf;
-          alloc_buf = false;
-        }
+        if (alloc_buf) delete [] buf;
+        alloc_buf = true;
         buf = complete_hex;
         len += 1;
       }

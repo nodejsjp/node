@@ -298,9 +298,15 @@ static int uv_getaddrinfo_done(eio_req* req_) {
 
   uv__req_unregister(req->loop, req);
 
-  free(req->hints);
-  free(req->service);
-  free(req->hostname);
+  /* see initialization in uv_getaddrinfo() */
+  if (req->hints)
+    free(req->hints);
+  else if (req->service)
+    free(req->service);
+  else if (req->hostname)
+    free(req->hostname);
+  else
+    assert(0);
 
   if (req->retcode == 0) {
     /* OK */
@@ -325,62 +331,81 @@ static int uv_getaddrinfo_done(eio_req* req_) {
 }
 
 
-static void getaddrinfo_thread_proc(eio_req *req) {
-  uv_getaddrinfo_t* handle = req->data;
+static void getaddrinfo_thread_proc(eio_req *req_) {
+  uv_getaddrinfo_t* req = req_->data;
 
-  handle->retcode = getaddrinfo(handle->hostname,
-                                handle->service,
-                                handle->hints,
-                                &handle->res);
+  req->retcode = getaddrinfo(req->hostname,
+                             req->service,
+                             req->hints,
+                             &req->res);
 }
 
 
-/* stub implementation of uv_getaddrinfo */
 int uv_getaddrinfo(uv_loop_t* loop,
-                   uv_getaddrinfo_t* handle,
+                   uv_getaddrinfo_t* req,
                    uv_getaddrinfo_cb cb,
                    const char* hostname,
                    const char* service,
                    const struct addrinfo* hints) {
-  eio_req* req;
+  size_t hostname_len;
+  size_t service_len;
+  size_t hints_len;
+  eio_req* req_;
+  size_t len;
+  char* buf;
+
+  if (req == NULL || cb == NULL || (hostname == NULL && service == NULL))
+    return uv__set_artificial_error(loop, UV_EINVAL);
+
   uv_eio_init(loop);
 
-  if (handle == NULL || cb == NULL ||
-      (hostname == NULL && service == NULL)) {
-    uv__set_artificial_error(loop, UV_EINVAL);
-    return -1;
-  }
+  hostname_len = hostname ? strlen(hostname) + 1 : 0;
+  service_len = service ? strlen(service) + 1 : 0;
+  hints_len = hints ? sizeof(*hints) : 0;
+  buf = malloc(hostname_len + service_len + hints_len);
 
-  uv__req_init(loop, handle, UV_GETADDRINFO);
-  handle->loop = loop;
-  handle->cb = cb;
+  if (buf == NULL)
+    return uv__set_artificial_error(loop, UV_ENOMEM);
 
-  /* TODO don't alloc so much. */
+  uv__req_init(loop, req, UV_GETADDRINFO);
+  req->loop = loop;
+  req->cb = cb;
+  req->res = NULL;
+  req->hints = NULL;
+  req->service = NULL;
+  req->hostname = NULL;
+  req->retcode = 0;
+
+  /* order matters, see uv_getaddrinfo_done() */
+  len = 0;
 
   if (hints) {
-    handle->hints = malloc(sizeof(struct addrinfo));
-    memcpy(handle->hints, hints, sizeof(struct addrinfo));
-  }
-  else {
-    handle->hints = NULL;
+    req->hints = memcpy(buf + len, hints, sizeof(*hints));
+    len += sizeof(*hints);
   }
 
-  /* TODO security! check lengths, check return values. */
+  if (service) {
+    req->service = memcpy(buf + len, service, service_len);
+    len += service_len;
+  }
 
-  handle->hostname = hostname ? strdup(hostname) : NULL;
-  handle->service = service ? strdup(service) : NULL;
-  handle->res = NULL;
-  handle->retcode = 0;
+  if (hostname) {
+    req->hostname = memcpy(buf + len, hostname, hostname_len);
+    len += hostname_len;
+  }
 
-  /* TODO check handle->hostname == NULL */
-  /* TODO check handle->service == NULL */
+  req_ = eio_custom(getaddrinfo_thread_proc,
+                    EIO_PRI_DEFAULT,
+                    uv_getaddrinfo_done,
+                    req,
+                    &loop->uv_eio_channel);
 
-  req = eio_custom(getaddrinfo_thread_proc, EIO_PRI_DEFAULT,
-      uv_getaddrinfo_done, handle, &loop->uv_eio_channel);
-  assert(req);
-  assert(req->data == handle);
+  if (req_)
+    return 0;
 
-  return 0;
+  free(buf);
+
+  return uv__set_artificial_error(loop, UV_ENOMEM);
 }
 
 
@@ -426,6 +451,11 @@ int uv__accept(int sockfd) {
 
   while (1) {
 #if __linux__
+    static int no_accept4;
+
+    if (no_accept4)
+      goto skip;
+
     peerfd = uv__accept4(sockfd,
                          NULL,
                          NULL,
@@ -439,6 +469,9 @@ int uv__accept(int sockfd) {
 
     if (errno != ENOSYS)
       break;
+
+    no_accept4 = 1;
+skip:
 #endif
 
     peerfd = accept(sockfd, NULL, NULL);
@@ -462,17 +495,34 @@ int uv__accept(int sockfd) {
 }
 
 
+#if __linux__
+
 int uv__nonblock(int fd, int set) {
   int r;
 
-#if FIONBIO
   do
     r = ioctl(fd, FIONBIO, &set);
   while (r == -1 && errno == EINTR);
 
   return r;
-#else
+}
+
+
+int uv__cloexec(int fd, int set) {
+  int r;
+
+  do
+    r = ioctl(fd, set ? FIOCLEX : FIONCLEX);
+  while (r == -1 && errno == EINTR);
+
+  return r;
+}
+
+#else /* !__linux__ */
+
+int uv__nonblock(int fd, int set) {
   int flags;
+  int r;
 
   do
     r = fcntl(fd, F_GETFL);
@@ -491,7 +541,6 @@ int uv__nonblock(int fd, int set) {
   while (r == -1 && errno == EINTR);
 
   return r;
-#endif
 }
 
 
@@ -499,15 +548,6 @@ int uv__cloexec(int fd, int set) {
   int flags;
   int r;
 
-#if __linux__
-  /* Linux knows only FD_CLOEXEC so we can safely omit the fcntl(F_GETFD)
-   * syscall. CHECKME: That's probably true for other Unices as well.
-   */
-  if (set)
-    flags = FD_CLOEXEC;
-  else
-    flags = 0;
-#else
   do
     r = fcntl(fd, F_GETFD);
   while (r == -1 && errno == EINTR);
@@ -519,7 +559,6 @@ int uv__cloexec(int fd, int set) {
     flags = r | FD_CLOEXEC;
   else
     flags = r & ~FD_CLOEXEC;
-#endif
 
   do
     r = fcntl(fd, F_SETFD, flags);
@@ -527,6 +566,8 @@ int uv__cloexec(int fd, int set) {
 
   return r;
 }
+
+#endif /* __linux__ */
 
 
 /* This function is not execve-safe, there is a race window

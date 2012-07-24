@@ -166,10 +166,12 @@ in `null` for `depth`.
 <!--
 If `colors` is `true`, the output will be styled with ANSI color codes.
 Defaults to `false`.
+Colors are customizable, see below.
 -->
 
 `colors` が `true` の場合、出力は ANSI カラーコードで色づけされます。
 デフォルトは `false` です。
+後述するように、色はカスタマイズ可能です。
 
 <!--
 Example of inspecting all properties of the `util` object:
@@ -180,6 +182,59 @@ Example of inspecting all properties of the `util` object:
     var util = require('util');
 
     console.log(util.inspect(util, true, null));
+
+### Customizing `util.inspect` colors
+
+<!--
+Color output (if enabled) of `util.inspect` is customizable globally
+via `util.inspect.styles` and `util.inspect.colors` objects.
+-->
+
+`util.inspect` が出力する色は、(有効であれば) `util.inspect.styles` および
+`util.inspect.colors` オブジェクトを通じてグローバルにカスタマイズすることが
+可能です。
+
+<!--
+`util.inspect.styles` is a map assigning each style a color
+from `util.inspect.colors`.
+Highlighted styles and their default values are:
+-->
+
+`util.inspect.styles` は各スタイルと `util.inspect.colors` に
+定義された色を割り当てたマッピングです。
+強調されるスタイルとそれらのデフォルト値は:
+
+<!--
+ * `number` (yellow)
+ * `boolean` (yellow)
+ * `string` (green)
+ * `date` (magenta)
+ * `regexp` (red)
+ * `null` (bold)
+ * `undefined` (grey)
+ * `special` - only function at this time (cyan)
+ * `name` (intentionally no styling)
+-->
+
+ * `number` (黄)
+ * `boolean` (黄)
+ * `string` (緑)
+ * `date` (紫)
+ * `regexp` (赤)
+ * `null` (太字)
+ * `undefined` (灰)
+ * `special` - only function at this time (水色)
+ * `name` (意図的にスタイル無し)
+
+<!--
+Predefined color codes are: `white`, `grey`, `black`, `blue`, `cyan`, 
+`green`, `magenta`, `red` and `yellow`.
+There are also `bold`, `italic`, `underline` and `inverse` codes.
+-->
+
+事前に定義された色は: `white`、`grey`、`black`、`blue`、`cyan`、
+`green`、`magenta`、`red`、および `yellow` です。
+`bold`、`italic`、`underline`、および `inverse` コードを使うこともできます。
 
 
 ## util.isArray(object)

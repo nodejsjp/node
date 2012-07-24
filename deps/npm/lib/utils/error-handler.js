@@ -82,7 +82,10 @@ function errorHandler (er) {
 
   cbCalled = true
   if (!er) return exit(0)
-  if (!(er instanceof Error)) {
+  if (typeof er === "string") {
+    log.error("", er)
+    return exit(1, true)
+  } else if (!(er instanceof Error)) {
     log.error("weird error", er)
     return exit(1, true)
   }
@@ -90,6 +93,7 @@ function errorHandler (er) {
   var m = er.code || er.message.match(/^(?:Error: )?(E[A-Z]+)/)
   if (m && !er.code) er.code = m
 
+  var didStack = false
   switch (er.code) {
   case "ECONNREFUSED":
     log.error("", er)
@@ -205,12 +209,13 @@ function errorHandler (er) {
     } // else passthrough
 
   default:
-    log.error("", er)
-    log.error("", ["You may report this log at:"
-              ,"    <http://github.com/isaacs/npm/issues>"
-              ,"or email it to:"
-              ,"    <npm-@googlegroups.com>"
-              ].join("\n"))
+    didStack = true
+    log.error("", er.stack || er.message || er)
+    log.error("", ["If you need help, you may report this log at:"
+                  ,"    <http://github.com/isaacs/npm/issues>"
+                  ,"or email it to:"
+                  ,"    <npm-@googlegroups.com>"
+                  ].join("\n"))
     break
   }
 
@@ -235,17 +240,20 @@ function errorHandler (er) {
     , "fstream_finish_call"
     , "fstream_linkpath"
     , "code"
-    , "message"
     , "errno"
+    , "stack"
+    , "fstream_stack"
     ].forEach(function (k) {
-      if (er[k]) log.error(k, er[k])
+      var v = er[k]
+      if (k === "stack") {
+        if (didStack) return
+        if (!v) v = er.message
+      }
+      if (!v) return
+      if (k === "fstream_stack") v = v.join("\n")
+      log.error(k, v)
     })
 
-  if (er.fstream_stack) {
-    log.error("fstream_stack", er.fstream_stack.join("\n"))
-  }
-
-  if (er.errno && typeof er.errno !== "object") log.error(er.errno, "errno")
   exit(typeof er.errno === "number" ? er.errno : 1)
 }
 
