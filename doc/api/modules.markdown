@@ -349,7 +349,7 @@ would resolve to different files.
 
 <!-- type=var -->
 
-!-- name=module -->
+<!-- name=module -->
 
 * {Object}
 
