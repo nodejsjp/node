@@ -857,6 +857,17 @@ first chunk of body.
 Node はストリーミングデータを分割して送信しようとしていると仮定します。
 すなわち、レスポンスはボディの最初のチャンクまでバッファリングされます。
 
+<!--
+Returns `true` if the entire data was flushed successfully to the kernel
+buffer. Returns `false` if all or part of the data was queued in user memory.
+`'drain'` will be emitted when the buffer is again free.
+-->
+
+データ全体のカーネルバッファへのフラッシュが成功すると `true` を返します。
+データ全体または一部がユーザメモリ内のキューに入れられた場合は
+`false` を返します。
+再びバッファが空いた場合は `'drain'` イベントが生成されます。
+
 ### response.addTrailers(headers)
 
 <!--
