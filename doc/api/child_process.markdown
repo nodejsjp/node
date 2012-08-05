@@ -815,8 +815,7 @@ Runs a command in a shell and buffers the output.
 
 コマンドをシェルで実行し、その出力をバッファに格納します。
 
-    var util = require('util'),
-        exec = require('child_process').exec,
+    var exec = require('child_process').exec,
         child;
 
     child = exec('cat *.js bad_file | wc -l',
@@ -930,7 +929,6 @@ leaner than `child_process.exec`. It has the same options.
   * `cwd` {String} Current working directory of the child process
   * `env` {Object} Environment key-value pairs
   * `encoding` {String} (Default: 'utf8')
-  * `timeout` {Number} (Default: 0)
 * Return: ChildProcess object
 -->
 
@@ -940,7 +938,6 @@ leaner than `child_process.exec`. It has the same options.
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
   * `env` {Object} 環境変数として与えるキー・値のペア
   * `encoding` {String} (Default: 'utf8')
-  * `timeout` {Number} (Default: 0)
 * Return: ChildProcess object
 
 <!--
@@ -964,6 +961,15 @@ with the parent's. To change this behavior set the `silent` property in the
 デフォルトでは、起動された Node プロセスは親プロセスに関連づけられた標準出力と
 標準エラー出力を持ちます。これを変更するには `options` オブジェクトの
 `silent` プロパティを `true` に設定します。
+
+<!--
+The child process does not automatically exit once it's done, you need to call
+`process.exit()` explicitly. This limitation may be lifted in the future.
+-->
+
+子プロセスは自動的に終了するわけではないので、
+明示的に `process.exit()` を呼び出す必要があります。
+この制限は将来取り除かれるかもしれません。
 
 <!--
 These child Nodes are still whole new instances of V8. Assume at least 30ms

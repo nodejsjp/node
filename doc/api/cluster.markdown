@@ -469,13 +469,12 @@ The method takes an optional callback argument which will be called when finishe
 * {Object}
 
 <!--
-In the cluster all living worker objects are stored in this object by there
-`id` as the key. This makes it easy to loop through all living workers.
+A hash that stores the active worker objects, keyed by `id` field. Makes it
+easy to loop through all the workers.
 -->
 
-このクラスタで生きている全てのワーカオブジェクトを、その `id`
-をキーとして保存しているオブジェクトです。
-これは全ての生きているワーカに対して繰り返しを行うことを容易にします。
+`id` をキーとしてアクティブなワーカオブジェクトを保存しているハッシュです。
+これは全てのワーカに対して繰り返しを行うことを容易にします。
 
     // Go through all workers
     function eachWorker(callback) {
