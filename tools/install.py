@@ -62,6 +62,7 @@ def try_copy(path, dst):
   source_path, target_path = mkpaths(path, dst)
   print 'installing %s' % target_path
   try_mkdir_r(os.path.dirname(target_path))
+  try_unlink(target_path) # prevent ETXTBSY errors
   return shutil.copy2(source_path, target_path)
 
 def try_remove(path, dst):
@@ -90,7 +91,9 @@ def waf_files(action):
           'tools/wafadmin/Scripting.py',
           'tools/wafadmin/TaskGen.py',
           'tools/wafadmin/Task.py',
-          'tools/wafadmin/Tools/ar.py',
+          'tools/wafadmin/Utils.py'],
+          'lib/node/wafadmin/')
+  action(['tools/wafadmin/Tools/ar.py',
           'tools/wafadmin/Tools/cc.py',
           'tools/wafadmin/Tools/ccroot.py',
           'tools/wafadmin/Tools/compiler_cc.py',
@@ -122,12 +125,11 @@ def waf_files(action):
           'tools/wafadmin/Tools/unittestw.py',
           'tools/wafadmin/Tools/winres.py',
           'tools/wafadmin/Tools/xlc.py',
-          'tools/wafadmin/Tools/xlcxx.py',
-          'tools/wafadmin/Utils.py'],
-          'lib/node/')
+          'tools/wafadmin/Tools/xlcxx.py'],
+          'lib/node/wafadmin/Tools/')
 
 def update_shebang(path, shebang):
-  print 'updating shebang of %s' % path
+  print 'updating shebang of %s to %s' % (path, shebang)
   s = open(path, 'r').read()
   s = re.sub(r'#!.*\n', '#!' + shebang + '\n', s)
   open(path, 'w').write(s)
@@ -152,7 +154,16 @@ def npm_files(action):
     action([link_path], 'bin/npm')
   elif action == install:
     try_symlink('../lib/node_modules/npm/bin/npm-cli.js', link_path)
-    update_shebang(link_path, node_prefix + '/bin/node')
+    if os.environ.get('PORTABLE'):
+      # This crazy hack is necessary to make the shebang execute the copy
+      # of node relative to the same directory as the npm script. The precompiled
+      # binary tarballs use a prefix of "/" which gets translated to "/bin/node"
+      # in the regular shebang modifying logic, which is incorrect since the
+      # precompiled bundle should be able to be extracted anywhere and "just work"
+      shebang = '/bin/sh\n// 2>/dev/null; exec "`dirname "$0"`/node" "$0" "$@"'
+    else:
+      shebang = os.path.join(node_prefix, 'bin/node')
+    update_shebang(link_path, shebang)
   else:
     assert(0) # unhandled action type
 
@@ -188,8 +199,8 @@ def files(action):
   # with dtrace support now (oracle's "unbreakable" linux)
   action(['src/node.d'], 'lib/dtrace/')
 
-  if variables.get('node_install_waf'): waf_files(action)
-  if variables.get('node_install_npm'): npm_files(action)
+  if 'true' == variables.get('node_install_waf'): waf_files(action)
+  if 'true' == variables.get('node_install_npm'): npm_files(action)
 
 def run(args):
   global dst_dir, node_prefix, target_defaults, variables
@@ -202,7 +213,7 @@ def run(args):
   target_defaults = conf['target_defaults']
 
   # argv[2] is a custom install prefix for packagers (think DESTDIR)
-  dst_dir = node_prefix = variables.get('node_prefix', '/usr/local')
+  dst_dir = node_prefix = variables.get('node_prefix') or '/usr/local'
   if len(args) > 2: dst_dir = abspath(args[2] + '/' + dst_dir)
 
   cmd = args[1] if len(args) > 1 else 'install'
