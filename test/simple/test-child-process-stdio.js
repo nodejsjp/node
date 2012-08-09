@@ -21,10 +21,16 @@
 
 var common = require('../common');
 var assert = require('assert');
-var net = require('net');
+var spawn = require('child_process').spawn;
 
-var sock = net.connect(1234, 'localhost');
-sock.pause();
-sock.resume();
-console.log('ok');
-process.exit(0);
+var options = {stdio: ['pipe']};
+var child = common.spawnPwd(options);
+
+assert.notEqual(child.stdout, null);
+assert.notEqual(child.stderr, null);
+
+options = {stdio: 'ignore'};
+child = common.spawnPwd(options);
+
+assert.equal(child.stdout, null);
+assert.equal(child.stderr, null);
