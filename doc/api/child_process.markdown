@@ -502,8 +502,7 @@ Example of running `ls -lh /usr`, capturing `stdout`, `stderr`, and the exit cod
 
 ls -lh /usr` を実行して `stdout`、`stderr`、および終了コードを取得する例:
 
-    var util  = require('util'),
-        spawn = require('child_process').spawn,
+    var spawn = require('child_process').spawn,
         ls    = spawn('ls', ['-lh', '/usr']);
 
     ls.stdout.on('data', function (data) {
@@ -525,8 +524,7 @@ Example: A very elaborate way to run 'ps ax | grep ssh'
 
 とても手の込んだ方法で実行する 'ps ax | grep ssh' の例:
 
-    var util  = require('util'),
-        spawn = require('child_process').spawn,
+    var spawn = require('child_process').spawn,
         ps    = spawn('ps', ['ax']),
         grep  = spawn('grep', ['ssh']);
 
