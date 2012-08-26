@@ -402,14 +402,16 @@ call `.setupMaster()` with no arguments.
     (デフォルトは `false`)
 
 <!--
-The `setupMaster` is used to change the default 'fork' behavior. It takes
-one option object argument.
-
-Example:
+`setupMaster` is used to change the default 'fork' behavior. The new settings
+are effective immediately and permanently, they cannot be changed later on.
 -->
 
 `setupMaster()` は 'fork' のデフォルト動作を変更するために使われます。
-引数として一つのオプションオブジェクトを受け取ります。
+新しい設定は即時かつ永続的に有効で、後から変更することはできません。
+
+<!--
+Example:
+-->
 
 例:
 
@@ -644,7 +646,7 @@ that would normally not allow the worker to do any cleanup if needed.
 行えないかもしれません。
 
     if (cluster.isMaster) {
-      var worker = cluser.fork();
+      var worker = cluster.fork();
       var timeout;
 
       worker.on('listening', function(address) {
