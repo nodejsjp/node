@@ -181,24 +181,34 @@ automatically set as a listener for the [secureConnection][] event.  The
   - `crl` : Either a string or list of strings of PEM encoded CRLs (Certificate
     Revocation List)
 
-  - `ciphers`: A string describing the ciphers to use or exclude. Consult
-    <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for
-    details on the format.
-    To mitigate [BEAST attacks]
-    (http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html),
-    it is recommended that you use this option in conjunction with the
-    `honorCipherOrder` option described below to prioritize the RC4 algorithm,
-    since it is a non-CBC cipher. A recommended cipher list follows:
-    `ECDHE-RSA-AES256-SHA:AES256-SHA:RC4-SHA:RC4:HIGH:!MD5:!aNULL:!EDH:!AESGCM`
+  - `ciphers`: A string describing the ciphers to use or exclude.
 
-  - `honorCipherOrder` :
-	When choosing a cipher, use the server's preferences instead of the client
-	preferences.
-	Note that if SSLv2 is used, the server will send its list of preferences
-	to the client, and the client chooses the cipher.
-	Although, this option is disabled by default, it is *recommended* that you
-	use this option in conjunction with the `ciphers` option to mitigate
-	BEAST attacks.
+    To mitigate [BEAST attacks] it is recommended that you use this option in
+    conjunction with the `honorCipherOrder` option described below to
+    prioritize the non-CBC cipher.
+
+    Defaults to
+    `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`.
+    Consult the [OpenSSL cipher list format documentation] for details on the
+    format.
+
+    `ECDHE-RSA-AES128-SHA256` and `AES128-GCM-SHA256` are used when node.js is
+    linked against OpenSSL 1.0.1 or newer and the client speaks TLS 1.2, RC4 is
+    used as a secure fallback.
+
+    **NOTE**: Previous revisions of this section suggested `AES256-SHA` as an
+    acceptable cipher. Unfortunately, `AES256-SHA` is a CBC cipher and therefore
+    susceptible to BEAST attacks. Do *not* use it.
+
+  - `honorCipherOrder` : When choosing a cipher, use the server's preferences
+    instead of the client preferences.
+
+    Note that if SSLv2 is used, the server will send its list of preferences
+    to the client, and the client chooses the cipher.
+
+    Although, this option is disabled by default, it is *recommended* that you
+    use this option in conjunction with the `ciphers` option to mitigate
+    BEAST attacks.
 
   - `requestCert`: If `true` the server will request a certificate from
     clients that connect and attempt to verify that certificate. Default:
@@ -244,19 +254,32 @@ automatically set as a listener for the [secureConnection][] event.  The
   失効した証明書の一覧) の文字列または文字列の配列。
 
   - `ciphers`: 使用または除外する暗号を記述した文字列です。
-    詳細は <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT>
-    を参照してください。
-    [BEAST 攻撃](http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html)
-    を抑制するために、このオプションと以下に示す `honorCipherOrder`
-    を共に使って、非 CBC 暗号である RC4 アルゴリズムを優先することを推奨します。
-    推奨する暗号リストはこの通りです:
-    `ECDHE-RSA-AES256-SHA:AES256-SHA:RC4-SHA:RC4:HIGH:!MD5:!aNULL:!EDH:!AESGCM`
+
+    [BEAST 攻撃]を抑制するために、このオプションと以下に示す `honorCipherOrder`
+    を共に使って、非 CBC 暗号を優先することを推奨します。
+
+    デフォルトは
+    `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`
+    です。
+    詳細は [OpenSSL 暗号リストフォーマットのドキュメント] を参照してください。
+
+    `ECDHE-RSA-AES128-SHA256` と `AES128-GCM-SHA256` は、Node.js が
+    OpenSSL 1.0.1 以降とリンクされていて、クライアントが TLS 1.2 を
+    サポートしている場合に使われます。
+    RC4 は安全なフォールバックとして使われます。
+
+    **注意**: 以前のバージョンのこのセクションは `AES256-SHA` を
+    受け入れ可能な暗号であるかのように示していました。
+    残念ながら、`AES256-SHA` は CBC 暗号であり、したがって BEAST
+    攻撃には弱いです。
 
   - `honorCipherOrder` :
     暗号を選択する際に、クライアントではなくサーバの設定を使用します。
+
     SSLv2 が使われる場合は、サーバは設定のリストをクライアントに送信し、
     クライアントが暗号を選択することに注意してください。
-    このオプションはデフォルトで無効にですが、BEAST 攻撃を抑制するために
+
+    このオプションはデフォルトでは無効ですが、BEAST 攻撃を抑制するために
     `ciphers` オプションと共に使用することを *推奨* します。
 
   - `requestCert`: `true` の場合、サーバは接続しようとするクライアントからの
@@ -878,6 +901,19 @@ The numeric representation of the remote port. For example, `443`.
 リモートポートの数値表現です。
 例えば、`443`。
 
+<!--
+[OpenSSL cipher list format documentation]: http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT
+[BEAST attacks]: http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html
+[CleartextStream]: #tls_class_tls_cleartextstream
+[net.Server.address()]: net.html#net_server_address
+['secureConnect']: #tls_event_secureconnect
+[secureConnection]: #tls_event_secureconnection
+[Stream]: stream.html#stream_stream
+[tls.Server]: #tls_class_tls_server
+-->
+
+[OpenSSL 暗号リストフォーマットのドキュメント]: http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT
+[BEAST 攻撃]: http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html
 [CleartextStream]: #tls_class_tls_cleartextstream
 [net.Server.address()]: net.html#net_server_address
 ['secureConnect']: #tls_event_secureconnect
