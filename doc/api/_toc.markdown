@@ -35,8 +35,6 @@
 * [OS](os.html)
 * [Debugger](debugger.html)
 * [Cluster](cluster.html)
-* Appendixes
-  * [Appendix 1: Recommended Third-party Modules](appendix_1.html)
 -->
 
 * [このドキュメントについて](documentation.html)
@@ -75,5 +73,3 @@
 * [OS](os.html)
 * [デバッガ](debugger.html)
 * [クラスタ](cluster.html)
-* 付録
-  * [付録 1: 推奨されるサードパーティ製のモジュール](appendix_1.html)

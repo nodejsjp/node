@@ -394,6 +394,30 @@ Don't call `server.address()` until the `'listening'` event has been emitted.
 
 `'listening'` イベントが生成される前に `server.address()` を呼び出してはいけません。
 
+### server.unref()
+
+<!--
+Calling `unref` on a server will allow the program to exit if this is the only
+active server in the event system. If the server is already `unref`d calling
+`unref` again will have no effect.
+-->
+
+イベントシステムにおいて、このサーバだけがアクティブな場合にプログラムを
+終了することができるように、`unref` を呼び出します。
+既に `unref` されたサーバで再び `unref` が呼び出されても影響はありません。
+
+### server.ref()
+
+<!--
+Opposite of `unref`, calling `ref` on a previously `unref`d server will *not*
+let the program exit if it's the only server left (the default behavior). If
+the server is `ref`d calling `ref` again will have no effect.
+-->
+
+`unref` とは逆に、以前に `unref` されたサーバが唯一残ったサーバになっても、
+プログラムが終了 (デフォルトの動作です) しないように、`ref` を呼び出します。
+既に `ref` されたサーバで再び `ref` が呼び出されても影響はありません。
+
 ### server.maxConnections
 
 <!--
@@ -764,6 +788,30 @@ three properties, e.g.
 アドレスファミリ名、ポートを返します。
 返されるオブジェクトは 3 つのプロパティを持ちます。例:
 `{ port: 12346, family: 'IPv4', address: '127.0.0.1' }`
+
+### socket.unref()
+
+<!--
+Calling `unref` on a socket will allow the program to exit if this is the only
+active socket in the event system. If the socket is already `unref`d calling
+`unref` again will have no effect.
+-->
+
+イベントシステムにおいて、このソケットだけがアクティブな場合にプログラムを
+終了することができるように、`unref` を呼び出します。
+既に `unref` されたソケットで再び `unref` が呼び出されても影響はありません。
+
+### socket.ref()
+
+<!--
+Opposite of `unref`, calling `ref` on a previously `unref`d socket will *not*
+let the program exit if it's the only socket left (the default behavior). If
+the socket is `ref`d calling `ref` again will have no effect.
+-->
+
+`unref` とは逆に、以前に `unref` されたソケットが唯一残ったソケットになっても、
+プログラムが終了 (デフォルトの動作です) しないように、`ref` を呼び出します。
+既に `ref` されたソケットで再び `ref` が呼び出されても影響はありません。
 
 ### socket.remoteAddress
 
