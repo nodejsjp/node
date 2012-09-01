@@ -23,6 +23,7 @@
 #include "req_wrap.h"
 #include "handle_wrap.h"
 
+#include "ares.h"
 #include "uv.h"
 
 #include "v8-debug.h"
@@ -62,14 +63,8 @@ typedef int mode_t;
 #endif
 
 #include "node_buffer.h"
-#ifdef __POSIX__
-# include "node_io_watcher.h"
-#endif
 #include "node_file.h"
 #include "node_http_parser.h"
-#ifdef __POSIX__
-# include "node_signal_watcher.h"
-#endif
 #include "node_constants.h"
 #include "node_javascript.h"
 #include "node_version.h"
@@ -129,8 +124,6 @@ static int max_stack_size = 0;
 // used by C++ modules as well
 bool no_deprecation = false;
 
-static uv_check_t check_tick_watcher;
-static uv_prepare_t prepare_tick_watcher;
 static uv_idle_t tick_spinner;
 static bool need_tick_cb;
 static Persistent<String> tick_callback_sym;
@@ -263,6 +256,7 @@ static void Spin(uv_idle_t* handle, int status) {
   Tick();
 }
 
+
 static void StartTickSpinner() {
   need_tick_cb = true;
   // TODO: this tick_spinner shouldn't be necessary. An ev_prepare should be
@@ -273,23 +267,12 @@ static void StartTickSpinner() {
   uv_idle_start(&tick_spinner, Spin);
 }
 
+
 static Handle<Value> NeedTickCallback(const Arguments& args) {
   StartTickSpinner();
   return Undefined();
 }
 
-static void PrepareTick(uv_prepare_t* handle, int status) {
-  assert(handle == &prepare_tick_watcher);
-  assert(status == 0);
-  Tick();
-}
-
-
-static void CheckTick(uv_check_t* handle, int status) {
-  assert(handle == &check_tick_watcher);
-  assert(status == 0);
-  Tick();
-}
 
 static inline const char *errno_string(int errorno) {
 #define ERRNO_CASE(e)  case e: return #e;
@@ -703,6 +686,10 @@ const char *signo_string(int signo) {
 
 #ifdef SIGTSTP
   SIGNO_CASE(SIGTSTP);
+#endif
+
+#ifdef SIGBREAK
+  SIGNO_CASE(SIGBREAK);
 #endif
 
 #ifdef SIGTTIN
@@ -1169,7 +1156,25 @@ ssize_t DecodeWrite(char *buf,
     return -1;
   }
 
-  Local<String> str = val->ToString();
+  bool is_buffer = Buffer::HasInstance(val);
+
+  if (is_buffer && encoding == BINARY) { // fast path, copy buffer data
+    const char* data = Buffer::Data(val.As<Object>());
+    size_t size = Buffer::Length(val.As<Object>());
+    size_t len = size < buflen ? size : buflen;
+    memcpy(buf, data, len);
+    return len;
+  }
+
+  Local<String> str;
+
+  if (is_buffer) { // slow path, convert to binary string
+    Local<Value> arg = String::New("binary");
+    str = MakeCallback(val.As<Object>(), "toString", 1, &arg)->ToString();
+  }
+  else {
+    str = val->ToString();
+  }
 
   if (encoding == UTF8) {
     str->WriteUtf8(buf, buflen, NULL, String::HINT_MANY_WRITES_EXPECTED);
@@ -1199,8 +1204,15 @@ ssize_t DecodeWrite(char *buf,
   return buflen;
 }
 
-
 void DisplayExceptionLine (TryCatch &try_catch) {
+  // Prevent re-entry into this function.  For example, if there is
+  // a throw from a program in vm.runInThisContext(code, filename, true),
+  // then we want to show the original failure, not the secondary one.
+  static bool displayed_error = false;
+
+  if (displayed_error) return;
+  displayed_error = true;
+
   HandleScope scope;
 
   Handle<Message> message = try_catch.Message();
@@ -1219,33 +1231,37 @@ void DisplayExceptionLine (TryCatch &try_catch) {
     String::Utf8Value sourceline(message->GetSourceLine());
     const char* sourceline_string = *sourceline;
 
-    // HACK HACK HACK
-    //
-    // FIXME
-    //
-    // Because of how CommonJS modules work, all scripts are wrapped with a
-    // "function (function (exports, __filename, ...) {"
+    // Because of how node modules work, all scripts are wrapped with a
+    // "function (module, exports, __filename, ...) {"
     // to provide script local variables.
     //
     // When reporting errors on the first line of a script, this wrapper
-    // function is leaked to the user. This HACK is to remove it. The length
-    // of the wrapper is 62. That wrapper is defined in src/node.js
+    // function is leaked to the user. There used to be a hack here to
+    // truncate off the first 62 characters, but it caused numerous other
+    // problems when vm.runIn*Context() methods were used for non-module
+    // code.
     //
-    // If that wrapper is ever changed, then this number also has to be
-    // updated. Or - someone could clean this up so that the two peices
-    // don't need to be changed.
+    // If we ever decide to re-instate such a hack, the following steps
+    // must be taken:
     //
-    // Even better would be to get support into V8 for wrappers that
-    // shouldn't be reported to users.
-    int offset = linenum == 1 ? 62 : 0;
+    // 1. Pass a flag around to say "this code was wrapped"
+    // 2. Update the stack frame output so that it is also correct.
+    //
+    // It would probably be simpler to add a line rather than add some
+    // number of characters to the first line, since V8 truncates the
+    // sourceline to 78 characters, and we end up not providing very much
+    // useful debugging info to the user if we remove 62 characters.
 
-    fprintf(stderr, "%s\n", sourceline_string + offset);
-    // Print wavy underline (GetUnderline is deprecated).
     int start = message->GetStartColumn();
-    for (int i = offset; i < start; i++) {
+    int end = message->GetEndColumn();
+
+    // fprintf(stderr, "---\nsourceline:%s\noffset:%d\nstart:%d\nend:%d\n---\n", sourceline_string, start, end);
+
+    fprintf(stderr, "%s\n", sourceline_string);
+    // Print wavy underline (GetUnderline is deprecated).
+    for (int i = 0; i < start; i++) {
       fputc((sourceline_string[i] == '\t') ? '\t' : ' ', stderr);
     }
-    int end = message->GetEndColumn();
     for (int i = start; i < end; i++) {
       fputc('^', stderr);
     }
@@ -1576,38 +1592,6 @@ static Handle<Value> Uptime(const Arguments& args) {
 }
 
 
-v8::Handle<v8::Value> UVCounters(const v8::Arguments& args) {
-  HandleScope scope;
-
-  uv_counters_t* c = &uv_default_loop()->counters;
-
-  Local<Object> obj = Object::New();
-
-#define setc(name) \
-    obj->Set(String::New(#name), Integer::New(static_cast<int32_t>(c->name)));
-
-  setc(eio_init)
-  setc(req_init)
-  setc(handle_init)
-  setc(stream_init)
-  setc(tcp_init)
-  setc(udp_init)
-  setc(pipe_init)
-  setc(tty_init)
-  setc(prepare_init)
-  setc(check_init)
-  setc(idle_init)
-  setc(async_init)
-  setc(timer_init)
-  setc(process_init)
-  setc(fs_event_init)
-
-#undef setc
-
-  return scope.Close(obj);
-}
-
-
 v8::Handle<v8::Value> MemoryUsage(const v8::Arguments& args) {
   HandleScope scope;
 
@@ -1702,7 +1686,6 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
   HandleScope scope;
   char symbol[1024], *base, *pos;
   uv_lib_t lib;
-  node_module_struct compat_mod;
   int r;
 
   if (args.Length() < 2) {
@@ -1756,27 +1739,20 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
     return ThrowException(exception);
   }
 
-  // Get the init() function from the dynamically shared object.
   node_module_struct *mod;
   if (uv_dlsym(&lib, symbol, reinterpret_cast<void**>(&mod))) {
-    /* Start Compatibility hack: Remove once everyone is using NODE_MODULE macro */
-    memset(&compat_mod, 0, sizeof compat_mod);
-
-    mod = &compat_mod;
-    mod->version = NODE_MODULE_VERSION;
-
-    if (uv_dlsym(&lib, "init", reinterpret_cast<void**>(&mod->register_func))) {
-      Local<String> errmsg = String::New(uv_dlerror(&lib));
-      uv_dlclose(&lib);
-      return ThrowException(Exception::Error(errmsg));
-    }
-    /* End Compatibility hack */
+    char errmsg[1024];
+    snprintf(errmsg, sizeof(errmsg), "Symbol %s not found.", symbol);
+    return ThrowError(errmsg);
   }
 
   if (mod->version != NODE_MODULE_VERSION) {
-    Local<Value> exception = Exception::Error(
-        String::New("Module version mismatch, refusing to load."));
-    return ThrowException(exception);
+    char errmsg[1024];
+    snprintf(errmsg,
+             sizeof(errmsg),
+             "Module version mismatch. Expected %d, got %d.",
+             NODE_MODULE_VERSION, mod->version);
+    return ThrowError(errmsg);
   }
 
   // Execute the C++ module
@@ -1882,13 +1858,6 @@ static Handle<Value> Binding(const Arguments& args) {
     exports = Object::New();
     DefineConstants(exports);
     binding_cache->Set(module, exports);
-
-#ifdef __POSIX__
-  } else if (!strcmp(*module_v, "io_watcher")) {
-    exports = Object::New();
-    IOWatcher::Initialize(exports);
-    binding_cache->Set(module, exports);
-#endif
 
   } else if (!strcmp(*module_v, "natives")) {
     exports = Object::New();
@@ -2275,7 +2244,6 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 
   NODE_SET_METHOD(process, "uptime", Uptime);
   NODE_SET_METHOD(process, "memoryUsage", MemoryUsage);
-  NODE_SET_METHOD(process, "uvCounters", UVCounters);
 
   NODE_SET_METHOD(process, "binding", Binding);
 
@@ -2453,10 +2421,34 @@ static void ParseArgs(int argc, char **argv) {
 static Isolate* node_isolate = NULL;
 static volatile bool debugger_running = false;
 
+
+static uv_async_t dispatch_debug_messages_async;
+
+
+// Called from the main thread.
+static void DispatchDebugMessagesAsyncCallback(uv_async_t* handle, int status) {
+  v8::Debug::ProcessDebugMessages();
+}
+
+
+// Called from V8 Debug Agent TCP thread.
+static void DispatchMessagesDebugAgentCallback() {
+  uv_async_send(&dispatch_debug_messages_async);
+}
+
+
 static void EnableDebug(bool wait_connect) {
   // If we're called from another thread, make sure to enter the right
   // v8 isolate.
   node_isolate->Enter();
+
+  v8::Debug::SetDebugMessageDispatchHandler(DispatchMessagesDebugAgentCallback,
+                                            false);
+
+  uv_async_init(uv_default_loop(),
+                &dispatch_debug_messages_async,
+                DispatchDebugMessagesAsyncCallback);
+  uv_unref((uv_handle_t*) &dispatch_debug_messages_async);
 
   // Start the debug thread and it's associated TCP server on port 5858.
   bool r = v8::Debug::EnableAgent("node " NODE_VERSION,
@@ -2739,14 +2731,6 @@ char** Init(int argc, char *argv[]) {
   RegisterSignalHandler(SIGINT, SignalExit);
   RegisterSignalHandler(SIGTERM, SignalExit);
 #endif // __POSIX__
-
-  uv_prepare_init(uv_default_loop(), &prepare_tick_watcher);
-  uv_prepare_start(&prepare_tick_watcher, PrepareTick);
-  uv_unref(reinterpret_cast<uv_handle_t*>(&prepare_tick_watcher));
-
-  uv_check_init(uv_default_loop(), &check_tick_watcher);
-  uv_check_start(&check_tick_watcher, node::CheckTick);
-  uv_unref(reinterpret_cast<uv_handle_t*>(&check_tick_watcher));
 
   uv_idle_init(uv_default_loop(), &tick_spinner);
 

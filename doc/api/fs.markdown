@@ -121,7 +121,7 @@ Synchronous rename(2).
 
 同期の rename(2)。
 
-## fs.truncate(fd, len, [callback])
+## fs.ftruncate(fd, len, [callback])
 
 <!--
 Asynchronous ftruncate(2). No arguments other than a possible exception are
@@ -130,13 +130,31 @@ given to the completion callback.
 
 非同期の ftruncate(2)。完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 
-## fs.truncateSync(fd, len)
+## fs.ftruncateSync(fd, len)
 
 <!--
 Synchronous ftruncate(2).
 -->
 
 同期の ftruncate(2)。
+
+## fs.truncate(path, len, [callback])
+
+<!--
+Asynchronous truncate(2). No arguments other than a possible exception are
+given to the completion callback.
+-->
+
+非同期の truncate(2)。
+完了コールバックには発生し得る例外以外に引数が渡されることはありません。
+
+## fs.truncateSync(path, len)
+
+<!--
+Synchronous truncate(2).
+-->
+
+同期の truncate(2)。
 
 ## fs.chown(path, uid, gid, [callback])
 

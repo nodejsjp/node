@@ -86,6 +86,10 @@ void uv__udp_finish_close(uv_udp_t* handle) {
     req = ngx_queue_data(q, uv_udp_send_t, queue);
     uv__req_unregister(handle->loop, req);
 
+    if (req->bufs != req->bufsml)
+      free(req->bufs);
+    req->bufs = NULL;
+
     if (req->send_cb) {
       /* FIXME proper error code like UV_EABORTED */
       uv__set_artificial_error(handle->loop, UV_EINTR);
@@ -171,6 +175,7 @@ static void uv__udp_run_completed(uv_udp_t* handle) {
 
     if (req->bufs != req->bufsml)
       free(req->bufs);
+    req->bufs = NULL;
 
     if (req->send_cb == NULL)
       continue;
@@ -375,7 +380,7 @@ out:
 
 
 static int uv__udp_maybe_deferred_bind(uv_udp_t* handle, int domain) {
-  struct sockaddr_storage taddr;
+  unsigned char taddr[sizeof(struct sockaddr_in6)];
   socklen_t addrlen;
 
   assert(domain == AF_INET || domain == AF_INET6);
@@ -418,6 +423,8 @@ static int uv__udp_send(uv_udp_send_t* req,
                         struct sockaddr* addr,
                         socklen_t addrlen,
                         uv_udp_send_cb send_cb) {
+  assert(bufcnt > 0);
+
   if (uv__udp_maybe_deferred_bind(handle, addr->sa_family))
     return -1;
 
@@ -429,7 +436,7 @@ static int uv__udp_send(uv_udp_send_t* req,
   req->handle = handle;
   req->bufcnt = bufcnt;
 
-  if (bufcnt <= UV_REQ_BUFSML_SIZE) {
+  if (bufcnt <= (int) ARRAY_SIZE(req->bufsml)) {
     req->bufs = req->bufsml;
   }
   else if ((req->bufs = malloc(bufcnt * sizeof(bufs[0]))) == NULL) {
@@ -453,8 +460,6 @@ int uv_udp_init(uv_loop_t* loop, uv_udp_t* handle) {
   memset(handle, 0, sizeof *handle);
 
   uv__handle_init(loop, (uv_handle_t*)handle, UV_UDP);
-  loop->counters.udp_init++;
-
   handle->fd = -1;
   ngx_queue_init(&handle->write_queue);
   ngx_queue_init(&handle->write_completed_queue);

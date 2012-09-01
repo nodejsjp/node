@@ -30,21 +30,6 @@
 
 #define SLAB_SIZE (1024 * 1024)
 
-// Temporary hack: libuv should provide uv_inet_pton and uv_inet_ntop.
-// Clean this up in tcp_wrap.cc too.
-#if defined(__MINGW32__) || defined(_MSC_VER)
-  extern "C" {
-#   include <inet_net_pton.h>
-#   include <inet_ntop.h>
-  }
-# define uv_inet_pton ares_inet_pton
-# define uv_inet_ntop ares_inet_ntop
-
-#else // __POSIX__
-# include <arpa/inet.h>
-# define uv_inet_pton inet_pton
-# define uv_inet_ntop inet_ntop
-#endif
 
 using namespace v8;
 
@@ -109,6 +94,9 @@ void UDPWrap::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "setMulticastLoopback", SetMulticastLoopback);
   NODE_SET_PROTOTYPE_METHOD(t, "setBroadcast", SetBroadcast);
   NODE_SET_PROTOTYPE_METHOD(t, "setTTL", SetTTL);
+
+  NODE_SET_PROTOTYPE_METHOD(t, "ref", HandleWrap::Ref);
+  NODE_SET_PROTOTYPE_METHOD(t, "unref", HandleWrap::Unref);
 
   target->Set(String::NewSymbol("UDP"),
               Persistent<FunctionTemplate>::New(t)->GetFunction());

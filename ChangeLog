@@ -1,4 +1,69 @@
-2012.07.20, Version 0.9.0 (Unstable)
+2012.08.28, Version 0.9.1 (Unstable)
+
+* buffer: Add Buffer.isEncoding(enc) to test for valid encoding values (isaacs)
+
+* Raise UV_ECANCELED on premature close. (Ben Noordhuis)
+
+* Remove c-ares from libuv, move to a top-level node dependency (Bert Belder)
+
+* ref/unref for all HandleWraps, timers, servers, and sockets (Timothy J Fontaine)
+
+* addon: remove node-waf, superseded by node-gyp (Ben Noordhuis)
+
+* child_process: emit error on exec failure (Ben Noordhuis)
+
+* cluster: do not use internal server API (Andreas Madsen)
+
+* constants: add O_DIRECT (Ian Babrou)
+
+* crypto: add sync interface to crypto.pbkdf2() (Ben Noordhuis)
+
+* darwin: emulate fdatasync() (Fedor Indutny)
+
+* dgram: make .bind() always asynchronous (Ben Noordhuis)
+
+* events: Make emitter.listeners() side-effect free (isaacs, Joe Andaverde)
+
+* fs: Throw early on invalid encoding args (isaacs)
+
+* fs: fix naming of truncate/ftruncate functions (isaacs)
+
+* http: bubble up parser errors to ClientRequest (Brian White)
+
+* linux: improve cpuinfo parser on ARM and MIPS (Ben Noordhuis)
+
+* net: add support for IPv6 addresses ending in :: (Josh Erickson)
+
+* net: support Server.listen(Pipe) (Andreas Madsen)
+
+* node: don't scan add-on for "init" symbol (Ben Noordhuis)
+
+* remove process.uvCounters() (Ben Noordhuis)
+
+* repl: console writes to repl rather than process stdio (Nathan Rajlich)
+
+* timers: implement setImmediate (Timothy J Fontaine)
+
+* tls: fix segfault in pummel/test-tls-ci-reneg-attack (Ben Noordhuis)
+
+* tools: Move gyp addon tools to node-gyp (Nathan Rajlich)
+
+* unix: preliminary signal handler support (Ben Noordhuis)
+
+* unix: remove dependency on ev_child (Ben Noordhuis)
+
+* unix: work around darwin bug, don't poll() on pipe (Fedor Indutny)
+
+* util: Formally deprecate util.pump() (Ben Noordhuis)
+
+* windows: make active and closing handle state independent (Bert Belder)
+
+* windows: report spawn errors to the exit callback (Bert Belder)
+
+* windows: signal handling support with uv_signal_t (Bert Belder)
+
+
+2012.07.20, Version 0.9.0 (Unstable), f9b237f478c372fd55e4590d7399dcd8f25f3603
 
 * punycode: update to v1.1.1 (Mathias Bynens)
 
@@ -19,6 +84,133 @@
 * readline: Use one history item for reentered line (Vladimir Beloborodov)
 
 * Fix #3521 Make process.env more like a regular Object (isaacs)
+
+
+2012.08.22, Version 0.8.8 (Stable)
+
+* V8: upgrade to 3.11.10.19
+
+* npm: upgrade to 1.1.59
+
+* windows: fix uninitialized memory access in uv_update_time() (Bert Belder)
+
+* unix, windows: fix memory corruption in fs-poll.c (Ben Noordhuis)
+
+* unix: fix integer overflow in uv_hrtime (Tim Holy)
+
+* sunos: fix uv_cpu_info() on x86_64 (Ben Noordhuis)
+
+* tls: update default cipher list (Ben Noordhuis)
+
+* unix: Fix llvm and older gcc duplicate symbol warnings (Bert Belder)
+
+* fs: fix use after free in stat watcher (Ben Noordhuis)
+
+* build: Fix using manually compiled gcc on OS X (Nathan Rajlich)
+
+* windows: make junctions work again (Bert Belder)
+
+
+2012.08.15, Version 0.8.7 (Stable), f640c5d35cba96634cd8176a525a1d876e361a61
+
+* npm: Upgrade to 1.1.49
+
+* website: download page (Golo Roden)
+
+* crypto: fix uninitialized memory access in openssl (Ben Noordhuis)
+
+* buffer, crypto: fix buffer decoding (Ben Noordhuis)
+
+* build: compile with -fno-tree-vrp when gcc >= 4.0 (Ben Noordhuis)
+
+* tls: handle multiple CN fields when verifying cert (Ben Noordhuis)
+
+* doc: remove unused util from child_process (Kyle Robinson Young)
+
+* build: rework -fvisibility=hidden detection (Ben Noordhuis)
+
+* windows: don't duplicate invalid stdio handles (Bert Belder)
+
+* windows: fix typos in process-stdio.c (Bert Belder)
+
+
+2012.08.07, Version 0.8.6 (Stable), 0544a586ca6b6b900a42e164033dbf350765700a
+
+* npm: Upgrade to v1.1.48
+
+* Add 'make binary' to build binary tarballs for all Unixes (Nathan Rajlich)
+
+* zlib: Emit 'close' on destroy(). (Dominic Tarr)
+
+* child_process: Fix stdout=null when stdio=['pipe'] (Tyler Neylon)
+
+* installer: prevent ETXTBSY errors (Ben Noordhuis)
+
+* installer: honor --without-npm, default install path (Ben Noordhuis)
+
+* net: make pause work with connecting sockets (Bert Belder)
+
+* installer: fix cross-compile installs (Ben Noordhuis)
+
+* net: fix .listen({fd:0}) (Ben Noordhuis)
+
+* windows: map WSANO_DATA to UV_ENOENT (Bert Belder)
+
+
+2012.08.02, Version 0.8.5 (Stable), 9b86a4453f0c76f2707a75c0b2343aba33ec63bc
+
+* node: tag Encode and friends NODE_EXTERN (Ben Noordhuis)
+
+* fs: fix ReadStream / WriteStream missing callback (Gil Pedersen)
+
+* fs: fix readFileSync("/proc/cpuinfo") regression (Ben Noordhuis)
+
+* installer: don't assume bash is installed (Ben Noordhuis)
+
+* Report errors properly from --eval and stdin (isaacs)
+
+* assert: fix throws() throws an error without message property (koichik)
+
+* cluster: fix libuv assert in net.listen() (Ben Noordhuis)
+
+* build: always link sunos builds with libumem (Trent Mick)
+
+* build: improve armv7 / hard-float detection (Adam Malcontenti-Wilson)
+
+* https: Use host header as effective servername (isaacs)
+
+* sunos: work around OS bug to prevent fs.watch() from spinning (Bryan Cantrill)
+
+* linux: fix 'two watchers, one path' segfault (Ben Noordhuis)
+
+* windows: fix memory leaks in many fs functions (Bert Belder)
+
+* windows: don't allow directories to be opened for writing/appending (Bert Belder)
+
+* windows: make fork() work even when not all stdio handles are valid (Bert Belder)
+
+* windows: make unlink() not remove mount points, and improve performance (Bert Belder)
+
+* build: Sign pkg installer for OS X (isaacs)
+
+
+2012.07.25, Version 0.8.4 (Stable), f98562fcd7d1cab573ca4dc1612157d6999befd4
+
+* V8: Upgrade to 3.11.10.17
+
+* npm: Upgrade to 1.1.45
+
+* net: fix Socket({ fd: 42 }) api (Ben Noordhuis)
+
+* readline: Remove event listeners on close (isaacs)
+
+* windows: correctly prep long path for fs.exists(Sync) (Bert Belder)
+
+* debugger: wake up the event loop when a debugger command is dispatched (Peter Rybin)
+
+* tls: verify server's identity (Fedor Indutny)
+
+* net: ignore socket.setTimeout(Infinity or NaN) (Fedor Indutny)
 
 
 2012.07.19, Version 0.8.3 (Stable), 60bf2d6cb33e4ce55604f73889ab840a9de8bdab

@@ -149,15 +149,12 @@ int uv_tcp_init(uv_loop_t* loop, uv_tcp_t* handle) {
   handle->func_connectex = NULL;
   handle->processed_accepts = 0;
 
-  loop->counters.tcp_init++;
-
   return 0;
 }
 
 
 void uv_tcp_endgame(uv_loop_t* loop, uv_tcp_t* handle) {
   int status;
-  int sys_error;
   unsigned int i;
   uv_tcp_accept_t* req;
 
@@ -169,19 +166,16 @@ void uv_tcp_endgame(uv_loop_t* loop, uv_tcp_t* handle) {
 
     if (handle->flags & UV_HANDLE_CLOSING) {
       status = -1;
-      sys_error = WSAEINTR;
+      uv__set_artificial_error(loop, UV_ECANCELED);
     } else if (shutdown(handle->socket, SD_SEND) != SOCKET_ERROR) {
       status = 0;
       handle->flags |= UV_HANDLE_SHUT;
     } else {
       status = -1;
-      sys_error = WSAGetLastError();
+      uv__set_sys_error(loop, WSAGetLastError());
     }
 
     if (handle->shutdown_req->cb) {
-      if (status == -1) {
-        uv__set_sys_error(loop, sys_error);
-      }
       handle->shutdown_req->cb(handle->shutdown_req, status);
     }
 
@@ -193,7 +187,6 @@ void uv_tcp_endgame(uv_loop_t* loop, uv_tcp_t* handle) {
   if (handle->flags & UV_HANDLE_CLOSING &&
       handle->reqs_pending == 0) {
     assert(!(handle->flags & UV_HANDLE_CLOSED));
-    uv__handle_stop(handle);
 
     if (!(handle->flags & UV_HANDLE_TCP_SOCKET_CLOSED)) {
       closesocket(handle->socket);
@@ -1392,7 +1385,7 @@ void uv_tcp_close(uv_loop_t* loop, uv_tcp_t* tcp) {
     tcp->flags |= UV_HANDLE_TCP_SOCKET_CLOSED;
   }
 
-  uv__handle_start(tcp);
+  uv__handle_closing(tcp);
 
   if (tcp->reqs_pending == 0) {
     uv_want_endgame(tcp->loop, (uv_handle_t*)tcp);
