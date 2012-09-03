@@ -136,6 +136,21 @@ Allocates a new buffer containing the given `str`.
 与えられた `str` を内容とする新しいバッファを割り当てます。
 `encoding` のデフォルトは `'utf8'` です。
 
+### Class Method: Buffer.isEncoding(encoding)
+
+<!--
+* `encoding` {String} The encoding string to test
+-->
+
+* `encoding` {String} 検証するエンコーディング名
+
+<!--
+Returns true if the `encoding` is a valid encoding argument, or false
+otherwise.
+-->
+
+`encoding` が正しければ `true`、それ以外は `false` を返します。
+
 ### buf.write(string, [offset], [length], [encoding])
 
 <!--

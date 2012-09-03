@@ -49,10 +49,14 @@
 
 #ifdef __APPLE__
 # include <mach-o/dyld.h> /* _NSGetExecutablePath */
+# include <sys/filio.h>
+# include <sys/ioctl.h>
 #endif
 
 #ifdef __FreeBSD__
 # include <sys/sysctl.h>
+# include <sys/filio.h>
+# include <sys/ioctl.h>
 # include <sys/wait.h>
 #endif
 
@@ -69,8 +73,11 @@ void uv_close(uv_handle_t* handle, uv_close_cb close_cb) {
     break;
 
   case UV_TTY:
-  case UV_TCP:
     uv__stream_close((uv_stream_t*)handle);
+    break;
+
+  case UV_TCP:
+    uv__tcp_close((uv_tcp_t*)handle);
     break;
 
   case UV_UDP:
@@ -113,6 +120,10 @@ void uv_close(uv_handle_t* handle, uv_close_cb close_cb) {
     uv__fs_poll_close((uv_fs_poll_t*)handle);
     break;
 
+  case UV_SIGNAL:
+    uv__signal_close((uv_signal_t*)handle);
+    break;
+
   default:
     assert(0);
   }
@@ -140,6 +151,7 @@ static void uv__finish_close(uv_handle_t* handle) {
     case UV_FS_EVENT:
     case UV_FS_POLL:
     case UV_POLL:
+    case UV_SIGNAL:
       break;
 
     case UV_NAMED_PIPE:
@@ -228,7 +240,7 @@ void uv_loop_delete(uv_loop_t* loop) {
 
 
 static unsigned int uv__poll_timeout(uv_loop_t* loop) {
-  if (!uv__has_active_handles(loop))
+  if (!uv__has_active_handles(loop) && !uv__has_active_reqs(loop))
     return 0;
 
   if (!ngx_queue_empty(&loop->idle_handles))
@@ -451,7 +463,7 @@ int uv__accept(int sockfd) {
 
   while (1) {
 #if __linux__
-    static int no_accept4;
+    static __read_mostly int no_accept4;
 
     if (no_accept4)
       goto skip;
@@ -495,7 +507,7 @@ skip:
 }
 
 
-#if __linux__
+#if defined(__linux__) || defined(__FreeBSD__) || defined(__APPLE__)
 
 int uv__nonblock(int fd, int set) {
   int r;
@@ -518,7 +530,7 @@ int uv__cloexec(int fd, int set) {
   return r;
 }
 
-#else /* !__linux__ */
+#else /* !(defined(__linux__) || defined(__FreeBSD__) || defined(__APPLE__)) */
 
 int uv__nonblock(int fd, int set) {
   int flags;
@@ -567,7 +579,7 @@ int uv__cloexec(int fd, int set) {
   return r;
 }
 
-#endif /* __linux__ */
+#endif /* defined(__linux__) || defined(__FreeBSD__) || defined(__APPLE__) */
 
 
 /* This function is not execve-safe, there is a race window

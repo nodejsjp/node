@@ -312,10 +312,10 @@ Returns `true` if the given "object" is an `Error`. `false` otherwise.
 ## util.pump(readableStream, writableStream, [callback])
 
 <!--
-Experimental
+    Stability: 0 - Deprecated: Use readableStream.pipe(writableStream)
 -->
 
-実験的
+    Stability: 0 - Deprecated: `readableStream.pipe(writableStream)` を使ってください。
 
 <!--
 Read the data from `readableStream` and send it to the `writableStream`.

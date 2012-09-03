@@ -71,8 +71,6 @@ int uv_timer_init(uv_loop_t* loop, uv_timer_t* handle) {
   handle->timer_cb = NULL;
   handle->repeat = 0;
 
-  loop->counters.timer_init++;
-
   return 0;
 }
 
@@ -80,7 +78,6 @@ int uv_timer_init(uv_loop_t* loop, uv_timer_t* handle) {
 void uv_timer_endgame(uv_loop_t* loop, uv_timer_t* handle) {
   if (handle->flags & UV_HANDLE_CLOSING) {
     assert(!(handle->flags & UV_HANDLE_CLOSED));
-    uv__handle_stop(handle);
     uv__handle_close(handle);
   }
 }
