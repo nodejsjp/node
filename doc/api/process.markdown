@@ -603,11 +603,11 @@ What processor architecture you're running on: `'arm'`, `'ia32'`, or `'x64'`.
 
 <!--
 What platform you're running on:
-`'darwin'`, `'freebsd'`, `'linux'`, `'solaris'` or `'win32'`
+`'darwin'`, `'freebsd'`, `'linux'`, `'sunos'` or `'win32'`
 -->
 
 どのプラットフォームで動いているかを示します:
-`'darwin'`、`'freebsd'`、`'linux'`、`'solaris'`、または `'win32'`
+`'darwin'`、`'freebsd'`、`'linux'`、`'sunos'`、または `'win32'`
 
     console.log('This platform is ' + process.platform);
 

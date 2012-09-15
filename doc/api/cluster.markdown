@@ -466,17 +466,40 @@ The method takes an optional callback argument which will be called when finishe
 
 このメソッドはオプションの引数としてコールバックを受け取ります。
 
+## cluster.worker
+
+* {Object}
+
+<!--
+A reference to the current worker object. Not available in the master process.
+-->
+
+現在のワーカオブジェクトへの参照です。
+マスタプロセスでは利用できません。
+
+    var cluster = require('cluster');
+
+    if (cluster.isMaster) {
+      console.log('I am master');
+      cluster.fork();
+      cluster.fork();
+    } else if (cluster.isWorker) {
+      console.log('I am worker #' + cluster.worker.id);
+    }
+
 ## cluster.workers
 
 * {Object}
 
 <!--
 A hash that stores the active worker objects, keyed by `id` field. Makes it
-easy to loop through all the workers.
+easy to loop through all the workers. It is only available in the master
+process.
 -->
 
 `id` をキーとしてアクティブなワーカオブジェクトを保存しているハッシュです。
 これは全てのワーカに対して繰り返しを行うことを容易にします。
+マスタプロセスでのみ利用可能です。
 
     // Go through all workers
     function eachWorker(callback) {
@@ -634,7 +657,7 @@ IPC チャネルが閉じられると `'disconnect'` イベントが生成され
 <!--
 Because there might be long living connections, it is useful to implement a timeout.
 This example ask the worker to disconnect and after 2 seconds it will destroy the
-server. An alternative wound be to execute `worker.destroy()` after 2 seconds, but
+server. An alternative would be to execute `worker.destroy()` after 2 seconds, but
 that would normally not allow the worker to do any cleanup if needed.
 -->
 

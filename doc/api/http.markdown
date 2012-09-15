@@ -704,7 +704,7 @@ Node は、Content-Length と実際に送信されたレスポンスボディの
 
 <!--
 When using implicit headers (not calling `response.writeHead()` explicitly), this property
-controls the status code that will be send to the client when the headers get
+controls the status code that will be sent to the client when the headers get
 flushed.
 -->
 
@@ -905,7 +905,7 @@ HTTP は、トレーラを生成するならそのヘッダフィールドのリ
 
 <!--
 This method signals to the server that all of the response headers and body
-has been sent; that server should consider this message complete.
+have been sent; that server should consider this message complete.
 The method, `response.end()`, MUST be called on each
 response.
 -->
