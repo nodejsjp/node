@@ -224,6 +224,36 @@ See `buffer.write()` example, above.
 上の `buffer.write()` の例を参照してください。
 
 
+### buf.toJSON()
+
+<!--
+Returns a JSON-representation of the Buffer instance, which is identical to the
+output for JSON Arrays. `JSON.stringify` implicitly calls this function when
+stringifying a Buffer instance.
+-->
+
+バッファインスタンスの JSON 表現を返します。
+それは配列の JSON 出力と同じです。
+`JSON.stringify()` は Buffer のインスタンスを文字列化する際に、
+この関数を暗黙的に呼び出します。
+
+<!--
+Example:
+-->
+
+例:
+
+    var buf = new Buffer('test');
+    var json = JSON.stringify(buf);
+
+    console.log(json);
+    // '[116,101,115,116]'
+
+    var copy = new Buffer(JSON.parse(json));
+
+    console.log(copy);
+    // <Buffer 74 65 73 74>
+
 ### buf[index]
 
 <!--type=property-->

@@ -2384,20 +2384,36 @@ static void ParseArgs(int argc, char **argv) {
     } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
       PrintHelp();
       exit(0);
-    } else if (strcmp(arg, "--eval") == 0 || strcmp(arg, "-e") == 0 ||
-        strcmp(arg, "-pe") == 0) {
-      if (argc <= i + 1) {
-        fprintf(stderr, "Error: --eval requires an argument\n");
+    } else if (strcmp(arg, "--eval") == 0   ||
+               strcmp(arg, "-e") == 0       ||
+               strcmp(arg, "--print") == 0  ||
+               strcmp(arg, "-pe") == 0      ||
+               strcmp(arg, "-p") == 0) {
+      bool is_eval = strchr(arg, 'e') != NULL;
+      bool is_print = strchr(arg, 'p') != NULL;
+
+      // argument to -p and --print is optional
+      if (is_eval == true && i + 1 >= argc) {
+        fprintf(stderr, "Error: %s requires an argument\n", arg);
         exit(1);
       }
-      if (arg[1] == 'p') {
-        print_eval = true;
+
+      print_eval = print_eval || is_print;
+      argv[i] = const_cast<char*>("");
+
+      // --eval, -e and -pe always require an argument
+      if (is_eval == true) {
+        eval_string = argv[++i];
+        continue;
       }
-      argv[i] = const_cast<char*>("");
+
+      // next arg is the expression to evaluate unless it starts with:
+      //  - a dash, then it's another switch
+      //  - "\\-", then it's an escaped expression, drop the backslash
+      if (argv[i + 1] == NULL) continue;
+      if (argv[i + 1][0] == '-') continue;
       eval_string = argv[++i];
-    } else if (strcmp(arg, "--print") == 0 || strcmp(arg, "-p") == 0) {
-      print_eval = true;
-      argv[i] = const_cast<char*>("");
+      if (strncmp(eval_string, "\\-", 2) == 0) ++eval_string;
     } else if (strcmp(arg, "--interactive") == 0 || strcmp(arg, "-i") == 0) {
       force_repl = true;
       argv[i] = const_cast<char*>("");
