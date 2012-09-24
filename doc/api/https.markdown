@@ -191,6 +191,7 @@ The following options from [tls.connect()][] can also be specified. However, a
 - `rejectUnauthorized`: If `true`, the server certificate is verified against
   the list of supplied CAs. An `'error'` event is emitted if verification
   fails. Verification happens at the connection level, *before* the HTTP
+<<<<<<< HEAD
   request is sent. Default `false`.
 -->
 
@@ -211,6 +212,10 @@ The following options from [tls.connect()][] can also be specified. However, a
   デフォルトは false です。
 
 <!--
+=======
+  request is sent. Default `true`.
+
+>>>>>>> master
 In order to specify these options, use a custom `Agent`.
 -->
 

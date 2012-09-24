@@ -57,7 +57,8 @@ extern "C" {
 # define __unix__
 #endif
 
-#if defined(__unix__) || defined(__POSIX__) || defined(__APPLE__)
+#if defined(__unix__) || defined(__POSIX__) || \
+    defined(__APPLE__) || defined(_AIX)
 # include "uv-private/uv-unix.h"
 #else
 # include "uv-private/uv-win.h"
@@ -598,6 +599,11 @@ struct uv_tcp_s {
 
 UV_EXTERN int uv_tcp_init(uv_loop_t*, uv_tcp_t* handle);
 
+/*
+ * Opens an existing file descriptor or SOCKET as a tcp handle.
+ */
+UV_EXTERN int uv_tcp_open(uv_tcp_t* handle, uv_os_sock_t sock);
+
 /* Enable/disable Nagle's algorithm. */
 UV_EXTERN int uv_tcp_nodelay(uv_tcp_t* handle, int enable);
 
@@ -701,6 +707,11 @@ struct uv_udp_send_s {
  * Returns 0 on success.
  */
 UV_EXTERN int uv_udp_init(uv_loop_t*, uv_udp_t* handle);
+
+/*
+ * Opens an existing file descriptor or SOCKET as a udp handle.
+ */
+UV_EXTERN int uv_udp_open(uv_udp_t* handle, uv_os_sock_t sock);
 
 /*
  * Bind to a IPv4 address and port.
@@ -939,7 +950,7 @@ UV_EXTERN int uv_pipe_init(uv_loop_t*, uv_pipe_t* handle, int ipc);
 /*
  * Opens an existing file descriptor or HANDLE as a pipe.
  */
-UV_EXTERN void uv_pipe_open(uv_pipe_t*, uv_file file);
+UV_EXTERN int uv_pipe_open(uv_pipe_t*, uv_file file);
 
 UV_EXTERN int uv_pipe_bind(uv_pipe_t* handle, const char* name);
 
@@ -1664,7 +1675,14 @@ enum uv_fs_event_flags {
    * regular interval.
    * This flag is currently not implemented yet on any backend.
    */
-  UV_FS_EVENT_STAT = 2
+  UV_FS_EVENT_STAT = 2,
+
+  /*
+   * By default, event watcher, when watching directory, is not registering
+   * (is ignoring) changes in it's subdirectories.
+   * This flag will override this behaviour on platforms that support it.
+   */
+  UV_FS_EVENT_RECURSIVE = 3
 };
 
 
@@ -1789,6 +1807,7 @@ UV_EXTERN void uv_once(uv_once_t* guard, void (*callback)(void));
 
 UV_EXTERN int uv_thread_create(uv_thread_t *tid,
     void (*entry)(void *arg), void *arg);
+UV_EXTERN unsigned long uv_thread_self(void);
 UV_EXTERN int uv_thread_join(uv_thread_t *tid);
 
 /* the presence of these unions force similar struct layout */

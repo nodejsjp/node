@@ -53,6 +53,14 @@ LINKFLAGS+=-lsocket -lnsl -lkstat
 OBJS += src/unix/sunos.o
 endif
 
+ifeq (AIX,$(uname_S))
+EV_CONFIG=config_aix.h
+EIO_CONFIG=config_aix.h
+CPPFLAGS += -Isrc/ares/config_aix -D_ALL_SOURCE -D_XOPEN_SOURCE=500
+LINKFLAGS+= -lperfstat
+OBJS += src/unix/aix.o
+endif
+
 ifeq (Darwin,$(uname_S))
 EV_CONFIG=config_darwin.h
 EIO_CONFIG=config_darwin.h
@@ -60,6 +68,7 @@ CPPFLAGS += -D_DARWIN_USE_64_BIT_INODE=1
 LINKFLAGS+=-framework CoreServices
 OBJS += src/unix/darwin.o
 OBJS += src/unix/kqueue.o
+OBJS += src/unix/fsevents.o
 endif
 
 ifeq (Linux,$(uname_S))
@@ -91,7 +100,7 @@ endif
 ifeq (NetBSD,$(uname_S))
 EV_CONFIG=config_netbsd.h
 EIO_CONFIG=config_netbsd.h
-LINKFLAGS+=
+LINKFLAGS+=-lkvm
 OBJS += src/unix/netbsd.o
 OBJS += src/unix/kqueue.o
 endif

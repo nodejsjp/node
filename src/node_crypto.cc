@@ -33,16 +33,7 @@
 #endif
 
 #include <stdlib.h>
-
 #include <errno.h>
-
-/* Sigh. */
-#ifdef _WIN32
-# include <windows.h>
-#else
-# include <pthread.h>
-#endif
-
 
 #if OPENSSL_VERSION_NUMBER >= 0x10000000L
 # define OPENSSL_CONST const
@@ -84,18 +75,17 @@ static Persistent<String> version_symbol;
 static Persistent<String> ext_key_usage_symbol;
 static Persistent<String> onhandshakestart_sym;
 static Persistent<String> onhandshakedone_sym;
+static Persistent<String> onclienthello_sym;
+static Persistent<String> onnewsession_sym;
+static Persistent<String> sessionid_sym;
 
 static Persistent<FunctionTemplate> secure_context_constructor;
 
 static uv_rwlock_t* locks;
 
 
-static unsigned long crypto_id_cb(void) {
-#ifdef _WIN32
-  return (unsigned long) GetCurrentThreadId();
-#else /* !_WIN32 */
-  return (unsigned long) pthread_self();
-#endif /* !_WIN32 */
+static void crypto_threadid_cb(CRYPTO_THREADID* tid) {
+  CRYPTO_THREADID_set_numeric(tid, uv_thread_self());
 }
 
 
@@ -217,12 +207,68 @@ Handle<Value> SecureContext::Init(const Arguments& args) {
   }
 
   sc->ctx_ = SSL_CTX_new(method);
-  // Enable session caching?
-  SSL_CTX_set_session_cache_mode(sc->ctx_, SSL_SESS_CACHE_SERVER);
-  // SSL_CTX_set_session_cache_mode(sc->ctx_,SSL_SESS_CACHE_OFF);
+
+  // SSL session cache configuration
+  SSL_CTX_set_session_cache_mode(sc->ctx_,
+                                 SSL_SESS_CACHE_SERVER |
+                                 SSL_SESS_CACHE_NO_INTERNAL |
+                                 SSL_SESS_CACHE_NO_AUTO_CLEAR);
+  SSL_CTX_sess_set_get_cb(sc->ctx_, GetSessionCallback);
+  SSL_CTX_sess_set_new_cb(sc->ctx_, NewSessionCallback);
 
   sc->ca_store_ = NULL;
   return True();
+}
+
+
+SSL_SESSION* SecureContext::GetSessionCallback(SSL* s,
+                                               unsigned char* key,
+                                               int len,
+                                               int* copy) {
+  HandleScope scope;
+
+  Connection* p = static_cast<Connection*>(SSL_get_app_data(s));
+
+  *copy = 0;
+  SSL_SESSION* sess = p->next_sess_;
+  p->next_sess_ = NULL;
+
+  return sess;
+}
+
+
+void SessionDataFree(char* data, void* hint) {
+  delete[] data;
+}
+
+
+int SecureContext::NewSessionCallback(SSL* s, SSL_SESSION* sess) {
+  HandleScope scope;
+
+  Connection* p = static_cast<Connection*>(SSL_get_app_data(s));
+
+  // Check if session is small enough to be stored
+  int size = i2d_SSL_SESSION(sess, NULL);
+  if (size > kMaxSessionSize) return 0;
+
+  // Serialize session
+  char* serialized = new char[size];
+  unsigned char* pserialized = reinterpret_cast<unsigned char*>(serialized);
+  memset(serialized, 0, size);
+  i2d_SSL_SESSION(sess, &pserialized);
+
+  Handle<Value> argv[2] = {
+    Buffer::New(reinterpret_cast<char*>(sess->session_id),
+                sess->session_id_length)->handle_,
+    Buffer::New(serialized, size, SessionDataFree, NULL)->handle_
+  };
+
+  if (onnewsession_sym.IsEmpty()) {
+    onnewsession_sym = NODE_PSYMBOL("onnewsession");
+  }
+  MakeCallback(p->handle_, onnewsession_sym, ARRAY_SIZE(argv), argv);
+
+  return 0;
 }
 
 
@@ -663,6 +709,150 @@ Handle<Value> SecureContext::LoadPKCS12(const Arguments& args) {
 }
 
 
+size_t ClientHelloParser::Write(const uint8_t* data, size_t len) {
+  HandleScope scope;
+
+  // Just accumulate data, everything will be pushed to BIO later
+  if (state_ == kPaused) return 0;
+
+  // Copy incoming data to the internal buffer
+  // (which has a size of the biggest possible TLS frame)
+  size_t available = sizeof(data_) - offset_;
+  size_t copied = len < available ? len : available;
+  memcpy(data_ + offset_, data, copied);
+  offset_ += copied;
+
+  // Vars for parsing hello
+  bool is_clienthello = false;
+  uint8_t session_size = -1;
+  uint8_t* session_id = NULL;
+  Local<Object> hello;
+  Handle<Value> argv[1];
+
+  switch (state_) {
+   case kWaiting:
+    // >= 5 bytes for header parsing
+    if (offset_ < 5) break;
+
+    if (data_[0] == kChangeCipherSpec || data_[0] == kAlert ||
+        data_[0] == kHandshake || data_[0] == kApplicationData) {
+      frame_len_ = (data_[3] << 8) + data_[4];
+      state_ = kTLSHeader;
+      body_offset_ = 5;
+    } else {
+      frame_len_ = (data_[0] << 8) + data_[1];
+      state_ = kSSLHeader;
+      if (*data_ & 0x40) {
+        // header with padding
+        body_offset_ = 3;
+      } else {
+        // without padding
+        body_offset_ = 2;
+      }
+    }
+
+    // Sanity check (too big frame, or too small)
+    if (frame_len_ >= sizeof(data_)) {
+      // Let OpenSSL handle it
+      Finish();
+      return copied;
+    }
+   case kTLSHeader:
+   case kSSLHeader:
+    // >= 5 + frame size bytes for frame parsing
+    if (offset_ < body_offset_ + frame_len_) break;
+
+    // Skip unsupported frames and gather some data from frame
+
+    // TODO: Check protocol version
+    if (data_[body_offset_] == kClientHello) {
+      is_clienthello = true;
+      uint8_t* body;
+      size_t session_offset;
+
+      if (state_ == kTLSHeader) {
+        // Skip frame header, hello header, protocol version and random data
+        session_offset = body_offset_ + 4 + 2 + 32;
+
+        if (session_offset + 1 < offset_) {
+          body = data_ + session_offset;
+          session_size = *body;
+          session_id = body + 1;
+        }
+      } else if (state_ == kSSLHeader) {
+        // Skip header, version
+        session_offset = body_offset_ + 3;
+
+        if (session_offset + 4 < offset_) {
+          body = data_ + session_offset;
+
+          int ciphers_size = (body[0] << 8) + body[1];
+
+          if (body + 4 + ciphers_size < data_ + offset_) {
+            session_size = (body[2] << 8) + body[3];
+            session_id = body + 4 + ciphers_size;
+          }
+        }
+      } else {
+        // Whoa? How did we get here?
+        abort();
+      }
+
+      // Check if we overflowed (do not reply with any private data)
+      if (session_id == NULL ||
+          session_size > 32 ||
+          session_id + session_size > data_ + offset_) {
+        Finish();
+        return copied;
+      }
+
+      // TODO: Parse other things?
+    }
+
+    // Not client hello - let OpenSSL handle it
+    if (!is_clienthello) {
+      Finish();
+      return copied;
+    }
+
+    // Parse frame, call javascript handler and
+    // move parser into the paused state
+    if (onclienthello_sym.IsEmpty()) {
+      onclienthello_sym = NODE_PSYMBOL("onclienthello");
+    }
+    if (sessionid_sym.IsEmpty()) {
+      sessionid_sym = NODE_PSYMBOL("sessionId");
+    }
+
+    state_ = kPaused;
+    hello = Object::New();
+    hello->Set(sessionid_sym,
+               Buffer::New(reinterpret_cast<char*>(session_id),
+                           session_size)->handle_);
+
+    argv[0] = hello;
+    MakeCallback(conn_->handle_, onclienthello_sym, 1, argv);
+    break;
+   case kEnded:
+   default:
+    break;
+  }
+
+  return copied;
+}
+
+
+void ClientHelloParser::Finish() {
+  assert(state_ != kEnded);
+  state_ = kEnded;
+
+  // Write all accumulated data
+  int r = BIO_write(conn_->bio_read_, reinterpret_cast<char*>(data_), offset_);
+  conn_->HandleBIOError(conn_->bio_read_, "BIO_write", r);
+  conn_->SetShutdownFlags();
+}
+
+
 #ifdef SSL_PRINT_DEBUG
 # define DEBUG_PRINT(...) fprintf (stderr, __VA_ARGS__)
 #else
@@ -785,6 +975,7 @@ void Connection::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "getPeerCertificate", Connection::GetPeerCertificate);
   NODE_SET_PROTOTYPE_METHOD(t, "getSession", Connection::GetSession);
   NODE_SET_PROTOTYPE_METHOD(t, "setSession", Connection::SetSession);
+  NODE_SET_PROTOTYPE_METHOD(t, "loadSession", Connection::LoadSession);
   NODE_SET_PROTOTYPE_METHOD(t, "isSessionReused", Connection::IsSessionReused);
   NODE_SET_PROTOTYPE_METHOD(t, "isInitFinished", Connection::IsInitFinished);
   NODE_SET_PROTOTYPE_METHOD(t, "verifyError", Connection::VerifyError);
@@ -938,23 +1129,20 @@ int Connection::SelectSNIContextCallback_(SSL *s, int *ad, void* arg) {
     }
     p->servername_ = Persistent<String>::New(String::New(servername));
 
-    // Call sniCallback_ and use it's return value as context
-    if (!p->sniCallback_.IsEmpty()) {
+    // Call the SNI callback and use its return value as context
+    if (!p->sniObject_.IsEmpty()) {
       if (!p->sniContext_.IsEmpty()) {
         p->sniContext_.Dispose();
       }
 
       // Get callback init args
       Local<Value> argv[1] = {*p->servername_};
-      Local<Function> callback = *p->sniCallback_;
 
       // Call it
-      //
-      // XXX There should be an object connected to this that
-      // we can attach a domain onto.
-      Local<Value> ret;
-      ret = Local<Value>::New(MakeCallback(Context::GetCurrent()->Global(),
-                                           callback, ARRAY_SIZE(argv), argv));
+      Local<Value> ret = Local<Value>::New(MakeCallback(p->sniObject_,
+                                                        "onselect",
+                                                        ARRAY_SIZE(argv),
+                                                        argv));
 
       // If ret is SecureContext
       if (secure_context_constructor->HasInstance(ret)) {
@@ -1111,9 +1299,17 @@ Handle<Value> Connection::EncIn(const Arguments& args) {
           String::New("off + len > buffer.length")));
   }
 
-  int bytes_written = BIO_write(ss->bio_read_, buffer_data + off, len);
-  ss->HandleBIOError(ss->bio_read_, "BIO_write", bytes_written);
-  ss->SetShutdownFlags();
+  int bytes_written;
+  char* data = buffer_data + off;
+
+  if (ss->is_server_ && !ss->hello_parser_.ended()) {
+    bytes_written = ss->hello_parser_.Write(reinterpret_cast<uint8_t*>(data),
+                                            len);
+  } else {
+    bytes_written = BIO_write(ss->bio_read_, data, len);
+    ss->HandleBIOError(ss->bio_read_, "BIO_write", bytes_written);
+    ss->SetShutdownFlags();
+  }
 
   return scope.Close(Integer::New(bytes_written));
 }
@@ -1443,7 +1639,7 @@ Handle<Value> Connection::SetSession(const Arguments& args) {
   ssize_t wlen = DecodeWrite(sbuf, slen, args[0], BINARY);
   assert(wlen == slen);
 
-  const unsigned char* p = (unsigned char*) sbuf;
+  const unsigned char* p = reinterpret_cast<const unsigned char*>(sbuf);
   SSL_SESSION* sess = d2i_SSL_SESSION(NULL, &p, wlen);
 
   delete [] sbuf;
@@ -1458,6 +1654,30 @@ Handle<Value> Connection::SetSession(const Arguments& args) {
     Local<String> eStr = String::New("SSL_set_session error");
     return ThrowException(Exception::Error(eStr));
   }
+
+  return True();
+}
+
+Handle<Value> Connection::LoadSession(const Arguments& args) {
+  HandleScope scope;
+
+  Connection *ss = Connection::Unwrap(args);
+
+  if (args.Length() >= 1 && Buffer::HasInstance(args[0])) {
+    ssize_t slen = Buffer::Length(args[0].As<Object>());
+    char* sbuf = Buffer::Data(args[0].As<Object>());
+
+    const unsigned char* p = reinterpret_cast<unsigned char*>(sbuf);
+    SSL_SESSION* sess = d2i_SSL_SESSION(NULL, &p, slen);
+
+    // Setup next session and move hello to the BIO buffer
+    if (ss->next_sess_ != NULL) {
+      SSL_SESSION_free(ss->next_sess_);
+    }
+    ss->next_sess_ = sess;
+  }
+
+  ss->hello_parser_.Finish();
 
   return True();
 }
@@ -1774,11 +1994,11 @@ Handle<Value> Connection::SetSNICallback(const Arguments& args) {
   }
 
   // Release old handle
-  if (!ss->sniCallback_.IsEmpty()) {
-    ss->sniCallback_.Dispose();
+  if (!ss->sniObject_.IsEmpty()) {
+    ss->sniObject_.Dispose();
   }
-  ss->sniCallback_ = Persistent<Function>::New(
-                            Local<Function>::Cast(args[0]));
+  ss->sniObject_ = Persistent<Object>::New(Object::New());
+  ss->sniObject_->Set(String::New("onselect"), args[0]);
 
   return True();
 }
@@ -1913,66 +2133,6 @@ static int LengthWithoutIncompleteUtf8(char* buffer, int len) {
     }
   }
   return 0;
-}
-
-
-// local decrypt final without strict padding check
-// to work with php mcrypt
-// see http://www.mail-archive.com/openssl-dev@openssl.org/msg19927.html
-int local_EVP_DecryptFinal_ex(EVP_CIPHER_CTX *ctx,
-                              unsigned char *out,
-                              int *outl) {
-  int i,b;
-  int n;
-
-  *outl=0;
-  b=ctx->cipher->block_size;
-
-  if (ctx->flags & EVP_CIPH_NO_PADDING) {
-    if(ctx->buf_len) {
-      EVPerr(EVP_F_EVP_DECRYPTFINAL,EVP_R_DATA_NOT_MULTIPLE_OF_BLOCK_LENGTH);
-      return 0;
-    }
-    *outl = 0;
-    return 1;
-  }
-
-  if (b > 1) {
-    if (ctx->buf_len || !ctx->final_used) {
-      EVPerr(EVP_F_EVP_DECRYPTFINAL,EVP_R_WRONG_FINAL_BLOCK_LENGTH);
-      return(0);
-    }
-
-    if (b > (int)(sizeof(ctx->final) / sizeof(ctx->final[0]))) {
-      EVPerr(EVP_F_EVP_DECRYPTFINAL,EVP_R_BAD_DECRYPT);
-      return(0);
-    }
-
-    n=ctx->final[b-1];
-
-    if (n > b) {
-      EVPerr(EVP_F_EVP_DECRYPTFINAL,EVP_R_BAD_DECRYPT);
-      return(0);
-    }
-
-    for (i=0; i<n; i++) {
-      if (ctx->final[--b] != n) {
-        EVPerr(EVP_F_EVP_DECRYPTFINAL,EVP_R_BAD_DECRYPT);
-        return(0);
-      }
-    }
-
-    n=ctx->cipher->block_size-n;
-
-    for (i=0; i<n; i++) {
-      out[i]=ctx->final[i];
-    }
-    *outl=n;
-  } else {
-    *outl=0;
-  }
-
-  return(1);
 }
 
 
@@ -2381,9 +2541,8 @@ class Decipher : public ObjectWrap {
     NODE_SET_PROTOTYPE_METHOD(t, "init", DecipherInit);
     NODE_SET_PROTOTYPE_METHOD(t, "initiv", DecipherInitIv);
     NODE_SET_PROTOTYPE_METHOD(t, "update", DecipherUpdate);
-    NODE_SET_PROTOTYPE_METHOD(t, "final", DecipherFinal<false>);
-    // This is completely undocumented:
-    NODE_SET_PROTOTYPE_METHOD(t, "finaltol", DecipherFinal<true>);
+    NODE_SET_PROTOTYPE_METHOD(t, "final", DecipherFinal);
+    NODE_SET_PROTOTYPE_METHOD(t, "finaltol", DecipherFinal); // remove someday
     NODE_SET_PROTOTYPE_METHOD(t, "setAutoPadding", SetAutoPadding);
 
     target->Set(String::NewSymbol("Decipher"), t->GetFunction());
@@ -2473,7 +2632,6 @@ class Decipher : public ObjectWrap {
   }
 
   // coverity[alloc_arg]
-  template <bool TOLERATE_PADDING>
   int DecipherFinal(unsigned char** out, int *out_len) {
     int r;
 
@@ -2484,11 +2642,7 @@ class Decipher : public ObjectWrap {
     }
 
     *out = new unsigned char[EVP_CIPHER_CTX_block_size(&ctx)];
-    if (TOLERATE_PADDING) {
-      r = local_EVP_DecryptFinal_ex(&ctx,*out,out_len);
-    } else {
-      r = EVP_CipherFinal_ex(&ctx,*out,out_len);
-    }
+    r = EVP_CipherFinal_ex(&ctx,*out,out_len);
     EVP_CIPHER_CTX_cleanup(&ctx);
     initialised_ = false;
     return r;
@@ -2738,7 +2892,6 @@ class Decipher : public ObjectWrap {
     return Undefined();
   }
 
-  template <bool TOLERATE_PADDING>
   static Handle<Value> DecipherFinal(const Arguments& args) {
     HandleScope scope;
 
@@ -2748,7 +2901,7 @@ class Decipher : public ObjectWrap {
     int out_len = -1;
     Local<Value> outString;
 
-    int r = cipher->DecipherFinal<TOLERATE_PADDING>(&out_value, &out_len);
+    int r = cipher->DecipherFinal(&out_value, &out_len);
 
     assert(out_value != NULL);
     assert(out_len != -1);
@@ -4203,7 +4356,7 @@ struct pbkdf2_req {
   size_t iter;
   char* key;
   size_t keylen;
-  Persistent<Function> callback;
+  Persistent<Object> obj;
 };
 
 
@@ -4249,13 +4402,10 @@ void EIO_PBKDF2After(uv_work_t* work_req) {
 
   HandleScope scope;
   Local<Value> argv[2];
-  Persistent<Function> cb = req->callback;
+  Persistent<Object> obj = req->obj;
   EIO_PBKDF2After(req, argv);
-
-  // XXX There should be an object connected to this that
-  // we can attach a domain onto.
-  MakeCallback(Context::GetCurrent()->Global(), cb, ARRAY_SIZE(argv), argv);
-  cb.Dispose();
+  MakeCallback(obj, "ondone", ARRAY_SIZE(argv), argv);
+  obj.Dispose();
 }
 
 
@@ -4271,7 +4421,6 @@ Handle<Value> PBKDF2(const Arguments& args) {
   ssize_t pass_written = -1;
   ssize_t salt_written = -1;
   ssize_t iter = -1;
-  Local<Function> callback;
   pbkdf2_req* req = NULL;
 
   if (args.Length() != 4 && args.Length() != 5) {
@@ -4334,8 +4483,8 @@ Handle<Value> PBKDF2(const Arguments& args) {
   req->keylen = keylen;
 
   if (args[4]->IsFunction()) {
-    callback = Local<Function>::Cast(args[4]);
-    req->callback = Persistent<Function>::New(callback);
+    req->obj = Persistent<Object>::New(Object::New());
+    req->obj->Set(String::New("ondone"), args[4]);
     uv_queue_work(uv_default_loop(),
                   &req->work_req,
                   EIO_PBKDF2,
@@ -4360,7 +4509,7 @@ typedef int (*RandomBytesGenerator)(unsigned char* buf, int size);
 
 struct RandomBytesRequest {
   ~RandomBytesRequest();
-  Persistent<Function> callback_;
+  Persistent<Object> obj_;
   unsigned long error_; // openssl error code or zero
   uv_work_t work_req_;
   size_t size_;
@@ -4369,10 +4518,9 @@ struct RandomBytesRequest {
 
 
 RandomBytesRequest::~RandomBytesRequest() {
-  if (!callback_.IsEmpty()) {
-    callback_.Dispose();
-    callback_.Clear();
-  }
+  if (obj_.IsEmpty()) return;
+  obj_.Dispose();
+  obj_.Clear();
 }
 
 
@@ -4433,12 +4581,7 @@ void RandomBytesAfter(uv_work_t* work_req) {
   HandleScope scope;
   Local<Value> argv[2];
   RandomBytesCheck(req, argv);
-
-  // XXX There should be an object connected to this that
-  // we can attach a domain onto.
-  MakeCallback(Context::GetCurrent()->Global(),
-               req->callback_,
-               ARRAY_SIZE(argv), argv);
+  MakeCallback(req->obj_, "ondone", ARRAY_SIZE(argv), argv);
 
   delete req;
 }
@@ -4463,15 +4606,15 @@ Handle<Value> RandomBytes(const Arguments& args) {
   req->size_ = size;
 
   if (args[1]->IsFunction()) {
-    Local<Function> callback_v = Local<Function>(Function::Cast(*args[1]));
-    req->callback_ = Persistent<Function>::New(callback_v);
+    req->obj_ = Persistent<Object>::New(Object::New());
+    req->obj_->Set(String::New("ondone"), args[1]);
 
     uv_queue_work(uv_default_loop(),
                   &req->work_req_,
                   RandomBytesWork<generator>,
                   RandomBytesAfter<generator>);
 
-    return Undefined();
+    return req->obj_;
   }
   else {
     Local<Value> argv[2];
@@ -4498,7 +4641,7 @@ void InitCrypto(Handle<Object> target) {
 
   crypto_lock_init();
   CRYPTO_set_locking_callback(crypto_lock_cb);
-  CRYPTO_set_id_callback(crypto_id_cb);
+  CRYPTO_THREADID_set_callback(crypto_threadid_cb);
 
   // Turn off compression. Saves memory - do it in userland.
 #if !defined(OPENSSL_NO_COMP)
