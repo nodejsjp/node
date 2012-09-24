@@ -137,6 +137,7 @@ typedef struct {
   uint64_t time;                                                              \
   void* signal_ctx;                                                           \
   uv_signal_t child_watcher;                                                  \
+  int emfile_fd;                                                              \
   UV_PLATFORM_LOOP_FIELDS                                                     \
 
 #define UV_REQ_TYPE_PRIVATE /* empty */
@@ -184,8 +185,7 @@ typedef struct {
   int fd;                                                                     \
   UV_STREAM_PRIVATE_PLATFORM_FIELDS                                           \
 
-#define UV_TCP_PRIVATE_FIELDS                                                 \
-  uv_idle_t* idle_handle;  /* for UV_TCP_SINGLE_ACCEPT handles */             \
+#define UV_TCP_PRIVATE_FIELDS /* empty */
 
 #define UV_UDP_PRIVATE_FIELDS                                                 \
   int fd;                                                                     \

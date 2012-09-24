@@ -531,11 +531,25 @@ you can use the `require('querystring').parse` function, or pass
 
 ### request.headers
 
+<<<<<<< HEAD
 <!--
-Read only.
+Read only map of header names and values. Header names are lower-cased.
 -->
 
-参照のみ可能です。
+参照のみ可能な、ヘッダ名と値のマップです。
+ヘッダ名は小文字化されています。
+
+<!--
+Example:
+-->
+例:
+
+    // Prints something like:
+    //
+    // { 'user-agent': 'curl/7.22.0',
+    //   host: '127.0.0.1:8000',
+    //   accept: '*/*' }
+    console.log(request.headers);
 
 ### request.trailers
 
@@ -624,6 +638,29 @@ The response implements the [Writable Stream][] interface. This is an
 レスポンスは [Writable  Stream][] インタフェースを実装します。
 これは以下のイベントを持つ [EventEmitter][] です:
 
+### Event: 'end'
+
+`function () { }`
+
+<!--
+Emitted when the response has been sent. More specifically, this event is
+emitted when the last segment of the response headers and body have been
+handed off to the operating system for transmission over the network. It
+does not imply that the client has received anything yet.
+-->
+
+レスポンスが送信された場合に生成されます。
+より具体的には、このイベントはレスポンスヘッダおよびボディの最後の
+セグメントが、ネットワークに転送されるためにオペレーティングシステムに
+渡された後に生成されます。
+それはクライアントが全て受信したことを意味しません。
+
+<!--
+After this event, no more events will be emitted on the response object.
+-->
+
+このイベントより後では、レスポンスオブジェクトはイベントを生成しません。
+
 ### Event: 'close'
 
 `function () { }`
@@ -704,7 +741,7 @@ Node は、Content-Length と実際に送信されたレスポンスボディの
 
 <!--
 When using implicit headers (not calling `response.writeHead()` explicitly), this property
-controls the status code that will be send to the client when the headers get
+controls the status code that will be sent to the client when the headers get
 flushed.
 -->
 
@@ -905,7 +942,7 @@ HTTP は、トレーラを生成するならそのヘッダフィールドのリ
 
 <!--
 This method signals to the server that all of the response headers and body
-has been sent; that server should consider this message complete.
+have been sent; that server should consider this message complete.
 The method, `response.end()`, MUST be called on each
 response.
 -->

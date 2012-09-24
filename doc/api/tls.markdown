@@ -414,7 +414,7 @@ Creates a new client connection to the given `port` and `host` (old API) or
 
   - `rejectUnauthorized`: If `true`, the server certificate is verified against
     the list of supplied CAs. An `'error'` event is emitted if verification
-    fails. Default: `false`.
+    fails. Default: `true`.
 
   - `NPNProtocols`: An array of string or `Buffer` containing supported NPN
     protocols. `Buffer` should have following format: `0x05hello0x05world`,
@@ -450,7 +450,7 @@ Creates a new client connection to the given `port` and `host` (old API) or
     リストによって検証されます。
     認証されなかった場合は `'error'` イベントが生成されます。
     認証は HTTP リクエストが送信される *前* にコネクションレベルで行われます。
-    デフォルトは false です。
+    デフォルトは true です。
 
   - `NPNProtocols`: サポートする NPN プロトコルの文字列または `Buffer` 
     の配列です。
@@ -658,6 +658,40 @@ established - it will be forwarded here.
 
 セキュアコネクションが確立される前にクライアントコネクションが
 `'error'` イベントを発した場合 － ここに転送されます。
+
+
+### Event: 'newSession'
+
+`function (sessionId, sessionData) { }`
+
+<!--
+Emitted on creation of TLS session. May be used to store sessions in external
+storage.
+-->
+
+TLS セッションが作成された場合に生成されます。
+セッションを外部ストレージに保存する場合に使えるでしょう。
+
+
+### Event: 'resumeSession'
+
+`function (sessionId, callback) { }`
+
+<!--
+Emitted when client wants to resume previous TLS session. Event listener may
+perform lookup in external storage using given `sessionId`, and invoke
+`callback(null, sessionData)` once finished. If session can't be resumed
+(i.e. doesn't exist in storage) one may call `callback(null, null)`. Calling
+`callback(err)` will terminate incoming connection and destroy socket.
+-->
+
+クライアントが以前の TLS セッションを再開を要求した場合に生成されます。
+イベントリスナは与えられた `sessionId` を使用して外部ストレージから
+セッションを見つけた場合、`callback(null, sessionData)` を一度呼び出すことが
+できます。
+セッションを再開できない場合 (すなわち、ストレージに存在しない場合)、
+`callback(null, null)` を呼ぶことができます。
+`callback(err)` を呼び出すと接続を終了し、ソケットを破棄します。
 
 
 ### server.listen(port, [host], [callback])
