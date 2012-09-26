@@ -43,7 +43,7 @@ See ['end'][] event for more information.
 ['end'][] イベントにより多くの情報があります。
 
 <!--
-Here is an example of a echo server which listens for connections
+Here is an example of an echo server which listens for connections
 on port 8124:
 -->
 

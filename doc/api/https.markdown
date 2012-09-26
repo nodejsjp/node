@@ -72,21 +72,25 @@ Or
 
 ## https.request(options, callback)
 
-<<<<<<< HEAD
 <!--
-Makes a request to a secure web server.  All options from [http.request()][]
-are valid.
--->
-=======
 Makes a request to a secure web server.
-
-`options` can be an object or a string. If `options` is a string, it is
-automatically parsed with [url.parse()](url.html#url.parse).
-
-All options from [http.request()][] are valid.
->>>>>>> v0.8
+-->
 
 セキュアな Web サーバへのリクエストを作成します。
+
+<!--
+`options` can be an object or a string. If `options` is a string, it is
+automatically parsed with [url.parse()](url.html#url.parse).
+-->
+
+`options` はオブジェクトまたは文字列です。
+`options` が文字列なら、それは自動的に [url.parse()](url.html#url.parse)
+によって解析されます。
+
+<!--
+All options from [http.request()][] are valid.
+-->
+
 [http.request()][] の全てと同様のオプションが指定できます。
 
 <!--
@@ -267,13 +271,16 @@ Like `http.get()` but for HTTPS.
 
 `http.get()` と同様ですが HTTPS です。
 
-<<<<<<< HEAD
 <!--
-=======
 `options` can be an object or a string. If `options` is a string, it is
 automatically parsed with [url.parse()](url.html#url.parse).
+-->
 
->>>>>>> v0.8
+`options` はオブジェクトまたは文字列です。
+`options` が文字列なら、それは自動的に [url.parse()](url.html#url.parse)
+によって解析されます。
+
+<!--
 Example:
 -->
 
