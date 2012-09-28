@@ -865,7 +865,7 @@ The synchronous version of `fs.appendFile`.
 
 ## fs.watchFile(filename, [options], listener)
 
-    Stability: 2 - Unstable.  Use fs.watch instead, if available.
+    Stability: 2 - Unstable.  Use fs.watch instead, if possible.
 
 <!--
 Watch for changes on `filename`. The callback `listener` will be called each
@@ -936,7 +936,7 @@ no-op, not an error.
 
 ## fs.watch(filename, [options], [listener])
 
-    Stability: 2 - Unstable.  Not available on all platforms.
+    Stability: 2 - Unstable.
 
 <!--
 Watch for changes on `filename`, where `filename` is either a file or a
@@ -986,20 +986,17 @@ unavailable in some situations.
 <!--
 This feature depends on the underlying operating system providing a way
 to be notified of filesystem changes.
-
-* On Linux systems, this uses `inotify`.
-* On BSD systems (including OS X), this uses `kqueue`.
-* On SunOS systems (including Solaris and SmartOS), this uses `event ports`.
-* On Windows systems, this feature depends on `ReadDirectoryChangesW`.
-
-If the underlying functionality is not available for some reason, then
-`fs.watch` will not be able to function.  You can still use
-`fs.watchFile`, which uses stat polling, but it is slower and less
-reliable.
 -->
 
 この機能は下層のオペレーティングシステムが提供するファイルシステム変更の
 通知に依存します。
+
+<!--
+* On Linux systems, this uses `inotify`.
+* On BSD systems (including OS X), this uses `kqueue`.
+* On SunOS systems (including Solaris and SmartOS), this uses `event ports`.
+* On Windows systems, this feature depends on `ReadDirectoryChangesW`.
+-->
 
 * Linux システムでは `inotify` が使われます。
 * BSD システム (OS X を含みます) では `kqueue` が使われます。
@@ -1007,8 +1004,23 @@ reliable.
   が使われます。
 * Windows システムでは、この機能は `ReadDirectoryChangesW` に依存します。
 
-何らかの理由で下層の機能が使えない場合、`fs.watch` は使えません。
-stat をポーリングする `fs.watchFile` を使うことはできますが、
+<!--
+If the underlying functionality is not available for some reason, then
+`fs.watch` will not be able to function.  For example, watching files or
+directories on network file systems (NFS, SMB, etc.) often doesn't work
+reliably or at all.
+-->
+
+何らかの理由で下層の機能が使えない場合、`fs.watch()` は使えません。
+たとえば、ネットワークファイルシステム (NFS、SMB、その他) はしばしば
+信頼できないか全く動作しません。
+
+<!--
+You can still use `fs.watchFile`, which uses stat polling, but it is slower and
+less reliable.
+-->
+
+stat をポーリングする `fs.watchFile()` を使うことはできますが、
 それは遅くて信頼性はより低くなります。
 
 #### Filename Argument
