@@ -1,6 +1,13 @@
 # Crypto
 
-    Stability: 3 - Stable
+<!--
+    Stability: 2 - Unstable; API changes are being discussed for
+    future versions.  Breaking changes will be minimized.  See below.
+-->
+
+    Stability: 2 - Unstable; 将来のバージョンで API を変更することがが
+    議論されています。互換性を損なう変更は最小限です。後述します。
+
 
 <!--
 Use `require('crypto')` to access this module.
@@ -745,6 +752,75 @@ Generates cryptographically strong pseudo-random data. Usage:
     } catch (ex) {
       // handle error
     }
+
+## Proposed API Changes in Future Versions of Node
+
+<!--
+The Crypto module was added to Node before there was the concept of a
+unified Stream API, and before there were Buffer objects for handling
+binary data.
+-->
+
+Crypto モジュールは、統合されたストリーム API やバイトデータを扱う Buffer
+オブジェクトよりも先に Node に追加されました。
+
+<!--
+As such, the streaming classes don't have the typical methods found on
+other Node classes, and many methods accept and return Binary-encoded
+strings by default rather than Buffers.
+-->
+
+そのため、このストリーミングなクラスは他の Node のクラスに見られる
+典型的なメソッドを持たず、多くのメソッドは引数や戻り値に
+Buffer ではなくバイナリエンコードされた文字列を使います。
+
+<!--
+A future version of node will make Buffers the default data type.
+This will be a breaking change for some use cases, but not all.
+-->
+
+将来のバージョンの Node では、Buffer がデフォルトのデータ型になります。
+これはあるユースケースにおいては互換性を損ないますが、
+全てのケースではありません。
+
+<!--
+For example, if you currently use the default arguments to the Sign
+class, and then pass the results to the Verify class, without ever
+inspecting the data, then it will continue to work as before.  Where
+you now get a binary string and then present the binary string to the
+Verify object, you'll get a Buffer, and present the Buffer to the
+Verify object.
+-->
+
+たとえば、Sign クラスをデフォルト引数で使っていて、
+その結果を全く調べずに Verify クラスに渡している場合、
+それは以前と同じように動くでしょう。
+それは、現時点ではバイナリ文字列を受け取ってそのバイナリ文字列を
+Veriy オブジェクトに渡しますが、将来は Buffer を受け取ってその
+Buffer を Verify オブジェクトに渡すようになります。
+
+<!--
+However, if you are doing things with the string data that will not
+work properly on Buffers (such as, concatenating them, storing in
+databases, etc.), or you are passing binary strings to the crypto
+functions without an encoding arguemnt, then you will need to start
+providing encoding arguments to specify which encoding you'd like to
+use.
+-->
+
+しかしながら、Buffer が文字列と正確に同じようには動かない何かをしている場合
+(連結やデータの並べ替えなど)、あるいはバイナリ文字列を Crypto の関数に
+エンコーディング引数無しで渡している場合、エンコーディング引数を与えて
+どのエンコーディングを使用しているかを指定する必要があります。
+
+<!--
+Also, a Streaming API will be provided, but this will be done in such
+a way as to preserve the legacy API surface.
+-->
+
+同時に、ストリーミング API も提供されますが、それはレガシーな API
+を維持する方法でなされます。
+
 
 [createCipher()]: #crypto_crypto_createcipher_algorithm_password
 [createCipheriv()]: #crypto_crypto_createcipheriv_algorithm_key_iv
