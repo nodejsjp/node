@@ -374,8 +374,9 @@ You can test this server by connecting to it with `openssl s_client`:
 
     openssl s_client -connect 127.0.0.1:8000
 
-## tls.connect(options, [secureConnectListener])
-## tls.connect(port, [host], [options], [secureConnectListener])
+
+## tls.connect(options, [callback])
+## tls.connect(port, [host], [options], [callback])
 
 <!--
 Creates a new client connection to the given `port` and `host` (old API) or
@@ -461,15 +462,15 @@ Creates a new client connection to the given `port` and `host` (old API) or
   - `servername`: TLS 拡張である SNI (Server Name Indication) のサーバ名です。
 
 <!--
-The `secureConnectListener` parameter will be added as a listener for the
-['secureConnect'][] event.
+The `callback` parameter will be added as a listener for the
+22['secureConnect'][] event.
 
 `tls.connect()` returns a [CleartextStream][] object.
 
 Here is an example of a client of echo server as described previously:
 -->
 
-`secureConnectLister` 引数は ['secureConnect'][] イベントのリスナとして
+`callback` 引数は ['secureConnect'][] イベントのリスナとして
 加えられます。
 
 `tls.connect()` は [CleartextStream][] オブジェクトを返します。

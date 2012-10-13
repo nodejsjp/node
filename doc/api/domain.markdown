@@ -347,14 +347,14 @@ specified emitter.
 これは `domain.add(emitter)` と対照的です。指定された EventEmitter を
 ドメインから削除します。
 
-### domain.bind(cb)
+### domain.bind(callback)
 
 <!--
-* `cb` {Function} The callback function
+* `callback` {Function} The callback function
 * return: {Function} The bound function
 -->
 
-* `cb` {Function} コールバック関数
+* `callback` {Function} コールバック関数
 * return: {Function} 束縛された関数
 
 <!--
@@ -384,32 +384,32 @@ thrown will be routed to the domain's `error` event.
       // with the normal line number and stack message.
     });
 
-### domain.intercept(cb)
+### domain.intercept(callback)
 
 <!--
-* `cb` {Function} The callback function
+* `callback` {Function} The callback function
 * return: {Function} The intercepted function
 -->
 
-* `cb` {Function} コールバック関数
+* `callback` {Function} コールバック関数
 * return: {Function} インターセプトされた関数
 
 <!--
-This method is almost identical to `domain.bind(cb)`.  However, in
+This method is almost identical to `domain.bind(callback)`.  However, in
 addition to catching thrown errors, it will also intercept `Error`
 objects sent as the first argument to the function.
 -->
 
-このメソッドはほとんど `domain.bind(cb)` と同じです。
+このメソッドはほとんど `domain.bind(callback)` と同じです。
 ただし、スローされたエラーを捕まえることに加えて、関数に渡される最初の引数が
 `Error` オブジェクトの場合もインターセプトします。
 
 <!--
-In this way, the common `if (er) return cb(er);` pattern can be replaced
+In this way, the common `if (er) return callback(er);` pattern can be replaced
 with a single error handler in a single place.
 -->
 
-これは、一般的な `if (er) return cb(er);` パターンを一カ所で単一の
+これは、一般的な `if (er) return callback(er);` パターンを一カ所で単一の
 エラーハンドラに置き換えることができます。
 
 #### Example

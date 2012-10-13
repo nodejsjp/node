@@ -315,10 +315,10 @@ a listener for the ['listening'][] event.  See also [net.Server.listen(path)][].
 詳細は [net.Server.listen(path)][] を参照してください。
 
 
-### server.listen(handle, [listeningListener])
+### server.listen(handle, [callback])
 
 * `handle` {Object}
-* `listeningListener` {Function}
+* `callback` {Function}
 
 <!--
 The `handle` object can be set to either a server or socket (anything
@@ -347,14 +347,15 @@ Listening on a file descriptor is not supported on Windows.
 <!--
 This function is asynchronous. The last parameter `callback` will be added as
 a listener for the ['listening'](net.html#event_listening_) event.
-See also [net.Server.listen()](net.html#server.listen).
+See also [net.Server.listen()](net.html#net_server_listen_handle_callback).
 -->
 
 この関数は非同期です。最後の引数の `callback` は
-['listening'][] イベントのリスナとして加えられます。
-詳細は [net.Server.listen(path)][] を参照してください。
+['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
+詳細は [net.Server.listen()](net.html#net_server_listen_handle_callback)
+を参照してください。
 
-### server.close([cb])
+### server.close([callback])
 
 <!--
 Stops the server from accepting new connections.  See [net.Server.close()][].
@@ -541,6 +542,7 @@ Read only map of header names and values. Header names are lower-cased.
 <!--
 Example:
 -->
+
 例:
 
     // Prints something like:
@@ -1709,9 +1711,9 @@ Resumes a paused response.
 [http.request()]: #http_http_request_options_callback
 [http.ServerRequest]: #http_class_http_serverrequest
 ['listening']: net.html#net_event_listening
-[net.Server.close()]: net.html#net_server_close_cb
-[net.Server.listen(path)]: net.html#net_server_listen_path_listeninglistener
-[net.Server.listen(port)]: net.html#net_server_listen_port_host_backlog_listeninglistener
+[net.Server.close()]: net.html#net_server_close_callback
+[net.Server.listen(path)]: net.html#net_server_listen_path_callback
+[net.Server.listen(port)]: net.html#net_server_listen_port_host_backlog_callback
 [Readable Stream]: stream.html#stream_readable_stream
 [socket.setKeepAlive()]: net.html#net_socket_setkeepalive_enable_initialdelay
 [socket.setNoDelay()]: net.html#net_socket_setnodelay_nodelay

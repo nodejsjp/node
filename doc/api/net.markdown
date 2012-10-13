@@ -220,7 +220,7 @@ A server is a `net.Socket` that can listen for new incoming connections.
 このクラスは TCP または UNIX ドメインのサーバを作成するために使われます。
 サーバは `net.Scoket` であり、新たに到着する接続を待ち受けることができます。
 
-### server.listen(port, [host], [backlog], [listeningListener])
+### server.listen(port, [host], [backlog], [callback])
 
 <!--
 Begin accepting connections on the specified `port` and `host`.  If the
@@ -247,13 +247,13 @@ sysctl の設定を通じて OS によって決定されます。
 
 <!--
 This function is asynchronous.  When the server has been bound,
-['listening'][] event will be emitted.  The last parameter `listeningListener`
+['listening'][] event will be emitted.  The last parameter `callback`
 will be added as an listener for the ['listening'][] event.
 -->
 
 この関数は非同期です。
 サーバがバインドされると、['listening'][] イベントが生成されます。
-最後の引数 `listeningListener` は ['listening'][] のリスナとして加えられます。
+最後の引数 `callback` は ['listening'][] のリスナとして加えられます。
 
 <!--
 One issue some users run into is getting `EADDRINUSE` errors. This means that
@@ -283,7 +283,7 @@ would be to wait a second and then try again. This can be done with
 注意: Node の全てのソケットは `SO_REUSEADDR` が設定されます)
 
 
-### server.listen(path, [listeningListener])
+### server.listen(path, [callback])
 
 <!--
 Start a UNIX socket server listening for connections on the given `path`.
@@ -293,18 +293,18 @@ Start a UNIX socket server listening for connections on the given `path`.
 
 <!--
 This function is asynchronous.  When the server has been bound,
-['listening'][] event will be emitted.  The last parameter `listeningListener`
+['listening'][] event will be emitted.  The last parameter `callback`
 will be added as an listener for the ['listening'][] event.
 -->
 
 この関数は非同期です。
 サーバがバインドされると、['listening'][] イベントが生成されます。
-最後の引数 `listeningListener` は ['listening'][] のリスナとして加えられます。
+最後の引数 `callback` は ['listening'][] のリスナとして加えられます。
 
-### server.listen(handle, [listeningListener])
+### server.listen(handle, [callback])
 
 * `handle` {Object}
-* `listeningListener` {Function}
+* `callback` {Function}
 
 <!--
 The `handle` object can be set to either a server or socket (anything
@@ -333,15 +333,15 @@ Listening on a file descriptor is not supported on Windows.
 <!--
 This function is asynchronous.  When the server has been bound,
 ['listening'](#event_listening_) event will be emitted.
-the last parameter `listeningListener` will be added as an listener for the
+the last parameter `callback` will be added as an listener for the
 ['listening'](#event_listening_) event.
 -->
 
 この関数は非同期です。
 サーバがバインドされると、['listening'][] イベントが生成されます。
-最後の引数 `listeningListener` は ['listening'][] のリスナとして加えられます。
+最後の引数 `callback` は ['listening'][] のリスナとして加えられます。
 
-### server.close([cb])
+### server.close([callback])
 
 <!--
 Stops the server from accepting new connections and keeps existing
