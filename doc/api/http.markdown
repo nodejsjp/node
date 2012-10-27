@@ -1618,25 +1618,43 @@ __データは失われる__ことに注意してください。
 `function () { }`
 
 <!--
-Emitted exactly once for each message. No arguments. After
-emitted no other events will be emitted on the response.
+Emitted exactly once for each response. After that, no more `'data'` events
+will be emitted on the response.
 -->
 
-メッセージごとに厳密に一回だけ生成されます。
-このイベントが生成された後、このレスポンスはどんなイベントも生成しません。
+レスポンスごとに厳密に一回だけ生成されます。
+その後、このレスポンス上では `'data'` イベントは生成されません。
+
 
 ### Event: 'close'
 
-`function (err) { }`
+`function () { }`
 
 <!--
 Indicates that the underlaying connection was terminated before
-`end` event was emitted.
-See [http.ServerRequest][]'s `'close'` event for more information.
+`response.end()` was called or able to flush.
 -->
 
-`'end'` イベントが生成される前に下層の接続が切断されたことを示します。
+`response.end()` が呼ばれたりフラッシュ可能になる前に、
+下層の接続が切断されたことを示します。
+
+<!--
+Just like `'end'`, this event occurs only once per response, and no more
+`'data'` events will fire afterwards. See [http.ServerResponse][]'s `'close'`
+event for more information.
+-->
+
+`'end'` のように、このイベントはレスポンス毎に一回生成され、
+`'data'` イベントはそれ以上生成されません。
 [http.ServerRequest][] の `'close'` イベントにより多くの情報があります。
+
+<!--
+Note: `'close'` can fire after `'end'`, but not vice versa.
+-->
+
+注意: `'close'` は `'end'` よりも後に生成されますが、
+常にというわけではありません。
+
 
 ### response.statusCode
 
