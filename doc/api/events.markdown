@@ -56,10 +56,10 @@ node ではエラーイベントは特別に扱われます．
 
 <!--
 All EventEmitters emit the event `'newListener'` when new listeners are
-added.
+added and `'removeListener'` when a listener is removed.
 -->
 
-全ての EventEmitter は、新しいリスナーが加えられるとイベント `'newListener'` を生成します。
+全ての EventEmitter は、新しいリスナーが加えられるとイベント `'newListener'` を生成し、リスナーが削除されると `'removeListener'` を生成します。
 
 ### emitter.addListener(event, listener)
 ### emitter.on(event, listener)

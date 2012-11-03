@@ -225,13 +225,24 @@ A `Writable Stream` has the following methods, members, and events.
 `function () { }`
 
 <!--
-After a `write()` method returned `false`, this event is emitted to
-indicate that it is safe to write again.
+Emitted when the stream's write queue empties and it's safe to write without
+buffering again. Listen for it when `stream.write()` returns `false`.
 -->
 
-`write()` メソッドが `false` でリターンした後、
-再び安全に書き込むことができるようになったことを示すために、
-このイベントは生成されます。
+ストリームの書き込みキューが空になり、バッファリングされることなく
+再び安全に書き込みができるようになった場合に生成されます。
+`stream.write()` が `false` を返した場合に監視してください。
+
+<!--
+The `'drain'` event can happen at *any* time, regardless of whether or not
+`stream.write()` has previously returned `false`. To avoid receiving unwanted
+`'drain'` events, listen using `stream.once()`.
+-->
+
+`stream.write()` が以前に `false` を返したかどうかにかかわらず、
+`'drain'` イベントは *いつでも* 発生します。
+意図しない `'drain'` イベントを受信しないようにするには、`stream.once()`
+を使って監視してください。
 
 ### Event: 'error'
 
@@ -273,7 +284,7 @@ A boolean that is `true` by default, but turns `false` after an
 デフォルトでは `true` ですが、`'error'` が発生した後、
 `end()` / `destroy()` が呼ばれた後で `false` に設定される boolean です。
 
-### stream.write(string, [encoding], [fd])
+### stream.write(string, [encoding])
 
 <!--
 Writes `string` with the given `encoding` to the stream.  Returns `true`
@@ -289,20 +300,6 @@ is empty again. The `encoding` defaults to `'utf8'`.
 `false` が返ります。
 `'drain'` イベントがカーネルバッファが再び空いたことを示します。
 `encoding` のデフォルトは `'utf8'` です。
-
-<!--
-If the optional `fd` parameter is specified, it is interpreted as an
-integral file descriptor to be sent over the stream. This is only
-supported for UNIX streams, and is silently ignored otherwise. When
-writing a file descriptor in this manner, closing the descriptor before
-the stream drains risks sending an invalid (closed) FD.
--->
-
-オプションの `fd` 引数が指定されると、
-ストリームに送信するための基礎となるファイル記述子として解釈されます。
-これは UNIX ストリームでのみサポートされており、その他では黙って無視されます。
-このようにファイル記述子に書き込む場合、ストリームが流れきる前にファイル記述子をクローズすると、
-データが不正な (クローズされた) ファイル記述子に送られるリスクがあります。
 
 ### stream.write(buffer)
 

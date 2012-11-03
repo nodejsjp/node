@@ -210,6 +210,37 @@ Returns a new [Unzip](#zlib_class_zlib_unzip) object with an
 [Unzip](#zlib_class_zlib_unzip) オブジェクトを返します。
 
 
+## Class: zlib.Zlib
+
+<!--
+Not exported by the `zlib` module. It is documented here because it is the base
+class of the compressor/decompressor classes.
+-->
+
+`zlib` モジュールによって公開されてはいません。
+ここで文書化するのは圧縮／解凍クラスのベースクラスだからです。
+
+### zlib.flush(callback)
+
+<!--
+Flush pending data. Don't call this frivolously, premature flushes negatively
+impact the effectiveness of the compression algorithm.
+-->
+
+保留中のデータをフラッシュします。
+これを気軽に呼び出さないでください、性急なフラッシュは圧縮アルゴリズムに
+ネガティブな影響を与えます。
+
+### zlib.reset()
+
+<!--
+Reset the compressor/decompressor to factory defaults. Only applicable to
+the inflate and deflate algorithms.
+-->
+
+圧縮／解凍をファクトリのデフォルトにリセットします。
+infrate および defrate アルゴリズムにのみ効果があります。
+
 ## Class: zlib.Gzip
 
 <!--

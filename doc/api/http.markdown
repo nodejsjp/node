@@ -250,13 +250,20 @@ sent to the server on that socket.
 
 ### Event: 'clientError'
 
-`function (exception) { }`
+`function (exception, socket) { }`
 
 <!--
 If a client connection emits an 'error' event - it will forwarded here.
 -->
 
 クライアントコネクションが 'error' イベントを発した場合 － ここに転送されます。
+
+<!--
+`socket` is the `net.Socket` object that the error originated from.
+-->
+
+`socket` はエラーが発生した `net.Socket` オブジェクトです。
+
 
 ### server.listen(port, [hostname], [backlog], [callback])
 
@@ -315,10 +322,10 @@ a listener for the ['listening'][] event.  See also [net.Server.listen(path)][].
 詳細は [net.Server.listen(path)][] を参照してください。
 
 
-### server.listen(handle, [listeningListener])
+### server.listen(handle, [callback])
 
 * `handle` {Object}
-* `listeningListener` {Function}
+* `callback` {Function}
 
 <!--
 The `handle` object can be set to either a server or socket (anything
@@ -347,14 +354,15 @@ Listening on a file descriptor is not supported on Windows.
 <!--
 This function is asynchronous. The last parameter `callback` will be added as
 a listener for the ['listening'](net.html#event_listening_) event.
-See also [net.Server.listen()](net.html#server.listen).
+See also [net.Server.listen()](net.html#net_server_listen_handle_callback).
 -->
 
 この関数は非同期です。最後の引数の `callback` は
-['listening'][] イベントのリスナとして加えられます。
-詳細は [net.Server.listen(path)][] を参照してください。
+['listening'](net.html#event_listening_) イベントのリスナとして加えられます。
+詳細は [net.Server.listen()](net.html#net_server_listen_handle_callback)
+を参照してください。
 
-### server.close([cb])
+### server.close([callback])
 
 <!--
 Stops the server from accepting new connections.  See [net.Server.close()][].
@@ -531,7 +539,6 @@ you can use the `require('querystring').parse` function, or pass
 
 ### request.headers
 
-<<<<<<< HEAD
 <!--
 Read only map of header names and values. Header names are lower-cased.
 -->
@@ -542,6 +549,7 @@ Read only map of header names and values. Header names are lower-cased.
 <!--
 Example:
 -->
+
 例:
 
     // Prints something like:
@@ -637,29 +645,6 @@ The response implements the [Writable Stream][] interface. This is an
 
 レスポンスは [Writable  Stream][] インタフェースを実装します。
 これは以下のイベントを持つ [EventEmitter][] です:
-
-### Event: 'end'
-
-`function () { }`
-
-<!--
-Emitted when the response has been sent. More specifically, this event is
-emitted when the last segment of the response headers and body have been
-handed off to the operating system for transmission over the network. It
-does not imply that the client has received anything yet.
--->
-
-レスポンスが送信された場合に生成されます。
-より具体的には、このイベントはレスポンスヘッダおよびボディの最後の
-セグメントが、ネットワークに転送されるためにオペレーティングシステムに
-渡された後に生成されます。
-それはクライアントが全て受信したことを意味しません。
-
-<!--
-After this event, no more events will be emitted on the response object.
--->
-
-このイベントより後では、レスポンスオブジェクトはイベントを生成しません。
 
 ### Event: 'close'
 
@@ -791,6 +776,15 @@ or
 または
 
     response.setHeader("Set-Cookie", ["type=ninja", "language=javascript"]);
+
+### response.headersSent
+
+<!--
+Boolean (read-only). True if headers were sent, false otherwise.
+-->
+
+(読み込み専用の) Boolean。
+ヘッダが送信済みなら true、それ以外は false です。
 
 ### response.sendDate
 
@@ -1640,25 +1634,43 @@ __データは失われる__ことに注意してください。
 `function () { }`
 
 <!--
-Emitted exactly once for each message. No arguments. After
-emitted no other events will be emitted on the response.
+Emitted exactly once for each response. After that, no more `'data'` events
+will be emitted on the response.
 -->
 
-メッセージごとに厳密に一回だけ生成されます。
-このイベントが生成された後、このレスポンスはどんなイベントも生成しません。
+レスポンスごとに厳密に一回生成されます。
+その後、このレスポンスで `'data'` イベントが生成されることはありません。
+
 
 ### Event: 'close'
 
-`function (err) { }`
+`function () { }`
 
 <!--
 Indicates that the underlaying connection was terminated before
-`end` event was emitted.
-See [http.ServerRequest][]'s `'close'` event for more information.
+`response.end()` was called or able to flush.
 -->
 
-`'end'` イベントが生成される前に下層の接続が切断されたことを示します。
+`response.end()` が呼ばれたりフラッシュ可能になる前に、
+下層の接続が切断されたことを示します。
+
+<!--
+Just like `'end'`, this event occurs only once per response, and no more
+`'data'` events will fire afterwards. See [http.ServerResponse][]'s `'close'`
+event for more information.
+-->
+
+`'end'` のように、このイベントはレスポンス毎に一回生成され、
+`'data'` イベントはそれ以上生成されません。
 [http.ServerRequest][] の `'close'` イベントにより多くの情報があります。
+
+<!--
+Note: `'close'` can fire after `'end'`, but not vice versa.
+-->
+
+注意: `'close'` は `'end'` の後に発生することがあります。
+その逆もあります。
+
 
 ### response.statusCode
 
@@ -1733,9 +1745,9 @@ Resumes a paused response.
 [http.request()]: #http_http_request_options_callback
 [http.ServerRequest]: #http_class_http_serverrequest
 ['listening']: net.html#net_event_listening
-[net.Server.close()]: net.html#net_server_close_cb
-[net.Server.listen(path)]: net.html#net_server_listen_path_listeninglistener
-[net.Server.listen(port)]: net.html#net_server_listen_port_host_backlog_listeninglistener
+[net.Server.close()]: net.html#net_server_close_callback
+[net.Server.listen(path)]: net.html#net_server_listen_path_callback
+[net.Server.listen(port)]: net.html#net_server_listen_port_host_backlog_callback
 [Readable Stream]: stream.html#stream_readable_stream
 [socket.setKeepAlive()]: net.html#net_socket_setkeepalive_enable_initialdelay
 [socket.setNoDelay()]: net.html#net_socket_setnodelay_nodelay
