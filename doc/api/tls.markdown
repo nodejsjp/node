@@ -374,8 +374,9 @@ You can test this server by connecting to it with `openssl s_client`:
 
     openssl s_client -connect 127.0.0.1:8000
 
-## tls.connect(options, [secureConnectListener])
-## tls.connect(port, [host], [options], [secureConnectListener])
+
+## tls.connect(options, [callback])
+## tls.connect(port, [host], [options], [callback])
 
 <!--
 Creates a new client connection to the given `port` and `host` (old API) or
@@ -461,7 +462,7 @@ Creates a new client connection to the given `port` and `host` (old API) or
   - `servername`: TLS 拡張である SNI (Server Name Indication) のサーバ名です。
 
 <!--
-The `secureConnectListener` parameter will be added as a listener for the
+The `callback` parameter will be added as a listener for the
 ['secureConnect'][] event.
 
 `tls.connect()` returns a [CleartextStream][] object.
@@ -469,7 +470,7 @@ The `secureConnectListener` parameter will be added as a listener for the
 Here is an example of a client of echo server as described previously:
 -->
 
-`secureConnectLister` 引数は ['secureConnect'][] イベントのリスナとして
+`callback` 引数は ['secureConnect'][] イベントのリスナとして
 加えられます。
 
 `tls.connect()` は [CleartextStream][] オブジェクトを返します。
@@ -649,7 +650,7 @@ TLS サーバの設定に依存しますが、認証されていないコネク�
 
 ### Event: 'clientError'
 
-`function (exception) { }`
+`function (exception, securePair) { }`
 
 <!--
 When a client connection emits an 'error' event before secure connection is
@@ -658,6 +659,12 @@ established - it will be forwarded here.
 
 セキュアコネクションが確立される前にクライアントコネクションが
 `'error'` イベントを発した場合 － ここに転送されます。
+
+<!--
+`securePair` is the `tls.SecurePair` that the error originated from.
+-->
+
+`securePair` はエラーが発生した `tls.SecurePair` です。
 
 
 ### Event: 'newSession'

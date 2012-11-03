@@ -29,6 +29,8 @@ try {
   process.exit();
 }
 
+crypto.DEFAULT_ENCODING = 'buffer';
+
 function aes256(decipherFinal) {
   var iv  = new Buffer('00000000000000000000000000000000', 'hex');
   var key = new Buffer('0123456789abcdef0123456789abcdef' +
@@ -37,13 +39,13 @@ function aes256(decipherFinal) {
   function encrypt(val, pad) {
         var c = crypto.createCipheriv('aes256', key, iv);
         c.setAutoPadding(pad);
-        return c.update(val, 'utf8') + c.final('binary');
+        return c.update(val, 'utf8', 'binary') + c.final('binary');
   }
 
   function decrypt(val, pad) {
         var c = crypto.createDecipheriv('aes256', key, iv);
         c.setAutoPadding(pad);
-        return c.update(val, 'binary') + c[decipherFinal]('utf8');
+        return c.update(val, 'binary', 'utf8') + c[decipherFinal]('utf8');
   }
 
   // echo 0123456789abcdef0123456789abcdef \

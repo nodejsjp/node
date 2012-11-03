@@ -740,10 +740,10 @@ Read data from the file specified by `fd`.
 `buffer` はデータが書き込まれるバッファです。
 
 <!--
-`offset` is offset within the buffer where writing will start.
+`offset` is offset within the buffer where reading will start.
 -->
 
-`offset` は書き込みを開始するバッファ内のオフセットです。
+`offset` は読み込みを開始するバッファ内のオフセットです。
 
 <!--
 `length` is an integer specifying the number of bytes to read.

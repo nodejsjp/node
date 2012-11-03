@@ -59,7 +59,7 @@
       'dependencies': [
         'deps/cares/cares.gyp:cares',
         'deps/http_parser/http_parser.gyp:http_parser',
-        'deps/uv/uv.gyp:uv',
+        'deps/uv/uv.gyp:libuv',
         'node_js2c#host',
       ],
 
@@ -237,7 +237,7 @@
           ],
         }],
       ],
-      'msvs-settings': {
+      'msvs_settings': {
         'VCLinkerTool': {
           'SubSystem': 1, # /subsystem:console
         },

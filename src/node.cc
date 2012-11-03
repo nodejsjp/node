@@ -1065,8 +1065,14 @@ enum encoding ParseEncoding(Handle<Value> encoding_v, enum encoding _default) {
     return UCS2;
   } else if (strcasecmp(*encoding, "ucs-2") == 0) {
     return UCS2;
+  } else if (strcasecmp(*encoding, "utf16le") == 0) {
+    return UCS2;
+  } else if (strcasecmp(*encoding, "utf-16le") == 0) {
+    return UCS2;
   } else if (strcasecmp(*encoding, "binary") == 0) {
     return BINARY;
+  } else if (strcasecmp(*encoding, "buffer") == 0) {
+    return BUFFER;
   } else if (strcasecmp(*encoding, "hex") == 0) {
     return HEX;
   } else if (strcasecmp(*encoding, "raw") == 0) {
@@ -1088,6 +1094,11 @@ enum encoding ParseEncoding(Handle<Value> encoding_v, enum encoding _default) {
 
 Local<Value> Encode(const void *buf, size_t len, enum encoding encoding) {
   HandleScope scope;
+
+  if (encoding == BUFFER) {
+    return scope.Close(
+        Buffer::New(static_cast<const char*>(buf), len)->handle_);
+  }
 
   if (!len) return scope.Close(String::Empty());
 
@@ -1119,7 +1130,7 @@ ssize_t DecodeBytes(v8::Handle<v8::Value> val, enum encoding encoding) {
     return -1;
   }
 
-  if (encoding == BINARY && Buffer::HasInstance(val)) {
+  if ((encoding == BUFFER || encoding == BINARY) && Buffer::HasInstance(val)) {
     return Buffer::Length(val->ToObject());
   }
 
@@ -1158,7 +1169,8 @@ ssize_t DecodeWrite(char *buf,
 
   bool is_buffer = Buffer::HasInstance(val);
 
-  if (is_buffer && encoding == BINARY) { // fast path, copy buffer data
+  if (is_buffer && (encoding == BINARY || encoding == BUFFER)) {
+    // fast path, copy buffer data
     const char* data = Buffer::Data(val.As<Object>());
     size_t size = Buffer::Length(val.As<Object>());
     size_t len = size < buflen ? size : buflen;
@@ -1480,6 +1492,7 @@ static Handle<Value> SetGid(const Arguments& args) {
     struct group grp, *grpp = NULL;
     int err;
 
+    errno = 0;
     if ((err = getgrnam_r(*grpnam, &grp, getbuf, ARRAY_SIZE(getbuf), &grpp)) ||
         grpp == NULL) {
       if (errno == 0)
@@ -1520,6 +1533,7 @@ static Handle<Value> SetUid(const Arguments& args) {
     struct passwd pwd, *pwdp = NULL;
     int err;
 
+    errno = 0;
     if ((err = getpwnam_r(*pwnam, &pwd, getbuf, ARRAY_SIZE(getbuf), &pwdp)) ||
         pwdp == NULL) {
       if (errno == 0)
@@ -2341,7 +2355,7 @@ static void PrintHelp() {
          "Options:\n"
          "  -v, --version        print node's version\n"
          "  -e, --eval script    evaluate script\n"
-         "  -p, --print          print result of --eval\n"
+         "  -p, --print          evaluate script and print result\n"
          "  -i, --interactive    always enter the REPL even if stdin\n"
          "                       does not appear to be a terminal\n"
          "  --no-deprecation     silence deprecation warnings\n"
@@ -2721,7 +2735,7 @@ char** Init(int argc, char *argv[]) {
     // a breakpoint on the first line of the startup script
     v8argc += 2;
     v8argv = new char*[v8argc];
-    memcpy(v8argv, argv, sizeof(argv) * option_end_index);
+    memcpy(v8argv, argv, sizeof(*argv) * option_end_index);
     v8argv[option_end_index] = const_cast<char*>("--expose_debug_as");
     v8argv[option_end_index + 1] = const_cast<char*>("v8debug");
   }

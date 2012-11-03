@@ -28,7 +28,7 @@ Normalize a string path, taking care of `'..'` and `'.'` parts.
 <!--
 When multiple slashes are found, they're replaced by a single one;
 when the path contains a trailing slash, it is preserved.
-On windows backslashes are used. 
+On Windows backslashes are used.
 -->
 
 複数のスラッシュが見つかると、それらは一つに置換されます;
@@ -81,7 +81,7 @@ Resolves `to` to an absolute path.
 If `to` isn't already absolute `from` arguments are prepended in right to left
 order, until an absolute path is found. If after using all `from` paths still
 no absolute path is found, the current working directory is used as well. The
-resulting path is normalized, and trailing slashes are removed unless the path 
+resulting path is normalized, and trailing slashes are removed unless the path
 gets resolved to the root directory. Non-string arguments are ignored.
 -->
 
@@ -249,17 +249,17 @@ The platform-specific file separator. `'\\'` or `'/'`.
 プラットフォーム固有のファイルセパレータ。 `'\\'` または `'/'`。
 
 <!--
-An example on linux:
+An example on *nix:
 -->
 
-Linux での例:
+*nix での例:
 
     'foo/bar/baz'.split(path.sep)
     // returns
     ['foo', 'bar', 'baz']
 
 <!--
-An example on windows:
+An example on Windows:
 -->
 
 Windows での例:
@@ -267,3 +267,37 @@ Windows での例:
     'foo\\bar\\baz'.split(path.sep)
     // returns
     ['foo', 'bar', 'baz']
+
+## path.delimiter
+
+<!--
+The platform-specific path delimiter, `;` or `':'`.
+-->
+
+プラットフォーム固有のパス区切り文字、`';'` または `':'`。
+
+<!--
+An example on *nix:
+-->
+
+*nix での例:
+
+    console.log(process.env.PATH)
+    // '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin'
+
+    process.env.PATH.split(path.delimiter)
+    // returns
+    ['/usr/bin', '/bin', '/usr/sbin', '/sbin', '/usr/local/bin']
+
+<!--
+An example on Windows:
+-->
+
+Windows での例:
+
+    console.log(process.env.PATH)
+    // 'C:\Windows\system32;C:\Windows;C:\Program Files\nodejs\'
+
+    process.env.PATH.split(path.delimiter)
+    // returns
+    ['C:\Windows\system32', 'C:\Windows', 'C:\Program Files\nodejs\']
