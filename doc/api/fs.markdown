@@ -606,7 +606,7 @@ not followed. Exclusive mode may or may not work with network file systems.
   ファイルは作成される (存在しない場合) または長さ 0 に切り詰められます
   (存在する場合)。
 
-* `'wx'` - `'w+'` と似ていますが、ファイルを排他モードでオープンします。
+* `'wx+'` - `'w+'` と似ていますが、ファイルを排他モードでオープンします。
 
 * `'a'` - ファイルを追記用でオープンします。
   ファイルが存在しない場合は作成されます。
@@ -740,10 +740,10 @@ Read data from the file specified by `fd`.
 `buffer` はデータが書き込まれるバッファです。
 
 <!--
-`offset` is offset within the buffer where writing will start.
+`offset` is offset within the buffer where reading will start.
 -->
 
-`offset` は書き込みを開始するバッファ内のオフセットです。
+`offset` は読み込みを開始するバッファ内のオフセットです。
 
 <!--
 `length` is an integer specifying the number of bytes to read.

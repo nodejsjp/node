@@ -70,6 +70,25 @@ Or
       res.end("hello world\n");
     }).listen(8000);
 
+
+### server.listen(port, [host], [backlog], [callback])
+### server.listen(path, [callback])
+### server.listen(handle, [callback])
+
+<!--
+See [http.listen()][] for details.
+-->
+
+詳細は [http.listen()][] を参照してください。
+
+### server.close([callback])
+
+<!--
+See [http.close()][] for details.
+-->
+
+詳細は [http.close()][] を参照してください。
+
 ## https.request(options, callback)
 
 <!--
@@ -191,8 +210,7 @@ The following options from [tls.connect()][] can also be specified. However, a
 - `rejectUnauthorized`: If `true`, the server certificate is verified against
   the list of supplied CAs. An `'error'` event is emitted if verification
   fails. Verification happens at the connection level, *before* the HTTP
-<<<<<<< HEAD
-  request is sent. Default `false`.
+  request is sent. Default `true`.
 -->
 
 - `pfx`: SSL で使用する証明書、秘密鍵、認証局の証明書。
@@ -209,13 +227,9 @@ The following options from [tls.connect()][] can also be specified. However, a
   リストによって検証されます。
   認証されなかった場合は `'error'` イベントが生成されます。
   認証は HTTP リクエストが送信される *前* にコネクションレベルで行われます。
-  デフォルトは false です。
+  デフォルトは `true` です。
 
 <!--
-=======
-  request is sent. Default `true`.
-
->>>>>>> master
 In order to specify these options, use a custom `Agent`.
 -->
 
@@ -327,6 +341,8 @@ Global instance of [https.Agent][] for all HTTPS client requests.
 
 [Agent]: #https_class_https_agent
 [globalAgent]: #https_https_globalagent
+[http.listen()]: http.html#http_server_listen_port_hostname_backlog_callback
+[http.close()]: http.html#http_server_close_callback
 [http.Agent]: http.html#http_class_http_agent
 [http.request()]: http.html#http_http_request_options_callback
 [https.Agent]: #https_class_https_agent

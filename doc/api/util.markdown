@@ -129,7 +129,7 @@ Output with timestamp on `stdout`.
     require('util').log('Timestamped message.');
 
 
-## util.inspect(object, [showHidden], [depth], [colors])
+## util.inspect(object, [options])
 
 <!--
 Return a string representation of `object`, which is useful for debugging.
@@ -138,40 +138,50 @@ Return a string representation of `object`, which is useful for debugging.
 デバッグで有用な、`object` の文字列表現を返します。
 
 <!--
-If `showHidden` is `true`, then the object's non-enumerable properties will be
-shown too. Defaults to `false`.
+An optional *options* object may be passed that alters certain aspects of the
+formatted string:
 -->
 
-`showHidden` が `true` の場合、
-オブジェクトの Enumerable でないプロパティも表示されます。
-デフォルトは `false` です。
+オプションの *options* オブジェクトは、フォーマット化された文字列の
+特定の側面を変更するために渡すことができます。
 
 <!--
-If `depth` is provided, it tells `inspect` how many times to recurse while
-formatting the object. This is useful for inspecting large complicated objects.
+ - `showHidden` - if `true` then the object's non-enumerable properties will be
+   shown too. Defaults to `false`.
 -->
 
-`depth` が与えられた場合、
-オブジェクトをフォーマットするために何回再帰するかを `inspect` に伝えます。
-これは巨大で複雑なオブジェクトを調査する場合に便利です。
+ - `showHidden` - `true` の場合、
+   オブジェクトの Enumerable でないプロパティも表示されます。
+   デフォルトは `false` です。
 
 <!--
-The default is to only recurse twice.  To make it recurse indefinitely, pass
-in `null` for `depth`.
+ - `depth` - tells `inspect` how many times to recurse while formatting the
+   object. This is useful for inspecting large complicated objects. Defaults to
+   `2`. To make it recurse indefinitely pass `null`.
 -->
 
-デフォルトでは 2 回だけ再帰します。
-無限に再帰するには、`depth` に `null` を渡します。
+ - `depth` - オブジェクトをフォーマットするために何回再帰するかを
+   `inspect` に伝えます。
+   これは巨大で複雑なオブジェクトを調査する場合に便利です。
+   デフォルトは `2` です。
+   無限に再帰するには、`null` を渡します。
 
 <!--
-If `colors` is `true`, the output will be styled with ANSI color codes.
-Defaults to `false`.
-Colors are customizable, see below.
+ - `colors` - if `true`, then the output will be styled with ANSI color codes.
+   Defaults to `false`. Colors are customizable, see below.
 -->
 
-`colors` が `true` の場合、出力は ANSI カラーコードで色づけされます。
+ - `colors` - `true` の場合、出力は ANSI カラーコードで色づけされます。
 デフォルトは `false` です。
 後述するように、色はカスタマイズ可能です。
+
+<!--
+ - `customInspect` - if `false`, then custom `inspect()` functions defined on the
+   objects being inspected won't be called. Defaults to `true`.
+-->
+
+ - `customInspect` - `false` の場合、オブジェクト独自の `inspect()` 関数は
+   呼び出されません。デフォルトは `false` です。
 
 <!--
 Example of inspecting all properties of the `util` object:
@@ -181,7 +191,7 @@ Example of inspecting all properties of the `util` object:
 
     var util = require('util');
 
-    console.log(util.inspect(util, true, null));
+    console.log(util.inspect(util, { showHidden: true, depth: null }));
 
 ### Customizing `util.inspect` colors
 
@@ -235,6 +245,24 @@ There are also `bold`, `italic`, `underline` and `inverse` codes.
 事前に定義された色は: `white`、`grey`、`black`、`blue`、`cyan`、
 `green`、`magenta`、`red`、および `yellow` です。
 `bold`、`italic`、`underline`、および `inverse` コードを使うこともできます。
+
+<!--
+Objects also may define their own `inspect(depth)` function which `util.inspect()`
+will invoke and use the result of when inspecting the object:
+-->
+
+オブジェクトは `util.inspect()` から呼び出される自前の `inspect(depth)`
+関数を持つことができ、その結果はオブジェクトを調査するために使われます。
+
+    var util = require('util');
+
+    var obj = { name: 'nate' };
+    obj.inspect = function(depth) {
+      return '{' + this.name + '}';
+    };
+
+    util.inspect(obj);
+      // "{nate}"
 
 
 ## util.isArray(object)

@@ -1,6 +1,13 @@
 # Crypto
 
-    Stability: 3 - Stable
+<!--
+    Stability: 2 - Unstable; API changes are being discussed for
+    future versions.  Breaking changes will be minimized.  See below.
+-->
+
+    Stability: 2 - Unstable; 将来のバージョンにおいて API の変更が
+    議論されています。互換性を損なう変更は最小限になる予定です。
+    後述します。
 
 <!--
 Use `require('crypto')` to access this module.
@@ -9,40 +16,80 @@ Use `require('crypto')` to access this module.
 このモジュールにアクセスするには `require('crypto')` を使用します。
 
 <!--
-The crypto module requires OpenSSL to be available on the underlying platform.
-It offers a way of encapsulating secure credentials to be used as part
-of a secure HTTPS net or http connection.
+The crypto module offers a way of encapsulating secure credentials to be
+used as part of a secure HTTPS net or http connection.
 -->
 
-暗号化モジュールは下層のプラットフォームで OpenSSL が有効であることを
-必要とします。
-それは安全な HTTPS ネットワークや http コネクションの一部として使われる、
+暗号化モジュールは安全な HTTPS ネットワークや http
+コネクションの一部として使われる、
 安全な認証情報をカプセル化する方法を提供します。
 
 <!--
-It also offers a set of wrappers for OpenSSL's hash, hmac, cipher, decipher, sign and verify methods.
+It also offers a set of wrappers for OpenSSL's hash, hmac, cipher,
+decipher, sign and verify methods.
 -->
 
 同時に OpenSSL のハッシュ、HMAC、暗号、復号、署名、そして検証へのラッパーを一式提供します。
 
+
+## crypto.getCiphers()
+
+<!--
+Returns an array with the names of the supported ciphers.
+-->
+
+サポートされている暗号の名前からなる配列を返します。
+
+<!--
+Example:
+-->
+
+例:
+
+    var ciphers = crypto.getCiphers();
+    console.log(ciphers); // ['AES128-SHA', 'AES256-SHA', ...]
+
+
+## crypto.getHashes()
+
+<!--
+Returns an array with the names of the supported hash algorithms.
+-->
+
+サポートされているハッシュアルゴリズムの名前からなる配列を返します。
+
+<!--
+Example:
+-->
+
+    var hashes = crypto.getHashes();
+    console.log(hashes); // ['sha', 'sha1', 'sha1WithRSAEncryption', ...]
+
+
 ## crypto.createCredentials(details)
 
 <!--
-Creates a credentials object, with the optional details being a dictionary with keys:
+Creates a credentials object, with the optional details being a
+dictionary with keys:
 -->
 
-認証情報オブジェクトを作成します。オプションの `details` は以下のキーを持つ辞書です:
+認証情報オブジェクトを作成します。オプションの `details`
+は以下のキーを持つ辞書です:
 
 <!--
-* `pfx` : A string or buffer holding the PFX or PKCS12 encoded private key, certificate and CA certificates
+* `pfx` : A string or buffer holding the PFX or PKCS12 encoded private
+  key, certificate and CA certificates
 * `key` : A string holding the PEM encoded private key
 * `passphrase` : A string of passphrase for the private key or pfx
 * `cert` : A string holding the PEM encoded certificate
-* `ca` : Either a string or list of strings of PEM encoded CA certificates to trust.
-* `crl` : Either a string or list of strings of PEM encoded CRLs (Certificate Revocation List)
-* `ciphers`: A string describing the ciphers to use or exclude. Consult
-  <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT> for details
-  on the format.
+* `ca` : Either a string or list of strings of PEM encoded CA
+  certificates to trust.
+* `crl` : Either a string or list of strings of PEM encoded CRLs
+  (Certificate Revocation List)
+* `ciphers`: A string describing the ciphers to use or exclude.
+  Consult
+  <http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT>
+  for details on the format.
 -->
 
 * `pfx` : PFX または PKCS12 でエンコードされた秘密鍵、証明書、および CA の
@@ -59,7 +106,8 @@ Creates a credentials object, with the optional details being a dictionary with 
   を参照してください。
 
 <!--
-If no 'ca' details are given, then node.js will use the default publicly trusted list of CAs as given in
+If no 'ca' details are given, then node.js will use the default
+publicly trusted list of CAs as given in
 <http://mxr.mozilla.org/mozilla/source/security/nss/lib/ckfw/builtins/certdata.txt>.
 -->
 
@@ -71,17 +119,19 @@ If no 'ca' details are given, then node.js will use the default publicly trusted
 ## crypto.createHash(algorithm)
 
 <!--
-Creates and returns a hash object, a cryptographic hash with the given algorithm
-which can be used to generate hash digests.
+Creates and returns a hash object, a cryptographic hash with the given
+algorithm which can be used to generate hash digests.
 -->
 
 ハッシュオブジェクトを生成して返します。
 与えられたアルゴリズムによる暗号ハッシュ関数はダイジェストの生成に使われます。
 
 <!--
-`algorithm` is dependent on the available algorithms supported by the version
-of OpenSSL on the platform. Examples are `'sha1'`, `'md5'`, `'sha256'`, `'sha512'`, etc.
-On recent releases, `openssl list-message-digest-algorithms` will display the available digest algorithms.
+`algorithm` is dependent on the available algorithms supported by the
+version of OpenSSL on the platform. Examples are `'sha1'`, `'md5'`,
+`'sha256'`, `'sha512'`, etc.  On recent releases, `openssl
+list-message-digest-algorithms` will display the available digest
+algorithms.
 -->
 
 `algorithm` は、プラットフォーム上の OpenSSL 
@@ -127,31 +177,38 @@ Returned by `crypto.createHash`.
 ### hash.update(data, [input_encoding])
 
 <!--
-Updates the hash content with the given `data`, the encoding of which is given
-in `input_encoding` and can be `'utf8'`, `'ascii'` or `'binary'`.
-Defaults to `'binary'`.
-This can be called many times with new data as it is streamed.
+Updates the hash content with the given `data`, the encoding of which
+is given in `input_encoding` and can be `'utf8'`, `'ascii'` or
+`'binary'`.  If no encoding is provided, then a buffer is expected.
 -->
 
 与えられた `data` でハッシュの内容を更新します。
 そのエンコーディングは `input_encoding` で与えられ、`'utf8'`、`'ascii'`、
 または `'binary'` を指定することができます。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが期待されます。
+
+<!--
+This can be called many times with new data as it is streamed.
+-->
+
 これは新しいデータがストリームに流される際に何度も呼び出されます。
 
 ### hash.digest([encoding])
 
 <!--
-Calculates the digest of all of the passed data to be hashed.
-The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
-Defaults to `'binary'`.
-
-Note: `hash` object can not be used after `digest()` method been called.
+Calculates the digest of all of the passed data to be hashed.  The
+`encoding` can be `'hex'`, `'binary'` or `'base64'`.  If no encoding
+is provided, then a buffer is returned.
 -->
 
 渡された全てのデータがハッシュ化されたダイジェストを計算します。
 `encoding` は `'hex'`、`'binary'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
+
+<!--
+Note: `hash` object can not be used after `digest()` method been
+called.
+-->
 
 注意: `digest()` メソッドを呼び出した後で `hash` 
 オブジェクトを使うことはできません。
@@ -160,14 +217,15 @@ Note: `hash` object can not be used after `digest()` method been called.
 ## crypto.createHmac(algorithm, key)
 
 <!--
-Creates and returns a hmac object, a cryptographic hmac with the given algorithm and key.
+Creates and returns a hmac object, a cryptographic hmac with the given
+algorithm and key.
 -->
 
 与えられたアルゴリズムとキーで HMAC を計算する、HMAC オブジェクトを作成して返します。
 
 <!--
-`algorithm` is dependent on the available algorithms supported by OpenSSL - see createHash above.
-`key` is the hmac key to be used.
+`algorithm` is dependent on the available algorithms supported by
+OpenSSL - see createHash above.  `key` is the hmac key to be used.
 -->
 
 `algorithm` は OpenSSL でサポートされているアルゴリズムに依存します － 
@@ -188,8 +246,8 @@ hmac を作成するためのクラスです。
 ### hmac.update(data)
 
 <!--
-Update the hmac content with the given `data`.
-This can be called many times with new data as it is streamed.
+Update the hmac content with the given `data`.  This can be called
+many times with new data as it is streamed.
 -->
 
 与えられた `data` で HMAC の内容を更新します。
@@ -198,16 +256,19 @@ This can be called many times with new data as it is streamed.
 ### hmac.digest([encoding])
 
 <!--
-Calculates the digest of all of the passed data to the hmac.
-The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
-Defaults to `'binary'`.
-
-Note: `hmac` object can not be used after `digest()` method been called.
+Calculates the digest of all of the passed data to the hmac.  The
+`encoding` can be `'hex'`, `'binary'` or `'base64'`.  If no encoding
+is provided, then a buffer is returned.
 -->
 
 渡された全てのデータが HMAC 化されたダイジェストを計算します。
 `encoding` は `'hex'`、`'binary'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
+
+<!--
+Note: `hmac` object can not be used after `digest()` method been
+called.
+-->
 
 注意: `digest()` メソッドを呼び出した後で `hmac` 
 オブジェクトを使うことはできません。
@@ -216,16 +277,18 @@ Note: `hmac` object can not be used after `digest()` method been called.
 ## crypto.createCipher(algorithm, password)
 
 <!--
-Creates and returns a cipher object, with the given algorithm and password.
-
-`algorithm` is dependent on OpenSSL, examples are `'aes192'`, etc.
-On recent releases, `openssl list-cipher-algorithms` will display the
-available cipher algorithms.
-`password` is used to derive key and IV, which must be a `'binary'` encoded
-string or a [buffer](buffer.html).
+Creates and returns a cipher object, with the given algorithm and
+password.
 -->
 
 与えられたアルゴリズムとパスワードを使用する暗号オブジェクトを作成して返します。
+<!--
+`algorithm` is dependent on OpenSSL, examples are `'aes192'`, etc.  On
+recent releases, `openssl list-cipher-algorithms` will display the
+available cipher algorithms.  `password` is used to derive key and IV,
+which must be a `'binary'` encoded string or a [buffer](buffer.html).
+-->
+
 `algorithm` は、OpenSSL に依存します。例えば `'aes192'` などです。
 最近のリリースでは、`openssl list-cipher-algorithms`
 で利用可能な暗号アルゴリズムが表示されます。
@@ -236,23 +299,28 @@ string or a [buffer](buffer.html).
 ## crypto.createCipheriv(algorithm, key, iv)
 
 <!--
-Creates and returns a cipher object, with the given algorithm, key and iv.
-
-`algorithm` is the same as the argument to `createCipher()`.
-`key` is the raw key used by the algorithm.
-`iv` is an [initialization
-vector](http://en.wikipedia.org/wiki/Initialization_vector).
-
-`key` and `iv` must be `'binary'` encoded strings or [buffers](buffer.html).
+Creates and returns a cipher object, with the given algorithm, key and
+iv.
 -->
 
 与えられたアルゴリズムとキーおよび IV を使用する暗号オブジェクトを作成して
 返します。
 
+<!--
+`algorithm` is the same as the argument to `createCipher()`.  `key` is
+the raw key used by the algorithm.  `iv` is an [initialization
+vector](http://en.wikipedia.org/wiki/Initialization_vector).
+-->
+
 `algorithm` は `createCipher()` の引数と同じです。
 `key` はアルゴリズムで使用される生のキーです。
 `iv` は[initialization
 vector](http://en.wikipedia.org/wiki/Initialization_vector) です。
+
+<!--
+`key` and `iv` must be `'binary'` encoded strings or
+[buffers](buffer.html).
+-->
 
 `key` と `iv` は `'binary'` でエンコードされた文字列または
 [buffers](buffer.html) でなければなりません
@@ -261,11 +329,13 @@ vector](http://en.wikipedia.org/wiki/Initialization_vector) です。
 
 <!--
 Class for encrypting data.
-
-Returned by `crypto.createCipher` and `crypto.createCipheriv`.
 -->
 
 データを暗号化するためのクラスです。
+
+<!--
+Returned by `crypto.createCipher` and `crypto.createCipheriv`.
+-->
 
 `crypto.createCipher` および `crypto.createCipheriv` から返されます。
 
@@ -273,23 +343,26 @@ Returned by `crypto.createCipher` and `crypto.createCipheriv`.
 
 <!--
 Updates the cipher with `data`, the encoding of which is given in
-`input_encoding` and can be `'utf8'`, `'ascii'` or `'binary'`.
-Defaults to `'binary'`.
-
-The `output_encoding` specifies the output format of the enciphered data,
-and can be `'binary'`, `'base64'` or `'hex'`. Defaults to `'binary'`.
+`input_encoding` and can be `'utf8'`, `'ascii'` or `'binary'`.  If no
+encoding is provided, then a buffer is expected.
 -->
 
 `data` で暗号を更新します。
 `input_encoding` で与えられるエンコーディングは `'utf8'`、`'ascii'`、`'binary'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが期待されます。
+
+The `output_encoding` specifies the output format of the enciphered
+data, and can be `'binary'`, `'base64'` or `'hex'`.  If no encoding is
+provided, then a buffer iis returned.
+-->
 
 `output_encoding` は暗号化されたデータの出力フォーマットを指定するもので、
 `'utf8'`、`'ascii'` または `'binary'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
 
 <!--
-Returns the enciphered contents, and can be called many times with new data as it is streamed.
+Returns the enciphered contents, and can be called many times with new
+data as it is streamed.
 -->
 
 暗号化されたコンテンツが返されます。これは新しいデータがストリームに流される際に何度も呼び出されます。
@@ -297,15 +370,19 @@ Returns the enciphered contents, and can be called many times with new data as i
 ### cipher.final([output_encoding])
 
 <!--
-Returns any remaining enciphered contents, with `output_encoding` being one of:
-`'binary'`, `'base64'` or `'hex'`. Defaults to `'binary'`.
-
-Note: `cipher` object can not be used after `final()` method been called.
+Returns any remaining enciphered contents, with `output_encoding`
+being one of: `'binary'`, `'base64'` or `'hex'`.  If no encoding is
+provided, then a buffer is returned.
 -->
 
 暗号化されたコンテンツの残りを返します。
 `output_encoding` は次のいずれかです: `'binary'`、`'base64'` または `'hex'`。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
+
+<!--
+Note: `cipher` object can not be used after `final()` method been
+called.
+-->
 
 注意: `final()` メソッドを呼び出した後で `cipher` 
 オブジェクトを使うことはできません。
@@ -313,9 +390,11 @@ Note: `cipher` object can not be used after `final()` method been called.
 ### cipher.setAutoPadding(auto_padding=true)
 
 <!--
-You can disable automatic padding of the input data to block size. If `auto_padding` is false,
-the length of the entire input data must be a multiple of the cipher's block size or `final` will fail.
-Useful for non-standard padding, e.g. using `0x0` instead of PKCS padding. You must call this before `cipher.final`.
+You can disable automatic padding of the input data to block size. If
+`auto_padding` is false, the length of the entire input data must be a
+multiple of the cipher's block size or `final` will fail.  Useful for
+non-standard padding, e.g. using `0x0` instead of PKCS padding. You
+must call this before `cipher.final`.
 -->
 
 入力データが自動的にブロックサイズにパディングされることを
@@ -331,8 +410,8 @@ Useful for non-standard padding, e.g. using `0x0` instead of PKCS padding. You m
 ## crypto.createDecipher(algorithm, password)
 
 <!--
-Creates and returns a decipher object, with the given algorithm and key.
-This is the mirror of the [createCipher()][] above.
+Creates and returns a decipher object, with the given algorithm and
+key.  This is the mirror of the [createCipher()][] above.
 -->
 
 与えられたアルゴリズムとパスワードを使用する復号オブジェクトを作成して返します。
@@ -341,8 +420,8 @@ This is the mirror of the [createCipher()][] above.
 ## crypto.createDecipheriv(algorithm, key, iv)
 
 <!--
-Creates and returns a decipher object, with the given algorithm, key and iv.
-This is the mirror of the [createCipheriv()][] above.
+Creates and returns a decipher object, with the given algorithm, key
+and iv.  This is the mirror of the [createCipheriv()][] above.
 -->
 
 与えられたアルゴリズムとキー、IV を使用する復号オブジェクトを作成して返します。
@@ -363,34 +442,42 @@ Returned by `crypto.createDecipher` and `crypto.createDecipheriv`.
 ### decipher.update(data, [input_encoding], [output_encoding])
 
 <!--
-Updates the decipher with `data`, which is encoded in `'binary'`, `'base64'`
-or `'hex'`. Defaults to `'binary'`.
-
-The `output_decoding` specifies in what format to return the deciphered
-plaintext: `'binary'`, `'ascii'` or `'utf8'`. Defaults to `'binary'`.
+Updates the decipher with `data`, which is encoded in `'binary'`,
+`'base64'` or `'hex'`.  If no encoding is provided, then a buffer is
+expected.
 -->
 
 `'binary'`、`'base64'` または `'hex'` のいずれかでエンコードされた復号を
-`data` で更新します。デフォルトは `'binary'` です。
+`data` で更新します。
+エンコーディングが与えられなかった場合はバッファが期待されます。
+
+<!--
+The `output_decoding` specifies in what format to return the
+deciphered plaintext: `'binary'`, `'ascii'` or `'utf8'`.  If no
+encoding is provided, then a buffer is returned.
+-->
 
 `output_decoding` は復号化されたプレーンテキストのフォーマットを指定するもので、
 `'binary'`、`'ascii'` あるいは `'utf8'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
 
 
 ### decipher.final([output_encoding])
 
 <!--
-Returns any remaining plaintext which is deciphered,
-with `output_encoding` being one of: `'binary'`, `'ascii'` or `'utf8'`.
-Defaults to `'binary'`.
-
-Note: `decipher` object can not be used after `final()` method been called.
+Returns any remaining plaintext which is deciphered, with
+`output_encoding` being one of: `'binary'`, `'ascii'` or `'utf8'`.  If
+no encoding is provided, then a buffer is returned.
 -->
 
 復号化されたプレーンテキストの残りを返します。
 `output_decoding` は `'binary'`、`'ascii'` あるいは `'utf8'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
+
+<!--
+Note: `decipher` object can not be used after `final()` method been
+called.
+-->
 
 注意: `final()` メソッドを呼び出した後で `decipher` 
 オブジェクトを使うことはできません。
@@ -398,9 +485,11 @@ Note: `decipher` object can not be used after `final()` method been called.
 ### decipher.setAutoPadding(auto_padding=true)
 
 <!--
-You can disable auto padding if the data has been encrypted without standard block padding to prevent
-`decipher.final` from checking and removing it. Can only work if the input data's length is a multiple of the
-ciphers block size. You must call this before streaming data to `decipher.update`.
+You can disable auto padding if the data has been encrypted without
+standard block padding to prevent `decipher.final` from checking and
+removing it. Can only work if the input data's length is a multiple of
+the ciphers block size. You must call this before streaming data to
+`decipher.update`.
 -->
 
 データブロックが非標準のパディングで暗号化されている場合、
@@ -411,9 +500,9 @@ ciphers block size. You must call this before streaming data to `decipher.update
 ## crypto.createSign(algorithm)
 
 <!--
-Creates and returns a signing object, with the given algorithm.
-On recent OpenSSL releases, `openssl list-public-key-algorithms` will display
-the available signing algorithms. Examples are `'RSA-SHA256'`.
+Creates and returns a signing object, with the given algorithm.  On
+recent OpenSSL releases, `openssl list-public-key-algorithms` will
+display the available signing algorithms. Examples are `'RSA-SHA256'`.
 -->
 
 与えられたアルゴリズムで署名オブジェクトを作成して返します。
@@ -435,8 +524,8 @@ Returned by `crypto.createSign`.
 ### signer.update(data)
 
 <!--
-Updates the signer object with data.
-This can be called many times with new data as it is streamed.
+Updates the signer object with data.  This can be called many times
+with new data as it is streamed.
 -->
 
 署名オブジェクトをデータで更新します。
@@ -445,26 +534,31 @@ This can be called many times with new data as it is streamed.
 ### signer.sign(private_key, [output_format])
 
 <!--
-Calculates the signature on all the updated data passed through the signer.
-`private_key` is a string containing the PEM encoded private key for signing.
+Calculates the signature on all the updated data passed through the
+signer.  `private_key` is a string containing the PEM encoded private
+key for signing.
 -->
 
 署名オブジェクトに渡された全ての更新データで署名を計算します。
 `private_key` は PEM でエンコードされた秘密鍵を内容とする文字列です。
 
 <!--
-Returns the signature in `output_format` which can be `'binary'`, `'hex'` or
-`'base64'`. Defaults to `'binary'`.
-
-Note: `signer` object can not be used after `sign()` method been called.
+Returns the signature in `output_format` which can be `'binary'`,
+`'hex'` or `'base64'`. If no encoding is provided, then a buffer is
+returned.
 -->
 
 `'binary'`、`'hex'`、あるいは `'base64'` のいずれかを指定した `output_format`
-による署名を返します。デフォルトは `'binary'` です。
+による署名を返します。
+エンコーディングが与えられなかった場合はバッファが返されます。
+
+<!--
+Note: `signer` object can not be used after `sign()` method been
+called.
+-->
 
 注意: `sign()` メソッドを呼び出した後で `signer` 
 オブジェクトを使うことはできません。
-
 
 ## crypto.createVerify(algorithm)
 
@@ -490,8 +584,8 @@ Returned by `crypto.createVerify`.
 ### verifier.update(data)
 
 <!--
-Updates the verifier object with data.
-This can be called many times with new data as it is streamed.
+Updates the verifier object with data.  This can be called many times
+with new data as it is streamed.
 -->
 
 検証オブジェクトをデータで更新します。
@@ -500,11 +594,12 @@ This can be called many times with new data as it is streamed.
 ### verifier.verify(object, signature, [signature_format])
 
 <!--
-Verifies the signed data by using the `object` and `signature`. `object` is  a
-string containing a PEM encoded object, which can be one of RSA public key,
-DSA public key, or X.509 certificate. `signature` is the previously calculated
-signature for the data, in the `signature_format` which can be `'binary'`,
-`'hex'` or `'base64'`. Defaults to `'binary'`.
+Verifies the signed data by using the `object` and `signature`.
+`object` is  a string containing a PEM encoded object, which can be
+one of RSA public key, DSA public key, or X.509 certificate.
+`signature` is the previously calculated signature for the data, in
+the `signature_format` which can be `'binary'`, `'hex'` or `'base64'`.
+If no encoding is specified, then a buffer is expected.
 -->
 
 署名されたデータを `object` と `signature` で検証します。
@@ -512,15 +607,20 @@ signature for the data, in the `signature_format` which can be `'binary'`,
 PEM でエンコードしたオブジェクトです。
 `signature` は先に計算したデータの署名で、
 その `signature_format` は `'binary'`、`'hex'`、または `'base64'`
-のいずれかです。デフォルトは `'binary'` です。
+のいずれかです。
+エンコーディングが与えられなかった場合はバッファが期待されます。
 
 <!--
-Returns true or false depending on the validity of the signature for the data and public key.
-
-Note: `verifier` object can not be used after `verify()` method been called.
+Returns true or false depending on the validity of the signature for
+the data and public key.
 -->
 
 署名されたデータと公開鍵による検証の結果によって true または false を返します。
+
+<!--
+Note: `verifier` object can not be used after `verify()` method been
+called.
+-->
 
 注意: `verify()` メソッドを呼び出した後で `verifier` 
 オブジェクトを使うことはできません。
@@ -528,8 +628,8 @@ Note: `verifier` object can not be used after `verify()` method been called.
 ## crypto.createDiffieHellman(prime_length)
 
 <!--
-Creates a Diffie-Hellman key exchange object and generates a prime of the
-given bit length. The generator used is `2`.
+Creates a Diffie-Hellman key exchange object and generates a prime of
+the given bit length. The generator used is `2`.
 -->
 
 ディフィー・ヘルマン鍵共有オブジェクトを作成し、
@@ -538,15 +638,15 @@ given bit length. The generator used is `2`.
 ## crypto.createDiffieHellman(prime, [encoding])
 
 <!--
-Creates a Diffie-Hellman key exchange object using the supplied prime. The
-generator used is `2`. Encoding can be `'binary'`, `'hex'`, or `'base64'`.
-Defaults to `'binary'`.
+Creates a Diffie-Hellman key exchange object using the supplied prime.
+The generator used is `2`. Encoding can be `'binary'`, `'hex'`, or
+`'base64'`.  If no encoding is specified, then a buffer is expected.
 -->
 
 与えられた素数からディフィー・ヘルマン鍵共有オブジェクトを作成します。
 生成元は `2` です。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
 
 ## Class: DiffieHellman
 
@@ -563,118 +663,126 @@ Returned by `crypto.createDiffieHellman`.
 ### diffieHellman.generateKeys([encoding])
 
 <!--
-Generates private and public Diffie-Hellman key values, and returns the
-public key in the specified encoding. This key should be transferred to the
-other party. Encoding can be `'binary'`, `'hex'`, or `'base64'`.
-Defaults to `'binary'`.
+Generates private and public Diffie-Hellman key values, and returns
+the public key in the specified encoding. This key should be
+transferred to the other party. Encoding can be `'binary'`, `'hex'`,
+or `'base64'`.  If no encoding is provided, then a buffer is returned.
 -->
 
 ディフィー・ヘルマン法で秘密および公開鍵を作成し、
 指定の方法でエンコーディングされた公開鍵を返します。
 この鍵は相手側に渡されるものです。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
 
 ### diffieHellman.computeSecret(other_public_key, [input_encoding], [output_encoding])
 
 <!--
-Computes the shared secret using `other_public_key` as the other party's
-public key and returns the computed shared secret. Supplied key is
-interpreted using specified `input_encoding`, and secret is encoded using
-specified `output_encoding`. Encodings can be `'binary'`, `'hex'`, or
-`'base64'`. The input encoding defaults to `'binary'`.
-If no output encoding is given, the input encoding is used as output encoding.
+Computes the shared secret using `other_public_key` as the other
+party's public key and returns the computed shared secret. Supplied
+key is interpreted using specified `input_encoding`, and secret is
+encoded using specified `output_encoding`. Encodings can be
+`'binary'`, `'hex'`, or `'base64'`. If the input encoding is not
+provided, then a buffer is expected.
 -->
 
 `other_public_key` を相手側の公開鍵として共有の秘密鍵を計算して返します。
 与えられた公開鍵は指定の `input_encoding` を使って解釈され、
 秘密鍵は `output_encoding` で指定された方法でエンコードされます。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
-入力エンコーディングのデフォルトは `'binary'` です。
-出力のエンコーディングが与えられなかった場合は、入力のエンコーディングが
-出力エンコーディングとして使われます。
+入力のエンコーディングが与えられなかった場合はバッファが期待されます。
+
+<!--
+If no output encoding is given, then a buffer is returned.
+-->
+
+出力のエンコーディングが与えられなかった場合はバッファが返されます。
 
 ### diffieHellman.getPrime([encoding])
 
 <!--
-Returns the Diffie-Hellman prime in the specified encoding, which can be
-`'binary'`, `'hex'`, or `'base64'`. Defaults to `'binary'`.
+Returns the Diffie-Hellman prime in the specified encoding, which can
+be `'binary'`, `'hex'`, or `'base64'`. If no encoding is provided,
+then a buffer is returned.
 -->
 
 ディフィー・ヘルマン法の素数を指定のエンコーディングで返します。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
 
 ### diffieHellman.getGenerator([encoding])
 
 <!--
-Returns the Diffie-Hellman prime in the specified encoding, which can be
-`'binary'`, `'hex'`, or `'base64'`. Defaults to `'binary'`.
+Returns the Diffie-Hellman prime in the specified encoding, which can
+be `'binary'`, `'hex'`, or `'base64'`. If no encoding is provided,
+then a buffer is returned.
 -->
 
 ディフィー・ヘルマン法の生成元を指定のエンコーディングで返します。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
 
 ### diffieHellman.getPublicKey([encoding])
 
 <!--
-Returns the Diffie-Hellman public key in the specified encoding, which can
-be `'binary'`, `'hex'`, or `'base64'`. Defaults to `'binary'`.
+Returns the Diffie-Hellman public key in the specified encoding, which
+can be `'binary'`, `'hex'`, or `'base64'`. If no encoding is provided,
+then a buffer is returned.
 -->
 
 ディフィー・ヘルマン法による公開鍵を指定のエンコーディングで返します。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
 
 ### diffieHellman.getPrivateKey([encoding])
 
 <!--
-Returns the Diffie-Hellman private key in the specified encoding, which can
-be `'binary'`, `'hex'`, or `'base64'`. Defaults to `'binary'`.
+Returns the Diffie-Hellman private key in the specified encoding,
+which can be `'binary'`, `'hex'`, or `'base64'`. If no encoding is
+provided, then a buffer is returned.
 -->
 
 ディフィー・ヘルマン法による秘密鍵を指定のエンコーディングで返します。
 エンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが返されます。
 
 ### diffieHellman.setPublicKey(public_key, [encoding])
 
 <!--
-Sets the Diffie-Hellman public key. Key encoding can be `'binary'`, `'hex'`,
-or `'base64'`. Defaults to `'binary'`.
+Sets the Diffie-Hellman public key. Key encoding can be `'binary'`,
+`'hex'` or `'base64'`. If no encoding is provided, then a buffer is
+expected.
 -->
 
 ディフィー・ヘルマン法による公開鍵を設定します。
 鍵のエンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが期待されます。
 
 ### diffieHellman.setPrivateKey(public_key, [encoding])
 
 <!--
-Sets the Diffie-Hellman private key. Key encoding can be `'binary'`, `'hex'`,
-or `'base64'`. Defaults to `'binary'`.
+Sets the Diffie-Hellman private key. Key encoding can be `'binary'`,
+`'hex'` or `'base64'`. If no encoding is provided, then a buffer is
+expected.
 -->
 
 ディフィー・ヘルマン法による秘密鍵を設定します。
 鍵のエンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
-デフォルトは `'binary'` です。
+エンコーディングが与えられなかった場合はバッファが期待されます。
 
 ## crypto.getDiffieHellman(group_name)
 
 <!--
-Creates a predefined Diffie-Hellman key exchange object.
-The supported groups are: `'modp1'`, `'modp2'`, `'modp5'`
-(defined in [RFC 2412][])
-and `'modp14'`, `'modp15'`, `'modp16'`, `'modp17'`, `'modp18'`
-(defined in [RFC 3526][]).
-The returned object mimics the interface of objects created by
-[crypto.createDiffieHellman()][] above, but
-will not allow to change the keys (with
-[diffieHellman.setPublicKey()][] for example).
-The advantage of using this routine is that the parties don't have to
-generate nor exchange group modulus beforehand, saving both processor and
-communication time.
+Creates a predefined Diffie-Hellman key exchange object.  The
+supported groups are: `'modp1'`, `'modp2'`, `'modp5'` (defined in [RFC
+2412][]) and `'modp14'`, `'modp15'`, `'modp16'`, `'modp17'`,
+`'modp18'` (defined in [RFC 3526][]).  The returned object mimics the
+interface of objects created by [crypto.createDiffieHellman()][]
+above, but will not allow to change the keys (with
+[diffieHellman.setPublicKey()][] for example).  The advantage of using
+this routine is that the parties don't have to generate nor exchange
+group modulus beforehand, saving both processor and communication
+time.
 -->
 
 事前に定義された Diffie-Hellman 鍵交換オブジェクトを作成します。
@@ -705,8 +813,8 @@ Example (obtaining a shared secret):
     alice.generateKeys();
     bob.generateKeys();
 
-    var alice_secret = alice.computeSecret(bob.getPublicKey(), 'binary', 'hex');
-    var bob_secret = bob.computeSecret(alice.getPublicKey(), 'binary', 'hex');
+    var alice_secret = alice.computeSecret(bob.getPublicKey(), null, 'hex');
+    var bob_secret = bob.computeSecret(alice.getPublicKey(), null, 'hex');
 
     /* alice_secret and bob_secret should be the same */
     console.log(alice_secret == bob_secret);
@@ -723,6 +831,15 @@ The callback gets two arguments `(err, derivedKey)`.
 (ランダムなバイト値)、および繰り返しから、指定された長さの鍵を生成する、
 非同期の PBKDF2 です。
 コールバック関数は二つの引数を受け取る `(err, derivedKey)` です。
+
+## crypto.pbkdf2Sync(password, salt, iterations, keylen)
+
+<!--
+Synchronous PBKDF2 function.  Returns derivedKey or throws error.
+-->
+
+同期版の PBKDF2 関数。
+生成された鍵を返すか、例外をスローします。
 
 ## crypto.randomBytes(size, [callback])
 
@@ -745,6 +862,103 @@ Generates cryptographically strong pseudo-random data. Usage:
     } catch (ex) {
       // handle error
     }
+
+## crypto.DEFAULT_ENCODING
+
+<!--
+The default encoding to use for functions that can take either strings
+or buffers.  The default value is `'buffer'`, which makes it default
+to using Buffer objects.  This is here to make the crypto module more
+easily compatible with legacy programs that expected `'binary'` to be
+the default encoding.
+-->
+
+関数が使用するエンコーディングのデフォルトは、文字列かバッファの
+いずれかにすることができます。
+
+<!--
+Note that new programs will probably expect buffers, so only use this
+as a temporary measure.
+-->
+
+新しいプログラムはおそらくバッファを期待することに注意してください。
+これは一時的な手段としてのみ使用してください。
+
+## Recent API Changes
+
+<!--
+The Crypto module was added to Node before there was the concept of a
+unified Stream API, and before there were Buffer objects for handling
+binary data.
+-->
+
+Crypto モジュールは、統合されたストリーム API やバイトデータを扱う Buffer
+オブジェクトよりも先に Node に追加されました。
+
+<!--
+As such, the streaming classes don't have the typical methods found on
+other Node classes, and many methods accepted and returned
+Binary-encoded strings by default rather than Buffers.  This was
+changed to use Buffers by default instead.
+-->
+
+そのため、このストリーミングなクラスは他の Node のクラスに見られる
+典型的なメソッドを持たず、多くのメソッドは引数や戻り値に
+Buffer ではなくバイナリエンコードされた文字列を使います。
+
+<!--
+This is a breaking change for some use cases, but not all.
+-->
+
+これはあるユースケースにおいては互換性を損ないますが、
+全てのケースではありません。
+
+<!--
+For example, if you currently use the default arguments to the Sign
+class, and then pass the results to the Verify class, without ever
+inspecting the data, then it will continue to work as before.  Where
+you once got a binary string and then presented the binary string to
+the Verify object, you'll now get a Buffer, and present the Buffer to
+the Verify object.
+-->
+
+たとえば、Sign クラスをデフォルト引数で使っていて、
+その結果を全く調べずに Verify クラスに渡している場合、
+それは以前と同じように動くでしょう。
+それは、現時点ではバイナリ文字列を受け取ってそのバイナリ文字列を
+Veriy オブジェクトに渡しますが、将来は Buffer を受け取ってその
+Buffer を Verify オブジェクトに渡すようになります。
+
+<!--
+However, if you were doing things with the string data that will not
+work properly on Buffers (such as, concatenating them, storing in
+databases, etc.), or you are passing binary strings to the crypto
+functions without an encoding argument, then you will need to start
+providing encoding arguments to specify which encoding you'd like to
+use.  To switch to the previous style of using binary strings by
+default, set the `crypto.DEFAULT_ENCODING` field to 'binary'.  Note
+that new programs will probably expect buffers, so only use this as a
+temporary measure.
+-->
+
+しかしながら、Buffer が文字列と正確に同じようには動かない何かをしている場合
+(例えば、それらを連結したり、データベースに保存したりするなど)、
+あるいはバイナリ文字列を Crypto の関数にエンコーディング引数無しで
+渡している場合、エンコーディング引数を与えてどのエンコーディングを
+使用しているかを指定する必要があります。
+以前のようにデフォルトでバイナリ文字列を使うように切り替えるには、
+`crypto.DEFAULT_ENCODING` フィールドに `binary` を設定します。
+新しいプログラムはおそらくバッファを期待することに注意してください。
+これは一時的な手段としてのみ使用してください。
+
+<!--
+Also, a Streaming API will be provided, but this will be done in such
+a way as to preserve the legacy API surface.
+-->
+
+同時に、ストリーミング API も提供されますが、それはレガシーな API
+を維持する方法でなされます。
+
 
 [createCipher()]: #crypto_crypto_createcipher_algorithm_password
 [createCipheriv()]: #crypto_crypto_createcipheriv_algorithm_key_iv

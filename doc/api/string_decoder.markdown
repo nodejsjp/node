@@ -30,10 +30,18 @@ Accepts a single argument, `encoding` which defaults to `utf8`.
 
 文字列の引数 `encoding` を受け取ります。デフォルトは `'utf8'` です。
 
-### StringDecoder.write(buffer)
+### decoder.write(buffer)
 
 <!--
 Returns a decoded string.
 -->
 
 デコードされた文字列を返します。
+
+### decoder.end()
+
+<!--
+Returns any trailing bytes that were left in the buffer.
+-->
+
+バッファに残った終端のバイト列を返します。
