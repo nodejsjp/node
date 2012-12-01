@@ -119,7 +119,7 @@ Example:
     var https = require('https');
 
     var options = {
-      host: 'encrypted.google.com',
+      hostname: 'encrypted.google.com',
       port: 443,
       path: '/',
       method: 'GET'
@@ -146,11 +146,6 @@ The options argument has the following options
 `options` 引数は以下のオプションを持ちます。
 
 <!--
-- host: IP or domain of host to make request to. Defaults to `'localhost'`.
-- port: port of host to request to. Defaults to 443.
-- path: Path to request. Default `'/'`.
-- method: HTTP request method. Default `'GET'`.
-
 - `host`: A domain name or IP address of the server to issue the request to.
   Defaults to `'localhost'`.
 - `hostname`: To support `url.parse()` `hostname` is preferred over `host`
@@ -170,8 +165,8 @@ The options argument has the following options
 -->
 
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
-   デフォルトは `'localhost'` です。
-- `hostname`: `url.parse()` サポート。`hostname` は `host` を上書きします。
+- `hostname`: `url.parse()` で扱える文字列をサポートします。
+  `hostname` は `host` を上書きします。
 - `port`: リモートサーバのポート。デフォルトは 443 です。
 - `method`: HTTPS リクエストのメソッドの文字列。デフォルトは `'GET'` です。
 - `path`: リクエストのパス。デフォルトは `'/'` です。
@@ -240,7 +235,7 @@ Example:
 例:
 
     var options = {
-      host: 'encrypted.google.com',
+      hostname: 'encrypted.google.com',
       port: 443,
       path: '/',
       method: 'GET',
@@ -266,7 +261,7 @@ Example:
 例:
 
     var options = {
-      host: 'encrypted.google.com',
+      hostname: 'encrypted.google.com',
       port: 443,
       path: '/',
       method: 'GET',
