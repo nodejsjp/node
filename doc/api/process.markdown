@@ -82,8 +82,8 @@ your application after every unhandled exception!
 -->
 
 これを使う代わりに、[ドメイン](domain.html) を使ってください。
-それを使えば、捕まえられない例外が発生した後でもアプリケーションを
-再開することができます！
+これを使う場合は、捕まえられない例外が発生した後にアプリケーションを
+再起動してください！
 
 <!--
 Do *not* use it as the node.js equivalent of `On Error Resume Next`. An
