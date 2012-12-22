@@ -124,18 +124,6 @@ Process files with the extension `.sjs` as `.js`:
 
     require.extensions['.sjs'] = require.extensions['.js'];
 
-<!--
-Write your own extension handler:
--->
-
-独自の拡張子ハンドラを記述するには:
-
-    require.extensions['.sjs'] = function(module, filename) {
-      var content = fs.readFileSync(filename, 'utf8');
-      // Parse the file content and give to module.exports
-      module.exports = content;
-    };
-
 ## __filename
 
 <!-- type=var -->
