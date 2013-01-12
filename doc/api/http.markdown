@@ -1039,7 +1039,7 @@ Example:
 例:
 
     var options = {
-      host: 'www.google.com',
+      hostname: 'www.google.com',
       port: 80,
       path: '/upload',
       method: 'POST'
@@ -1195,7 +1195,7 @@ Alternatively, you could just opt out of pooling entirely using `agent:false`:
 別の方法として、 `agent: false` を指定することで、
 プーリングを使用しないこともできます:
 
-    http.get({host:'localhost', port:80, path:'/', agent:false}, function (res) {
+    http.get({hostname:'localhost', port:80, path:'/', agent:false}, function (res) {
       // Do stuff
     })
 
@@ -1409,7 +1409,7 @@ A client server pair that show you how to listen for the `connect` event.
       // make a request to a tunneling proxy
       var options = {
         port: 1337,
-        host: '127.0.0.1',
+        hostname: '127.0.0.1',
         method: 'CONNECT',
         path: 'www.google.com:80'
       };
@@ -1475,7 +1475,7 @@ A client server pair that show you how to listen for the `upgrade` event.
       // make a request
       var options = {
         port: 1337,
-        host: '127.0.0.1',
+        hostname: '127.0.0.1',
         headers: {
           'Connection': 'Upgrade',
           'Upgrade': 'websocket'

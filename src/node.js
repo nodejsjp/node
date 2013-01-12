@@ -140,7 +140,6 @@
 
       } else {
         // Read all of stdin - execute it.
-        process.stdin.resume();
         process.stdin.setEncoding('utf8');
 
         var code = '';
@@ -280,8 +279,18 @@
       }
     }
 
-    process._tickCallback = function(fromSpinner) {
+    function maxTickWarn() {
+      // XXX Remove all this maxTickDepth stuff in 0.11
+      var msg = '(node) warning: Recursive process.nextTick detected. ' +
+                'This will break in the next version of node. ' +
+                'Please use setImmediate for recursive deferral.';
+      if (process.traceDeprecation)
+        console.trace(msg);
+      else
+        console.error(msg);
+    }
 
+    process._tickCallback = function(fromSpinner) {
       // if you add a nextTick in a domain's error handler, then
       // it's possible to cycle indefinitely.  Normally, the tickDone
       // in the finally{} block below will prevent this, however if
@@ -347,6 +356,9 @@
       // on the way out, don't bother.
       // it won't get fired anyway.
       if (process._exiting) return;
+
+      if (tickDepth >= process.maxTickDepth)
+        maxTickWarn();
 
       var tock = { callback: callback };
       if (process.domain) tock.domain = process.domain;
@@ -418,13 +430,18 @@
 
       case 'PIPE':
         var net = NativeModule.require('net');
-        stream = new net.Stream(fd);
+        stream = new net.Socket({
+          fd: fd,
+          readable: false,
+          writable: true
+        });
 
-        // FIXME Should probably have an option in net.Stream to create a
+        // FIXME Should probably have an option in net.Socket to create a
         // stream from an existing fd which is writable only. But for now
         // we'll just add this hack and set the `readable` member to false.
         // Test: ./node test/fixtures/echo.js < /etc/passwd
         stream.readable = false;
+        stream.read = null;
         stream._type = 'pipe';
 
         // FIXME Hack to have stream not keep the event loop alive.
@@ -484,18 +501,26 @@
       switch (tty_wrap.guessHandleType(fd)) {
         case 'TTY':
           var tty = NativeModule.require('tty');
-          stdin = new tty.ReadStream(fd);
+          stdin = new tty.ReadStream(fd, {
+            highWaterMark: 0,
+            lowWaterMark: 0,
+            readable: true,
+            writable: false
+          });
           break;
 
         case 'FILE':
           var fs = NativeModule.require('fs');
-          stdin = new fs.ReadStream(null, {fd: fd});
+          stdin = new fs.ReadStream(null, { fd: fd });
           break;
 
         case 'PIPE':
           var net = NativeModule.require('net');
-          stdin = new net.Stream(fd);
-          stdin.readable = true;
+          stdin = new net.Socket({
+            fd: fd,
+            readable: true,
+            writable: false
+          });
           break;
 
         default:
@@ -507,16 +532,23 @@
       stdin.fd = fd;
 
       // stdin starts out life in a paused state, but node doesn't
-      // know yet.  Call pause() explicitly to unref() it.
-      stdin.pause();
+      // know yet.  Explicitly to readStop() it to put it in the
+      // not-reading state.
+      if (stdin._handle && stdin._handle.readStop) {
+        stdin._handle.reading = false;
+        stdin._readableState.reading = false;
+        stdin._handle.readStop();
+      }
 
-      // when piping stdin to a destination stream,
-      // let the data begin to flow.
-      var pipe = stdin.pipe;
-      stdin.pipe = function(dest, opts) {
-        stdin.resume();
-        return pipe.call(stdin, dest, opts);
-      };
+      // if the user calls stdin.pause(), then we need to stop reading
+      // immediately, so that the process can close down.
+      stdin.on('pause', function() {
+        if (!stdin._handle)
+          return;
+        stdin._readableState.reading = false;
+        stdin._handle.reading = false;
+        stdin._handle.readStop();
+      });
 
       return stdin;
     });
@@ -688,8 +720,8 @@
 
     var nativeModule = new NativeModule(id);
 
-    nativeModule.compile();
     nativeModule.cache();
+    nativeModule.compile();
 
     return nativeModule.exports;
   };

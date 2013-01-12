@@ -83,9 +83,7 @@ See [http.listen()][] for details.
 
 ### server.close([callback])
 
-<!--
 See [http.close()][] for details.
--->
 
 詳細は [http.close()][] を参照してください。
 
@@ -121,7 +119,7 @@ Example:
     var https = require('https');
 
     var options = {
-      host: 'encrypted.google.com',
+      hostname: 'encrypted.google.com',
       port: 443,
       path: '/',
       method: 'GET'
@@ -148,11 +146,6 @@ The options argument has the following options
 `options` 引数は以下のオプションを持ちます。
 
 <!--
-- host: IP or domain of host to make request to. Defaults to `'localhost'`.
-- port: port of host to request to. Defaults to 443.
-- path: Path to request. Default `'/'`.
-- method: HTTP request method. Default `'GET'`.
-
 - `host`: A domain name or IP address of the server to issue the request to.
   Defaults to `'localhost'`.
 - `hostname`: To support `url.parse()` `hostname` is preferred over `host`
@@ -172,8 +165,8 @@ The options argument has the following options
 -->
 
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
-   デフォルトは `'localhost'` です。
-- `hostname`: `url.parse()` サポート。`hostname` は `host` を上書きします。
+- `hostname`: `url.parse()` で扱える文字列をサポートします。
+  `hostname` は `host` を上書きします。
 - `port`: リモートサーバのポート。デフォルトは 443 です。
 - `method`: HTTPS リクエストのメソッドの文字列。デフォルトは `'GET'` です。
 - `path`: リクエストのパス。デフォルトは `'/'` です。
@@ -242,7 +235,7 @@ Example:
 例:
 
     var options = {
-      host: 'encrypted.google.com',
+      hostname: 'encrypted.google.com',
       port: 443,
       path: '/',
       method: 'GET',
@@ -268,7 +261,7 @@ Example:
 例:
 
     var options = {
-      host: 'encrypted.google.com',
+      hostname: 'encrypted.google.com',
       port: 443,
       path: '/',
       method: 'GET',
@@ -346,5 +339,6 @@ Global instance of [https.Agent][] for all HTTPS client requests.
 [http.Agent]: http.html#http_class_http_agent
 [http.request()]: http.html#http_http_request_options_callback
 [https.Agent]: #https_class_https_agent
+[https.request()]: #https_https_request_options_callback
 [tls.connect()]: tls.html#tls_tls_connect_options_secureconnectlistener
 [tls.createServer()]: tls.html#tls_tls_createserver_options_secureconnectionlistener

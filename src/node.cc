@@ -27,8 +27,11 @@
 #include "uv.h"
 
 #include "v8-debug.h"
-#if defined HAVE_DTRACE || defined HAVE_ETW
+#if defined HAVE_DTRACE || defined HAVE_ETW || defined HAVE_SYSTEMTAP
 # include "node_dtrace.h"
+#endif
+#if defined HAVE_PERFCTR
+# include "node_counters.h"
 #endif
 
 #include <locale.h>
@@ -71,6 +74,9 @@ typedef int mode_t;
 #include "node_string.h"
 #if HAVE_OPENSSL
 # include "node_crypto.h"
+#endif
+#if HAVE_SYSTEMTAP
+#include "node_systemtap.h"
 #endif
 #include "node_script.h"
 #include "v8_typed_array.h"
@@ -141,83 +147,8 @@ static bool use_sni = true;
 static bool use_sni = false;
 #endif
 
-#ifdef __POSIX__
-// Buffer for getpwnam_r(), getgrpam_r() and other misc callers; keep this
-// scoped at file-level rather than method-level to avoid excess stack usage.
-static char getbuf[PATH_MAX + 1];
-#endif
-
-// We need to notify V8 when we're idle so that it can run the garbage
-// collector. The interface to this is V8::IdleNotification(). It returns
-// true if the heap hasn't be fully compacted, and needs to be run again.
-// Returning false means that it doesn't have anymore work to do.
-//
-// A rather convoluted algorithm has been devised to determine when Node is
-// idle. You'll have to figure it out for yourself.
-static uv_check_t gc_check;
-static uv_idle_t gc_idle;
-static uv_timer_t gc_timer;
-bool need_gc;
-
 // process-relative uptime base, initialized at start-up
 static double prog_start_time;
-
-#define FAST_TICK 700.
-#define GC_WAIT_TIME 5000.
-#define RPM_SAMPLES 100
-#define TICK_TIME(n) tick_times[(tick_time_head - (n)) % RPM_SAMPLES]
-static int64_t tick_times[RPM_SAMPLES];
-static int tick_time_head;
-
-static void CheckStatus(uv_timer_t* watcher, int status);
-
-static void StartGCTimer () {
-  if (!uv_is_active((uv_handle_t*) &gc_timer)) {
-    uv_timer_start(&gc_timer, node::CheckStatus, 5000, 5000);
-  }
-}
-
-static void StopGCTimer () {
-  if (uv_is_active((uv_handle_t*) &gc_timer)) {
-    uv_timer_stop(&gc_timer);
-  }
-}
-
-static void Idle(uv_idle_t* watcher, int status) {
-  assert((uv_idle_t*) watcher == &gc_idle);
-
-  if (V8::IdleNotification()) {
-    uv_idle_stop(&gc_idle);
-    StopGCTimer();
-  }
-}
-
-
-// Called directly after every call to select() (or epoll, or whatever)
-static void Check(uv_check_t* watcher, int status) {
-  assert(watcher == &gc_check);
-
-  tick_times[tick_time_head] = uv_now(uv_default_loop());
-  tick_time_head = (tick_time_head + 1) % RPM_SAMPLES;
-
-  StartGCTimer();
-
-  for (int i = 0; i < (int)(GC_WAIT_TIME/FAST_TICK); i++) {
-    double d = TICK_TIME(i+1) - TICK_TIME(i+2);
-    //printf("d = %f\n", d);
-    // If in the last 5 ticks the difference between
-    // ticks was less than 0.7 seconds, then continue.
-    if (d < FAST_TICK) {
-      //printf("---\n");
-      return;
-    }
-  }
-
-  // Otherwise start the gc!
-
-  //fprintf(stderr, "start idle 2\n");
-  uv_idle_start(&gc_idle, node::Idle);
-}
 
 
 static void Tick(void) {
@@ -1461,6 +1392,108 @@ static Handle<Value> Umask(const Arguments& args) {
 
 #ifdef __POSIX__
 
+static const uid_t uid_not_found = static_cast<uid_t>(-1);
+static const gid_t gid_not_found = static_cast<gid_t>(-1);
+
+
+static uid_t uid_by_name(const char* name) {
+  struct passwd pwd;
+  struct passwd* pp;
+  char buf[8192];
+  int rc;
+
+  errno = 0;
+  pp = NULL;
+
+  if ((rc = getpwnam_r(name, &pwd, buf, sizeof(buf), &pp)) == 0 && pp != NULL) {
+    return pp->pw_uid;
+  }
+
+  return uid_not_found;
+}
+
+
+static char* name_by_uid(uid_t uid) {
+  struct passwd pwd;
+  struct passwd* pp;
+  char buf[8192];
+  int rc;
+
+  errno = 0;
+  pp = NULL;
+
+  if ((rc = getpwuid_r(uid, &pwd, buf, sizeof(buf), &pp)) == 0 && pp != NULL) {
+    return strdup(pp->pw_name);
+  }
+
+  if (rc == 0) {
+    errno = ENOENT;
+  }
+
+  return NULL;
+}
+
+
+static gid_t gid_by_name(const char* name) {
+  struct group pwd;
+  struct group* pp;
+  char buf[8192];
+  int rc;
+
+  errno = 0;
+  pp = NULL;
+
+  if ((rc = getgrnam_r(name, &pwd, buf, sizeof(buf), &pp)) == 0 && pp != NULL) {
+    return pp->gr_gid;
+  }
+
+  return gid_not_found;
+}
+
+
+#if 0  // For future use.
+static const char* name_by_gid(gid_t gid) {
+  struct group pwd;
+  struct group* pp;
+  char buf[8192];
+  int rc;
+
+  errno = 0;
+  pp = NULL;
+
+  if ((rc = getgrgid_r(gid, &pwd, buf, sizeof(buf), &pp)) == 0 && pp != NULL) {
+    return strdup(pp->gr_name);
+  }
+
+  if (rc == 0) {
+    errno = ENOENT;
+  }
+
+  return NULL;
+}
+#endif
+
+
+static uid_t uid_by_name(Handle<Value> value) {
+  if (value->IsUint32()) {
+    return static_cast<uid_t>(value->Uint32Value());
+  } else {
+    String::Utf8Value name(value);
+    return uid_by_name(*name);
+  }
+}
+
+
+static gid_t gid_by_name(Handle<Value> value) {
+  if (value->IsUint32()) {
+    return static_cast<gid_t>(value->Uint32Value());
+  } else {
+    String::Utf8Value name(value);
+    return gid_by_name(*name);
+  }
+}
+
+
 static Handle<Value> GetUid(const Arguments& args) {
   HandleScope scope;
   int uid = getuid();
@@ -1478,40 +1511,20 @@ static Handle<Value> GetGid(const Arguments& args) {
 static Handle<Value> SetGid(const Arguments& args) {
   HandleScope scope;
 
-  if (args.Length() < 1) {
-    return ThrowException(Exception::Error(
-      String::New("setgid requires 1 argument")));
+  if (!args[0]->IsUint32() && !args[0]->IsString()) {
+    return ThrowTypeError("setgid argument must be a number or a string");
   }
 
-  int gid;
+  gid_t gid = gid_by_name(args[0]);
 
-  if (args[0]->IsNumber()) {
-    gid = args[0]->Int32Value();
-  } else if (args[0]->IsString()) {
-    String::Utf8Value grpnam(args[0]);
-    struct group grp, *grpp = NULL;
-    int err;
-
-    errno = 0;
-    if ((err = getgrnam_r(*grpnam, &grp, getbuf, ARRAY_SIZE(getbuf), &grpp)) ||
-        grpp == NULL) {
-      if (errno == 0)
-        return ThrowException(Exception::Error(
-          String::New("setgid group id does not exist")));
-      else
-        return ThrowException(ErrnoException(errno, "getgrnam_r"));
-    }
-
-    gid = grpp->gr_gid;
-  } else {
-    return ThrowException(Exception::Error(
-      String::New("setgid argument must be a number or a string")));
+  if (gid == gid_not_found) {
+    return ThrowError("setgid group id does not exist");
   }
 
-  int result;
-  if ((result = setgid(gid)) != 0) {
+  if (setgid(gid)) {
     return ThrowException(ErrnoException(errno, "setgid"));
   }
+
   return Undefined();
 }
 
@@ -1519,43 +1532,141 @@ static Handle<Value> SetGid(const Arguments& args) {
 static Handle<Value> SetUid(const Arguments& args) {
   HandleScope scope;
 
-  if (args.Length() < 1) {
-    return ThrowException(Exception::Error(
-          String::New("setuid requires 1 argument")));
+  if (!args[0]->IsUint32() && !args[0]->IsString()) {
+    return ThrowTypeError("setuid argument must be a number or a string");
   }
 
-  int uid;
+  uid_t uid = uid_by_name(args[0]);
 
-  if (args[0]->IsNumber()) {
-    uid = args[0]->Int32Value();
-  } else if (args[0]->IsString()) {
-    String::Utf8Value pwnam(args[0]);
-    struct passwd pwd, *pwdp = NULL;
-    int err;
-
-    errno = 0;
-    if ((err = getpwnam_r(*pwnam, &pwd, getbuf, ARRAY_SIZE(getbuf), &pwdp)) ||
-        pwdp == NULL) {
-      if (errno == 0)
-        return ThrowException(Exception::Error(
-          String::New("setuid user id does not exist")));
-      else
-        return ThrowException(ErrnoException(errno, "getpwnam_r"));
-    }
-
-    uid = pwdp->pw_uid;
-  } else {
-    return ThrowException(Exception::Error(
-      String::New("setuid argument must be a number or a string")));
+  if (uid == uid_not_found) {
+    return ThrowError("setuid user id does not exist");
   }
 
-  int result;
-  if ((result = setuid(uid)) != 0) {
+  if (setuid(uid)) {
     return ThrowException(ErrnoException(errno, "setuid"));
   }
+
   return Undefined();
 }
 
+
+static Handle<Value> GetGroups(const Arguments& args) {
+  HandleScope scope;
+
+  int ngroups = getgroups(0, NULL);
+
+  if (ngroups == -1) {
+    return ThrowException(ErrnoException(errno, "getgroups"));
+  }
+
+  gid_t* groups = new gid_t[ngroups];
+
+  ngroups = getgroups(ngroups, groups);
+
+  if (ngroups == -1) {
+    delete[] groups;
+    return ThrowException(ErrnoException(errno, "getgroups"));
+  }
+
+  Local<Array> groups_list = Array::New(ngroups);
+  bool seen_egid = false;
+  gid_t egid = getegid();
+
+  for (int i = 0; i < ngroups; i++) {
+    groups_list->Set(i, Integer::New(groups[i]));
+    if (groups[i] == egid) seen_egid = true;
+  }
+
+  delete[] groups;
+
+  if (seen_egid == false) {
+    groups_list->Set(ngroups, Integer::New(egid));
+  }
+
+  return scope.Close(groups_list);
+}
+
+
+static Handle<Value> SetGroups(const Arguments& args) {
+  HandleScope scope;
+
+  if (!args[0]->IsArray()) {
+    return ThrowTypeError("argument 1 must be an array");
+  }
+
+  Local<Array> groups_list = args[0].As<Array>();
+  size_t size = groups_list->Length();
+  gid_t* groups = new gid_t[size];
+
+  for (size_t i = 0; i < size; i++) {
+    gid_t gid = gid_by_name(groups_list->Get(i));
+
+    if (gid == gid_not_found) {
+      delete[] groups;
+      return ThrowError("group name not found");
+    }
+
+    groups[i] = gid;
+  }
+
+  int rc = setgroups(size, groups);
+  delete[] groups;
+
+  if (rc == -1) {
+    return ThrowException(ErrnoException(errno, "setgroups"));
+  }
+
+  return Undefined();
+}
+
+
+static Handle<Value> InitGroups(const Arguments& args) {
+  HandleScope scope;
+
+  if (!args[0]->IsUint32() && !args[0]->IsString()) {
+    return ThrowTypeError("argument 1 must be a number or a string");
+  }
+
+  if (!args[1]->IsUint32() && !args[1]->IsString()) {
+    return ThrowTypeError("argument 2 must be a number or a string");
+  }
+
+  String::Utf8Value arg0(args[0]);
+  gid_t extra_group;
+  bool must_free;
+  char* user;
+
+  if (args[0]->IsUint32()) {
+    user = name_by_uid(args[0]->Uint32Value());
+    must_free = true;
+  } else {
+    user = *arg0;
+    must_free = false;
+  }
+
+  if (user == NULL) {
+    return ThrowError("initgroups user not found");
+  }
+
+  extra_group = gid_by_name(args[1]);
+
+  if (extra_group == gid_not_found) {
+    if (must_free) free(user);
+    return ThrowError("initgroups extra group not found");
+  }
+
+  int rc = initgroups(user, extra_group);
+
+  if (must_free) {
+    free(user);
+  }
+
+  if (rc) {
+    return ThrowException(ErrnoException(errno, "initgroups"));
+  }
+
+  return Undefined();
+}
 
 #endif // __POSIX__
 
@@ -1564,31 +1675,6 @@ v8::Handle<v8::Value> Exit(const v8::Arguments& args) {
   HandleScope scope;
   exit(args[0]->IntegerValue());
   return Undefined();
-}
-
-
-static void CheckStatus(uv_timer_t* watcher, int status) {
-  assert(watcher == &gc_timer);
-
-  // check memory
-  if (!uv_is_active((uv_handle_t*) &gc_idle)) {
-    HeapStatistics stats;
-    V8::GetHeapStatistics(&stats);
-    if (stats.total_heap_size() > 1024 * 1024 * 128) {
-      // larger than 128 megs, just start the idle watcher
-      uv_idle_start(&gc_idle, node::Idle);
-      return;
-    }
-  }
-
-  double d = uv_now(uv_default_loop()) - TICK_TIME(3);
-
-  //printfb("timer d = %f\n", d);
-
-  if (d  >= GC_WAIT_TIME - 1.) {
-    //fprintf(stderr, "start idle\n");
-    uv_idle_start(&gc_idle, node::Idle);
-  }
 }
 
 
@@ -1751,6 +1837,13 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
     Local<Value> exception =
         Exception::Error(String::New("Out of memory."));
     return ThrowException(exception);
+  }
+
+  /* Replace dashes with underscores. When loading foo-bar.node,
+   * look for foo_bar_module, not foo-bar_module.
+   */
+  for (pos = symbol; *pos != '\0'; ++pos) {
+    if (*pos == '-') *pos = '_';
   }
 
   node_module_struct *mod;
@@ -2244,6 +2337,10 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 
   NODE_SET_METHOD(process, "setgid", SetGid);
   NODE_SET_METHOD(process, "getgid", GetGid);
+
+  NODE_SET_METHOD(process, "getgroups", GetGroups);
+  NODE_SET_METHOD(process, "setgroups", SetGroups);
+  NODE_SET_METHOD(process, "initgroups", InitGroups);
 #endif // __POSIX__
 
   NODE_SET_METHOD(process, "_kill", Kill);
@@ -2307,8 +2404,12 @@ void Load(Handle<Object> process_l) {
   Local<Object> global = v8::Context::GetCurrent()->Global();
   Local<Value> args[1] = { Local<Value>::New(process_l) };
 
-#if defined HAVE_DTRACE || defined HAVE_ETW
+#if defined HAVE_DTRACE || defined HAVE_ETW || defined HAVE_SYSTEMTAP
   InitDTrace(global);
+#endif
+
+#if defined HAVE_PERFCTR
+  InitPerfCounters(global);
 #endif
 
   f->Call(global, 1, args);
@@ -2763,16 +2864,6 @@ char** Init(int argc, char *argv[]) {
 #endif // __POSIX__
 
   uv_idle_init(uv_default_loop(), &tick_spinner);
-
-  uv_check_init(uv_default_loop(), &gc_check);
-  uv_check_start(&gc_check, node::Check);
-  uv_unref(reinterpret_cast<uv_handle_t*>(&gc_check));
-
-  uv_idle_init(uv_default_loop(), &gc_idle);
-  uv_unref(reinterpret_cast<uv_handle_t*>(&gc_idle));
-
-  uv_timer_init(uv_default_loop(), &gc_timer);
-  uv_unref(reinterpret_cast<uv_handle_t*>(&gc_timer));
 
   V8::SetFatalErrorHandler(node::OnFatalError);
 

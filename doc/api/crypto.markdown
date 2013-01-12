@@ -166,11 +166,26 @@ Example: this program that takes the sha1 sum of a file
 
 <!--
 The class for creating hash digests of data.
-
-Returned by `crypto.createHash`.
 -->
 
 データのハッシュダイジェストを作成するためのクラスです。
+
+<!--
+It is a [stream](stream.html) that is both readable and writable.  The
+written data is used to compute the hash.  Once the writable side of
+the stream is ended, use the `read()` method to get the computed hash
+digest.  The legacy `update` and `digest` methods are also supported.
+-->
+
+これは読み込みと書き込みの両方が可能な [ストリーム](stream.html) です。
+書き込まれたデータはハッシュを計算するために使われます。
+一度ストリームの書き込み側が閉じられると、計算されたハッシュダイジェストを
+読み出すために `read()` メソッドを使うことができます。
+レガシーな `update()` および `digest()` メソッドもサポートされます。
+
+<!--
+Returned by `crypto.createHash`.
+-->
 
 `crypto.createHash()` から返されます。
 
@@ -222,6 +237,19 @@ algorithm and key.
 -->
 
 与えられたアルゴリズムとキーで HMAC を計算する、HMAC オブジェクトを作成して返します。
+
+<!--
+It is a [stream](stream.html) that is both readable and writable.  The
+written data is used to compute the hmac.  Once the writable side of
+the stream is ended, use the `read()` method to get the computed
+digest.  The legacy `update` and `digest` methods are also supported.
+-->
+
+これは読み込みと書き込みの両方が可能な [ストリーム](stream.html) です。
+書き込まれたデータはハッシュを計算するために使われます。
+一度ストリームの書き込み側が閉じられると、計算されたハッシュダイジェストを
+読み出すために `read()` メソッドを使うことができます。
+レガシーな `update()` および `digest()` メソッドもサポートされます。
 
 <!--
 `algorithm` is dependent on the available algorithms supported by
@@ -296,6 +324,19 @@ which must be a `'binary'` encoded string or a [buffer](buffer.html).
 これは `'binary'` でエンコードされた文字列または [buffer](buffer.html)
 でなければなりません
 
+<!--
+It is a [stream](stream.html) that is both readable and writable.  The
+written data is used to compute the hash.  Once the writable side of
+the stream is ended, use the `read()` method to get the computed hash
+digest.  The legacy `update` and `digest` methods are also supported.
+-->
+
+これは読み込みと書き込みの両方が可能な [ストリーム](stream.html) です。
+書き込まれたデータはハッシュを計算するために使われます。
+一度ストリームの書き込み側が閉じられると、計算されたハッシュダイジェストを
+読み出すために `read()` メソッドを使うことができます。
+レガシーな `update()` および `digest()` メソッドもサポートされます。
+
 ## crypto.createCipheriv(algorithm, key, iv)
 
 <!--
@@ -338,6 +379,19 @@ Returned by `crypto.createCipher` and `crypto.createCipheriv`.
 -->
 
 `crypto.createCipher` および `crypto.createCipheriv` から返されます。
+
+<!--
+Cipher objects are [streams](stream.html) that are both readable and
+writable.  The written plain text data is used to produce the
+encrypted data on the the readable side.  The legacy `update` and
+`final` methods are also supported.
+-->
+
+暗号化オブジェクトは読み込みと書き込みの両方が可能な
+[ストリーム](stream.html) です。
+書き込まれたプレーンテキストデータは、読み込み側に暗号化されたデータを
+生成するために使われます。
+レガシーな `update()` および `final()` メソッドもサポートされます。
 
 ### cipher.update(data, [input_encoding], [output_encoding])
 
@@ -439,6 +493,19 @@ Returned by `crypto.createDecipher` and `crypto.createDecipheriv`.
 
 `crypto.createDecipher` および `crypto.createDecipheriv` から返されます。
 
+<!--
+Decipher objects are [streams](stream.html) that are both readable and
+writable.  The written enciphered data is used to produce the
+plain-text data on the the readable side.  The legacy `update` and
+`final` methods are also supported.
+-->
+
+復号化オブジェクトは読み込みと書き込みの両方が可能な
+[ストリーム](stream.html) です。
+書き込まれた暗号化データは、読み込み側にプレーンテキストデータを
+生成するために使われます。
+レガシーな `update()` および `final()` メソッドもサポートされます。
+
 ### decipher.update(data, [input_encoding], [output_encoding])
 
 <!--
@@ -509,7 +576,7 @@ display the available signing algorithms. Examples are `'RSA-SHA256'`.
 最近のOpenSSLのリリースでは、`openssl list-public-key-algorithms`
 で利用可能な署名アルゴリズムの一覧が表示されます。例えば 'RSA-SHA256'。
 
-## Class: Signer
+## Class: Sign
 
 <!--
 Class for generating signatures.
@@ -521,21 +588,33 @@ Returned by `crypto.createSign`.
 
 `crypto.createSign` から返されます。
 
-### signer.update(data)
+<!--
+Sign objects are writable [streams](stream.html).  The written data is
+used to generate the signature.  Once all of the data has been
+written, the `sign` method will return the signature.  The legacy
+`update` method is also supported.
+-->
+
+署名オブジェクトは書き込み可能な [ストリーム](stream.html) です。
+書き込まれたデータは署名を生成するために使われます。
+全てのデータが書き込まれると、`sign()` メソッドはその署名を返します。
+レガシーな `update()` メソッドもサポートされます。
+
+### sign.update(data)
 
 <!--
-Updates the signer object with data.  This can be called many times
+Updates the sign object with data.  This can be called many times
 with new data as it is streamed.
 -->
 
 署名オブジェクトをデータで更新します。
 これは新しいデータがストリームに流される際に何度も呼び出されます。
 
-### signer.sign(private_key, [output_format])
+### sign.sign(private_key, [output_format])
 
 <!--
 Calculates the signature on all the updated data passed through the
-signer.  `private_key` is a string containing the PEM encoded private
+sign.  `private_key` is a string containing the PEM encoded private
 key for signing.
 -->
 
@@ -553,11 +632,11 @@ returned.
 エンコーディングが与えられなかった場合はバッファが返されます。
 
 <!--
-Note: `signer` object can not be used after `sign()` method been
+Note: `sign` object can not be used after `sign()` method been
 called.
 -->
 
-注意: `sign()` メソッドを呼び出した後で `signer` 
+注意: `sign()` メソッドを呼び出した後で `sign` 
 オブジェクトを使うことはできません。
 
 ## crypto.createVerify(algorithm)
@@ -580,6 +659,20 @@ Returned by `crypto.createVerify`.
 署名を検証するためのクラスです。
 
 `crypto.createVerify` から返されます。
+
+<!--
+Verify objects are writable [streams](stream.html).  The written data
+is used to validate against the supplied signature.  Once all of the
+data has been written, the `verify` method will return true if the
+supplied signature is valid.  The legacy `update` method is also
+supported.
+-->
+
+検証オブジェクトは書き込み可能な [ストリーム](stream.html) です。
+書き込まれたデータは与えられた署名を検証するために使われます。
+全てのデータが書き込まれると、`verify()` メソッドは与えられた署名が正しければ
+`true` を返します。
+レガシーな `update()` メソッドもサポートされます。
 
 ### verifier.update(data)
 
@@ -758,7 +851,7 @@ expected.
 鍵のエンコーディングは `'binary'`、`'hex'`、または `'base64'` のいずれかです。
 エンコーディングが与えられなかった場合はバッファが期待されます。
 
-### diffieHellman.setPrivateKey(public_key, [encoding])
+### diffieHellman.setPrivateKey(private_key, [encoding])
 
 <!--
 Sets the Diffie-Hellman private key. Key encoding can be `'binary'`,
@@ -950,14 +1043,6 @@ temporary measure.
 `crypto.DEFAULT_ENCODING` フィールドに `binary` を設定します。
 新しいプログラムはおそらくバッファを期待することに注意してください。
 これは一時的な手段としてのみ使用してください。
-
-<!--
-Also, a Streaming API will be provided, but this will be done in such
-a way as to preserve the legacy API surface.
--->
-
-同時に、ストリーミング API も提供されますが、それはレガシーな API
-を維持する方法でなされます。
 
 
 [createCipher()]: #crypto_crypto_createcipher_algorithm_password

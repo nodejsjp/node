@@ -94,8 +94,8 @@ In busy processes, the programmer is _strongly encouraged_ to use the
 asynchronous versions of these calls. The synchronous versions will block
 the entire process until they complete--halting all connections.
 
-Relative path to filename can be used, remember however that this path will be relative
-to `process.cwd()`.
+Relative path to filename can be used, remember however that this path will be
+relative to `process.cwd()`.
 -->
 
 忙しいプロセスでは、プログラマはこれらの非同期バージョンを使うことが*強く推奨*されます。
@@ -103,6 +103,36 @@ to `process.cwd()`.
 
 ファイル名には相対パスを使うことが出来ます。しかし、このパスは
 `process.cwd()` からの相対パスであることを思い出してください。
+
+<!--
+Most fs functions let you omit the callback argument. If you do, a default
+callback is used that rethrows errors. To get a trace to the original call
+site, set the NODE_DEBUG environment variable:
+-->
+
+fs モジュールのほとんどの関数はコールバック引数を省略することができます。
+そうすると、エラーを再スローするコールバックがデフォルトとして使用されます。
+本来の呼び出し元のトレースを取得するには、`NODE_DEBUG`
+環境変数を設定してください:
+
+    $ cat script.js
+    function bad() {
+      require('fs').readFile('/');
+    }
+    bad();
+
+    $ env NODE_DEBUG=fs node script.js
+    fs.js:66
+            throw err;
+                  ^
+    Error: EISDIR, read
+        at rethrow (fs.js:61:21)
+        at maybeCallback (fs.js:79:42)
+        at Object.fs.readFile (fs.js:153:18)
+        at bad (/path/to/script.js:2:17)
+        at Object.<anonymous> (/path/to/script.js:5:1)
+        <etc.>
+
 
 ## fs.rename(oldPath, newPath, [callback])
 
@@ -1184,7 +1214,8 @@ Returns a new ReadStream object (See `Readable Stream`).
       encoding: null,
       fd: null,
       mode: 0666,
-      bufferSize: 64 * 1024
+      bufferSize: 64 * 1024,
+      autoClose: true
     }
 
 <!--
@@ -1197,6 +1228,20 @@ start at 0. The `encoding` can be `'utf8'`, `'ascii'`, or `'base64'`.
 `options` に `start` および `end` を含めることができます。
 `start` と `end` はどちらも包含的で0から始まります。
 `encoding` は `'utf8'`、`'ascii'`、または `'base64'` です。
+
+<!--
+If `autoClose` is false, then the file descriptor won't be closed, even if
+there's an error.  It is your responsiblity to close it and make sure
+there's no file descriptor leak.  If `autoClose` is set to true (default
+behavior), on `error` or `end` the file descriptor will be closed
+automatically.
+-->
+
+`autoClose` が `false` の場合、エラーが発生しない限りファイル記述子は
+クローズされません。ファイルをクローズし、ファイル記述子が
+リークしないようにするのはあなたの責務です。
+`autoClose` が `true` に設定されると (デフォルトの振る舞いです)、
+`error` または `end` によってファイル記述子は自動的にクローズされます。
 
 <!--
 An example to read the last 10 bytes of a file which is 100 bytes long:

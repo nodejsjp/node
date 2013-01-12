@@ -21,6 +21,15 @@ Returns the operating system's default directory for temp files.
 
 一時ファイルのためのデフォルトディレクトリを返します。
 
+## os.endianness()
+
+<!--
+Returns the endianness of the CPU. Possible values are `"BE"` or `"LE"`.
+-->
+
+CPU のエンディアン (バイトオーダー) を返します。
+あり得る値は `"BE"` または `"LE"` です。
+
 ## os.hostname()
 
 <!--

@@ -456,6 +456,88 @@ blocks while resolving it to a numerical ID.
     }
 
 
+## process.getgroups()
+
+<!--
+Note: this function is only available on POSIX platforms (i.e. not Windows)
+-->
+
+注意: この関数は POSIC プラットフォーム (つまり Windows 以外)
+でのみ利用可能です。
+
+<!--
+Returns an array with the supplementary group IDs. POSIX leaves it unspecified
+if the effective group ID is included but node.js ensures it always is.
+-->
+
+補助グループ ID の配列を返します。
+POSIX は実効グループ ID が含まれることを明示していませんが、
+Node.js では常にそれが含まれることを保証します。
+
+
+## process.setgroups(groups)
+
+<!--
+Note: this function is only available on POSIX platforms (i.e. not Windows)
+-->
+
+注意: この関数は POSIC プラットフォーム (つまり Windows 以外)
+でのみ利用可能です。
+
+<!--
+Sets the supplementary group IDs. This is a privileged operation, meaning you
+need to be root or have the CAP_SETGID capability.
+-->
+
+補助グループ ID を設定します。
+これは特権オペレーションであり、ルートであるか、または CAP_SETGID ケーパビリティを持つ必要があります。
+
+<!--
+The list can contain group IDs, group names or both.
+-->
+
+リストはグループ ID、グループ名、または両方を含むことができます。
+
+
+## process.initgroups(user, extra_group)
+
+<!--
+Note: this function is only available on POSIX platforms (i.e. not Windows)
+-->
+
+注意: この関数は POSIC プラットフォーム (つまり Windows 以外)
+でのみ利用可能です。
+
+<!--
+Reads /etc/group and initializes the group access list, using all groups of
+which the user is a member. This is a privileged operation, meaning you need
+to be root or have the CAP_SETGID capability.
+-->
+
+`/etc/group` を読み込んでグループアクセスリストを初期化し、
+user がメンバーである全てのグループを使用します。
+これは特権オペレーションであり、ルートであるか、または CAP_SETGID ケーパビリティを持つ必要があります。
+
+<!--
+`user` is a user name or user ID. `extra_group` is a group name or group ID.
+-->
+
+`user` はユーザ名またはユーザ ID、
+`extra_group` はグループ名またはグループ ID です。
+
+<!--
+Some care needs to be taken when dropping privileges. Example:
+-->
+
+特権を落とす際は、いくつか注意すべき事があります。例:
+
+    console.log(process.getgroups());         // [ 0 ]
+    process.initgroups('bnoordhuis', 1000);   // switch user
+    console.log(process.getgroups());         // [ 27, 30, 46, 1000, 0 ]
+    process.setgid(1000);                     // drop root gid
+    console.log(process.getgroups());         // [ 27, 30, 46, 1000 ]
+
+
 ## process.version
 
 <!--
@@ -515,6 +597,9 @@ JavaScript で表現したオブジェクトを保持します。
        { host_arch: 'x64',
          node_install_npm: 'true',
          node_prefix: '',
+         node_shared_cares: 'false',
+         node_shared_http_parser: 'false',
+         node_shared_libuv: 'false',
          node_shared_v8: 'false',
          node_shared_zlib: 'false',
          node_use_dtrace: 'false',

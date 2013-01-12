@@ -455,6 +455,8 @@ there is no IPC channel keeping it alive. When calling this method the
     for stdio.  (See below)
   * `env` {Object} Environment key-value pairs
   * `detached` {Boolean} The child will be a process group leader.  (See below)
+  * `uid` {Number} Sets the user identity of the process. (See setuid(2).)
+  * `gid` {Number} Sets the group identity of the process. (See setgid(2).)
 * return: {ChildProcess object}
 -->
 
@@ -468,6 +470,10 @@ there is no IPC channel keeping it alive. When calling this method the
   * `env` {Object} 環境変数として与えるキー・値のペア
   * `detached` {Boolean} 子プロセスがプロセスグループのリーダになるかどうか
     (後述)。
+  * `uid` {Number} このプロセスのユーザ識別子を設定します
+     (setuid(2) を参照)。
+  * `gid` {Number} このプロセスのグループ識別子を設定します
+    (setgid(2) を参照)。
 * return: {ChildProcess object}
 
 <!--
