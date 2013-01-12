@@ -21,6 +21,15 @@ Returns the operating system's default directory for temp files.
 
 一時ファイルのためのデフォルトディレクトリを返します。
 
+## os.endianness()
+
+<!--
+Returns the endianness of the CPU. Possible values are `"BE"` or `"LE"`.
+-->
+
+CPU のエンディアン (バイトオーダー) を返します。
+あり得る値は `"BE"` または `"LE"` です。
+
 ## os.hostname()
 
 <!--
@@ -96,11 +105,13 @@ Returns the amount of free system memory in bytes.
 ## os.cpus()
 
 <!--
-Returns an array of objects containing information about each CPU/core installed: model, speed (in MHz), and times (an object containing the number of CPU ticks spent in: user, nice, sys, idle, and irq).
+Returns an array of objects containing information about each CPU/core
+installed: model, speed (in MHz), and times (an object containing the number of
+milliseconds the CPU/core spent in: user, nice, sys, idle, and irq).
 -->
 
 インストールされている CPU/ コアごとの情報を含んだオブジェクトの配列を返します。
-情報はモデル、スピード (MHz)、そして時間 (CPU が使用した user, nice, sys, idle, irq 時間を含んだオブジェクト) です。
+情報はモデル、スピード (MHz)、そして時間 (CPU/コア が使用した user, nice, sys, idle, irq のミリ秒を含んだオブジェクト) です。
 
 <!--
 Example inspection of os.cpus:

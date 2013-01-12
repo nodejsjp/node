@@ -9,11 +9,9 @@
         ],
         'conditions': [
           ['OS=="solaris"', {
-            'cflags': ['-pthreads'],
-            'ldlags': ['-pthreads'],
+            'cflags': [ '-pthreads' ],
           }, {
-            'cflags': ['-pthread'],
-            'ldlags': ['-pthread'],
+            'cflags': [ '-pthread' ],
           }],
         ],
       }],
@@ -32,12 +30,24 @@
       'direct_dependent_settings': {
         'include_dirs': [ 'include' ],
         'conditions': [
-          ['OS=="linux"', {
-            'libraries': [ '-ldl' ],
+          ['OS != "win"', {
+            'defines': [
+              '_LARGEFILE_SOURCE',
+              '_FILE_OFFSET_BITS=64',
+              '_POSIX_C_SOURCE=200112',
+            ],
+          }],
+          ['OS == "mac"', {
+            'defines': [
+              '_DARWIN_USE_64_BIT_INODE=1',
+              '_DARWIN_C_SOURCE',  # _POSIX_C_SOURCE hides SysV definitions.
+            ],
           }],
         ],
       },
-
+      'defines': [
+        'HAVE_CONFIG_H'
+      ],
       'sources': [
         'common.gypi',
         'include/uv.h',
@@ -106,7 +116,6 @@
             '-Wno-unused-parameter'
           ],
           'sources': [
-            'include/uv-private/ev.h',
             'include/uv-private/uv-unix.h',
             'include/uv-private/uv-linux.h',
             'include/uv-private/uv-sunos.h',
@@ -116,10 +125,6 @@
             'src/unix/core.c',
             'src/unix/dl.c',
             'src/unix/error.c',
-            'src/unix/ev/ev.c',
-            'src/unix/ev/ev_vars.h',
-            'src/unix/ev/ev_wrap.h',
-            'src/unix/ev/event.h',
             'src/unix/fs.c',
             'src/unix/getaddrinfo.c',
             'src/unix/internal.h',
@@ -137,19 +142,31 @@
             'src/unix/tty.c',
             'src/unix/udp.c',
           ],
-          'include_dirs': [ 'src/unix/ev', ],
-          'libraries': [ '-lm' ]
+          'link_settings': {
+            'libraries': [ '-lm' ],
+            'conditions': [
+              ['OS=="solaris"', {
+                'ldflags': [ '-pthreads' ],
+              }, {
+                'ldflags': [ '-pthread' ],
+              }],
+            ],
+          },
+          'conditions': [
+            ['"<(library)" == "shared_library"', {
+              'cflags': [ '-fPIC' ],
+            }],
+          ],
         }],
         [ 'OS=="mac"', {
           'sources': [ 'src/unix/darwin.c', 'src/unix/fsevents.c' ],
-          'direct_dependent_settings': {
+          'link_settings': {
             'libraries': [
               '$(SDKROOT)/System/Library/Frameworks/CoreServices.framework',
             ],
           },
           'defines': [
             '_DARWIN_USE_64_BIT_INODE=1',
-            'EV_CONFIG_H="config_darwin.h"',
           ]
         }],
         [ 'OS=="linux"', {
@@ -159,11 +176,8 @@
             'src/unix/linux/syscalls.c',
             'src/unix/linux/syscalls.h',
           ],
-          'defines': [
-            'EV_CONFIG_H="config_linux.h"',
-          ],
-          'direct_dependent_settings': {
-            'libraries': [ '-lrt' ],
+          'link_settings': {
+            'libraries': [ '-ldl', '-lrt' ],
           },
         }],
         [ 'OS=="solaris"', {
@@ -171,9 +185,8 @@
           'defines': [
             '__EXTENSIONS__',
             '_XOPEN_SOURCE=500',
-            'EV_CONFIG_H="config_sunos.h"',
           ],
-          'direct_dependent_settings': {
+          'link_settings': {
             'libraries': [
               '-lkstat',
               '-lnsl',
@@ -188,20 +201,16 @@
           'defines': [
             '_ALL_SOURCE',
             '_XOPEN_SOURCE=500',
-            'EV_CONFIG_H="config_aix.h"',
           ],
-          'direct_dependent_settings': {
+          'link_settings': {
             'libraries': [
               '-lperfstat',
             ],
           },
         }],
-        [ 'OS=="freebsd"', {
+        [ 'OS=="freebsd" or OS=="dragonflybsd"', {
           'sources': [ 'src/unix/freebsd.c' ],
-          'defines': [
-            'EV_CONFIG_H="config_freebsd.h"',
-          ],
-          'direct_dependent_settings': {
+          'link_settings': {
             'libraries': [
               '-lkvm',
             ],
@@ -209,22 +218,16 @@
         }],
         [ 'OS=="openbsd"', {
           'sources': [ 'src/unix/openbsd.c' ],
-          'defines': [
-            'EV_CONFIG_H="config_openbsd.h"',
-          ],
         }],
         [ 'OS=="netbsd"', {
           'sources': [ 'src/unix/netbsd.c' ],
-          'defines': [
-            'EV_CONFIG_H="config_netbsd.h"',
-          ],
-          'direct_dependent_settings': {
+          'link_settings': {
             'libraries': [
               '-lkvm',
             ],
           },
         }],
-        [ 'OS=="mac" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd"', {
+        [ 'OS in "mac freebsd dragonflybsd openbsd netbsd".split()', {
           'sources': [ 'src/unix/kqueue.c' ],
         }],
         ['library=="shared_library"', {
@@ -254,6 +257,7 @@
         'test/test-cwd-and-chdir.c',
         'test/test-delayed-accept.c',
         'test/test-error.c',
+        'test/test-embed.c',
         'test/test-fail-always.c',
         'test/test-fs.c',
         'test/test-fs-event.c',
@@ -278,6 +282,7 @@
         'test/test-poll-close.c',
         'test/test-process-title.c',
         'test/test-ref.c',
+        'test/test-run-nowait.c',
         'test/test-run-once.c',
         'test/test-semaphore.c',
         'test/test-shutdown-close.c',
@@ -302,12 +307,13 @@
         'test/test-tcp-write-to-half-open-connection.c',
         'test/test-tcp-writealot.c',
         'test/test-tcp-unexpected-read.c',
+        'test/test-tcp-read-stop.c',
         'test/test-threadpool.c',
+        'test/test-threadpool-cancel.c',
         'test/test-mutexes.c',
         'test/test-thread.c',
         'test/test-barrier.c',
         'test/test-condvar.c',
-        'test/test-condvar-consumer-producer.c',
         'test/test-timer-again.c',
         'test/test-timer.c',
         'test/test-tty.c',
@@ -365,6 +371,7 @@
         'test/benchmark-getaddrinfo.c',
         'test/benchmark-list.h',
         'test/benchmark-loop-count.c',
+        'test/benchmark-million-async.c',
         'test/benchmark-million-timers.c',
         'test/benchmark-multi-accept.c',
         'test/benchmark-ping-pongs.c',

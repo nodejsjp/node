@@ -43,7 +43,7 @@
     # access is allowed for all CPUs.
     'v8_can_use_unaligned_accesses%': 'default',
 
-    # Setting 'v8_can_use_vfp_instructions' to 'true' will enable use of ARM VFP
+    # Setting 'v8_can_use_vfp2_instructions' to 'true' will enable use of ARM VFP
     # instructions in the V8 generated code. VFP instructions will be enabled
     # both for the snapshot and for the ARM target. Leaving the default value
     # of 'false' will avoid VFP instructions in the snapshot and use CPU feature
@@ -70,15 +70,14 @@
 
     'v8_enable_disassembler%': 0,
 
-    # Enable extra checks in API functions and other strategic places.
-    'v8_enable_extra_checks%': 1,
+    'v8_enable_gdbjit%': 0,
 
     'v8_object_print%': 0,
 
-    'v8_enable_gdbjit%': 0,
-
     # Enable profiling support. Only required on Windows.
     'v8_enable_prof%': 0,
+
+    'v8_enable_verify_heap%': 0,
 
     # Some versions of GCC 4.5 seem to need -fno-strict-aliasing.
     'v8_no_strict_aliasing%': 0,
@@ -112,14 +111,14 @@
       ['v8_enable_disassembler==1', {
         'defines': ['ENABLE_DISASSEMBLER',],
       }],
-      ['v8_enable_extra_checks==1', {
-        'defines': ['ENABLE_EXTRA_CHECKS',],
+      ['v8_enable_gdbjit==1', {
+        'defines': ['ENABLE_GDB_JIT_INTERFACE',],
       }],
       ['v8_object_print==1', {
         'defines': ['OBJECT_PRINT',],
       }],
-      ['v8_enable_gdbjit==1', {
-        'defines': ['ENABLE_GDB_JIT_INTERFACE',],
+      ['v8_enable_verify_heap==1', {
+        'defines': ['VERIFY_HEAP',],
       }],
       ['v8_interpreted_regexp==1', {
         'defines': ['V8_INTERPRETED_REGEXP',],
@@ -129,6 +128,11 @@
           'V8_TARGET_ARCH_ARM',
         ],
         'conditions': [
+          ['armv7==1', {
+            'defines': [
+              'CAN_USE_ARMV7_INSTRUCTIONS=1',
+            ],
+          }],
           [ 'v8_can_use_unaligned_accesses=="true"', {
             'defines': [
               'CAN_USE_UNALIGNED_ACCESSES=1',
@@ -139,12 +143,16 @@
               'CAN_USE_UNALIGNED_ACCESSES=0',
             ],
           }],
-          [ 'v8_can_use_vfp2_instructions=="true"', {
+          # NEON implies VFP3 and VFP3 implies VFP2.
+          [ 'v8_can_use_vfp2_instructions=="true" or arm_neon==1 or \
+             arm_fpu=="vfpv3" or arm_fpu=="vfpv3-d16"', {
             'defines': [
               'CAN_USE_VFP2_INSTRUCTIONS',
             ],
           }],
-          [ 'v8_can_use_vfp3_instructions=="true"', {
+          # NEON implies VFP3.
+          [ 'v8_can_use_vfp3_instructions=="true" or arm_neon==1 or \
+             arm_fpu=="vfpv3" or arm_fpu=="vfpv3-d16"', {
             'defines': [
               'CAN_USE_VFP3_INSTRUCTIONS',
             ],
@@ -152,7 +160,7 @@
           [ 'v8_use_arm_eabi_hardfloat=="true"', {
             'defines': [
               'USE_EABI_HARDFLOAT=1',
-              'CAN_USE_VFP3_INSTRUCTIONS',
+              'CAN_USE_VFP2_INSTRUCTIONS',
             ],
             'target_conditions': [
               ['_toolset=="target"', {
@@ -195,10 +203,11 @@
                   ['mips_arch_variant=="mips32r2"', {
                     'cflags': ['-mips32r2', '-Wa,-mips32r2'],
                   }],
+                  ['mips_arch_variant=="mips32r1"', {
+                    'cflags': ['-mips32', '-Wa,-mips32'],
+                 }],
                   ['mips_arch_variant=="loongson"', {
                     'cflags': ['-mips3', '-Wa,-mips3'],
-                  }, {
-                    'cflags': ['-mips32', '-Wa,-mips32'],
                   }],
                 ],
               }],
@@ -302,9 +311,14 @@
           ['_toolset=="target"', {
             'variables': {
               'm32flag': '<!((echo | $(echo ${CXX_target:-${CXX:-$(which g++)}}) -m32 -E - > /dev/null 2>&1) && echo "-m32" || true)',
+              'clang%': 0,
             },
-            'cflags': [ '<(m32flag)' ],
-            'ldflags': [ '<(m32flag)' ],
+            'conditions': [
+              ['OS!="android" or clang==1', {
+                'cflags': [ '<(m32flag)' ],
+                'ldflags': [ '<(m32flag)' ],
+              }],
+            ],
             'xcode_settings': {
               'ARCHS': [ 'i386' ],
             },
@@ -320,11 +334,15 @@
     ],  # conditions
     'configurations': {
       'Debug': {
+        'variables': {
+          'v8_enable_extra_checks%': 1,
+        },
         'defines': [
           'DEBUG',
           'ENABLE_DISASSEMBLER',
           'V8_ENABLE_CHECKS',
           'OBJECT_PRINT',
+          'VERIFY_HEAP',
         ],
         'msvs_settings': {
           'VCCLCompilerTool': {
@@ -343,6 +361,9 @@
           },
         },
         'conditions': [
+          ['v8_enable_extra_checks==1', {
+            'defines': ['ENABLE_EXTRA_CHECKS',],
+          }],
           ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd"', {
             'cflags': [ '-Wall', '<(werror)', '-W', '-Wno-unused-parameter',
                         '-Wnon-virtual-dtor', '-Woverloaded-virtual' ],
@@ -361,21 +382,23 @@
               }],
             ],
           }],
+          ['OS=="mac"', {
+            'xcode_settings': {
+              'GCC_OPTIMIZATION_LEVEL': '0',  # -O0
+            },
+          }],
         ],
       },  # Debug
       'Release': {
+        'variables': {
+          'v8_enable_extra_checks%': 0,
+        },
         'conditions': [
+          ['v8_enable_extra_checks==1', {
+            'defines': ['ENABLE_EXTRA_CHECKS',],
+          }],
           ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd" \
             or OS=="android"', {
-            'cflags!': [
-              '-O2',
-              '-Os',
-            ],
-            'cflags': [
-              '-fdata-sections',
-              '-ffunction-sections',
-              '-O3',
-            ],
             'conditions': [
               [ 'gcc_version==44 and clang==0', {
                 'cflags': [
