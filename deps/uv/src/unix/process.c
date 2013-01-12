@@ -33,10 +33,6 @@
 #include <fcntl.h>
 #include <poll.h>
 
-#ifdef __APPLE__
-# include <TargetConditionals.h>
-#endif
-
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
 # include <crt_externs.h>
 # define environ (*_NSGetEnviron())
@@ -116,7 +112,7 @@ static void uv__chld(uv_signal_t* handle, int signum) {
 
 
 int uv__make_socketpair(int fds[2], int flags) {
-#if __linux__
+#if defined(__linux__)
   static int no_cloexec;
 
   if (no_cloexec)
@@ -152,7 +148,7 @@ skip:
 
 
 int uv__make_pipe(int fds[2], int flags) {
-#if __linux__
+#if defined(__linux__)
   static int no_pipe2;
 
   if (no_pipe2)
@@ -189,77 +185,69 @@ skip:
  * zero on success.
  */
 static int uv__process_init_stdio(uv_stdio_container_t* container, int fds[2]) {
-  int fd = -1;
-  switch (container->flags & (UV_IGNORE | UV_CREATE_PIPE | UV_INHERIT_FD |
-                              UV_INHERIT_STREAM)) {
-    case UV_IGNORE:
-      return 0;
-    case UV_CREATE_PIPE:
-      assert(container->data.stream != NULL);
+  int mask;
+  int fd;
 
-      if (container->data.stream->type != UV_NAMED_PIPE) {
-        errno = EINVAL;
-        return -1;
-      }
+  mask = UV_IGNORE | UV_CREATE_PIPE | UV_INHERIT_FD | UV_INHERIT_STREAM;
 
-      return uv__make_socketpair(fds, 0);
-    case UV_INHERIT_FD:
-    case UV_INHERIT_STREAM:
-      if (container->flags & UV_INHERIT_FD) {
-        fd = container->data.fd;
-      } else {
-        fd = container->data.stream->fd;
-      }
+  switch (container->flags & mask) {
+  case UV_IGNORE:
+    return 0;
 
-      if (fd == -1) {
-        errno = EINVAL;
-        return -1;
-      }
-
-      fds[1] = fd;
-
-      return 0;
-    default:
-      assert(0 && "Unexpected flags");
+  case UV_CREATE_PIPE:
+    assert(container->data.stream != NULL);
+    if (container->data.stream->type != UV_NAMED_PIPE) {
+      errno = EINVAL;
       return -1;
-  }
-}
+    }
+    return uv__make_socketpair(fds, 0);
 
+  case UV_INHERIT_FD:
+  case UV_INHERIT_STREAM:
+    if (container->flags & UV_INHERIT_FD)
+      fd = container->data.fd;
+    else
+      fd = uv__stream_fd(container->data.stream);
 
-static int uv__process_stdio_flags(uv_stdio_container_t* container,
-                                   int writable) {
-  if (container->data.stream->type == UV_NAMED_PIPE &&
-      ((uv_pipe_t*)container->data.stream)->ipc) {
-    return UV_STREAM_READABLE | UV_STREAM_WRITABLE;
-  } else if (writable) {
-    return UV_STREAM_WRITABLE;
-  } else {
-    return UV_STREAM_READABLE;
+    if (fd == -1) {
+      errno = EINVAL;
+      return -1;
+    }
+
+    fds[1] = fd;
+    return 0;
+
+  default:
+    assert(0 && "Unexpected flags");
+    return -1;
   }
 }
 
 
 static int uv__process_open_stream(uv_stdio_container_t* container,
-                                   int fds[2],
+                                   int pipefds[2],
                                    int writable) {
-  int child_fd;
   int flags;
-  int fd;
 
-  fd = fds[0];
-  child_fd = fds[1];
-
-  /* No need to create stream */
-  if (!(container->flags & UV_CREATE_PIPE) || fd < 0)
+  if (!(container->flags & UV_CREATE_PIPE) || pipefds[0] < 0)
     return 0;
 
-  assert(child_fd >= 0);
-  close(child_fd);
+  if (close(pipefds[1]))
+    if (errno != EINTR && errno != EINPROGRESS)
+      abort();
 
-  uv__nonblock(fd, 1);
-  flags = uv__process_stdio_flags(container, writable);
+  pipefds[1] = -1;
+  uv__nonblock(pipefds[0], 1);
 
-  return uv__stream_open((uv_stream_t*)container->data.stream, fd, flags);
+  if (container->data.stream->type == UV_NAMED_PIPE &&
+      ((uv_pipe_t*)container->data.stream)->ipc)
+    flags = UV_STREAM_READABLE | UV_STREAM_WRITABLE;
+  else if (writable)
+    flags = UV_STREAM_WRITABLE;
+  else
+    flags = UV_STREAM_READABLE;
+
+  return uv__stream_open(container->data.stream, pipefds[0], flags);
 }
 
 
@@ -289,24 +277,24 @@ static void uv__process_child_init(uv_process_options_t options,
                                    int error_fd) {
   int close_fd;
   int use_fd;
-  int i;
+  int fd;
 
   if (options.flags & UV_PROCESS_DETACHED)
     setsid();
 
-  for (i = 0; i < stdio_count; i++) {
-    close_fd = pipes[i][0];
-    use_fd = pipes[i][1];
+  for (fd = 0; fd < stdio_count; fd++) {
+    close_fd = pipes[fd][0];
+    use_fd = pipes[fd][1];
 
     if (use_fd >= 0)
       close(close_fd);
-    else if (i >= 3)
+    else if (fd >= 3)
       continue;
     else {
       /* redirect stdin, stdout and stderr to /dev/null even if UV_IGNORE is
        * set
        */
-      use_fd = open("/dev/null", i == 0 ? O_RDONLY : O_RDWR);
+      use_fd = open("/dev/null", fd == 0 ? O_RDONLY : O_RDWR);
 
       if (use_fd == -1) {
         uv__write_int(error_fd, errno);
@@ -315,12 +303,15 @@ static void uv__process_child_init(uv_process_options_t options,
       }
     }
 
-    if (i == use_fd)
+    if (fd == use_fd)
       uv__cloexec(use_fd, 0);
     else {
-      dup2(use_fd, i);
+      dup2(use_fd, fd);
       close(use_fd);
     }
+
+    if (fd <= 2)
+      uv__nonblock(fd, 0);
   }
 
   if (options.cwd && chdir(options.cwd)) {
@@ -341,7 +332,9 @@ static void uv__process_child_init(uv_process_options_t options,
     _exit(127);
   }
 
-  environ = options.env;
+  if (options.env) {
+    environ = options.env;
+  }
 
   execvp(options.file, options.args);
   uv__write_int(error_fd, errno);
@@ -362,10 +355,11 @@ int uv_spawn(uv_loop_t* loop,
   int i;
 
   assert(options.file != NULL);
-  assert(!(options.flags & ~(UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS |
-                             UV_PROCESS_DETACHED |
+  assert(!(options.flags & ~(UV_PROCESS_DETACHED |
                              UV_PROCESS_SETGID |
-                             UV_PROCESS_SETUID)));
+                             UV_PROCESS_SETUID |
+                             UV_PROCESS_WINDOWS_HIDE |
+                             UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS)));
 
   uv__handle_init(loop, (uv_handle_t*)process, UV_PROCESS);
   ngx_queue_init(&process->queue);
@@ -388,14 +382,6 @@ int uv_spawn(uv_loop_t* loop,
   for (i = 0; i < options.stdio_count; i++)
     if (uv__process_init_stdio(options.stdio + i, pipes[i]))
       goto error;
-
-  /* swap stdin file descriptors, it's the only writable stream */
-  {
-    int* p = pipes[0];
-    int t = p[0];
-    p[0] = p[1];
-    p[1] = t;
-  }
 
   /* This pipe is used by the parent to wait until
    * the child has called `execve()`. We need this

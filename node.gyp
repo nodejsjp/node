@@ -6,9 +6,15 @@
     'werror': '',
     'node_use_dtrace%': 'false',
     'node_use_etw%': 'false',
+    'node_use_perfctr%': 'false',
+    'node_has_winsdk%': 'false',
     'node_shared_v8%': 'false',
     'node_shared_zlib%': 'false',
+    'node_shared_http_parser%': 'false',
+    'node_shared_cares%': 'false',
+    'node_shared_libuv%': 'false',
     'node_use_openssl%': 'true',
+    'node_use_systemtap%': 'false',
     'node_shared_openssl%': 'false',
     'library_files': [
       'src/node.js',
@@ -39,6 +45,11 @@
       'lib/readline.js',
       'lib/repl.js',
       'lib/stream.js',
+      'lib/_stream_readable.js',
+      'lib/_stream_writable.js',
+      'lib/_stream_duplex.js',
+      'lib/_stream_transform.js',
+      'lib/_stream_passthrough.js',
       'lib/string_decoder.js',
       'lib/sys.js',
       'lib/timers.js',
@@ -57,14 +68,12 @@
       'type': 'executable',
 
       'dependencies': [
-        'deps/cares/cares.gyp:cares',
-        'deps/http_parser/http_parser.gyp:http_parser',
-        'deps/uv/uv.gyp:libuv',
         'node_js2c#host',
       ],
 
       'include_dirs': [
         'src',
+        'tools/msvs/genfiles',
         'deps/uv/src/ares',
         '<(SHARED_INTERMEDIATE_DIR)' # for node_natives.h
       ],
@@ -133,6 +142,7 @@
         'NODE_WANT_INTERNALS=1',
         'ARCH="<(target_arch)"',
         'PLATFORM="<(OS)"',
+        'NODE_TAG="<(node_tag)"',
       ],
 
       'conditions': [
@@ -146,7 +156,6 @@
         }, {
           'defines': [ 'HAVE_OPENSSL=0' ]
         }],
-
         [ 'node_use_dtrace=="true"', {
           'defines': [ 'HAVE_DTRACE=1' ],
           'dependencies': [ 'node_dtrace_header' ],
@@ -160,13 +169,18 @@
           #
           'sources': [
             'src/node_dtrace.cc',
-            'src/node_dtrace_provider.cc'
+            'src/node_dtrace_provider.cc',
+            'src/node_dtrace_ustack.cc',
           ],
-          'conditions': [ [
-            'target_arch=="ia32"', {
-              'sources': [ 'src/node_dtrace_ustack.cc' ]
-            }
-          ] ],
+        } ],
+        [ 'node_use_systemtap=="true"', {
+          'defines': [ 'HAVE_SYSTEMTAP=1', 'STAP_SDT_V1=1' ],
+          'dependencies': [ 'node_systemtap_header' ],
+          'include_dirs': [ '<(SHARED_INTERMEDIATE_DIR)' ],
+          'sources': [
+            'src/node_dtrace.cc',
+            '<(SHARED_INTERMEDIATE_DIR)/node_systemtap.h',
+          ],
         } ],
         [ 'node_use_etw=="true"', {
           'defines': [ 'HAVE_ETW=1' ],
@@ -176,8 +190,19 @@
             'src/node_win32_etw_provider-inl.h',
             'src/node_win32_etw_provider.cc',
             'src/node_dtrace.cc',
-            '<(SHARED_INTERMEDIATE_DIR)/node_etw_provider.h',
-            '<(SHARED_INTERMEDIATE_DIR)/node_etw_provider.rc',
+            'tools/msvs/genfiles/node_etw_provider.h',
+            'tools/msvs/genfiles/node_etw_provider.rc',
+          ]
+        } ],
+        [ 'node_use_perfctr=="true"', {
+          'defines': [ 'HAVE_PERFCTR=1' ],
+          'dependencies': [ 'node_perfctr' ],
+          'sources': [
+            'src/node_win32_perfctr_provider.h',
+            'src/node_win32_perfctr_provider.cc',
+            'src/node_counters.cc',
+            'src/node_counters.h',
+            'tools/msvs/genfiles/node_perfctr_provider.rc',
           ]
         } ],
         [ 'node_shared_v8=="false"', {
@@ -190,6 +215,18 @@
 
         [ 'node_shared_zlib=="false"', {
           'dependencies': [ 'deps/zlib/zlib.gyp:zlib' ],
+        }],
+
+        [ 'node_shared_http_parser=="false"', {
+          'dependencies': [ 'deps/http_parser/http_parser.gyp:http_parser' ],
+        }],
+
+        [ 'node_shared_cares=="false"', {
+          'dependencies': [ 'deps/cares/cares.gyp:cares' ],
+        }],
+
+        [ 'node_shared_libuv=="false"', {
+          'dependencies': [ 'deps/uv/uv.gyp:libuv' ],
         }],
 
         [ 'OS=="win"', {
@@ -248,15 +285,43 @@
       'target_name': 'node_etw',
       'type': 'none',
       'conditions': [
-        [ 'node_use_etw=="true"', {
+        [ 'node_use_etw=="true" and node_has_winsdk=="true"', {
           'actions': [
             {
               'action_name': 'node_etw',
               'inputs': [ 'src/res/node_etw_provider.man' ],
-              'outputs': [ '<(SHARED_INTERMEDIATE_DIR)' ],
-              'action': [ 'mc <@(_inputs) -h <@(_outputs) -r <@(_outputs)' ]
+              'outputs': [
+                'tools/msvs/genfiles/node_etw_provider.rc',
+                'tools/msvs/genfiles/node_etw_provider.h',
+                'tools/msvs/genfiles/node_etw_providerTEMP.BIN',
+              ],
+              'action': [ 'mc <@(_inputs) -h tools/msvs/genfiles -r tools/msvs/genfiles' ]
             }
           ]
+        } ]
+      ]
+    },
+    # generate perf counter header and resource files
+    {
+      'target_name': 'node_perfctr',
+      'type': 'none',
+      'conditions': [
+        [ 'node_use_perfctr=="true" and node_has_winsdk=="true"', {
+          'actions': [
+            {
+              'action_name': 'node_perfctr_man',
+              'inputs': [ 'src/res/node_perfctr_provider.man' ],
+              'outputs': [
+                'tools/msvs/genfiles/node_perfctr_provider.h',
+                'tools/msvs/genfiles/node_perfctr_provider.rc',
+                'tools/msvs/genfiles/MSG00001.BIN',
+              ],
+              'action': [ 'ctrpp <@(_inputs) '
+                          '-o tools/msvs/genfiles/node_perfctr_provider.h '
+                          '-rc tools/msvs/genfiles/node_perfctr_provider.rc'
+              ]
+            },
+          ],
         } ]
       ]
     },
@@ -267,38 +332,31 @@
       'actions': [
         {
           'action_name': 'node_js2c',
-
           'inputs': [
             '<@(library_files)',
             './config.gypi',
           ],
-
           'outputs': [
             '<(SHARED_INTERMEDIATE_DIR)/node_natives.h',
           ],
-
-          # FIXME can the following conditions be shorted by just setting
-          # macros.py into some variable which then gets included in the
-          # action?
-
           'conditions': [
-            [ 'node_use_dtrace=="true" or node_use_etw=="true"', {
-              'action': [
-                'python',
-                'tools/js2c.py',
-                '<@(_outputs)',
-                '<@(_inputs)',
+            [ 'node_use_dtrace=="false"'
+              ' and node_use_etw=="false"'
+              ' and node_use_systemtap=="false"',
+            {
+                'inputs': ['src/macros.py']
+              }
               ],
-            }, { # No Dtrace
-              'action': [
-                'python',
-                'tools/js2c.py',
-                '<@(_outputs)',
-                '<@(_inputs)',
-                'src/macros.py'
-              ],
+            [ 'node_use_perfctr=="false"', {
+              'inputs': [ 'src/perfctr_macros.py' ]
             }]
           ],
+              'action': [
+                '<(python)',
+                'tools/js2c.py',
+                '<@(_outputs)',
+                '<@(_inputs)',
+              ],
         },
       ],
     }, # end node_js2c
@@ -313,6 +371,23 @@
               'inputs': [ 'src/node_provider.d' ],
               'outputs': [ '<(SHARED_INTERMEDIATE_DIR)/node_provider.h' ],
               'action': [ 'dtrace', '-h', '-xnolibs', '-s', '<@(_inputs)',
+                '-o', '<@(_outputs)' ]
+            }
+          ]
+        } ]
+      ]
+    },
+    {
+      'target_name': 'node_systemtap_header',
+      'type': 'none',
+      'conditions': [
+        [ 'node_use_systemtap=="true"', {
+          'actions': [
+            {
+              'action_name': 'node_systemtap_header',
+              'inputs': [ 'src/node_systemtap.d' ],
+              'outputs': [ '<(SHARED_INTERMEDIATE_DIR)/node_systemtap.h' ],
+              'action': [ 'dtrace', '-h', '-C', '-s', '<@(_inputs)',
                 '-o', '<@(_outputs)' ]
             }
           ]
@@ -345,7 +420,7 @@
       'target_name': 'node_dtrace_ustack',
       'type': 'none',
       'conditions': [
-        [ 'node_use_dtrace=="true" and target_arch=="ia32"', {
+        [ 'node_use_dtrace=="true"', {
           'actions': [
             {
               'action_name': 'node_dtrace_ustack_constants',
@@ -370,9 +445,19 @@
               'outputs': [
                 '<(PRODUCT_DIR)/obj.target/node/src/node_dtrace_ustack.o'
               ],
-              'action': [
-                'dtrace', '-32', '-I<(SHARED_INTERMEDIATE_DIR)', '-Isrc',
-                '-C', '-G', '-s', 'src/v8ustack.d', '-o', '<@(_outputs)',
+              'conditions': [
+                [ 'target_arch=="ia32"', {
+                  'action': [
+                    'dtrace', '-32', '-I<(SHARED_INTERMEDIATE_DIR)', '-Isrc',
+                    '-C', '-G', '-s', 'src/v8ustack.d', '-o', '<@(_outputs)',
+                  ]
+                } ],
+                [ 'target_arch=="x64"', {
+                  'action': [
+                    'dtrace', '-64', '-I<(SHARED_INTERMEDIATE_DIR)', '-Isrc',
+                    '-C', '-G', '-s', 'src/v8ustack.d', '-o', '<@(_outputs)',
+                  ]
+                } ],
               ]
             }
           ]
@@ -381,4 +466,3 @@
     }
   ] # end targets
 }
-

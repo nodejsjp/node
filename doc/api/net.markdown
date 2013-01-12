@@ -839,6 +839,28 @@ The numeric representation of the remote port. For example,
 リモートポートの数値表現です。
 たとえば、`80` や `21`。
 
+### socket.localAddress
+
+<!--
+The string representation of the local IP address the remote client is
+connecting on. For example, if you are listening on `'0.0.0.0'` and the
+client connects on `'192.168.1.1'`, the value would be `'192.168.1.1'`.
+-->
+
+リモートクライアントが接続しているローカル IP アドレスを表現する文字列です。
+たとえば、 `'0.0.0.0'` をリッスンしていて、クライアントが `'192.168.1.1'`
+に接続した場合、この値は `'192.168.1.1'` になります。
+
+### socket.localPort
+
+<!--
+The numeric representation of the local port. For example,
+`80` or `21`.
+-->
+
+ローカルポートの数値表現です。
+たとえば、`80` や `21`。
+
 ### socket.bytesRead
 
 <!--

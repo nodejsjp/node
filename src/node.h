@@ -103,7 +103,7 @@ void EmitExit(v8::Handle<v8::Object> process);
 
 #define NODE_DEFINE_CONSTANT(target, constant)                            \
   (target)->Set(v8::String::NewSymbol(#constant),                         \
-                v8::Integer::New(constant),                               \
+                v8::Number::New(constant),                                \
                 static_cast<v8::PropertyAttribute>(                       \
                     v8::ReadOnly|v8::DontDelete))
 
@@ -265,10 +265,5 @@ MakeCallback(const v8::Handle<v8::Object> object,
              v8::Handle<v8::Value> argv[]);
 
 }  // namespace node
-
-#if !defined(NODE_WANT_INTERNALS) && !defined(_WIN32)
-# include "ev-emul.h"
-# include "eio-emul.h"
-#endif
 
 #endif  // SRC_NODE_H_

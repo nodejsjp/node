@@ -27,6 +27,7 @@
 #include "pipe_wrap.h"
 #include "tcp_wrap.h"
 #include "req_wrap.h"
+#include "node_counters.h"
 
 #include <stdlib.h> // abort()
 #include <limits.h> // INT_MAX
@@ -123,7 +124,8 @@ void StreamWrap::SetHandle(uv_handle_t* h) {
 
 void StreamWrap::UpdateWriteQueueSize() {
   HandleScope scope;
-  object_->Set(write_queue_size_sym, Integer::New(stream_->write_queue_size));
+  object_->Set(write_queue_size_sym,
+               Integer::New(stream_->write_queue_size, node_isolate));
 }
 
 
@@ -144,7 +146,7 @@ Handle<Value> StreamWrap::ReadStart(const Arguments& args) {
   // Error starting the tcp.
   if (r) SetErrno(uv_last_error(uv_default_loop()));
 
-  return scope.Close(Integer::New(r));
+  return scope.Close(Integer::New(r, node_isolate));
 }
 
 
@@ -158,7 +160,7 @@ Handle<Value> StreamWrap::ReadStop(const Arguments& args) {
   // Error starting the tcp.
   if (r) SetErrno(uv_last_error(uv_default_loop()));
 
-  return scope.Close(Integer::New(r));
+  return scope.Close(Integer::New(r, node_isolate));
 }
 
 
@@ -203,8 +205,8 @@ void StreamWrap::OnReadCommon(uv_stream_t* handle, ssize_t nread,
   int argc = 3;
   Local<Value> argv[4] = {
     slab,
-    Integer::NewFromUnsigned(buf.base - Buffer::Data(slab)),
-    Integer::NewFromUnsigned(nread)
+    Integer::NewFromUnsigned(buf.base - Buffer::Data(slab), node_isolate),
+    Integer::NewFromUnsigned(nread, node_isolate)
   };
 
   Local<Object> pending_obj;
@@ -219,11 +221,17 @@ void StreamWrap::OnReadCommon(uv_stream_t* handle, ssize_t nread,
 
   if (!pending_obj.IsEmpty()) {
     assert(pending_obj->InternalFieldCount() > 0);
-    StreamWrap* pending_wrap =
-      static_cast<StreamWrap*>(pending_obj->GetPointerFromInternalField(0));
+    StreamWrap* pending_wrap = static_cast<StreamWrap*>(
+        pending_obj->GetAlignedPointerFromInternalField(0));
     if (uv_accept(handle, pending_wrap->GetStream())) abort();
     argv[3] = pending_obj;
     argc++;
+  }
+
+  if (wrap->stream_->type == UV_TCP) {
+    NODE_COUNT_NET_BYTES_RECV(nread);
+  } else if (wrap->stream_->type == UV_NAMED_PIPE) {
+    NODE_COUNT_PIPE_BYTES_RECV(nread);
   }
 
   MakeCallback(wrap->object_, onread_sym, argc, argv);
@@ -256,7 +264,7 @@ Handle<Value> StreamWrap::WriteBuffer(const Arguments& args) {
     uv_err_t err;
     err.code = UV_ENOBUFS;
     SetErrno(err);
-    return scope.Close(v8::Null());
+    return scope.Close(v8::Null(node_isolate));
   }
 
   char* storage = new char[sizeof(WriteWrap)];
@@ -283,8 +291,14 @@ Handle<Value> StreamWrap::WriteBuffer(const Arguments& args) {
     SetErrno(uv_last_error(uv_default_loop()));
     req_wrap->~WriteWrap();
     delete[] storage;
-    return scope.Close(v8::Null());
+    return scope.Close(v8::Null(node_isolate));
   } else {
+    if (wrap->stream_->type == UV_TCP) {
+      NODE_COUNT_NET_BYTES_SENT(length);
+    } else if (wrap->stream_->type == UV_NAMED_PIPE) {
+      NODE_COUNT_PIPE_BYTES_SENT(length);
+    }
+
     return scope.Close(req_wrap->object_);
   }
 }
@@ -340,7 +354,7 @@ Handle<Value> StreamWrap::WriteStringImpl(const Arguments& args) {
     uv_err_t err;
     err.code = UV_ENOBUFS;
     SetErrno(err);
-    return scope.Close(v8::Null());
+    return scope.Close(v8::Null(node_isolate));
   }
 
   char* storage = new char[sizeof(WriteWrap) + storage_size + 15];
@@ -395,7 +409,7 @@ Handle<Value> StreamWrap::WriteStringImpl(const Arguments& args) {
       Local<Object> send_stream_obj = args[1]->ToObject();
       assert(send_stream_obj->InternalFieldCount() > 0);
       StreamWrap* send_stream_wrap = static_cast<StreamWrap*>(
-          send_stream_obj->GetPointerFromInternalField(0));
+          send_stream_obj->GetAlignedPointerFromInternalField(0));
       send_stream = send_stream_wrap->GetStream();
     }
 
@@ -416,8 +430,14 @@ Handle<Value> StreamWrap::WriteStringImpl(const Arguments& args) {
     SetErrno(uv_last_error(uv_default_loop()));
     req_wrap->~WriteWrap();
     delete[] storage;
-    return scope.Close(v8::Null());
+    return scope.Close(v8::Null(node_isolate));
   } else {
+    if (wrap->stream_->type == UV_TCP) {
+      NODE_COUNT_NET_BYTES_SENT(buf.len);
+    } else if (wrap->stream_->type == UV_NAMED_PIPE) {
+      NODE_COUNT_PIPE_BYTES_SENT(buf.len);
+    }
+
     return scope.Close(req_wrap->object_);
   }
 }
@@ -455,9 +475,9 @@ void StreamWrap::AfterWrite(uv_write_t* req, int status) {
   wrap->UpdateWriteQueueSize();
 
   Local<Value> argv[] = {
-    Integer::New(status),
-    Local<Value>::New(wrap->object_),
-    Local<Value>::New(req_wrap->object_)
+    Integer::New(status, node_isolate),
+    Local<Value>::New(node_isolate, wrap->object_),
+    Local<Value>::New(node_isolate, req_wrap->object_)
   };
 
   MakeCallback(req_wrap->object_, oncomplete_sym, ARRAY_SIZE(argv), argv);
@@ -481,7 +501,7 @@ Handle<Value> StreamWrap::Shutdown(const Arguments& args) {
   if (r) {
     SetErrno(uv_last_error(uv_default_loop()));
     delete req_wrap;
-    return scope.Close(v8::Null());
+    return scope.Close(v8::Null(node_isolate));
   } else {
     return scope.Close(req_wrap->object_);
   }
@@ -503,9 +523,9 @@ void StreamWrap::AfterShutdown(uv_shutdown_t* req, int status) {
   }
 
   Local<Value> argv[3] = {
-    Integer::New(status),
-    Local<Value>::New(wrap->object_),
-    Local<Value>::New(req_wrap->object_)
+    Integer::New(status, node_isolate),
+    Local<Value>::New(node_isolate, wrap->object_),
+    Local<Value>::New(node_isolate, req_wrap->object_)
   };
 
   MakeCallback(req_wrap->object_, oncomplete_sym, ARRAY_SIZE(argv), argv);

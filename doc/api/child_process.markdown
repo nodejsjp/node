@@ -455,6 +455,8 @@ there is no IPC channel keeping it alive. When calling this method the
     for stdio.  (See below)
   * `env` {Object} Environment key-value pairs
   * `detached` {Boolean} The child will be a process group leader.  (See below)
+  * `uid` {Number} Sets the user identity of the process. (See setuid(2).)
+  * `gid` {Number} Sets the group identity of the process. (See setgid(2).)
 * return: {ChildProcess object}
 -->
 
@@ -468,6 +470,10 @@ there is no IPC channel keeping it alive. When calling this method the
   * `env` {Object} 環境変数として与えるキー・値のペア
   * `detached` {Boolean} 子プロセスがプロセスグループのリーダになるかどうか
     (後述)。
+  * `uid` {Number} このプロセスのユーザ識別子を設定します
+     (setuid(2) を参照)。
+  * `gid` {Number} このプロセスのグループ識別子を設定します
+    (setgid(2) を参照)。
 * return: {ChildProcess object}
 
 <!--
@@ -927,6 +933,7 @@ leaner than `child_process.exec`. It has the same options.
   * `cwd` {String} Current working directory of the child process
   * `env` {Object} Environment key-value pairs
   * `encoding` {String} (Default: 'utf8')
+  * `execPath` {String} Executable used to create the child process
 * Return: ChildProcess object
 -->
 
@@ -936,6 +943,7 @@ leaner than `child_process.exec`. It has the same options.
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
   * `env` {Object} 環境変数として与えるキー・値のペア
   * `encoding` {String} (Default: 'utf8')
+  * `execPath` {String} 子プロセスの作成に使われる実行ファイル
 * Return: ChildProcess object
 
 <!--
@@ -979,5 +987,19 @@ thousands of them.
 新しい Node ごとに少なくとも 30 ミリ秒の起動時間と 
 10MB のメモリを前提としてください。
 つまり、数千の子プロセスを作ることは出来ません。
+
+<!--
+The `execPath` property in the `options` object allows for a process to be
+created for the child rather than the current `node` executable. This should be
+done with care and by default will talk over the fd represented an
+environmental variable `NODE_CHANNEL_FD` on the child process. The input and
+output on this fd is expected to be line delimited JSON objects.
+-->
+
+`options` オブジェクト中の `execPath` プロパティは、
+現在の `node` 実行ファイルではない子プロセスの作成を可能にします。
+デフォルトでは、子プロセスの環境変数 `NODE_CHANNEL_FD` によって示される
+ファイル記述子を通じて対話することに注意しなければなりません。
+このファイル記述子における入力と出力は、改行で区切られた JSON オブジェクトです。
 
 [EventEmitter]: events.html#events_class_events_eventemitter
