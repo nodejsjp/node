@@ -73,7 +73,7 @@
 
       'include_dirs': [
         'src',
-        'src/gen',
+        'tools/msvs/genfiles',
         'deps/uv/src/ares',
         '<(SHARED_INTERMEDIATE_DIR)' # for node_natives.h
       ],
@@ -169,13 +169,9 @@
           #
           'sources': [
             'src/node_dtrace.cc',
-            'src/node_dtrace_provider.cc'
+            'src/node_dtrace_provider.cc',
+            'src/node_dtrace_ustack.cc',
           ],
-          'conditions': [ [
-            'target_arch=="ia32"', {
-              'sources': [ 'src/node_dtrace_ustack.cc' ]
-            }
-          ] ],
         } ],
         [ 'node_use_systemtap=="true"', {
           'defines': [ 'HAVE_SYSTEMTAP=1', 'STAP_SDT_V1=1' ],
@@ -194,8 +190,8 @@
             'src/node_win32_etw_provider-inl.h',
             'src/node_win32_etw_provider.cc',
             'src/node_dtrace.cc',
-            'src/gen/node_etw_provider.h',
-            'src/gen/node_etw_provider.rc',
+            'tools/msvs/genfiles/node_etw_provider.h',
+            'tools/msvs/genfiles/node_etw_provider.rc',
           ]
         } ],
         [ 'node_use_perfctr=="true"', {
@@ -206,7 +202,7 @@
             'src/node_win32_perfctr_provider.cc',
             'src/node_counters.cc',
             'src/node_counters.h',
-            'src/gen/node_perfctr_provider.rc',
+            'tools/msvs/genfiles/node_perfctr_provider.rc',
           ]
         } ],
         [ 'node_shared_v8=="false"', {
@@ -295,11 +291,11 @@
               'action_name': 'node_etw',
               'inputs': [ 'src/res/node_etw_provider.man' ],
               'outputs': [
-                'src/gen/node_etw_provider.rc',
-                'src/gen/node_etw_provider.h',
-                'src/gen/node_etw_providerTEMP.BIN',
+                'tools/msvs/genfiles/node_etw_provider.rc',
+                'tools/msvs/genfiles/node_etw_provider.h',
+                'tools/msvs/genfiles/node_etw_providerTEMP.BIN',
               ],
-              'action': [ 'mc <@(_inputs) -h src/gen -r src/gen' ]
+              'action': [ 'mc <@(_inputs) -h tools/msvs/genfiles -r tools/msvs/genfiles' ]
             }
           ]
         } ]
@@ -316,13 +312,13 @@
               'action_name': 'node_perfctr_man',
               'inputs': [ 'src/res/node_perfctr_provider.man' ],
               'outputs': [
-                'src/gen/node_perfctr_provider.h',
-                'src/gen/node_perfctr_provider.rc',
-                'src/gen/MSG00001.BIN',
+                'tools/msvs/genfiles/node_perfctr_provider.h',
+                'tools/msvs/genfiles/node_perfctr_provider.rc',
+                'tools/msvs/genfiles/MSG00001.BIN',
               ],
               'action': [ 'ctrpp <@(_inputs) '
-                          '-o src/gen/node_perfctr_provider.h '
-                          '-rc src/gen/node_perfctr_provider.rc'
+                          '-o tools/msvs/genfiles/node_perfctr_provider.h '
+                          '-rc tools/msvs/genfiles/node_perfctr_provider.rc'
               ]
             },
           ],
@@ -424,7 +420,7 @@
       'target_name': 'node_dtrace_ustack',
       'type': 'none',
       'conditions': [
-        [ 'node_use_dtrace=="true" and target_arch=="ia32"', {
+        [ 'node_use_dtrace=="true"', {
           'actions': [
             {
               'action_name': 'node_dtrace_ustack_constants',
@@ -449,9 +445,19 @@
               'outputs': [
                 '<(PRODUCT_DIR)/obj.target/node/src/node_dtrace_ustack.o'
               ],
-              'action': [
-                'dtrace', '-32', '-I<(SHARED_INTERMEDIATE_DIR)', '-Isrc',
-                '-C', '-G', '-s', 'src/v8ustack.d', '-o', '<@(_outputs)',
+              'conditions': [
+                [ 'target_arch=="ia32"', {
+                  'action': [
+                    'dtrace', '-32', '-I<(SHARED_INTERMEDIATE_DIR)', '-Isrc',
+                    '-C', '-G', '-s', 'src/v8ustack.d', '-o', '<@(_outputs)',
+                  ]
+                } ],
+                [ 'target_arch=="x64"', {
+                  'action': [
+                    'dtrace', '-64', '-I<(SHARED_INTERMEDIATE_DIR)', '-Isrc',
+                    '-C', '-G', '-s', 'src/v8ustack.d', '-o', '<@(_outputs)',
+                  ]
+                } ],
               ]
             }
           ]

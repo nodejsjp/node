@@ -93,7 +93,7 @@ class ZCtx : public ObjectWrap {
     HandleScope scope;
     ZCtx *ctx = ObjectWrap::Unwrap<ZCtx>(args.This());
     ctx->Close();
-    return scope.Close(Undefined());
+    return scope.Close(Undefined(node_isolate));
   }
 
 
@@ -244,8 +244,8 @@ class ZCtx : public ObjectWrap {
         return;
     }
 
-    Local<Integer> avail_out = Integer::New(ctx->strm_.avail_out);
-    Local<Integer> avail_in = Integer::New(ctx->strm_.avail_in);
+    Local<Integer> avail_out = Integer::New(ctx->strm_.avail_out, node_isolate);
+    Local<Integer> avail_in = Integer::New(ctx->strm_.avail_in, node_isolate);
 
     ctx->write_in_progress_ = false;
 
@@ -270,7 +270,8 @@ class ZCtx : public ObjectWrap {
            "Invalid error handler");
     HandleScope scope;
     Local<Value> args[2] = { String::New(msg),
-                             Local<Value>::New(Number::New(ctx->err_)) };
+                             Local<Value>::New(node_isolate,
+                                               Number::New(ctx->err_)) };
     MakeCallback(ctx->handle_, onerror_sym, ARRAY_SIZE(args), args);
 
     // no hope of rescue.
@@ -332,7 +333,7 @@ class ZCtx : public ObjectWrap {
     Init(ctx, level, windowBits, memLevel, strategy,
          dictionary, dictionary_len);
     SetDictionary(ctx);
-    return Undefined();
+    return Undefined(node_isolate);
   }
 
   static Handle<Value> Reset(const Arguments &args) {
@@ -342,7 +343,7 @@ class ZCtx : public ObjectWrap {
 
     Reset(ctx);
     SetDictionary(ctx);
-    return Undefined();
+    return Undefined(node_isolate);
   }
 
   static void Init(ZCtx *ctx, int level, int windowBits, int memLevel,

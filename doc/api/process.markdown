@@ -910,15 +910,14 @@ a diff reading, useful for benchmarks and measuring intervals:
 差分を得ることができます。これはベンチマークやインターバルの測定に便利です。
 
     var time = process.hrtime();
-    // [ 1800216, 927643717 ]
+    // [ 1800216, 25 ]
 
     setTimeout(function() {
       var diff = process.hrtime(time);
-      // [ 1, 6962306 ]
+      // [ 1, 552 ]
 
-      console.log('benchmark took %d seconds and %d nanoseconds',
-                  diff[0], diff[1]);
-      // benchmark took 1 seconds and 6962306 nanoseconds
+      console.log('benchmark took %d nanoseconds', diff[0] * 1e9 + diff[1]);
+      // benchmark took 1000000527 nanoseconds
     }, 1000);
 
 [EventEmitter]: events.html#events_class_events_eventemitter

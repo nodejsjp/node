@@ -250,6 +250,70 @@ your own extension classes.
 しかしながら、あなたの拡張クラスではこのメソッドをオーバーライドすることが
 求められて**います**。
 
+### readable.push(chunk)
+
+<!--
+* `chunk` {Buffer | null | String} Chunk of data to push into the read queue
+* return {Boolean} Whether or not more pushes should be performed
+-->
+
+* `chunk` {Buffer | null | String} 読み込みキューにプッシュされる、
+  データのチャンク
+* return {Boolean} まだプッシュしてもいいかどうか
+
+<!--
+The `Readable` class works by putting data into a read queue to be
+pulled out later by calling the `read()` method when the `'readable'`
+event fires.
+-->
+
+`'readable'` イベントが生成された時、後で `read()` メソッドを呼び出して
+取得されるデータを読み込みキューに入れておくことによって
+`Readable` クラスは機能します。
+
+<!--
+The `push()` method will explicitly insert some data into the read
+queue.  If it is called with `null` then it will signal the end of the
+data.
+-->
+
+`push()` メソッドはいくつかのデータを明示的に読み込みキューに挿入します。
+もし `null` と共に呼び出されると、それはデータが終了したことを伝えます。
+
+<!--
+In some cases, you may be wrapping a lower-level source which has some
+sort of pause/resume mechanism, and a data callback.  In those cases,
+you could wrap the low-level source object by doing something like
+this:
+-->
+
+場合によっては、pause/resume メカニズムとデータのコールバックを持つ
+低水準のソースをラップするかもしれません。
+それらのケースでは、次のように低水準なソースオブジェクトを
+ラップすることができます:
+
+```javascript
+// source is an object with readStop() and readStart() methods,
+// and an `ondata` member that gets called when it has data, and
+// an `onend` member that gets called when the data is over.
+
+var stream = new Readable();
+
+source.ondata = function(chunk) {
+  // if push() returns false, then we need to stop reading from source
+  if (!stream.push(chunk))
+    source.readStop();
+};
+
+source.onend = function() {
+  stream.push(null);
+};
+
+// _read will be called when the stream wants to pull more data in
+stream._read = function(size, cb) {
+  source.readStart();
+};
+```
 
 ### readable.wrap(stream)
 
