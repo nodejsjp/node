@@ -19,18 +19,33 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 var common = require('../common');
+var net = require('net');
 var assert = require('assert');
 
-common.error('before');
+var sock = new net.Socket();
 
-var Script = process.binding('evals').NodeScript;
+var server = net.createServer().listen(common.PORT, function() {
+  assert(!sock.readable);
+  assert(!sock.writable);
+  assert.equal(sock.readyState, 'closed');
 
-// undefined reference
-var script = new Script('foo.bar = 5;');
-script.runInNewContext();
+  sock.connect(common.PORT, function() {
+    assert.equal(sock.readable, true);
+    assert.equal(sock.writable, true);
+    assert.equal(sock.readyState, 'open');
 
-common.error('after');
+    sock.end();
+    assert(!sock.writable);
+    assert.equal(sock.readyState, 'readOnly');
+
+    server.close();
+    sock.on('close', function() {
+      assert(!sock.readable);
+      assert(!sock.writable);
+      assert.equal(sock.readyState, 'closed');
+    });
+  });
+
+  assert.equal(sock.readyState, 'opening');
+});

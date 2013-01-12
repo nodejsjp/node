@@ -20,33 +20,57 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-
-
-var common = require('../common');
+var common = require('../common.js');
 var assert = require('assert');
+var stream = require('stream');
+var crypto = require('crypto');
 
-var net = require('net');
 var util = require('util');
-var x = path.join(common.fixturesDir, 'x.txt');
-var expected = 'xyz';
 
-var server = net.createServer(function(socket) {
-  socket.on('receive', function(data) {
-    found = data;
-    client.close();
-    socket.close();
-    server.close();
-    assert.equal(expected, found);
+function TestWriter() {
+    stream.Writable.call(this);
+}
+util.inherits(TestWriter, stream.Writable);
+
+TestWriter.prototype._write = function (buffer, callback) {
+  console.log('write called');
+  // super slow write stream (callback never called)
+};
+
+var dest = new TestWriter();
+
+function TestReader(id) {
+    stream.Readable.call(this);
+    this.reads = 0;
+}
+util.inherits(TestReader, stream.Readable);
+
+TestReader.prototype._read = function (size, callback) {
+  this.reads += 1;
+  crypto.randomBytes(size, callback);
+};
+
+var src1 = new TestReader();
+var src2 = new TestReader();
+
+src1.pipe(dest);
+
+src1.once('readable', function () {
+  process.nextTick(function () {
+
+    src2.pipe(dest);
+
+    src2.once('readable', function () {
+      process.nextTick(function () {
+
+        src1.unpipe(dest);
+      });
+    });
   });
 });
-server.listen(common.PORT);
 
-var client = net.createConnection(common.PORT);
-client.on('connect', function() {
-  fs.open(x, 'r').addCallback(function(fd) {
-    fs.sendfile(client.fd, fd, 0, expected.length)
-      .addCallback(function(size) {
-          assert.equal(expected.length, size);
-        });
-  });
+
+process.on('exit', function () {
+  assert.equal(src1.reads, 2);
+  assert.equal(src2.reads, 2);
 });

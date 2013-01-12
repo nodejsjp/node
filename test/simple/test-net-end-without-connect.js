@@ -19,18 +19,8 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-
-
 var common = require('../common');
-var assert = require('assert');
+var net = require('net');
 
-common.error('before');
-
-var Script = process.binding('evals').NodeScript;
-
-// undefined reference
-var script = new Script('foo.bar = 5;');
-script.runInNewContext();
-
-common.error('after');
+var sock = new net.Socket;
+sock.end();  // Should not throw.

@@ -57,20 +57,20 @@ are added to it.
 
 <!--
 * `error.domain` The domain that first handled the error.
-* `error.domain_emitter` The event emitter that emitted an 'error' event
+* `error.domainEmitter` The event emitter that emitted an 'error' event
   with the error object.
-* `error.domain_bound` The callback function which was bound to the
+* `error.domainBound` The callback function which was bound to the
   domain, and passed an error as its first argument.
-* `error.domain_thrown` A boolean indicating whether the error was
+* `error.domainThrown` A boolean indicating whether the error was
   thrown, emitted, or passed to a bound callback function.
 -->
 
 * `error.domain` このエラーを最初に捕まえたドメイン。
-* `error.domain_emitter` このエラーオブジェクトと共に `error` イベントを
+* `error.domainEmitter` このエラーオブジェクトと共に `error` イベントを
   生成した EventEmitter。
-* `error.domain_bound` ドメインに束縛されたコールバック関数で、
+* `error.domainBound` ドメインに束縛されたコールバック関数で、
   その第 1 引数にエラーが渡されたもの。
-* `error.domain_throw` エラーがスローされたか、EventEmitter から生成されたか、
+* `error.domainThrown` エラーがスローされたか、EventEmitter から生成されたか、
   それとも束縛されたコールバック関数に渡されたかを示す boolean 値。
 
 ## Implicit Binding

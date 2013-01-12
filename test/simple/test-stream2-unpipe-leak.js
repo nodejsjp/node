@@ -20,17 +20,44 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
-
-
-var common = require('../common');
+var common = require('../common.js');
 var assert = require('assert');
+var stream = require('stream');
 
-common.error('before');
+var util = require('util');
 
-var Script = process.binding('evals').NodeScript;
+function TestWriter() {
+    stream.Writable.call(this);
+}
+util.inherits(TestWriter, stream.Writable);
 
-// undefined reference
-var script = new Script('foo.bar = 5;');
-script.runInNewContext();
+TestWriter.prototype._write = function (buffer, callback) {
+    callback(null);
+};
 
-common.error('after');
+var dest = new TestWriter();
+
+function TestReader() {
+    stream.Readable.call(this);
+}
+util.inherits(TestReader, stream.Readable);
+
+TestReader.prototype._read = function (size, callback) {
+    callback(new Buffer('hallo'));
+};
+
+var src = new TestReader();
+
+for (var i = 0; i < 10; i++) {
+    src.pipe(dest);
+    src.unpipe(dest);
+}
+
+assert.equal(src.listeners('end').length, 0);
+assert.equal(src.listeners('readable').length, 0);
+
+assert.equal(dest.listeners('unpipe').length, 0);
+assert.equal(dest.listeners('drain').length, 0);
+assert.equal(dest.listeners('error').length, 0);
+assert.equal(dest.listeners('close').length, 0);
+assert.equal(dest.listeners('finish').length, 0);

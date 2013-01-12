@@ -736,6 +736,16 @@ descriptor) has been closed. Not all streams will emit this.
 がクローズされた時に生成されます。
 全てのストリームがこれを生成するわけではありません。
 
+### Event: 'finish'
+
+<!--
+When `end()` is called and there are no more chunks to write, this
+event is emitted.
+-->
+
+`end()` が呼び出されてそれ以上書き込まれるチャンクがない場合、
+このイベントが生成されます。
+
 ### Event: 'pipe'
 
 * `source` {Readable Stream}
