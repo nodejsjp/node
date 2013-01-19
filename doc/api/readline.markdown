@@ -289,7 +289,7 @@ user hits enter, or return. This is a good hook to listen for user input.
 
 `input` ストリームから `\n` を読み込むごとに生成されます。
 通常、ユーザがエンターまたはリターンを打つごとに受信します。
-これはユーザ入浴のよいフックとなります。
+これはユーザ入力のよいフックとなります。
 
 <!--
 Example of listening for `line`:
