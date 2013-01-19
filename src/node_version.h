@@ -24,7 +24,7 @@
 
 #define NODE_MAJOR_VERSION 0
 #define NODE_MINOR_VERSION 9
-#define NODE_PATCH_VERSION 6
+#define NODE_PATCH_VERSION 7
 
 #ifndef NODE_TAG
 # define NODE_TAG ""
