@@ -144,7 +144,7 @@ API は実運用で広範囲にテストされており、おそらく変更さ�
 
 <!--
 ```
-Stability: 5 - API Locked
+Stability: 5 - Locked
 Unless serious bugs are found, this code will not ever
 change.  Please do not suggest changes in this area; they will be refused.
 -->

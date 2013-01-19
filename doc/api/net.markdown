@@ -438,23 +438,50 @@ with `child_process.fork()`.
 ### server.connections
 
 <!--
+This function is **deprecated**; please use [server.getConnections()][] instead.
+-->
+
+この関数は **廃止予定** です;
+代わりに [server.getConnections()][] を使ってください。
+
+<!--
 The number of concurrent connections on the server.
 -->
 
 このサーバ上の並行コネクションの数です。
 
 <!--
-This becomes `null` when sending a socket to a child with `child_process.fork()`.
+This becomes `null` when sending a socket to a child with
+`child_process.fork()`. To poll forks and get current number of active
+connections use asynchronous `server.getConnections` instead.
 -->
 
 ソケットが `child_process.fork()` によって子プロセスに送られると、
 これは `null` になります。
+fork した子プロセスにポーリングして現在のアクティブな接続を得る代わりに、
+非同期の `server.getConnections` を使用してください。
 
 <!--
 `net.Server` is an [EventEmitter][] with the following events:
 -->
 
 `net.Server` は以下のイベントを持つ [EventEmitter][] です:
+
+### server.getConnections(callback)
+
+<!--
+Asynchronously get the number of concurrent connections on the server. Works
+when sockets were sent to forks.
+-->
+
+サーバ上の並行コネクオションの数を非同期に取得します。
+ソケットが fork した子プロセスに送られても動作します。
+
+<!--
+Callback should take two arguments `err` and `count`.
+-->
+
+コールバックは `err` と `count` の二つの引数を取るべきです。
 
 ### Event: 'listening'
 

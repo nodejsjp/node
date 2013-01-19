@@ -22,7 +22,14 @@
 var common = require('../common');
 var assert = require('assert');
 
+var SlowBuffer = require('buffer').SlowBuffer;
 var Buffer = require('buffer').Buffer;
+
+// Regression test for segfault introduced in commit e501ce4.
+['base64','binary','ucs2','utf8','ascii'].forEach(function(encoding) {
+  var buf = new SlowBuffer(0);
+  buf.write('', encoding);
+});
 
 var b = Buffer(1024); // safe constructor
 
@@ -805,3 +812,47 @@ assert.throws(function() {
 assert.throws(function() {
   new Buffer(0xFFFFFFFFF);
 }, TypeError);
+
+
+// attempt to overflow buffers, similar to previous bug in array buffers
+assert.throws(function() {
+  var buf = new Buffer(8);
+  buf.readFloatLE(0xffffffff);
+}, /Trying to access beyond buffer length/);
+
+assert.throws(function() {
+  var buf = new Buffer(8);
+  buf.writeFloatLE(0.0, 0xffffffff);
+}, /Trying to access beyond buffer length/);
+
+assert.throws(function() {
+  var buf = new SlowBuffer(8);
+  buf.readFloatLE(0xffffffff);
+}, /Trying to read beyond buffer length/);
+
+assert.throws(function() {
+  var buf = new SlowBuffer(8);
+  buf.writeFloatLE(0.0, 0xffffffff);
+}, /Trying to write beyond buffer length/);
+
+
+// ensure negative values can't get past offset
+assert.throws(function() {
+  var buf = new Buffer(8);
+  buf.readFloatLE(-1);
+}, /offset is not uint/);
+
+assert.throws(function() {
+  var buf = new Buffer(8);
+  buf.writeFloatLE(0.0, -1);
+}, /offset is not uint/);
+
+assert.throws(function() {
+  var buf = new SlowBuffer(8);
+  buf.readFloatLE(-1);
+}, /offset is not uint/);
+
+assert.throws(function() {
+  var buf = new SlowBuffer(8);
+  buf.writeFloatLE(0.0, -1);
+}, /offset is not uint/);

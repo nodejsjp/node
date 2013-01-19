@@ -320,11 +320,7 @@ second argument to the `message` event.
 ソケットオブジェクトを他のプロセスに送信するためのものです。
 子プロセスはそれを `'message'` イベントの第 2 引数として受信します。
 
-<!--
-**send server object**
--->
-
-**サーバオブジェクトを送信する**
+#### Example: sending server object
 
 <!--
 Here is an example of sending a server:
@@ -365,11 +361,7 @@ that some connections will be handled by the parent and some by the child.
 サーバは親プロセスと子プロセスで共有されることに注意してください。
 これはコネクションが時には親あるいは子で処理されることを意味します。
 
-<!--
-**send socket object**
--->
-
-**ソケットオブジェクトを送信する**
+#### Example: sending socket object
 
 <!--
 Here is an example of sending a socket. It will spawn two children and handle
