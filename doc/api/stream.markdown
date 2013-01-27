@@ -178,6 +178,9 @@ method. (See below.)
     resource.  Default=16kb
   * `encoding` {String} If specified, then buffers will be decoded to
     strings using the specified encoding.  Default=null
+  * `objectMode` {Boolean} Whether this stream should behave
+    as a stream of objects. Meaning that stream.read(n) returns
+    a single value instead of a Buffer of size n
 -->
 
 * `options` {Object} (任意)
@@ -189,6 +192,9 @@ method. (See below.)
     内部バッファに貯めておくバイト数の最大値。デフォルトは 16kb。
   * `encoding` {String} 指定されるとバッファは指定のエンコーディングで
     デコードされます。デフォルトは `null`。
+  * `objectMode` {Boolean} このストリームがオブジェクトストリームとして
+    振る舞うべきかどうか。これは `stream.read(n)` がサイズ n のバッファではなく
+    一つの値を返すことを意味します。
 
 <!--
 In classes that extend the Readable class, make sure to call the

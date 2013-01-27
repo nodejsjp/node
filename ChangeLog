@@ -1,4 +1,27 @@
-2013.01.18, Version 0.9.7 (Unstable)
+2013.01.24, Version 0.9.8 (Unstable)
+
+* npm: Upgrade to v1.2.3
+
+* V8: Upgrade to 3.15.11.10
+
+* streams: Support objects other than Buffers (Jake Verbaten)
+
+* buffer: remove float write range checks (Trevor Norris)
+
+* http: close connection on 304/204 responses with chunked encoding (Ben Noordhuis)
+
+* build: fix build with dtrace support on FreeBSD (Fedor Indutny)
+
+* console: Support formatting options in trace() (isaacs)
+
+* domain: empty stack on all exceptions (Dave Olszewski)
+
+* unix, windows: make uv_*_bind() error codes consistent (Andrius Bentkus)
+
+* linux: add futimes() fallback (Ben Noordhuis)
+
+
+2013.01.18, Version 0.9.7 (Unstable), 9e7bebeb8305edd55735a95955a98fdbe47572e5
 
 * V8: Upgrade to 3.15.11.7
 
@@ -302,6 +325,21 @@
 * readline: Use one history item for reentered line (Vladimir Beloborodov)
 
 * Fix #3521 Make process.env more like a regular Object (isaacs)
+
+
+2013.01.18, Version 0.8.18 (Stable), 2c4eef0d972838c51999d32c0d251857a713dc18
+
+* npm: Upgrade to v1.2.2
+
+* dns: make error message match errno (Dan Milon)
+
+* tls: follow RFC6125 more stricly (Fedor Indutny)
+
+* buffer: reject negative SlowBuffer offsets (Ben Noordhuis)
+
+* install: add simplejson fallback (Chris Dent)
+
+* http: fix "Cannot call method 'emit' of null" (Ben Noordhuis)
 
 
 2013.01.09, Version 0.8.17 (Stable), c50c33e9397d7a0a8717e8ce7530572907c054ad
