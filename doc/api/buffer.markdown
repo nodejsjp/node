@@ -1037,7 +1037,7 @@ complement signed integer into `buffer`.
 
 <!--
 Writes `value` to the buffer at the specified offset with specified endian
-format. Note, `value` must be a valid 32 bit float.
+format. Note, behavior is unspecified if `value` is not a 32 bit float.
 
 Set `noAssert` to true to skip validation of `value` and `offset`. This means
 that `value` may be too large for the specific function and `offset` may be
@@ -1047,7 +1047,8 @@ should not be used unless you are certain of correctness. Defaults to `false`.
 
 `value` を 32bit 浮動小数点数としてバッファの指定された位置に、
 指定されたエンディアンで書き込みます。
-`value` は妥当な 32bit 浮動小数点数でなければならないことに注意してください。
+`value` が 32bit 浮動小数点数でない場合の振る舞いは未定義であることに
+注意してください。
 
 もし `noAssert` が `true` なら，`value` と `offset` の検証をスキップします。
 これは、`value` がこの関数で扱えるより大きな場合や、`offset` 

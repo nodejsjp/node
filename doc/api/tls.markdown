@@ -388,6 +388,25 @@ You can test this server by connecting to it with `openssl s_client`:
     openssl s_client -connect 127.0.0.1:8000
 
 
+## tls.SLAB_BUFFER_SIZE
+
+<!--
+Size of slab buffer used by all tls servers and clients.
+Default: `10 * 1024 * 1024`.
+-->
+
+全ての TLS サーバ及びクライアントで使用されるスラブバッファのサイズ。
+デフォルトは: `10 * 1024 * 1024`。
+
+
+<!--
+Don't change the defaults unless you know what you are doing.
+-->
+
+あなたがしようとしていることを理解していない限り、
+デフォルトを変更しないでください。
+
+
 ## tls.connect(options, [callback])
 ## tls.connect(port, [host], [options], [callback])
 
