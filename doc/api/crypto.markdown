@@ -153,7 +153,7 @@ Calculates the digest of all of the passed data to be hashed.
 The `encoding` can be `'hex'`, `'binary'` or `'base64'`.
 Defaults to `'binary'`.
 
-Note: `hash` object can not be used after `digest()` method been called.
+Note: `hash` object can not be used after `digest()` method has been called.
 -->
 
 渡された全てのデータがハッシュ化されたダイジェストを計算します。
