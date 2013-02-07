@@ -539,13 +539,11 @@ opened as a unix socket to that path.
 
 <!--
 Normally this method is not needed, as `net.createConnection` opens the
-socket. Use this only if you are implementing a custom Socket or if a
-Socket is closed and you want to reuse it to connect to another server.
+socket. Use this only if you are implementing a custom Socket.
 -->
 
 通常このメソッドは必要なく、`net.createConnection` でソケットをオープンします。
-これを使うのは、カスタマイズされたソケットを実装している場合や、
-ソケットがクローズされた後にコネクションを再利用して別のサーバに接続する場合だけです。
+これを使うのは、カスタマイズされたソケットを実装している場合だけです。
 
 <!--
 This function is asynchronous. When the ['connect'][] event is emitted the
