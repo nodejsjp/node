@@ -443,6 +443,14 @@ Does copy between buffers. The source and target regions can be overlapped.
 `sourceEnd` のデフォルトは `buffer.length` です。
 
 <!--
+All values passed that are `undefined`/`NaN` or are out of bounds are set equal
+to their respective defaults.
+-->
+
+`undefined`/`NaN` またはその他の不正な値が渡された場合は、
+それぞれのデフォルトが設定されます。
+
+<!--
 Example: build two Buffers, then copy `buf1` from byte 16 through byte 19
 into `buf2`, starting at the 8th byte in `buf2`.
 -->

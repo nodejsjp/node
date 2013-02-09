@@ -251,3 +251,43 @@ test('write callbacks', function (t) {
   });
   tw.end();
 });
+
+test('end callback', function (t) {
+  var tw = new TestWriter();
+  tw.end(function () {
+    t.end();
+  });
+});
+
+test('end callback with chunk', function (t) {
+  var tw = new TestWriter();
+  tw.end(new Buffer('hello world'), function () {
+    t.end();
+  });
+});
+
+test('end callback with chunk and encoding', function (t) {
+  var tw = new TestWriter();
+  tw.end('hello world', 'ascii', function () {
+    t.end();
+  });
+});
+
+test('end callback after .write() call', function (t) {
+  var tw = new TestWriter();
+  tw.write(new Buffer('hello world'));
+  tw.end(function () {
+    t.end();
+  });
+});
+
+test('encoding should be ignored for buffers', function(t) {
+  var tw = new W();
+  var hex = '018b5e9a8f6236ffe30e31baf80d2cf6eb';
+  tw._write = function(chunk, cb) {
+    t.equal(chunk.toString('hex'), hex);
+    t.end();
+  };
+  var buf = new Buffer(hex, 'hex');
+  tw.write(buf, 'binary');
+});

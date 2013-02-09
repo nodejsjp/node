@@ -13,8 +13,9 @@ API はいくつかのライブラリの知識が必要で、(現時点では) �
 <!--
  - V8 JavaScript, a C++ library. Used for interfacing with JavaScript:
    creating objects, calling functions, etc.  Documented mostly in the
-   `v8.h` header file (`deps/v8/include/v8.h` in the Node source tree),
-   which is also available [online](http://izs.me/v8-docs/main.html).
+   `v8.h` header file (`deps/v8/include/v8.h` in the Node source
+   tree), which is also available
+   [online](http://izs.me/v8-docs/main.html).
 -->
 
  - V8 JavaScript は C++ のライブラリです。
@@ -24,10 +25,11 @@ API はいくつかのライブラリの知識が必要で、(現時点では) �
    [オンライン](http://izs.me/v8-docs/main.html) で参照することもできます。
 
 <!--
- - [libuv](https://github.com/joyent/libuv), C event loop library. Anytime one
-   needs to wait for a file descriptor to become readable, wait for a timer, or
-   wait for a signal to received one will need to interface with libuv. That is,
-   if you perform any I/O, libuv will need to be used.
+ - [libuv](https://github.com/joyent/libuv), C event loop library.
+   Anytime one needs to wait for a file descriptor to become readable,
+   wait for a timer, or wait for a signal to received one will need to
+   interface with libuv. That is, if you perform any I/O, libuv will
+   need to be used.
 -->
 
  - [libuv](https://github.com/joyent/libuv) は
@@ -53,13 +55,23 @@ API はいくつかのライブラリの知識が必要で、(現時点では) �
  - その他。どのような物が利用できるかは `deps/` 以下を参照してさい。
 
 <!--
-Node statically compiles all its dependencies into the executable. When
-compiling your module, you don't need to worry about linking to any of these
-libraries.
+Node statically compiles all its dependencies into the executable.
+When compiling your module, you don't need to worry about linking to
+any of these libraries.
 -->
 
 Node は全ての依存ライブラリを実行ファイルに静的にコンパイルします。
 モジュールのコンパイル時には、それらのリンクについて一切気にする必要は有りません。
+
+<!--
+All of the following examples are available for
+[download](https://github.com/rvagg/node-addon-examples) and may be
+used as a starting-point for your own Addon.
+-->
+
+以下のサンプルの全ては
+[ダウンロード](https://github.com/rvagg/node-addon-examples)
+から利用することができ、独自のアドオンの出発点になるでしょう。
 
 ## Hello world
 
@@ -71,7 +83,7 @@ the following JavaScript code:
 では、 以下の JavaScript コードと同じ様に動作する小さなアドオンを
 C++ で作成してみましょう。
 
-    exports.hello = function() { return 'world'; };
+    module.exports.hello = function() { return 'world'; };
 
 <!--
 First we create a file `hello.cc`:
@@ -90,10 +102,11 @@ First we create a file `hello.cc`:
       return scope.Close(String::New("world"));
     }
 
-    void init(Handle<Object> target) {
-      target->Set(String::NewSymbol("hello"),
+    void init(Handle<Object> exports) {
+      exports->Set(String::NewSymbol("hello"),
           FunctionTemplate::New(Method)->GetFunction());
     }
+
     NODE_MODULE(hello, init)
 
 <!--
@@ -103,7 +116,7 @@ Note that all Node addons must export an initialization function:
 全ての Node アドオンは初期化関数をエクスポートしなければならないことに
 注意してください。
 
-    void Initialize (Handle<Object> target);
+    void Initialize (Handle<Object> exports);
     NODE_MODULE(module_name, Initialize)
 
 <!--
@@ -278,8 +291,8 @@ function calls and return a result. This is the main and only needed source
       return scope.Close(num);
     }
 
-    void Init(Handle<Object> target) {
-      target->Set(String::NewSymbol("add"),
+    void Init(Handle<Object> exports) {
+      exports->Set(String::NewSymbol("add"),
           FunctionTemplate::New(Add)->GetFunction());
     }
 
@@ -322,12 +335,24 @@ JavaScript の関数を C++ の関数に渡してそこから呼び出すこと�
       return scope.Close(Undefined());
     }
 
-    void Init(Handle<Object> target) {
-      target->Set(String::NewSymbol("runCallback"),
+    void Init(Handle<Object> exports, Handle<Object> module) {
+      module->Set(String::NewSymbol("exports"),
           FunctionTemplate::New(RunCallback)->GetFunction());
     }
 
     NODE_MODULE(addon, Init)
+
+<!--
+Note that this example uses a two-argument form of `Init()` that receives
+the full `module` object as the second argument. This allows the addon
+to completely overwrite `exports` with a single function instead of
+adding the function as a property of `exports`.
+-->
+
+この例は二つの引数を取る形式の `Init()` を使用して、第2引数で完全な `module`
+オブジェクトを受け取っていることに注意してください。
+これは、`exports` のプロパティとして関数を加える代わりに、アドオンが
+一つの関数で `exports` を完全に上書きすることを可能にします。
 
 <!--
 To test it run the following JavaScript snippet:
@@ -337,7 +362,7 @@ To test it run the following JavaScript snippet:
 
     var addon = require('./build/Release/addon');
 
-    addon.runCallback(function(msg){
+    addon(function(msg){
       console.log(msg); // 'hello world'
     });
 
@@ -368,8 +393,8 @@ C++ 関数の中から新しいオブジェクトを作成して返すことが�
       return scope.Close(obj);
     }
 
-    void Init(Handle<Object> target) {
-      target->Set(String::NewSymbol("createObject"),
+    void Init(Handle<Object> exports, Handle<Object> module) {
+      module->Set(String::NewSymbol("exports"),
           FunctionTemplate::New(CreateObject)->GetFunction());
     }
 
@@ -383,8 +408,8 @@ To test it in JavaScript:
 
     var addon = require('./build/Release/addon');
 
-    var obj1 = addon.createObject('hello');
-    var obj2 = addon.createObject('world');
+    var obj1 = addon('hello');
+    var obj2 = addon('world');
     console.log(obj1.msg+' '+obj2.msg); // 'hello world'
 
 
@@ -418,8 +443,8 @@ wraps a C++ function:
       return scope.Close(fn);
     }
 
-    void Init(Handle<Object> target) {
-      target->Set(String::NewSymbol("createFunction"),
+    void Init(Handle<Object> exports, Handle<Object> module) {
+      module->Set(String::NewSymbol("exports"),
           FunctionTemplate::New(CreateFunction)->GetFunction());
     }
 
@@ -434,7 +459,7 @@ To test:
 
     var addon = require('./build/Release/addon');
 
-    var fn = addon.createFunction();
+    var fn = addon();
     console.log(fn()); // 'hello world'
 
 
@@ -457,8 +482,8 @@ C++ オブジェクト／クラスをラップし、JavaScript から new 演算
 
     using namespace v8;
 
-    void InitAll(Handle<Object> target) {
-      MyObject::Init(target);
+    void InitAll(Handle<Object> exports) {
+      MyObject::Init(exports);
     }
 
     NODE_MODULE(addon, InitAll)
@@ -476,7 +501,7 @@ Then in `myobject.h` make your wrapper inherit from `node::ObjectWrap`:
 
     class MyObject : public node::ObjectWrap {
      public:
-      static void Init(v8::Handle<v8::Object> target);
+      static void Init(v8::Handle<v8::Object> exports);
 
      private:
       MyObject();
@@ -507,7 +532,7 @@ prototype:
     MyObject::MyObject() {};
     MyObject::~MyObject() {};
 
-    void MyObject::Init(Handle<Object> target) {
+    void MyObject::Init(Handle<Object> exports) {
       // Prepare constructor template
       Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
       tpl->SetClassName(String::NewSymbol("MyObject"));
@@ -517,7 +542,7 @@ prototype:
           FunctionTemplate::New(PlusOne)->GetFunction());
 
       Persistent<Function> constructor = Persistent<Function>::New(tpl->GetFunction());
-      target->Set(String::NewSymbol("MyObject"), constructor);
+      exports->Set(String::NewSymbol("MyObject"), constructor);
     }
 
     Handle<Value> MyObject::New(const Arguments& args) {
@@ -584,10 +609,10 @@ createObject` を `addon.cc` に登録しましょう:
       return scope.Close(MyObject::NewInstance(args));
     }
 
-    void InitAll(Handle<Object> target) {
+    void InitAll(Handle<Object> exports, Handle<Object> module) {
       MyObject::Init();
 
-      target->Set(String::NewSymbol("createObject"),
+      module->Set(String::NewSymbol("exports"),
           FunctionTemplate::New(CreateObject)->GetFunction());
     }
 
@@ -688,14 +713,14 @@ Test it with:
 
 これでテストします:
 
-    var addon = require('./build/Release/addon');
+    var createObject = require('./build/Release/addon');
 
-    var obj = addon.createObject(10);
+    var obj = createObject(10);
     console.log( obj.plusOne() ); // 11
     console.log( obj.plusOne() ); // 12
     console.log( obj.plusOne() ); // 13
 
-    var obj2 = addon.createObject(20);
+    var obj2 = createObject(20);
     console.log( obj2.plusOne() ); // 21
     console.log( obj2.plusOne() ); // 22
     console.log( obj2.plusOne() ); // 23
@@ -738,13 +763,13 @@ C++ オブジェクトをラップして返すことに加えて、Node が提�
       return scope.Close(Number::New(sum));
     }
 
-    void InitAll(Handle<Object> target) {
+    void InitAll(Handle<Object> exports) {
       MyObject::Init();
 
-      target->Set(String::NewSymbol("createObject"),
+      exports->Set(String::NewSymbol("createObject"),
           FunctionTemplate::New(CreateObject)->GetFunction());
 
-      target->Set(String::NewSymbol("add"),
+      exports->Set(String::NewSymbol("add"),
           FunctionTemplate::New(Add)->GetFunction());
     }
 
