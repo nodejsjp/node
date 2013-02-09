@@ -810,6 +810,25 @@ The number of concurrent connections on the server.
 
 サーバの並行コネクションの数です。
 
+## Class: CryptoStream
+
+<!--
+This is an encrypted stream.
+-->
+
+これは暗号化されたストリームです。
+
+### cryptoStream.bytesWritten
+
+<!--
+A proxy to the underlying socket's bytesWritten accessor, this will return
+the total bytes written to the socket, *including the TLS overhead*.
+-->
+
+下層にあるソケットの bytesWritten にアクセスするプロキシで、
+*TLS のオーバーヘッドを含めて* ソケットに書き込まれたトータルのバイト数を
+返します。
+
 ## Class: tls.CleartextStream
 
 <!--

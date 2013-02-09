@@ -13,7 +13,7 @@ Use `require('os')` to access this module.
 
 `require('os')` によってこのモジュールにアクセスします。
 
-## os.tmpDir()
+## os.tmpdir()
 
 <!--
 Returns the operating system's default directory for temp files.

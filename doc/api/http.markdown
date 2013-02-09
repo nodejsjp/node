@@ -114,11 +114,11 @@ per connection (in the case of keep-alive connections).
 (Keep Alive なコネクションの場合)。
 
 <!--
- `request` is an instance of `http.ServerRequest` and `response` is
+ `request` is an instance of `http.IncomingMessage` and `response` is
  an instance of `http.ServerResponse`
 -->
 
-`request` は `http.ServerRequest` のインスタンス、
+`request` は `http.IncomingMessage` のインスタンス、
 `response` は `http.ServerResponse` のインスタンスです。
 
 ### Event: 'connection'
@@ -380,253 +380,6 @@ no limit will be applied.
 
 受け付けるヘッダ数の上限で、デフォルトは 1000 です。
 0 に設定されると、制限しないことになります。
-
-
-## Class: http.ServerRequest
-
-<!--
-This object is created internally by a HTTP server -- not by
-the user -- and passed as the first argument to a `'request'` listener.
--->
-
-このオブジェクトは HTTP サーバ内部 － ユーザではなく － で作成され、
-`'request'` リスナーの第1引数として渡されます。
-
-<!--
-The request implements the [Readable Stream][] interface. This is an
-[EventEmitter][] with the following events:
--->
-
-リクエストは [Readable Stream][] インタフェースを実装します。
-これは以下のイベントを持つ [EventEmitter][] です:
-
-### Event: 'data'
-
-`function (chunk) { }`
-
-<!--
-Emitted when a piece of the message body is received. The chunk is a string if
-an encoding has been set with `request.setEncoding()`, otherwise it's a
-[Buffer][].
--->
-
-メッセージボディの断片を受信した場合に生成されます。
-`request.setEncoding()` によってエンコーディングが設定された場合、
-`chunk` は文字列です。それ以外の場合は [Buffer][] です。
-
-<!--
-Example: A chunk of the body is given as the single
-argument. The transfer-encoding has been decoded.  The
-body chunk is a string.  The body encoding is set with
-`request.setEncoding()`.
-
-Note that the __data will be lost__ if there is no listener when a
-`ServerRequest` emits a `'data'` event.
--->
-
-例: 一つの引数としてボディのチャンクが与えられます。
-転送エンコーディングでデコードされます。
-ボディのチャンクは文字列です。
-ボディのエンコーディングは `request.setBodyEncoding()` で設定されます。
-
-`ServerRequest` が `'data'` イベントを生成した時にリスナが存在しなければ、
-__データは失われる__ことに注意してください。
-
-### Event: 'end'
-
-`function () { }`
-
-<!--
-Emitted exactly once for each request. After that, no more `'data'` events
-will be emitted on the request.
--->
-
-リクエストごとに厳密に一回生成されます。
-その後、このリクエストで `'data'` イベントが生成されることはありません。
-
-### Event: 'close'
-
-`function () { }`
-
-<!--
-Indicates that the underlaying connection was terminated before
-`response.end()` was called or able to flush.
--->
-
-`response.end()` が呼び出されたりフラッシュされる前に、
-下層の接続が切断されたことを示します。
-
-<!--
-Just like `'end'`, this event occurs only once per request, and no more `'data'`
-events will fire afterwards.
--->
-
-`'end'` と同様、このイベントはリクエスト上で一度だけ発生し、その後ではもう
-`'data'` イベントが発生することはありません。
-
-<!--
-Note: `'close'` can fire after `'end'`, but not vice versa.
--->
-
-注意: `'close'` は `'end'` の後で発生することがあります。
-その逆もあります。
-
-### request.method
-
-<!--
-The request method as a string. Read only. Example:
-`'GET'`, `'DELETE'`.
--->
-
-リクエストメソッドを表す文字列です。参照のみ可能です。
-例: `'GET'`、`'DELETE'`
-
-
-### request.url
-
-<!--
-Request URL string. This contains only the URL that is
-present in the actual HTTP request. If the request is:
--->
-
-リクエスト URL を表す文字列です。
-これは実際の HTTP リクエストに存在する URL だけを含みます。
-リクエストがこうなら:
-
-    GET /status?name=ryan HTTP/1.1\r\n
-    Accept: text/plain\r\n
-    \r\n
-
-<!--
-Then `request.url` will be:
--->
-
-この場合の `request.url` はこうなります:
-
-    '/status?name=ryan'
-
-<!--
-If you would like to parse the URL into its parts, you can use
-`require('url').parse(request.url)`.  Example:
--->
-
-URL の要素を解析したい場合は、
-`require('url').parse(request.url)` を参照してください。例:
-
-    node> require('url').parse('/status?name=ryan')
-    { href: '/status?name=ryan',
-      search: '?name=ryan',
-      query: 'name=ryan',
-      pathname: '/status' }
-
-<!--
-If you would like to extract the params from the query string,
-you can use the `require('querystring').parse` function, or pass
-`true` as the second argument to `require('url').parse`.  Example:
--->
-
-問い合わせ文字列からパラメータを取り出したい場合は、
-`require('querystring').parse` 関数を参照するか、
-`require('url').parse` の第 2 引数に `true` を渡してください。例:
-
-    node> require('url').parse('/status?name=ryan', true)
-    { href: '/status?name=ryan',
-      search: '?name=ryan',
-      query: { name: 'ryan' },
-      pathname: '/status' }
-
-
-
-### request.headers
-
-<!--
-Read only map of header names and values. Header names are lower-cased.
--->
-
-参照のみ可能な、ヘッダ名と値のマップです。
-ヘッダ名は小文字化されています。
-
-<!--
-Example:
--->
-
-例:
-
-    // Prints something like:
-    //
-    // { 'user-agent': 'curl/7.22.0',
-    //   host: '127.0.0.1:8000',
-    //   accept: '*/*' }
-    console.log(request.headers);
-
-### request.trailers
-
-<!--
-Read only; HTTP trailers (if present). Only populated after the 'end' event.
--->
-
-参照のみ可能です; HTTP のトレーラです (もしあれば)。'end' イベントの後にだけ発生します。
-
-### request.httpVersion
-
-<!--
-The HTTP protocol version as a string. Read only. Examples:
-`'1.1'`, `'1.0'`.
-Also `request.httpVersionMajor` is the first integer and
-`request.httpVersionMinor` is the second.
--->
-
-HTTP プロトコルのバージョンを表す文字列です。参照のみ可能です。例:
-`'1.1'`、`'1.0'`。
-同様に `request.httpVersionMajor` は最初の整数、
-`request.httpVersionMinor` は 2 番目の整数です。
-
-
-### request.setEncoding([encoding])
-
-<!--
-Set the encoding for the request body. See [stream.setEncoding()][] for more
-information.
--->
-
-リクエストボディのエンコーディングを設定します。詳細は
-[stream.setEncoding()][] を参照してください。
-
-### request.pause()
-
-<!--
-Pauses request from emitting events.  Useful to throttle back an upload.
--->
-
-リクエストによるイベントの生成を中断します。アップロード速度を落とすのに便利です。
-
-
-### request.resume()
-
-<!--
-Resumes a paused request.
--->
-
-中断されたリクエストを再開します。
-
-### request.connection
-
-<!--
-The `net.Socket` object associated with the connection.
--->
-
-コネクションに関連づけられた `net.Socket` オブジェクトです。
-
-
-<!--
-With HTTPS support, use request.connection.verifyPeer() and
-request.connection.getPeerCertificate() to obtain the client's
-authentication details.
--->
-
-HTTPS では `request.connection.verifyPeer()` と
-`request.connection.getPeerCertificate()` で
-クライアントの認証の詳細を取得できます。
 
 
 
@@ -1258,12 +1011,13 @@ data chunk or when closing the connection.
 To get the response, add a listener for `'response'` to the request object.
 `'response'` will be emitted from the request object when the response
 headers have been received.  The `'response'` event is executed with one
-argument which is an instance of `http.ClientResponse`.
+argument which is an instance of `http.IncomingMessage`.
 -->
 
 レスポンスを取得するには、`'response'` 用のリスナーをリクエストオブジェクトに加えます。
 `'response'` イベントはレスポンスヘッダを受信するとリクエストオブジェクトによって生成されます。
-`'response'` イベントは `http.ClientResponse` のインスタンスを唯一の引数として実行されます。
+`'response'` イベントは `http.IncomingMessage` のインスタンスを唯一の引数として
+実行されます。
 
 <!--
 During the `'response'` event, one can add listeners to the
@@ -1327,12 +1081,12 @@ The request implements the [Writable Stream][] interface. This is an
 
 <!--
 Emitted when a response is received to this request. This event is emitted only
-once. The `response` argument will be an instance of `http.ClientResponse`.
+once. The `response` argument will be an instance of `http.IncomingMessage`.
 -->
 
 このリクエストに対するレスポンスを受信した時に生成されます。
 このイベントは一回だけ生成されます。
-`response` 引数は `http.ClientResponse` のインスタンスです。
+`response` 引数は `http.IncomingMessage` のインスタンスです。
 
 <!--
 Options:
@@ -1595,38 +1349,48 @@ Once a socket is assigned to this request and is connected
 このリクエストにソケットが割り当てられて接続した際に、
 [socket.setKeepAlive()][] が呼び出されます。
 
-## http.ClientResponse
+
+## http.IncomingMessage
 
 <!--
-This object is created when making a request with `http.request()`. It is
-passed to the `'response'` event of the request object.
+An `IncomingMessage` object is created by `http.Server` or `http.ClientRequest`
+and passed as the first argument to the `'request'` and `'response'` event
+respectively. It may be used to access response status, headers and data.
 -->
 
-このオブジェクトは `http.request()` によってリクエストと一緒に作成されます。
-これはリクエストオブジェクトの `'response'` イベントに渡されます。
+`IncomingMessage` オブジェクトは `http.Server` または `http.ClientRequest()`
+によって作成され、`'request'` および `'response'` イベントそれぞれの
+最初の引数として渡されます。
+それはステータス、ヘッダ、およびデータにアクセスするために使われます。
 
 <!--
-The response implements the [Readable Stream][] interface. This is an
+It implements the [Readable Stream][] interface. `http.IncomingMessage` is an
 [EventEmitter][] with the following events:
 -->
 
-レスポンスは [Readable Stream][] インタフェースを実装します。
-これは以下のイベントを持つ [EventEmitter][] です:
+これは [Readable Stream][] インタフェースを実装します。
+`http.IncomingMessage` はは以下のイベントを持つ [EventEmitter][] です:
 
 ### Event: 'data'
 
 `function (chunk) { }`
 
 <!--
-Emitted when a piece of the message body is received.
-
-Note that the __data will be lost__ if there is no listener when a
-`ClientResponse` emits a `'data'` event.
+Emitted when a piece of the message body is received. The chunk is a string if
+an encoding has been set with `message.setEncoding()`, otherwise it's
+a [Buffer][].
 -->
 
 メッセージボディの断片を受信した場合に生成されます。
+`message.setEncoding()` によってエンコーディングが設定されている場合、
+チャンクは文字列です。それ以外の場合は [Buffer][] です。
 
-`ServerRequest` が `'data'` イベントを生成した時にリスナが存在しなければ、
+<!--
+Note that the __data will be lost__ if there is no listener when a
+`IncomingMessage` emits a `'data'` event.
+-->
+
+`IncomingMessage` が `'data'` イベントを生成した時にリスナが存在しなければ、
 __データは失われる__ことに注意してください。
 
 ### Event: 'end'
@@ -1640,7 +1404,6 @@ will be emitted on the response.
 
 レスポンスごとに厳密に一回生成されます。
 その後、このレスポンスで `'data'` イベントが生成されることはありません。
-
 
 ### Event: 'close'
 
@@ -1671,8 +1434,174 @@ Note: `'close'` can fire after `'end'`, but not vice versa.
 注意: `'close'` は `'end'` の後に発生することがあります。
 その逆もあります。
 
+### message.httpVersion
 
-### response.statusCode
+<!--
+In case of server request, the HTTP version sent by the client. In the case of
+client response, the HTTP version of the connected-to server.
+Probably either `'1.1'` or `'1.0'`.
+-->
+
+サーバリクエストの場合、クライアントが送信した HTTP バージョンです。
+クライアントレスポンスの場合、接続したサーバの HTTP バージョンです。
+いずれの場合も `'1.1'` または `'1.0'` です。
+
+<!--
+Also `response.httpVersionMajor` is the first integer and
+`response.httpVersionMinor` is the second.
+-->
+
+同様に `response.httpVersionMajor` は最初の整数、
+`response.httpVersionMinor` は 2 番目の整数です。
+
+
+### message.headers
+
+<!--
+The request/response headers object.
+-->
+
+リクエスト／レスポンスヘッダオブジェクトです。
+
+<!--
+Read only map of header names and values. Header names are lower-cased.
+Example:
+-->
+
+ヘッダ名と値のリードオンリーなマップです。ヘッダ名は小文字です。
+例:
+
+    // Prints something like:
+    //
+    // { 'user-agent': 'curl/7.22.0',
+    //   host: '127.0.0.1:8000',
+    //   accept: '*/*' }
+    console.log(request.headers);
+
+### message.trailers
+
+<!--
+The request/response trailers object. Only populated after the 'end' event.
+-->
+
+リクエスト／レスポンスのトレーラオブジェクトです。
+`'end'` イベントの後にだけ発生します。
+
+### message.setEncoding([encoding])
+
+<!--
+Set the encoding for data emitted by the `'data'` event. See [stream.setEncoding()][] for more
+information.
+-->
+
+`'data'` イベントによって生成されるデータのエンコーディングを設定します。
+詳細は [stream.setEncoding()][] を参照してください。
+
+<!--
+Should be set before any `'data'` events have been emitted.
+-->
+
+あらゆる `'data'` イベントが生成されるよりも前に設定されなければなりません。
+
+### message.pause()
+
+<!--
+Pauses request/response from emitting events.  Useful to throttle back a download.
+-->
+
+リクエスト／レスポンスによるイベントの生成を中断します。
+ダウンロード速度を落とすのに便利です。
+
+### message.resume()
+
+<!--
+Resumes a paused request/response.
+-->
+
+中断されたリクエスト／レスポンスを再開します。
+
+### message.method
+
+<!--
+**Only valid for request obtained from `http.Server`.**
+-->
+
+** `http.Server` から得たリクエストでのみ有効です **
+
+<!--
+The request method as a string. Read only. Example:
+`'GET'`, `'DELETE'`.
+-->
+
+リクエストメソッドを表す文字列です。参照のみ可能です。
+例: `'GET'`、`'DELETE'`
+
+### message.url
+
+<!--
+**Only valid for request obtained from `http.Server`.**
+-->
+
+** `http.Server` から得たリクエストでのみ有効です **
+
+<!--
+Request URL string. This contains only the URL that is
+present in the actual HTTP request. If the request is:
+-->
+
+リクエスト URL を表す文字列です。
+これは実際の HTTP リクエストに存在する URL だけを含みます。
+もしリクエストが:
+
+    GET /status?name=ryan HTTP/1.1\r\n
+    Accept: text/plain\r\n
+    \r\n
+
+<!--
+Then `request.url` will be:
+-->
+
+この場合の `request.url` はこうなります:
+
+    '/status?name=ryan'
+
+<!--
+If you would like to parse the URL into its parts, you can use
+`require('url').parse(request.url)`.  Example:
+-->
+
+URL の要素を解析したい場合は、
+`require('url').parse(request.url)` を参照してください。例:
+
+    node> require('url').parse('/status?name=ryan')
+    { href: '/status?name=ryan',
+      search: '?name=ryan',
+      query: 'name=ryan',
+      pathname: '/status' }
+
+<!--
+If you would like to extract the params from the query string,
+you can use the `require('querystring').parse` function, or pass
+`true` as the second argument to `require('url').parse`.  Example:
+-->
+
+問い合わせ文字列からパラメータを取り出したい場合は、
+`require('querystring').parse` 関数を参照するか、
+`require('url').parse` の第 2 引数に `true` を渡してください。例:
+
+    node> require('url').parse('/status?name=ryan', true)
+    { href: '/status?name=ryan',
+      search: '?name=ryan',
+      query: { name: 'ryan' },
+      pathname: '/status' }
+
+### message.statusCode
+
+<!--
+**Only valid for response obtained from `http.ClientRequest`.**
+-->
+
+** `http.ClientRequest` から得たレスポンスでのみ有効です **
 
 <!--
 The 3-digit HTTP response status code. E.G. `404`.
@@ -1680,62 +1609,23 @@ The 3-digit HTTP response status code. E.G. `404`.
 
 3 桁の数字によるレスポンスのステータスコードです。例えば `404`。
 
-### response.httpVersion
+### message.socket
 
 <!--
-The HTTP version of the connected-to server. Probably either
-`'1.1'` or `'1.0'`.
-Also `response.httpVersionMajor` is the first integer and
-`response.httpVersionMinor` is the second.
+The `net.Socket` object associated with the connection.
 -->
 
-接続しているサーバとの HTTP のバージョンです。
-おそらく `'1.1'` または `'1.0'` のどちらかです。
-同様に `response.httpVersionMajor` は最初の整数、
-`response.httpVersionMinor` は 2 番目の整数です。
-
-### response.headers
+コネクションに関連づけられた `net.Socket` オブジェクトです。
 
 <!--
-The response headers object.
+With HTTPS support, use request.connection.verifyPeer() and
+request.connection.getPeerCertificate() to obtain the client's
+authentication details.
 -->
 
-レスポンスヘッダオブジェクトです。
-
-### response.trailers
-
-<!--
-The response trailers object. Only populated after the 'end' event.
--->
-
-レスポンスのトレーラオブジェクトです。
-'end' イベントの後にだけ発生します。
-
-### response.setEncoding([encoding])
-
-<!--
-Set the encoding for the response body. See [stream.setEncoding()][] for more
-information.
--->
-
-レスポンスボディのエンコーディングを設定します。詳細は
-[stream.setEncoding()][] を参照してください。
-
-### response.pause()
-
-<!--
-Pauses response from emitting events.  Useful to throttle back a download.
--->
-
-イベントの生成によるレスポンスを中断します。ダウンロード速度を落とすのに便利です。
-
-### response.resume()
-
-<!--
-Resumes a paused response.
--->
-
-中断されていたレスポンスを再開します。
+HTTPS では `request.connection.verifyPeer()` と
+`request.connection.getPeerCertificate()` で
+クライアントの認証の詳細を取得できます。
 
 [Agent]: #http_class_http_agent
 ['checkContinue']: #http_event_checkcontinue
@@ -1743,7 +1633,7 @@ Resumes a paused response.
 [EventEmitter]: events.html#events_class_events_eventemitter
 [global Agent]: #http_http_globalagent
 [http.request()]: #http_http_request_options_callback
-[http.ServerRequest]: #http_class_http_serverrequest
+[http.IncomingMessage]: #http_class_http_incomingmessage
 ['listening']: net.html#net_event_listening
 [net.Server.close()]: net.html#net_server_close_callback
 [net.Server.listen(path)]: net.html#net_server_listen_path_callback
