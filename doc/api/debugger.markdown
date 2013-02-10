@@ -219,3 +219,20 @@ with `SIGUSR1`.
 -->
 
 V8 デバッガは Node をコマンドラインの `--debug` フラグで起動したり、起動済みの Node プロセスに `SIGUSR1` シグナルを送ることでも有効にできます。
+
+<!--
+Once a process has been set in debug mode with this it can be connected to
+with the node debugger. Either connect to the `pid` or the URI to the debugger.
+The syntax is:
+-->
+
+これによって一度デバッグモードに設定されたプロセスは、
+`pid` または URI のどちらでも node デバッガに接続することができます。
+形式は:
+
+<!--
+* `node debug -p <pid>` - Connects to the process via the `pid`
+* `node debug <URI> - Connects to the process via the URI such as localhost:5858-->
+
+* `node debug -p <pid>` - `pid` を通じてプロセスに接続
+* `node debug <URI> - `localhost:585` のような URI を通じてプロセスに接続

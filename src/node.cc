@@ -101,6 +101,8 @@ Persistent<String> domain_symbol;
 
 static Persistent<Object> process;
 
+static Persistent<String> exports_symbol;
+
 static Persistent<String> errno_symbol;
 static Persistent<String> syscall_symbol;
 static Persistent<String> errpath_symbol;
@@ -906,6 +908,11 @@ MakeCallback(const Handle<Object> object,
              Handle<Value> argv[]) {
   HandleScope scope;
 
+  if (argc > 6) {
+    fprintf(stderr, "node::MakeCallback - Too many args (%d)\n", argc);
+    abort();
+  }
+
   Local<Value> callback_v = object->Get(symbol);
   if (!callback_v->IsFunction()) {
     String::Utf8Value method(symbol);
@@ -915,18 +922,6 @@ MakeCallback(const Handle<Object> object,
     fprintf(stderr, "Non-function in MakeCallback. method = %s\n", *method);
     abort();
   }
-
-  Local<Function> callback = Local<Function>::Cast(callback_v);
-
-  return scope.Close(MakeCallback(object, callback, argc, argv));
-}
-
-Handle<Value>
-MakeCallback(const Handle<Object> object,
-             const Handle<Function> callback,
-             int argc,
-             Handle<Value> argv[]) {
-  HandleScope scope;
 
   // TODO Hook for long stack traces to be made here.
 
@@ -948,9 +943,9 @@ MakeCallback(const Handle<Object> object,
   }
 
   Local<Value> object_l = Local<Value>::New(node_isolate, object);
-  Local<Value> callback_l = Local<Value>::New(node_isolate, callback);
+  Local<Value> symbol_l = Local<Value>::New(node_isolate, symbol);
 
-  Local<Value> args[3] = { object_l, callback_l, argArray };
+  Local<Value> args[3] = { object_l, symbol_l, argArray };
 
   Local<Value> ret = process_makeCallback->Call(process, ARRAY_SIZE(args), args);
 
@@ -1786,8 +1781,8 @@ Handle<Value> Hrtime(const v8::Arguments& args) {
 
 typedef void (UV_DYNAMIC* extInit)(Handle<Object> exports);
 
-// DLOpen is node.dlopen(). Used to load 'module.node' dynamically shared
-// objects.
+// DLOpen is process.dlopen(module, filename).
+// Used to load 'module.node' dynamically shared objects.
 Handle<Value> DLOpen(const v8::Arguments& args) {
   HandleScope scope;
   char symbol[1024], *base, *pos;
@@ -1800,8 +1795,13 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
     return ThrowException(exception);
   }
 
-  String::Utf8Value filename(args[0]); // Cast
-  Local<Object> target = args[1]->ToObject(); // Cast
+  Local<Object> module = args[0]->ToObject(); // Cast
+  String::Utf8Value filename(args[1]); // Cast
+
+  if (exports_symbol.IsEmpty()) {
+    exports_symbol = NODE_PSYMBOL("exports");
+  }
+  Local<Object> exports = module->Get(exports_symbol)->ToObject();
 
   if (uv_dlopen(*filename, &lib)) {
     Local<String> errmsg = String::New(uv_dlerror(&lib));
@@ -1812,7 +1812,7 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
     return ThrowException(Exception::Error(errmsg));
   }
 
-  String::Utf8Value path(args[0]);
+  String::Utf8Value path(args[1]);
   base = *path;
 
   /* Find the shared library filename within the full path. */
@@ -1869,7 +1869,7 @@ Handle<Value> DLOpen(const v8::Arguments& args) {
   }
 
   // Execute the C++ module
-  mod->register_func(target);
+  mod->register_func(exports, module);
 
   // Tell coverity that 'handle' should not be freed when we return.
   // coverity[leaked_storage]
@@ -1953,7 +1953,9 @@ static Handle<Value> Binding(const Arguments& args) {
 
   if ((modp = get_builtin_module(*module_v)) != NULL) {
     exports = Object::New();
-    modp->register_func(exports);
+    // Internal bindings don't have a "module" object,
+    // only exports.
+    modp->register_func(exports, Undefined());
     binding_cache->Set(module, exports);
 
   } else if (!strcmp(*module_v, "constants")) {
