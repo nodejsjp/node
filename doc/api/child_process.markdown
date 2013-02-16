@@ -782,6 +782,8 @@ Node のドキュメント化されていない API と同様に、
 * `options` {Object}
   * `cwd` {String} Current working directory of the child process
   * `stdio` {Array|String} Child's stdio configuration. (See above)
+    Only stdin is configurable, anything else will lead to unpredictable
+    results.
   * `customFds` {Array} **Deprecated** File descriptors for the child to use
     for stdio.  (See above)
   * `env` {Object} Environment key-value pairs
@@ -800,6 +802,7 @@ Node のドキュメント化されていない API と同様に、
 * `options` {Object}
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
   * `stdio` {Array|String} 子プロセスの標準入出力の設定 (前述)。
+    標準入力のみが構成可能です。その他は予期しない結果を招くでしょう。
   * `customFds` {Array} **Deprecated** 子プロセスが標準入出力として使用する
    ファイル記述子の配列 (前述)
   * `env` {Object} 環境変数として与えるキー・値のペア
