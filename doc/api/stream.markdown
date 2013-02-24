@@ -763,17 +763,21 @@ constructor.
 生成されるかは、コンストラクタに与えられる
 `highWaterMark` および `lowWaterMark` オプションによって決定されます。
 
-### writable.end([chunk], [encoding])
+### writable.end([chunk], [encoding], [callback])
 
 <!--
 * `chunk` {Buffer | String} Optional final data to be written
 * `encoding` {String} Optional.  If `chunk` is a string, then encoding
   defaults to `'utf8'`
+* `callback` {Function} Optional.  Called when the final chunk is
+  successfully written.
 -->
 
 * `chunk` {Buffer | String} 書き込まれる最後のデータ (任意)。
 * `encoding` {String} `chunk` が文字列の場合のエンコーディング (任意)。
   デフォルトは `'utf8'`。
+* `callback` {Function} 最後のチャンクが正常に書き込まれた場合に
+  呼び出される (任意)。
 
 <!--
 Call this method to signal the end of the data being written to the

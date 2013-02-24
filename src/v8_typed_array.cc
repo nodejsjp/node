@@ -35,40 +35,10 @@ using node::ThrowRangeError;
 using node::ThrowTypeError;
 using node::ThrowError;
 
-template <unsigned int TBytes, v8::ExternalArrayType TEAType>
-class TypedArray;
-
-typedef TypedArray<1, v8::kExternalByteArray> Int8Array;
-typedef TypedArray<1, v8::kExternalUnsignedByteArray> Uint8Array;
-typedef TypedArray<1, v8::kExternalPixelArray> Uint8ClampedArray;
-typedef TypedArray<2, v8::kExternalShortArray> Int16Array;
-typedef TypedArray<2, v8::kExternalUnsignedShortArray> Uint16Array;
-typedef TypedArray<4, v8::kExternalIntArray> Int32Array;
-typedef TypedArray<4, v8::kExternalUnsignedIntArray> Uint32Array;
-typedef TypedArray<4, v8::kExternalFloatArray> Float32Array;
-typedef TypedArray<8, v8::kExternalDoubleArray> Float64Array;
-
 struct BatchedMethods {
   const char* name;
   v8::Handle<v8::Value> (*func)(const v8::Arguments& args);
 };
-
-void WeakCallback(v8::Persistent<v8::Value> value, void* data) {
-  v8::Object* obj = v8::Object::Cast(*value);
-
-  void* ptr = obj->GetIndexedPropertiesExternalArrayData();
-  int element_size = v8_typed_array::SizeOfArrayElementForType(
-      obj->GetIndexedPropertiesExternalArrayDataType());
-  int size =
-      obj->GetIndexedPropertiesExternalArrayDataLength() * element_size;
-
-  v8::V8::AdjustAmountOfExternalAllocatedMemory(-size);
-
-  value.ClearWeak();
-  value.Dispose();
-
-  free(ptr);
-}
 
 class ArrayBuffer {
  public:
@@ -99,9 +69,26 @@ class ArrayBuffer {
   }
 
  private:
+  static void WeakCallback(v8::Persistent<v8::Value> value, void* data) {
+    v8::Object* obj = v8::Object::Cast(*value);
+
+    void* ptr = obj->GetIndexedPropertiesExternalArrayData();
+    int element_size = v8_typed_array::SizeOfArrayElementForType(
+        obj->GetIndexedPropertiesExternalArrayDataType());
+    int size =
+        obj->GetIndexedPropertiesExternalArrayDataLength() * element_size;
+
+    v8::V8::AdjustAmountOfExternalAllocatedMemory(-size);
+
+    value.ClearWeak();
+    value.Dispose();
+
+    free(ptr);
+  }
+
   static v8::Handle<v8::Value> V8New(const v8::Arguments& args) {
     if (!args.IsConstructCall())
-      return ThrowTypeError("Constructor cannot be called as a function.");
+      return node::FromConstructorTemplate(GetTemplate(), args);
 
     // To match Chrome, we allow "new ArrayBuffer()".
     // if (args.Length() != 1)
@@ -138,7 +125,7 @@ class ArrayBuffer {
 
     v8::Persistent<v8::Object> persistent =
         v8::Persistent<v8::Object>::New(args.This());
-    persistent.MakeWeak(NULL, WeakCallback);
+    persistent.MakeWeak(NULL, &ArrayBuffer::WeakCallback);
 
     return args.This();
   }
@@ -254,7 +241,7 @@ class TypedArray {
  private:
   static v8::Handle<v8::Value> V8New(const v8::Arguments& args) {
     if (!args.IsConstructCall())
-      return ThrowTypeError("Constructor cannot be called as a function.");
+      return node::FromConstructorTemplate(GetTemplate(), args);
 
     // To match Chrome, we allow "new Float32Array()".
     // if (args.Length() != 1)
@@ -264,23 +251,10 @@ class TypedArray {
     unsigned int length = 0;
     unsigned int byte_offset = 0;
 
-    if (node::Buffer::HasInstance(args[0]) ||
-        ArrayBuffer::HasInstance(args[0])) {
+    if (ArrayBuffer::HasInstance(args[0])) {  // ArrayBuffer constructor.
       buffer = v8::Local<v8::Object>::Cast(args[0]);
-      size_t buflen = buffer->GetIndexedPropertiesExternalArrayDataLength();
-
-      // Try to short-circuit as early as possible. Assume that in most
-      // `new TypedArray(other_array)` calls, the old and the new array
-      // have the same type.
-      bool make_copy = HasInstance(buffer) ||
-                       Int8Array::HasInstance(buffer) ||
-                       Uint8Array::HasInstance(buffer) ||
-                       Int16Array::HasInstance(buffer) ||
-                       Uint16Array::HasInstance(buffer) ||
-                       Int32Array::HasInstance(buffer) ||
-                       Uint32Array::HasInstance(buffer) ||
-                       Float32Array::HasInstance(buffer) ||
-                       Float64Array::HasInstance(buffer);
+      size_t buflen =
+          buffer->GetIndexedPropertiesExternalArrayDataLength();
 
       if (!args[1]->IsUndefined() && args[1]->Int32Value() < 0)
         return ThrowRangeError("Byte offset out of range.");
@@ -305,31 +279,13 @@ class TypedArray {
       }
 
       void* buf = buffer->GetIndexedPropertiesExternalArrayData();
+      char* begin = reinterpret_cast<char*>(buf) + byte_offset;
 
-      if (make_copy) {
-        void* dst = malloc(length);
+      if (!checkAlignment(reinterpret_cast<uintptr_t>(begin), TBytes))
+        return ThrowRangeError("Byte offset is not aligned.");
 
-        if (dst == NULL)
-          return ThrowError("Out of memory.");
-
-        v8::V8::AdjustAmountOfExternalAllocatedMemory(length);
-        memcpy(dst, static_cast<const char*>(buf) + byte_offset, length);
-        v8::Persistent<v8::Object> persistent =
-            v8::Persistent<v8::Object>::New(args.This());
-        persistent->SetIndexedPropertiesToExternalArrayData(dst,
-                                                            TEAType,
-                                                            length);
-        persistent.MakeWeak(NULL, WeakCallback);
-      }
-      else {
-        char* begin = reinterpret_cast<char*>(buf) + byte_offset;
-
-        if (!checkAlignment(reinterpret_cast<uintptr_t>(begin), TBytes))
-          return ThrowRangeError("Byte offset is not aligned.");
-
-        args.This()->SetIndexedPropertiesToExternalArrayData(
-          begin, TEAType, length);
-      }
+      args.This()->SetIndexedPropertiesToExternalArrayData(
+        begin, TEAType, length);
     }
     else if (args[0]->IsObject()) {  // TypedArray / type[] constructor.
       v8::Local<v8::Object> obj = v8::Local<v8::Object>::Cast(args[0]);
@@ -503,6 +459,16 @@ class TypedArray {
   }
 };
 
+class Int8Array : public TypedArray<1, v8::kExternalByteArray> { };
+class Uint8Array : public TypedArray<1, v8::kExternalUnsignedByteArray> { };
+class Uint8ClampedArray : public TypedArray<1, v8::kExternalPixelArray> { };
+class Int16Array : public TypedArray<2, v8::kExternalShortArray> { };
+class Uint16Array : public TypedArray<2, v8::kExternalUnsignedShortArray> { };
+class Int32Array : public TypedArray<4, v8::kExternalIntArray> { };
+class Uint32Array : public TypedArray<4, v8::kExternalUnsignedIntArray> { };
+class Float32Array : public TypedArray<4, v8::kExternalFloatArray> { };
+class Float64Array : public TypedArray<8, v8::kExternalDoubleArray> { };
+
 template <typename T>
 v8::Handle<v8::Value> cTypeToValue(T) {
   return v8::Undefined();
@@ -647,7 +613,7 @@ class DataView {
  private:
   static v8::Handle<v8::Value> V8New(const v8::Arguments& args) {
     if (!args.IsConstructCall())
-      return ThrowTypeError("Constructor cannot be called as a function.");
+      return node::FromConstructorTemplate(GetTemplate(), args);
 
     if (args.Length() < 1)
       return ThrowError("Wrong number of arguments.");
@@ -656,7 +622,7 @@ class DataView {
       return ThrowError("Object must be an ArrayBuffer.");
 
     v8::Handle<v8::Object> buffer = v8::Handle<v8::Object>::Cast(args[0]);
-    if (!buffer->HasIndexedPropertiesInExternalArrayData())
+    if (!ArrayBuffer::HasInstance(buffer))
       return ThrowError("Object must be an ArrayBuffer.");
 
     unsigned int byte_length =
@@ -681,24 +647,12 @@ class DataView {
     }
 
     void* buf = buffer->GetIndexedPropertiesExternalArrayData();
-    char* dst = NULL;
-    if (ArrayBuffer::HasInstance(buffer)) {
-      dst = reinterpret_cast<char*>(buf) + byte_offset;
-    } else {
-      // Make a copy. A violation of the spec but we're not supposed
-      // to accept typed arrays anyway, only ArrayBuffers.
-      dst = static_cast<char*>(malloc(byte_length));
-      if (dst == NULL) return ThrowError("Out of memory.");
-      memcpy(dst, buf, byte_length);
-      v8::V8::AdjustAmountOfExternalAllocatedMemory(byte_length);
-      v8::Persistent<v8::Object>::New(args.This()).MakeWeak(NULL, WeakCallback);
-    }
 
     // Like ArrayBuffer, we violate the spec and add an operator[].
-    v8::ExternalArrayType array_type = v8::kExternalUnsignedByteArray;
-    args.This()->SetIndexedPropertiesToExternalArrayData(dst,
-                                                         array_type,
-                                                         byte_length);
+    args.This()->SetIndexedPropertiesToExternalArrayData(
+        reinterpret_cast<char*>(buf) + byte_offset,
+        v8::kExternalUnsignedByteArray, byte_length);
+
     args.This()->Set(v8::String::New("buffer"),
                      buffer,
                      (v8::PropertyAttribute)(v8::ReadOnly|v8::DontDelete));

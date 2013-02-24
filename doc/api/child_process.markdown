@@ -93,6 +93,16 @@ See `waitpid(2)`.
 ### Event: 'close'
 
 <!--
+* `code` {Number} the exit code, if it exited normally.
+* `signal` {String} the signal passed to kill the child process, if it
+  was killed by the parent.
+-->
+
+* `code` {Number} 普通に終了した場合は、その終了コード。
+* `signal` {String} 親プロセスによって殺された場合は、
+  子プロセスを殺すために渡されたシグナル。
+
+<!--
 This event is emitted when the stdio streams of a child process have all
 terminated.  This is distinct from 'exit', since multiple processes
 might share the same stdio streams.
@@ -222,7 +232,7 @@ be sent `'SIGTERM'`. See `signal(7)` for a list of available signals.
     var spawn = require('child_process').spawn,
         grep  = spawn('grep', ['ssh']);
 
-    grep.on('exit', function (code, signal) {
+    grep.on('close', function (code, signal) {
       console.log('child process terminated due to receipt of signal '+signal);
     });
 
@@ -511,7 +521,7 @@ ls -lh /usr` を実行して `stdout`、`stderr`、および終了コードを�
       console.log('stderr: ' + data);
     });
 
-    ls.on('exit', function (code) {
+    ls.on('close', function (code) {
       console.log('child process exited with code ' + code);
     });
 
@@ -534,7 +544,7 @@ Example: A very elaborate way to run 'ps ax | grep ssh'
       console.log('ps stderr: ' + data);
     });
 
-    ps.on('exit', function (code) {
+    ps.on('close', function (code) {
       if (code !== 0) {
         console.log('ps process exited with code ' + code);
       }
@@ -549,7 +559,7 @@ Example: A very elaborate way to run 'ps ax | grep ssh'
       console.log('grep stderr: ' + data);
     });
 
-    grep.on('exit', function (code) {
+    grep.on('close', function (code) {
       if (code !== 0) {
         console.log('grep process exited with code ' + code);
       }
@@ -774,6 +784,8 @@ Node のドキュメント化されていない API と同様に、
 * `options` {Object}
   * `cwd` {String} Current working directory of the child process
   * `stdio` {Array|String} Child's stdio configuration. (See above)
+    Only stdin is configurable, anything else will lead to unpredictable
+    results.
   * `customFds` {Array} **Deprecated** File descriptors for the child to use
     for stdio.  (See above)
   * `env` {Object} Environment key-value pairs
@@ -792,6 +804,7 @@ Node のドキュメント化されていない API と同様に、
 * `options` {Object}
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
   * `stdio` {Array|String} 子プロセスの標準入出力の設定 (前述)。
+    標準入力のみが構成可能です。その他は予期しない結果を招くでしょう。
   * `customFds` {Array} **Deprecated** 子プロセスが標準入出力として使用する
    ファイル記述子の配列 (前述)
   * `env` {Object} 環境変数として与えるキー・値のペア
