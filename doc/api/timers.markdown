@@ -104,12 +104,14 @@ request the timer hold the program open. If the timer is already `ref`d calling
 ## setImmediate(callback, [arg], [...])
 
 <!--
-To schedule the "immediate" execution of `callback`. Returns an `immediateId`
-for possible use with `clearImmediate()`. Optionally you can also pass
-arguments to the callback.
+To schedule the "immediate" execution of `callback` after I/O events
+callbacks and before `setTimeout` and `setInterval` . Returns an
+`immediateId` for possible use with `clearImmediate()`. Optionally you
+can also pass arguments to the callback.
 -->
 
-`callback` を「即時に」実行するようスケジュールします。
+`callback` を「即時」 (I/O イベントのコールバックより後、`setTimeout` および
+`setInterval` よりも前) に実行するようスケジュールします。
 `clearImmediate()` に渡すことのできる `immediatedId` を返します。
 オプションとして、コールバックへの引数を渡すことができます。
 
