@@ -89,25 +89,33 @@ null 文字を 0x00 に変換したい場合は `'utf8'` を使用してくだ�
 * `'hex'` - 各バイトを 2 桁の16進数文字列でエンコードします。
 
 <!--
-`Buffer` can also be used with Typed Array Views and DataViews.
+A `Buffer` object can also be used with typed arrays.  The buffer object is
+cloned to an `ArrayBuffer` that is used as the backing store for the typed
+array.  The memory of the buffer and the `ArrayBuffer` is not shared.
 -->
 
-`Buffer` は Typed Array のビューおよびデータビューとして使うことができます。
+`Buffer` は Typed Array として使うことができます。
+バッファオブジェクトは、Typed Array のバッキングストアとして使われる
+`ArrayBuffer` から複製されます。
+バッファと `Typed Array` はメモリを共有しません。
 
-    var buff = new Buffer(4);
-    var ui16 = new Uint16Array(buff);
-    var view = new DataView(buff);
+<!--
+NOTE: Node.js v0.8 simply retained a reference to the buffer in `array.buffer`
+instead of cloning it.
+-->
 
-    ui16[0] = 1;
-    ui16[1] = 2;
-    console.log(buff);
+Node.js の v0.8 では、バッファを複製するのではなく、単純に `array.buffer`
+に参照を維持していました。
 
-    view.setInt16(0, 1);       // set big-endian int16 at byte offset 0
-    view.setInt16(2, 2, true); // set little-endian int16 at byte offset 2
-    console.log(buff);
+<!--
+While more efficient, it introduces subtle incompatibilities with the typed
+arrays specification.  `ArrayBuffer#slice()` makes a copy of the slice while
+`Buffer#slice()` creates a view.
+-->
 
-    // <Buffer 01 00 02 00>
-    // <Buffer 00 01 02 00>
+それは効率的ではあったものの、Typed Array との微妙な非互換性をもたらしました。
+`ArrayBuffer#slice()` はスライスのコピーを作成する一方、
+`Buffer#slice()` はビューを作成します。
 
 ## Class: Buffer
 
@@ -480,12 +488,13 @@ into `buf2`, starting at the 8th byte in `buf2`.
 <!--
 Returns a new buffer which references the same memory as the old, but offset
 and cropped by the `start` (defaults to `0`) and `end` (defaults to
-`buffer.length`) indexes.
+`buffer.length`) indexes.  Negative indexes start from the end of the buffer.
 -->
 
 元のバッファと同じメモリを参照しますが、`start` (デフォルトは `0`) と
 `end` (デフォルトは `buffer.length`) で示されるオフセットと長さを持つ
 新しいバッファを返します。
+負のインデックスはバッファの末尾から開始します。
 
 <!--
 **Modifying the new buffer slice will modify memory in the original buffer!**
