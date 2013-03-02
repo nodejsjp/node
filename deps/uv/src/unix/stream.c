@@ -125,7 +125,7 @@ void uv__stream_init(uv_loop_t* loop,
 
 
 #if defined(__APPLE__)
-void uv__stream_osx_select(void* arg) {
+static void uv__stream_osx_select(void* arg) {
   uv_stream_t* stream;
   uv__stream_select_t* s;
   char buf[1024];
@@ -216,7 +216,7 @@ void uv__stream_osx_select(void* arg) {
 }
 
 
-void uv__stream_osx_interrupt_select(uv_stream_t* stream) {
+static void uv__stream_osx_interrupt_select(uv_stream_t* stream) {
   /* Notify select() thread about state change */
   uv__stream_select_t* s;
   int r;
@@ -235,7 +235,7 @@ void uv__stream_osx_interrupt_select(uv_stream_t* stream) {
 }
 
 
-void uv__stream_osx_select_cb(uv_async_t* handle, int status) {
+static void uv__stream_osx_select_cb(uv_async_t* handle, int status) {
   uv__stream_select_t* s;
   uv_stream_t* stream;
   int events;
@@ -260,7 +260,7 @@ void uv__stream_osx_select_cb(uv_async_t* handle, int status) {
 }
 
 
-void uv__stream_osx_cb_close(uv_handle_t* async) {
+static void uv__stream_osx_cb_close(uv_handle_t* async) {
   uv__stream_select_t* s;
 
   s = container_of(async, uv__stream_select_t, async);
@@ -268,7 +268,7 @@ void uv__stream_osx_cb_close(uv_handle_t* async) {
 }
 
 
-int uv__stream_try_select(uv_stream_t* stream, int fd) {
+static int uv__stream_try_select(uv_stream_t* stream, int fd) {
   /*
    * kqueue doesn't work with some files from /dev mount on osx.
    * select(2) in separate thread for those fds
@@ -300,7 +300,7 @@ int uv__stream_try_select(uv_stream_t* stream, int fd) {
   if (ret == -1)
     return uv__set_sys_error(stream->loop, errno);
 
-  if ((events[0].flags & EV_ERROR) == 0 || events[0].data != EINVAL)
+  if (ret == 0 || (events[0].flags & EV_ERROR) == 0 || events[0].data != EINVAL)
     return 0;
 
   /* At this point we definitely know that this fd won't work with kqueue */
@@ -484,6 +484,13 @@ static int uv__emfile_trick(uv_loop_t* loop, int accept_fd) {
 }
 
 
+#if defined(UV_HAVE_KQUEUE)
+# define UV_DEC_BACKLOG(w) w->rcount--;
+#else
+# define UV_DEC_BACKLOG(w) /* no-op */
+#endif /* defined(UV_HAVE_KQUEUE) */
+
+
 void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
   static int use_emfile_trick = -1;
   uv_stream_t* stream;
@@ -503,6 +510,10 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
    */
   while (uv__stream_fd(stream) != -1) {
     assert(stream->accepted_fd == -1);
+#if defined(UV_HAVE_KQUEUE)
+    if (w->rcount <= 0)
+      return;
+#endif /* defined(UV_HAVE_KQUEUE) */
     fd = uv__accept(uv__stream_fd(stream));
 
     if (fd == -1) {
@@ -514,6 +525,7 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
         return; /* Not an error. */
 
       case ECONNABORTED:
+        UV_DEC_BACKLOG(w)
         continue; /* Ignore. */
 
       case EMFILE:
@@ -525,8 +537,10 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
 
         if (use_emfile_trick) {
           SAVE_ERRNO(r = uv__emfile_trick(loop, uv__stream_fd(stream)));
-          if (r == 0)
+          if (r == 0) {
+            UV_DEC_BACKLOG(w)
             continue;
+          }
         }
 
         /* Fall through. */
@@ -537,6 +551,8 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
         continue;
       }
     }
+
+    UV_DEC_BACKLOG(w)
 
     stream->accepted_fd = fd;
     stream->connection_cb(stream, 0);
@@ -554,6 +570,9 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
     }
   }
 }
+
+
+#undef UV_DEC_BACKLOG
 
 
 int uv_accept(uv_stream_t* server, uv_stream_t* client) {
@@ -1169,21 +1188,26 @@ int uv_write2(uv_write_t* req,
   int empty_queue;
 
   assert(bufcnt > 0);
+  assert((stream->type == UV_TCP ||
+          stream->type == UV_NAMED_PIPE ||
+          stream->type == UV_TTY) &&
+         "uv_write (unix) does not yet support other types of streams");
 
-  assert((stream->type == UV_TCP || stream->type == UV_NAMED_PIPE ||
-      stream->type == UV_TTY) &&
-      "uv_write (unix) does not yet support other types of streams");
-
-  if (uv__stream_fd(stream) < 0) {
-    uv__set_sys_error(stream->loop, EBADF);
-    return -1;
-  }
+  if (uv__stream_fd(stream) < 0)
+    return uv__set_artificial_error(stream->loop, UV_EBADF);
 
   if (send_handle) {
-    if (stream->type != UV_NAMED_PIPE || !((uv_pipe_t*)stream)->ipc) {
-      uv__set_sys_error(stream->loop, EOPNOTSUPP);
-      return -1;
-    }
+    if (stream->type != UV_NAMED_PIPE || !((uv_pipe_t*)stream)->ipc)
+      return uv__set_artificial_error(stream->loop, UV_EINVAL);
+
+    /* XXX We abuse uv_write2() to send over UDP handles to child processes.
+     * Don't call uv__stream_fd() on those handles, it's a macro that on OS X
+     * evaluates to a function that operates on a uv_stream_t with a couple of
+     * OS X specific fields. On other Unices it does (handle)->io_watcher.fd,
+     * which works but only by accident.
+     */
+    if (uv__handle_fd((uv_handle_t*) send_handle) < 0)
+      return uv__set_artificial_error(stream->loop, UV_EBADF);
   }
 
   empty_queue = (stream->write_queue_size == 0);
@@ -1249,10 +1273,8 @@ static int uv__read_start_common(uv_stream_t* stream,
   assert(stream->type == UV_TCP || stream->type == UV_NAMED_PIPE ||
       stream->type == UV_TTY);
 
-  if (stream->flags & UV_CLOSING) {
-    uv__set_sys_error(stream->loop, EINVAL);
-    return -1;
-  }
+  if (stream->flags & UV_CLOSING)
+    return uv__set_sys_error(stream->loop, EINVAL);
 
   /* The UV_STREAM_READING flag is irrelevant of the state of the tcp - it just
    * expresses the desired state of the user.
@@ -1326,6 +1348,10 @@ int uv_is_writable(const uv_stream_t* stream) {
 #if defined(__APPLE__)
 int uv___stream_fd(uv_stream_t* handle) {
   uv__stream_select_t* s;
+
+  assert(handle->type == UV_TCP ||
+         handle->type == UV_TTY ||
+         handle->type == UV_NAMED_PIPE);
 
   s = handle->select;
   if (s != NULL)

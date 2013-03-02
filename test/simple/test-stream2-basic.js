@@ -333,14 +333,14 @@ test('multipipe', function(t) {
 test('back pressure respected', function (t) {
   function noop() {}
 
-  var r = new R();
+  var r = new R({ objectMode: true });
+  r._read = noop;
   var counter = 0;
   r.push(["one"]);
   r.push(["two"]);
   r.push(["three"]);
   r.push(["four"]);
   r.push(null);
-  r._read = noop;
 
   var w1 = new R();
   w1.write = function (chunk) {
@@ -406,7 +406,7 @@ test('read(0) for ended streams', function (t) {
   var r = new R();
   var written = false;
   var ended = false;
-  r._read = function () {};
+  r._read = function (n) {};
 
   r.push(new Buffer("foo"));
   r.push(null);
@@ -435,8 +435,8 @@ test('read(0) for ended streams', function (t) {
 test('sync _read ending', function (t) {
   var r = new R();
   var called = false;
-  r._read = function (n, cb) {
-    cb(null, null);
+  r._read = function (n) {
+    r.push(null);
   };
 
   r.once('end', function () {
@@ -449,19 +449,4 @@ test('sync _read ending', function (t) {
     assert.equal(called, true);
     t.end();
   })
-});
-
-assert.throws(function() {
-  var bad = new R({
-    highWaterMark: 10,
-    lowWaterMark: 1000
-  });
-});
-
-assert.throws(function() {
-  var W = require('stream').Writable;
-  var bad = new W({
-    highWaterMark: 10,
-    lowWaterMark: 1000
-  });
 });

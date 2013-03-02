@@ -32,7 +32,7 @@
 #endif
 
 #if defined(__linux__)
-# include "linux/syscalls.h"
+# include "linux-syscalls.h"
 #endif /* __linux__ */
 
 #if defined(__sun)
@@ -44,6 +44,9 @@
 #if defined(__APPLE__) && !TARGET_OS_IPHONE
 # include <CoreServices/CoreServices.h>
 #endif
+
+#define ACCESS_ONCE(type, var)                                                \
+  (*(volatile type*) &(var))
 
 #define UNREACHABLE()                                                         \
   do {                                                                        \
@@ -111,7 +114,6 @@ int uv__nonblock(int fd, int set);
 int uv__cloexec(int fd, int set);
 int uv__socket(int domain, int type, int protocol);
 int uv__dup(int fd);
-int uv_async_stop(uv_async_t* handle);
 void uv__make_close_pending(uv_handle_t* handle);
 
 void uv__io_init(uv__io_t* w, uv__io_cb cb, int fd);
@@ -121,6 +123,12 @@ void uv__io_close(uv_loop_t* loop, uv__io_t* w);
 void uv__io_feed(uv_loop_t* loop, uv__io_t* w);
 int uv__io_active(const uv__io_t* w, unsigned int events);
 void uv__io_poll(uv_loop_t* loop, int timeout); /* in milliseconds or -1 */
+
+/* async */
+void uv__async_send(struct uv__async* wa);
+void uv__async_init(struct uv__async* wa);
+int uv__async_start(uv_loop_t* loop, struct uv__async* wa, uv__async_cb cb);
+void uv__async_stop(uv_loop_t* loop, struct uv__async* wa);
 
 /* loop */
 int uv__loop_init(uv_loop_t* loop, int default_loop);
