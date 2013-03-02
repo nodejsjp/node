@@ -12,11 +12,16 @@ Nodeは `child_process` モジュールを通じて、3 方向の `popen(3)`
 
 <!--
 It is possible to stream data through a child's `stdin`, `stdout`, and
-`stderr` in a fully non-blocking way.
+`stderr` in a fully non-blocking way.  (Note that some programs use
+line-buffered I/O internally.  That doesn't affect node.js but it means
+data you send to the child process is not immediately consumed.)
 -->
 
 これは完全にノンブロッキングな方法で子プロセスの `stdin`、`stdout`、
 そして `stderr` を通じたデータストリームを実現します。
+(いくつかのプログラムは内部的にバッファリングされた I/O を使うことに
+注意してください。それは node.js には影響しませんが、
+子プロセスに送ったデータがすぐに消費されるとは限らないことを意味します)。
 
 <!--
 To create a child process use `require('child_process').spawn()`.

@@ -158,11 +158,11 @@ A `Readable Stream` has the following methods, members, and events.
 
 <!--
 Note that `stream.Readable` is an abstract class designed to be
-extended with an underlying implementation of the `_read(size, cb)`
+extended with an underlying implementation of the `_read(size)`
 method. (See below.)
 -->
 
-`stream.Readable` は下層の実装である `_read(size, cb)` メソッド (後述)
+`stream.Readable` は下層の実装である `_read(size)` メソッド (後述)
 によって拡張されるように設計された抽象クラスであることに注意してください。
 
 ### new stream.Readable([options])
@@ -171,8 +171,6 @@ method. (See below.)
 * `options` {Object}
   * `bufferSize` {Number} The size of the chunks to consume from the
     underlying resource. Default=16kb
-  * `lowWaterMark` {Number} The minimum number of bytes to store in
-    the internal buffer before emitting `readable`.  Default=0
   * `highWaterMark` {Number} The maximum number of bytes to store in
     the internal buffer before ceasing to read from the underlying
     resource.  Default=16kb
@@ -186,8 +184,6 @@ method. (See below.)
 * `options` {Object} (任意)
   * `bufferSize` {Number} 下層のリソースによって消費される
     チャンクのサイズです。デフォルトは 16kb。
-  * `lowWaterMark` {Number} `readable` イベントが生成されるまで
-    内部バッファに貯めておくバイト数の最小値。デフォルトは 0。
   * `highWaterMark` {Number} 下層のリソースから読み込むのを中断するまで
     内部バッファに貯めておくバイト数の最大値。デフォルトは 16kb。
   * `encoding` {String} 指定されるとバッファは指定のエンコーディングで
@@ -205,7 +201,7 @@ initialized.
 `Readable` クラスを拡張するクラスでは、バッファリングの設定を確実に
 初期化することができるように、必ずコンストラクタを呼び出してください。
 
-### readable.\_read(size, callback)
+### readable.\_read(size)
 
 <!--
 * `size` {Number} Number of bytes to read asynchronously
@@ -216,33 +212,22 @@ initialized.
 * `callback` {Function} エラーまたはデータと共に呼び出されるコールバック
 
 <!--
+Note: **This function should NOT be called directly.**  It should be
+implemented by child classes, and called by the internal Readable
+class methods only.
+-->
+
+注意: **この関数は直接呼び出すべきではありません。**
+これはサブクラスで実装されるべきであり、Readable クラスの内部からのみ
+呼び出されるべきです。
+
+<!--
 All Readable stream implementations must provide a `_read` method
 to fetch data from the underlying resource.
 -->
 
 全ての Readable ストリームは、下層のリソースからデータを
 取得するために `_read` メソッドを提供しなければなりません。
-
-<!--
-Note: **This function MUST NOT be called directly.**  It should be
-implemented by child classes, and called by the internal Readable
-class methods only.
--->
-
-注意: **この関数は直接呼び出してはいけません。**
-これはサブクラスで実装されるべきであり、Readable クラスの内部からのみ
-呼び出されるべきです。
-
-<!--
-Call the callback using the standard `callback(error, data)` pattern.
-When no more data can be fetched, call `callback(null, null)` to
-signal the EOF.
--->
-
-コールバックは標準的な `callback(error, data)`
-パターンを使って呼び出します。
-データをそれ以上取得できなくなった場合は、EOF を伝えるために
-`callback(null, null)` で呼び出します。
 
 <!--
 This method is prefixed with an underscore because it is internal to
@@ -256,6 +241,18 @@ your own extension classes.
 しかしながら、あなたの拡張クラスではこのメソッドをオーバーライドすることが
 求められて**います**。
 
+<!--
+When data is available, put it into the read queue by calling
+`readable.push(chunk)`.  If `push` returns false, then you should stop
+reading.  When `_read` is called again, you should start pushing more
+data.
+-->
+
+データが利用可能になれば、`readable.push(chunk)` を呼び出すことで
+それを読み込みキューに追加します。
+`push` が false を返した場合は、読み込みを止めるべきです。
+`_read` が再び呼び出された時が、さらに多くのデータを追加を開始すべき時です。
+
 ### readable.push(chunk)
 
 <!--
@@ -268,14 +265,29 @@ your own extension classes.
 * return {Boolean} まだプッシュしてもいいかどうか
 
 <!--
+Note: **This function should be called by Readable implementors, NOT
+by consumers of Readable subclasses.**  The `_read()` function will not
+be called again until at least one `push(chunk)` call is made.  If no
+data is available, then you MAY call `push('')` (an empty string) to
+allow a future `_read` call, without adding any data to the queue.
+-->
+
+注意: **この関数は Readable の実装から呼び出されるべきものであり、
+Readable のサブクラスの利用者が呼び出すべきではありません。**
+少なくとも一回は `push(chunk)` が呼び出されないと、`_read()` 関数が
+再び呼び出されることはありません。もし利用可能なデータがない場合は、
+将来 `_read` が呼び出されるように `push(''`)` (空文字列)
+を呼び出すことができます。
+
+<!--
 The `Readable` class works by putting data into a read queue to be
 pulled out later by calling the `read()` method when the `'readable'`
 event fires.
 -->
 
-`'readable'` イベントが生成された時、後で `read()` メソッドを呼び出して
-取得されるデータを読み込みキューに入れておくことによって
-`Readable` クラスは機能します。
+`Readable` クラスは、`'readable'` イベントの生成時に `read()`
+メソッドが呼び出されることで後から取り出されるデータを、
+読み込みキューに入れておくことによって機能します。
 
 <!--
 The `push()` method will explicitly insert some data into the read
@@ -321,6 +333,132 @@ stream._read = function(size, cb) {
 };
 ```
 
+### readable.unshift(chunk)
+
+<!--
+* `chunk` {Buffer | null | String} Chunk of data to unshift onto the read queue
+* return {Boolean} Whether or not more pushes should be performed
+-->
+
+* `chunk` {Buffer | null | String} 読み込みキューの先頭に戻されるデータのチャンク
+* return {Boolean} より多くの追加が実行されるべきかどうか
+
+<!--
+This is the corollary of `readable.push(chunk)`.  Rather than putting
+the data at the *end* of the read queue, it puts it at the *front* of
+the read queue.
+-->
+
+これは `readable.push(chunk)` からの帰結です。
+データを読み込みキューの *末尾* に加えるのではなく、
+読み込みキューの *先頭* に加えます。
+
+<!--
+This is useful in certain use-cases where a stream is being consumed
+by a parser, which needs to "un-consume" some data that it has
+optimistically pulled out of the source.
+-->
+
+これはストリームがパーサによって消費されるユースケースにおいて有用です。
+それはソースから楽観的に取り出したデータを「消費しなかったことにする」
+場合に必要です。
+
+```javascript
+// A parser for a simple data protocol.
+// The "header" is a JSON object, followed by 2 \n characters, and
+// then a message body.
+//
+// Note: This can be done more simply as a Transform stream.  See below.
+
+function SimpleProtocol(source, options) {
+  if (!(this instanceof SimpleProtocol))
+    return new SimpleProtocol(options);
+
+  Readable.call(this, options);
+  this._inBody = false;
+  this._sawFirstCr = false;
+
+  // source is a readable stream, such as a socket or file
+  this._source = source;
+
+  var self = this;
+  source.on('end', function() {
+    self.push(null);
+  });
+
+  // give it a kick whenever the source is readable
+  // read(0) will not consume any bytes
+  source.on('readable', function() {
+    self.read(0);
+  });
+
+  this._rawHeader = [];
+  this.header = null;
+}
+
+SimpleProtocol.prototype = Object.create(
+  Readable.prototype, { constructor: { value: SimpleProtocol }});
+
+SimpleProtocol.prototype._read = function(n) {
+  if (!this._inBody) {
+    var chunk = this._source.read();
+
+    // if the source doesn't have data, we don't have data yet.
+    if (chunk === null)
+      return this.push('');
+
+    // check if the chunk has a \n\n
+    var split = -1;
+    for (var i = 0; i < chunk.length; i++) {
+      if (chunk[i] === 10) { // '\n'
+        if (this._sawFirstCr) {
+          split = i;
+          break;
+        } else {
+          this._sawFirstCr = true;
+        }
+      } else {
+        this._sawFirstCr = false;
+      }
+    }
+
+    if (split === -1) {
+      // still waiting for the \n\n
+      // stash the chunk, and try again.
+      this._rawHeader.push(chunk);
+      this.push('');
+    } else {
+      this._inBody = true;
+      var h = chunk.slice(0, split);
+      this._rawHeader.push(h);
+      var header = Buffer.concat(this._rawHeader).toString();
+      try {
+        this.header = JSON.parse(header);
+      } catch (er) {
+        this.emit('error', new Error('invalid simple protocol data'));
+        return;
+      }
+      // now, because we got some extra data, unshift the rest
+      // back into the read queue so that our consumer will see it.
+      this.unshift(b);
+
+      // and let them know that we are done parsing the header.
+      this.emit('header', this.header);
+    }
+  } else {
+    // from there on, just provide the data to our consumer.
+    // careful not to push(null), since that would indicate EOF.
+    var chunk = this._source.read();
+    if (chunk) this.push(chunk);
+  }
+};
+
+// Usage:
+var parser = new SimpleProtocol(source);
+// Now parser is a readable stream that will emit 'header'
+// with the parsed header data.
+```
+
 ### readable.wrap(stream)
 
 <!--
@@ -361,14 +499,10 @@ myReader.on('readable', function() {
 ### Event: 'readable'
 
 <!--
-When there is data ready to be consumed, this event will fire.  The
-number of bytes that are required to be considered "readable" depends
-on the `lowWaterMark` option set in the constructor.
+When there is data ready to be consumed, this event will fire.
 -->
 
 データが消費される準備ができた時、このイベントが生成されます。
-「読み込み可能である」とみなされるために必要なバイト数は、
-コンストラクタで設定された `lowWaterMark` に依存します。
 
 <!--
 When this event emits, call the `read()` method to consume the data.
@@ -458,6 +592,12 @@ constructor.
 * Return: {Buffer | String | null}
 
 <!--
+Note: **This function SHOULD be called by Readable stream users.**
+-->
+
+注意: **この関数は Redable ストリームのユーザが呼び出すべきです。**
+
+<!--
 Call this method to consume data once the `'readable'` event is
 emitted.
 -->
@@ -485,11 +625,11 @@ a future `'readable'` event will be emitted when more is available.
 その後、より多くのデータが利用可能になると `'readable'` イベントが生成されます。
 
 <!--
-Note that calling `stream.read(0)` will always return `null`, and will
-trigger a refresh of the internal buffer, but otherwise be a no-op.
+Calling `stream.read(0)` will always return `null`, and will trigger a
+refresh of the internal buffer, but otherwise be a no-op.
 -->
 
-`stream.read(0)` は常に `null` を返すことに注意してください。
+`stream.read(0)` は常に `null` を返します。
 それは内部バッファをリフレッシュしますが、それ以外の処理はしません。
 
 ### readable.pipe(destination, [options])
@@ -637,8 +777,6 @@ method. (See below.)
 * `options` {Object}
   * `highWaterMark` {Number} Buffer level when `write()` starts
     returning false. Default=16kb
-  * `lowWaterMark` {Number} The buffer level when `'drain'` is
-    emitted.  Default=0
   * `decodeStrings` {Boolean} Whether or not to decode strings into
     Buffers before passing them to `_write()`.  Default=true
 -->
@@ -646,8 +784,6 @@ method. (See below.)
 * `options` {Object} (任意)
   * `highWaterMark` {Number} `write()` が `false` を返し始めるバッファレベル。
     デフォルトは 16kb。
-  * `lowWaterMark` {Number} `'drain'` が生成されるバッファレベル。
-    デフォルトは 0。
   * `decodeStrings` {Boolean} 文字列が `_write()` に渡される前に
     バッファにデコードするかどうか。デフォルトは `true`。
 
@@ -753,15 +889,12 @@ the buffer is full, and the data will be sent out in the future. The
 `'drain'` イベントはバッファが再び空になったことを伝えます。
 
 <!--
-The specifics of when `write()` will return false, and when a
-subsequent `'drain'` event will be emitted, are determined by the
-`highWaterMark` and `lowWaterMark` options provided to the
-constructor.
+The specifics of when `write()` will return false, is determined by
+the `highWaterMark` option provided to the constructor.
 -->
 
-`write()` がいつ `false` を返し、後続の `'drain'` イベントがいつ
-生成されるかは、コンストラクタに与えられる
-`highWaterMark` および `lowWaterMark` オプションによって決定されます。
+`write()` がいつ `false` を返すかは、コンストラクタに与えられる
+`highWaterMark` オプションによって決定されます。
 
 ### writable.end([chunk], [encoding], [callback])
 
@@ -856,13 +989,13 @@ Readable であり Writable でもあるストリームの一種です。
 
 <!--
 Note that `stream.Duplex` is an abstract class designed to be
-extended with an underlying implementation of the `_read(size, cb)`
+extended with an underlying implementation of the `_read(size)`
 and `_write(chunk, callback)` methods as you would with a Readable or
 Writable stream class.
 -->
 
 `stream.Duplex` は、Readable および Writable ストリームクラスと同様、
-下層の実装である `_read(size, cb)` および `_write(chunk, callback)`
+下層の実装である `_read(size)` および `_write(chunk, callback)`
 メソッドによって拡張されるように設計された抽象クラスであることに
 注意してください。
 
@@ -870,14 +1003,14 @@ Writable stream class.
 Since JavaScript doesn't have multiple prototypal inheritance, this
 class prototypally inherits from Readable, and then parasitically from
 Writable.  It is thus up to the user to implement both the lowlevel
-`_read(n,cb)` method as well as the lowlevel `_write(chunk,cb)` method
+`_read(n)` method as well as the lowlevel `_write(chunk,cb)` method
 on extension duplex classes.
 -->
 
 JavaScript は複数のプロトタイプ継承を持つことができないため、
 このクラスは Readable からプロトタイプを継承したうえで、
 Writable から寄生的な方法 (プロトタイプメンバーのコピー) を行います。
-低水準の `_read(n,cb)` および `_write(chunk,cb)` を実装することは、
+低水準の `_read(n)` および `_write(chunk,cb)` を実装することは、
 Duplex クラスを拡張するユーザの責務です。
 
 ### new stream.Duplex(options)
@@ -974,14 +1107,6 @@ initialized.
   (任意のエラー引数と共に) この関数を呼び出してください。
 
 <!--
-All Transform stream implementations must provide a `_transform`
-method to accept input and produce output.
--->
-
-全ての Transform ストリームの実装は、入力を受け取って出力を提供するために
-`_transform` メソッドを提供しなければなりません。
-
-<!--
 Note: **This function MUST NOT be called directly.**  It should be
 implemented by child classes, and called by the internal Transform
 class methods only.
@@ -990,6 +1115,14 @@ class methods only.
 注意: **この関数は直接呼び出してはいけません。**
 これはサブクラスで実装されるべきであり、Transform クラスの内部からのみ
 呼び出されるべきです。
+
+<!--
+All Transform stream implementations must provide a `_transform`
+method to accept input and produce output.
+-->
+
+全ての Transform ストリームの実装は、入力を受け取って出力を提供するために
+`_transform` メソッドを提供しなければなりません。
 
 <!--
 `_transform` should do whatever has to be done in this specific
@@ -1089,6 +1222,93 @@ your own extension classes.
 直接呼び出されるべきものではないため、アンダースコアの接頭辞を持ちます。
 しかしながら、あなたの拡張クラスではこのメソッドをオーバーライドすることが
 求められて**います**。
+
+### Example: `SimpleProtocol` parser
+
+<!--
+The example above of a simple protocol parser can be implemented much
+more simply by using the higher level `Transform` stream class.
+-->
+
+前述した単純なプロトコルパーサの例は、より高水準な `Transform`
+ストリームクラスを使うことで、さらにシンプルに実装することができます。
+
+<!--
+In this example, rather than providing the input as an argument, it
+would be piped into the parser, which is a more idiomatic Node stream
+approach.
+-->
+
+この例では、入力を引数で与えるのではなく、Node のストームにおける
+より慣用的なアプローチとしてパーサにパイプで送られます。
+
+```javascript
+function SimpleProtocol(options) {
+  if (!(this instanceof SimpleProtocol))
+    return new SimpleProtocol(options);
+
+  Transform.call(this, options);
+  this._inBody = false;
+  this._sawFirstCr = false;
+  this._rawHeader = [];
+  this.header = null;
+}
+
+SimpleProtocol.prototype = Object.create(
+  Transform.prototype, { constructor: { value: SimpleProtocol }});
+
+SimpleProtocol.prototype._transform = function(chunk, output, done) {
+  if (!this._inBody) {
+    // check if the chunk has a \n\n
+    var split = -1;
+    for (var i = 0; i < chunk.length; i++) {
+      if (chunk[i] === 10) { // '\n'
+        if (this._sawFirstCr) {
+          split = i;
+          break;
+        } else {
+          this._sawFirstCr = true;
+        }
+      } else {
+        this._sawFirstCr = false;
+      }
+    }
+
+    if (split === -1) {
+      // still waiting for the \n\n
+      // stash the chunk, and try again.
+      this._rawHeader.push(chunk);
+    } else {
+      this._inBody = true;
+      var h = chunk.slice(0, split);
+      this._rawHeader.push(h);
+      var header = Buffer.concat(this._rawHeader).toString();
+      try {
+        this.header = JSON.parse(header);
+      } catch (er) {
+        this.emit('error', new Error('invalid simple protocol data'));
+        return;
+      }
+      // and let them know that we are done parsing the header.
+      this.emit('header', this.header);
+
+      // now, because we got some extra data, emit this first.
+      output(b);
+    }
+  } else {
+    // from there on, just provide the data to our consumer as-is.
+    output(b);
+  }
+  done();
+};
+
+var parser = new SimpleProtocol();
+source.pipe(parser)
+
+// Now parser is a readable stream that will emit 'header'
+// with the parsed header data.
+```
+
 
 ## Class: stream.PassThrough
 
