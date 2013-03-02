@@ -803,7 +803,19 @@ Synchronous version of `fs.read`. Returns the number of `bytesRead`.
 
 同期版の `fs.read`。`bytesRead` の数を返します。
 
-## fs.readFile(filename, [encoding], [callback])
+## fs.readFile(filename, [options], [callback])
+
+<!--
+* `filename` {String}
+* `options` {Object}
+  * `encoding` {String | Null} default = `null`
+  * `flag` {String} default = `'r'`
+-->
+
+* `filename` {String}
+* `options` {Object}
+  * `encoding` {String | Null} デフォルトは `null`
+  * `flag` {String} デフォルトは `'r'`
 
 <!--
 Asynchronously reads the entire contents of a file. Example:
@@ -829,7 +841,7 @@ If no encoding is specified, then the raw buffer is returned.
 
 エンコーディングが指定されなければ、生のバッファが渡されます。
 
-## fs.readFileSync(filename, [encoding])
+## fs.readFileSync(filename, [options])
 
 <!--
 Synchronous version of `fs.readFile`. Returns the contents of the `filename`.
@@ -838,25 +850,47 @@ Synchronous version of `fs.readFile`. Returns the contents of the `filename`.
 同期版の `fs.readFile`。`filename` の内容を返します。
 
 <!--
-If `encoding` is specified then this function returns a string. Otherwise it
-returns a buffer.
+If the `encoding` option is specified then this function returns a
+string. Otherwise it returns a buffer.
 -->
 
-`encoding` が指定されるとこの関数は文字列を返します。
+`encoding` オプションが指定されるとこの関数は文字列を返します。
 そうでなければバッファを返します。
 
-## fs.writeFile(filename, data, [encoding], [callback])
+
+## fs.writeFile(filename, data, [options], [callback])
+
+<!--
+* `filename` {String}
+* `data` {String | Buffer}
+* `options` {Object}
+  * `encoding` {String | Null} default = `'utf8'`
+  * `mode` {Number} default = `438` (aka `0666` in Octal)
+  * `flag` {String} default = `'w'`
+-->
+
+* `filename` {String}
+* `data` {String | Buffer}
+* `options` {Object}
+  * `encoding` {String | Null} デフォルトは `'utf8'`
+  * `mode` {Number} デフォルトは `438` (8進数の `0666`)
+  * `flag` {String} デフォルトは `'w'`
 
 <!--
 Asynchronously writes data to a file, replacing the file if it already exists.
-`data` can be a string or a buffer. The `encoding` argument is ignored if
-`data` is a buffer. It defaults to `'utf8'`.
+`data` can be a string or a buffer.
 -->
 
 非同期にデータをファイルに書き込みます。
 ファイルが既に存在する場合は置き換えられます。
 `data` は文字列またはバッファです。
-`data` がバッファの場合、`encoding` は無視されます。
+
+<!--
+The `encoding` option is ignored if `data` is a buffer. It defaults
+to `'utf8'`.
+-->
+
+`data` がバッファの場合、`encoding` オプションは無視されます。
 デフォルトは `'utf8'` です。
 
 <!--
@@ -870,7 +904,7 @@ Example:
       console.log('It\'s saved!');
     });
 
-## fs.writeFileSync(filename, data, [encoding])
+## fs.writeFileSync(filename, data, [options])
 
 <!--
 The synchronous version of `fs.writeFile`.
@@ -878,19 +912,32 @@ The synchronous version of `fs.writeFile`.
 
 同期版の `fs.writeFile`。
 
-## fs.appendFile(filename, data, encoding='utf8', [callback])
+## fs.appendFile(filename, data, [options], [callback])
+
+<!--
+* `filename` {String}
+* `data` {String | Buffer}
+* `options` {Object}
+  * `encoding` {String | Null} default = `'utf8'`
+  * `mode` {Number} default = `438` (aka `0666` in Octal)
+  * `flag` {String} default = `'a'`
+-->
+
+* `filename` {String}
+* `data` {String | Buffer}
+* `options` {Object}
+  * `encoding` {String | Null} デフォルトは `'utf8'`
+  * `mode` {Number} デフォルトは `438` (8進数の `0666`)
+  * `flag` {String} デフォルトは `'a'`
 
 <!--
 Asynchronously append data to a file, creating the file if it not yet exists.
-`data` can be a string or a buffer. The `encoding` argument is ignored if
-`data` is a buffer.
+`data` can be a string or a buffer.
 -->
 
 非同期にデータをファイルに追加します。
 ファイルが存在しなければ作成されます。
 `data` は文字列またはバッファです。
-`data` がバッファの場合、`encoding` は無視されます。
-デフォルトは `'utf8'` です。
 
 <!--
 Example:
@@ -903,7 +950,7 @@ Example:
       console.log('The "data to append" was appended to file!');
     });
 
-## fs.appendFileSync(filename, data, encoding='utf8')
+## fs.appendFileSync(filename, data, [options])
 
 <!--
 The synchronous version of `fs.appendFile`.

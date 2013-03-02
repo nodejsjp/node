@@ -112,7 +112,8 @@
             '-pedantic',
             '-Wall',
             '-Wextra',
-            '-Wno-unused-parameter'
+            '-Wstrict-aliasing',
+            '-Wno-unused-parameter',
           ],
           'sources': [
             'include/uv-private/uv-unix.h',
@@ -157,11 +158,20 @@
             }],
           ],
         }],
+        [ 'OS=="linux" or OS=="mac"', {
+          'sources': [ 'src/unix/proctitle.c' ],
+        }],
         [ 'OS=="mac"', {
-          'sources': [ 'src/unix/darwin.c', 'src/unix/fsevents.c' ],
+          'sources': [
+            'src/unix/darwin.c',
+            'src/unix/fsevents.c',
+            'src/unix/darwin-proctitle.m',
+          ],
           'link_settings': {
             'libraries': [
+              '$(SDKROOT)/System/Library/Frameworks/Foundation.framework',
               '$(SDKROOT)/System/Library/Frameworks/CoreServices.framework',
+              '$(SDKROOT)/System/Library/Frameworks/ApplicationServices.framework',
             ],
           },
           'defines': [
@@ -170,10 +180,10 @@
         }],
         [ 'OS=="linux"', {
           'sources': [
-            'src/unix/linux/linux-core.c',
-            'src/unix/linux/inotify.c',
-            'src/unix/linux/syscalls.c',
-            'src/unix/linux/syscalls.h',
+            'src/unix/linux-core.c',
+            'src/unix/linux-inotify.c',
+            'src/unix/linux-syscalls.c',
+            'src/unix/linux-syscalls.h',
           ],
           'link_settings': {
             'libraries': [ '-ldl', '-lrt' ],
@@ -270,6 +280,7 @@
         'test/test-ipc-send-recv.c',
         'test/test-list.h',
         'test/test-loop-handles.c',
+        'test/test-loop-stop.c',
         'test/test-walk-handles.c',
         'test/test-multiple-listen.c',
         'test/test-pass-always.c',
