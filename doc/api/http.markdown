@@ -457,13 +457,6 @@ events will fire afterwards.
 `'end'` と同様、このイベントはリクエスト上で一度だけ発生し、その後ではもう
 `'data'` イベントが発生することはありません。
 
-<!--
-Note: `'close'` can fire after `'end'`, but not vice versa.
--->
-
-注意: `'close'` は `'end'` の後で発生することがあります。
-その逆もあります。
-
 ### request.method
 
 <!--
@@ -1649,6 +1642,7 @@ event for more information.
 `'data'` イベントはそれ以上生成されません。
 [http.ServerRequest][] の `'close'` イベントにより多くの情報があります。
 
+<<<<<<< HEAD
 <!--
 Note: `'close'` can fire after `'end'`, but not vice versa.
 -->
@@ -1656,6 +1650,8 @@ Note: `'close'` can fire after `'end'`, but not vice versa.
 注意: `'close'` は `'end'` よりも後に生成されますが、
 常にというわけではありません。
 
+=======
+>>>>>>> v0.8
 
 ### response.statusCode
 
