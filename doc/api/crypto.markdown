@@ -383,8 +383,8 @@ Returned by `crypto.createCipher` and `crypto.createCipheriv`.
 <!--
 Cipher objects are [streams](stream.html) that are both readable and
 writable.  The written plain text data is used to produce the
-encrypted data on the the readable side.  The legacy `update` and
-`final` methods are also supported.
+encrypted data on the readable side.  The legacy `update` and `final`
+methods are also supported.
 -->
 
 暗号化オブジェクトは読み込みと書き込みの両方が可能な
@@ -940,7 +940,7 @@ Synchronous PBKDF2 function.  Returns derivedKey or throws error.
 Generates cryptographically strong pseudo-random data. Usage:
 -->
 
-暗号学的に強い疑似乱数データを生成します。使用法:
+暗号学的で、強い疑似乱数データを生成します。使用法:
 
     // async
     crypto.randomBytes(256, function(ex, buf) {
@@ -955,6 +955,28 @@ Generates cryptographically strong pseudo-random data. Usage:
     } catch (ex) {
       // handle error
     }
+
+## crypto.pseudoRandomBytes(size, [callback])
+
+<!--
+Generates *non*-cryptographically strong pseudo-random data. The data
+returned will be unique if it is sufficiently long, but is not
+necessarily unpredictable. For this reason, the output of this
+function should never be used where unpredictability is important,
+such as in the generation of encryption keys.
+-->
+
+暗号学的では *ない*、強い疑似乱数データを生成します。
+返されるデータは十分に長ければユニークですが、
+必ずしも予測不可能ではありません。
+この理由のため、この関数の出力を暗号化キーの生成など、予測不可能であることが
+重要なところでは決して使用しないでください。
+
+<!--
+Usage is otherwise identical to `crypto.randomBytes`.
+-->
+
+他の使い方は `crypto.randomBytes` と同じです。
 
 ## crypto.DEFAULT_ENCODING
 

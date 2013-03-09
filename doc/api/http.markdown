@@ -381,7 +381,73 @@ no limit will be applied.
 受け付けるヘッダ数の上限で、デフォルトは 1000 です。
 0 に設定されると、制限しないことになります。
 
+### server.setTimeout(msecs, callback)
 
+* `msecs` {Number}
+* `callback` {Function}
+
+<!--
+Sets the timeout value for sockets, and emits a `'timeout'` event on
+the Server object, passing the socket as an argument, if a timeout
+occurs.
+-->
+
+ソケットにタイムアウト値を設定し、サーバオブジェクト上で `'timeout'`
+イベントを生成します。
+タイムアウトが発生すると、ソケットが引数として渡されます。
+
+<!--
+If there is a `'timeout'` event listener on the Server object, then it
+will be called with the timed-out socket as an argument.
+-->
+
+サーバオブジェクトに `'timeout'` イベントのリスナが存在すると、
+それはタイムアウトしたソケットを引数として呼び出されます。
+
+<!--
+By default, the Server's timeout value is 2 minutes, and sockets are
+destroyed automatically if they time out.  However, if you assign a
+callback to the Server's `'timeout'` event, then you are responsible
+for handling socket timeouts.
+-->
+
+デフォルトでは、サーバのタイムアウト値は 2 分で、
+タイムアウトしたソケットは自動的に破棄されます。
+しかしながら、`'timeout'` イベントのコールバックをサーバに割り当てた場合、
+タイムアウトしたソケットのハンドリングはあなたの責務となります。
+
+### server.timeout
+
+<!--
+* {Number} Default = 120000 (2 minutes)
+-->
+
+* {Number} デフォルト = 120000 (2 分)
+
+<!--
+The number of milliseconds of inactivity before a socket is presumed
+to have timed out.
+-->
+
+不活性なソケットがタイムアウトしたと推定されるまでのミリ秒を表す数値。
+
+<!--
+Note that the socket timeout logic is set up on connection, so
+changing this value only affects *new* connections to the server, not
+any existing connections.
+-->
+
+ソケットのタイムアウト処理は接続のセットアップ時に行われるため、
+この値の変更は既存の接続ではなく、サーバへの *新しい* 接続にだけ
+影響することに注意してください。
+
+<!--
+Set to 0 to disable any kind of automatic timeout behavior on incoming
+connections.
+-->
+
+0 を設定すると、到着する接続に対する自動的なタイムアウトの振る舞いは
+無効になります。
 
 ## Class: http.ServerResponse
 
@@ -474,6 +540,34 @@ which has been transmitted are equal or not.
 もしボディがより上位にコード化された文字を含む場合は、
 指定したエンコーディングによるバイト数を得るために `Buffer.byteLength()` を使うべきです。
 Node は、Content-Length と実際に送信されたレスポンスボディの長さが等しいかどうかチェックしません。
+
+### response.setTimeout(msecs, callback)
+
+* `msecs` {Number}
+* `callback` {Function}
+
+<!--
+Sets the Socket's timeout value to `msecs`.  If a callback is
+provided, then it is added as a listener on the `'timeout'` event on
+the response object.
+-->
+
+ソケットのタイムアウト値を `msec` に設定します。
+コールバックが与えられると、それはレスポンスオブジェクトの `'timeout'`
+イベントのリスナとして加えられます。
+
+<!--
+If no `'timeout'` listener is added to the request, the response, or
+the server, then sockets are destroyed when they time out.  If you
+assign a handler on the request, the response, or the server's
+`'timeout'` events, then it is your responsibility to handle timed out
+sockets.
+-->
+
+リクエスト、レスポンス、そしてサーバのいずれにも `'timeout'`
+リスナが存在しない場合、タイムアウトしたソケットは破棄されます。
+もしリクエスト、レスポンス、サーバのいずれかに `'timeout'` イベントを
+設定した場合、タイムアウトしたソケットのハンドリングはあなたの責務となります。
 
 ### response.statusCode
 
@@ -1427,13 +1521,6 @@ event for more information.
 `'data'` イベントはそれ以上生成されません。
 [http.ServerRequest][] の `'close'` イベントにより多くの情報があります。
 
-<!--
-Note: `'close'` can fire after `'end'`, but not vice versa.
--->
-
-注意: `'close'` は `'end'` の後に発生することがあります。
-その逆もあります。
-
 ### message.httpVersion
 
 <!--
@@ -1486,6 +1573,17 @@ The request/response trailers object. Only populated after the 'end' event.
 
 リクエスト／レスポンスのトレーラオブジェクトです。
 `'end'` イベントの後にだけ発生します。
+
+### message.setTimeout(msecs, callback)
+
+* `msecs` {Number}
+* `callback` {Function}
+
+<!--
+Calls `message.connection.setTimeout(msecs, callback)`.
+-->
+
+`message.connection.setTimeout(msecs, callback)` を呼びます。
 
 ### message.setEncoding([encoding])
 

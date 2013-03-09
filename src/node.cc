@@ -99,7 +99,9 @@ ngx_queue_t req_wrap_queue = { &req_wrap_queue, &req_wrap_queue };
 Persistent<String> process_symbol;
 Persistent<String> domain_symbol;
 
-static Persistent<Object> process;
+// declared in node_internals.h
+Persistent<Object> process;
+
 static Persistent<Function> process_tickDomainCallback;
 static Persistent<Function> process_tickFromSpinner;
 static Persistent<Function> process_tickCallback;
@@ -125,6 +127,7 @@ static Persistent<String> disposed_symbol;
 static bool print_eval = false;
 static bool force_repl = false;
 static bool trace_deprecation = false;
+static bool throw_deprecation = false;
 static char *eval_string = NULL;
 static int option_end_index = 0;
 static bool use_debug_agent = false;
@@ -1380,7 +1383,7 @@ Handle<Value> GetActiveHandles(const Arguments& args) {
 
   ngx_queue_foreach(q, &handle_wrap_queue) {
     HandleWrap* w = container_of(q, HandleWrap, handle_wrap_queue_);
-    if (w->object_.IsEmpty() || w->unref_) continue;
+    if (w->object_.IsEmpty() || (w->flags_ & HandleWrap::kUnref)) continue;
     Local<Value> obj = w->object_->Get(owner_sym);
     if (obj->IsUndefined()) obj = *w->object_;
     ary->Set(i++, obj);
@@ -2412,6 +2415,11 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
     process->Set(String::NewSymbol("noDeprecation"), True());
   }
 
+  // --throw-deprecation
+  if (throw_deprecation) {
+    process->Set(String::NewSymbol("throwDeprecation"), True());
+  }
+
   // --trace-deprecation
   if (trace_deprecation) {
     process->Set(String::NewSymbol("traceDeprecation"), True());
@@ -2476,6 +2484,9 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
                                                     kExternalUnsignedIntArray,
                                                     3);
   process->Set(String::NewSymbol("_tickInfoBox"), info_box);
+
+  // pre-set _events object for faster emit checks
+  process->Set(String::NewSymbol("_events"), Object::New());
 
   return process;
 }
@@ -2661,6 +2672,9 @@ static void ParseArgs(int argc, char **argv) {
     } else if (strcmp(arg, "--trace-deprecation") == 0) {
       argv[i] = const_cast<char*>("");
       trace_deprecation = true;
+    } else if (strcmp(arg, "--throw-deprecation") == 0) {
+      argv[i] = const_cast<char*>("");
+      throw_deprecation = true;
     } else if (argv[i][0] != '-') {
       break;
     }
