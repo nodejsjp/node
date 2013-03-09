@@ -169,8 +169,6 @@ method. (See below.)
 
 <!--
 * `options` {Object}
-  * `bufferSize` {Number} The size of the chunks to consume from the
-    underlying resource. Default=16kb
   * `highWaterMark` {Number} The maximum number of bytes to store in
     the internal buffer before ceasing to read from the underlying
     resource.  Default=16kb
@@ -182,8 +180,6 @@ method. (See below.)
 -->
 
 * `options` {Object} (任意)
-  * `bufferSize` {Number} 下層のリソースによって消費される
-    チャンクのサイズです。デフォルトは 16kb。
   * `highWaterMark` {Number} 下層のリソースから読み込むのを中断するまで
     内部バッファに貯めておくバイト数の最大値。デフォルトは 16kb。
   * `encoding` {String} 指定されるとバッファは指定のエンコーディングで
@@ -205,11 +201,9 @@ initialized.
 
 <!--
 * `size` {Number} Number of bytes to read asynchronously
-* `callback` {Function} Called with an error or with data
 -->
 
 * `size` {Number} 非同期に読み込むバイト数
-* `callback` {Function} エラーまたはデータと共に呼び出されるコールバック
 
 <!--
 Note: **This function should NOT be called directly.**  It should be
@@ -252,6 +246,22 @@ data.
 それを読み込みキューに追加します。
 `push` が false を返した場合は、読み込みを止めるべきです。
 `_read` が再び呼び出された時が、さらに多くのデータを追加を開始すべき時です。
+
+<!--
+The `size` argument is advisory.  Implementations where a "read" is a
+single call that returns data can use this to know how much data to
+fetch.  Implementations where that is not relevant, such as TCP or
+TLS, may ignore this argument, and simply provide data whenever it
+becomes available.  There is no need, for example to "wait" until
+`size` bytes are available before calling `stream.push(chunk)`.
+-->
+
+`size` 引数はアドバイス的です。
+"read" が一回の呼び出しでデータを返す実装では、
+どれだけのデータを取得すべきか知るためにこれを使うことができます。
+TCPやTLSなど、それに関連しない実装ではこの引数は無視され、
+利用可能になったデータをシンプルに提供するかもしれません。
+たとえば `size` バイトが利用可能になるまで「待つ」必要はありません。
 
 ### readable.push(chunk)
 
@@ -328,7 +338,8 @@ source.onend = function() {
 };
 
 // _read will be called when the stream wants to pull more data in
-stream._read = function(size, cb) {
+// the advisory size argument is ignored in this case.
+stream._read = function(n) {
   source.readStart();
 };
 ```
@@ -440,6 +451,7 @@ SimpleProtocol.prototype._read = function(n) {
       }
       // now, because we got some extra data, unshift the rest
       // back into the read queue so that our consumer will see it.
+      var b = chunk.slice(split);
       this.unshift(b);
 
       // and let them know that we are done parsing the header.
@@ -764,12 +776,13 @@ A `Writable` Stream has the following methods, members, and events.
 
 <!--
 Note that `stream.Writable` is an abstract class designed to be
-extended with an underlying implementation of the `_write(chunk, cb)`
-method. (See below.)
+extended with an underlying implementation of the
+`_write(chunk, encoding, cb)` method. (See below.)
 -->
 
-`stream.Writable` は下層の実装である `_write(chunk, cb)` メソッド (後述)
-によって拡張されるように設計された抽象クラスであることに注意してください。
+`stream.Writable` は下層の実装である `_write(chunk, encoding, cb)`
+メソッド (後述) によって拡張されるように設計された抽象クラスであることに
+注意してください。
 
 ### new stream.Writable([options])
 
@@ -796,16 +809,27 @@ initialized.
 `Writable` クラスを拡張するクラスでは、バッファリングの設定を確実に
 初期化することができるように、必ずコンストラクタを呼び出してください。
 
-### writable.\_write(chunk, callback)
+### writable.\_write(chunk, encoding, callback)
 
 <!--
-* `chunk` {Buffer | Array} The data to be written
-* `callback` {Function} Called with an error, or null when finished
+* `chunk` {Buffer | String} The chunk to be written.  Will always
+  be a buffer unless the `decodeStrings` option was set to `false`.
+* `encoding` {String} If the chunk is a string, then this is the
+  encoding type.  Ignore chunk is a buffer.  Note that chunk will
+  **always** be a buffer unless the `decodeStrings` option is
+  explicitly set to `false`.
+* `callback` {Function} Call this function (optionally with an error
+  argument) when you are done processing the supplied chunk.
 -->
 
 * `chunk` {Buffer | Array} 書き込まれるデータ。
-* `callback` {Function} 終了後にエラーまたは `null`
-  と共に呼び出されるコールバック
+  `decodeStrings` オプションが `false` に設定されない限り常にバッファです。
+* `encoding` {String} チャンクが文字列の場合のエンコーディング方式。
+  チャンクがバッファの場合は無視されます。
+  `decodeStrings` オプションが明示的に `false` に設定されない限り、
+  チャンクは *常に* バッファであるべき事に注意してください。
+* `callback` {Function} チャンクを提供する処理が終了した時に、
+  (任意のエラー引数と共に) この関数を呼び出してください。
 
 <!--
 All Writable stream implementations must provide a `_write` method to
@@ -835,14 +859,21 @@ signal that the write completed successfully or with an error.
 
 <!--
 If the `decodeStrings` flag is set in the constructor options, then
-`chunk` will be an array rather than a Buffer.  This is to support
+`chunk` may be a string rather than a Buffer, and `encoding` will
+indicate the sort of string that it is.  This is to support
 implementations that have an optimized handling for certain string
-data encodings.
+data encodings.  If you do not explicitly set the `decodeStrings`
+option to `false`, then you can safely ignore the `encoding` argument,
+and assume that `chunk` will always be a Buffer.
 -->
 
-コンストラクタオプションの `decodeString` フラグがセットされると、
-`chunk` は Buffer ではなく配列になります。
+コンストラクタオプションの `decodeStrings` フラグがセットされると、
+`chunk` を Buffer ではなく文字列にし、`encoding` でその文字列の
+種類を示すことができます。
 これは、実装が文字列データのエンコーディングを最適化できるようにするためです。
+`decodeStrings` オプションを明示的に `false` に設定しない場合、
+`endocing` 引数は安全に無視することができます。
+そして `chunk` は常に Buffer であると見なせます。
 
 <!--
 This method is prefixed with an underscore because it is internal to
@@ -990,12 +1021,12 @@ Readable であり Writable でもあるストリームの一種です。
 <!--
 Note that `stream.Duplex` is an abstract class designed to be
 extended with an underlying implementation of the `_read(size)`
-and `_write(chunk, callback)` methods as you would with a Readable or
+and `_write(chunk, encoding, callback)` methods as you would with a Readable or
 Writable stream class.
 -->
 
 `stream.Duplex` は、Readable および Writable ストリームクラスと同様、
-下層の実装である `_read(size)` および `_write(chunk, callback)`
+下層の実装である `_read(size)` および `_write(chunk, encoding, cb)`
 メソッドによって拡張されるように設計された抽象クラスであることに
 注意してください。
 
@@ -1003,14 +1034,14 @@ Writable stream class.
 Since JavaScript doesn't have multiple prototypal inheritance, this
 class prototypally inherits from Readable, and then parasitically from
 Writable.  It is thus up to the user to implement both the lowlevel
-`_read(n)` method as well as the lowlevel `_write(chunk,cb)` method
+`_read(n)` method as well as the lowlevel `_write(chunk, encoding, cb)` method
 on extension duplex classes.
 -->
 
 JavaScript は複数のプロトタイプ継承を持つことができないため、
 このクラスは Readable からプロトタイプを継承したうえで、
 Writable から寄生的な方法 (プロトタイプメンバーのコピー) を行います。
-低水準の `_read(n)` および `_write(chunk,cb)` を実装することは、
+低水準の `_read(n)` および `_write(chunk, encoding, cb)` を実装することは、
 Duplex クラスを拡張するユーザの責務です。
 
 ### new stream.Duplex(options)
@@ -1090,20 +1121,22 @@ initialized.
 `Transform` クラスを拡張するクラスでは、バッファリングの設定を確実に
 初期化することができるように、必ずコンストラクタを呼び出してください。
 
-### transform.\_transform(chunk, outputFn, callback)
+### transform.\_transform(chunk, encoding, callback)
 
 <!--
-* `chunk` {Buffer} The chunk to be transformed.
-* `outputFn` {Function} Call this function with any output data to be
-  passed to the readable interface.
+* `chunk` {Buffer | String} The chunk to be transformed.  Will always
+  be a buffer unless the `decodeStrings` option was set to `false`.
+* `encoding` {String} If the chunk is a string, then this is the
+  encoding type.  (Ignore if `decodeStrings` chunk is a buffer.)
 * `callback` {Function} Call this function (optionally with an error
   argument) when you are done processing the supplied chunk.
 -->
 
-* `chunk` {Buffer} 変換されるチャンク。
-* `outputFn` {Function} 読み込み可能なインタフェースに渡すために
-  データと共に呼び出してください。
-* `callback` {Function} 与えられたチャンクの処理が終了した場合に、
+* `chunk` {Buffer | Array} 書き込まれるデータ。
+  `decodeStrings` オプションが `false` に設定されない限り常にバッファです。
+* `encoding` {String} チャンクが文字列の場合のエンコーディング方式
+  (チャンクがバッファの場合は無視されます)。
+* `callback` {Function} チャンクを提供する処理が終了した時に、
   (任意のエラー引数と共に) この関数を呼び出してください。
 
 <!--
@@ -1136,15 +1169,24 @@ Transform クラスでしなければならないことは全て `_transform`
 で行わなければなりません。非同期 I/O、何かの処理、その他。
 
 <!--
+Call `transform.push(outputChunk)` 0 or more times to generate output
+from this input chunk, depending on how much data you want to output
+as a result of this chunk.
+-->
+
+この入力チャンクからの出力を生成するために、`transform.push(outputChunk)`
+を 0 回以上呼び出してください。
+それはこのチャンクの結果としてどれだけのデータを出力したいのかに依存します。
+
+<!--
 Call the callback function only when the current chunk is completely
-consumed.  Note that this may mean that you call the `outputFn` zero
-or more times, depending on how much data you want to output as a
-result of this chunk.
+consumed.  Note that there may or may not be output as a result of any
+particular input chunk.
 -->
 
 現在のチャンクの処理が完全に終了した場合のみ、コールバック関数を呼び出します。
-`outputFn` を何度 (0 回以上) 呼び出すかは、このチャンクからどれだけのデータを
-出力した以下に依存することに注意してください。
+特定の入力チャンクからの結果として、出力があるかもしれないし、
+無いかもしれないことに注意してください。
 
 <!--
 This method is prefixed with an underscore because it is internal to
@@ -1158,17 +1200,13 @@ your own extension classes.
 しかしながら、あなたの拡張クラスではこのメソッドをオーバーライドすることが
 求められて**います**。
 
-### transform.\_flush(outputFn, callback)
+### transform.\_flush(callback)
 
 <!--
-* `outputFn` {Function} Call this function with any output data to be
-  passed to the readable interface.
 * `callback` {Function} Call this function (optionally with an error
   argument) when you are done flushing any remaining data.
 -->
 
-* `outputFn` {Function} 読み込み可能なインタフェースに渡すために
-  データと共に呼び出してください。
 * `callback` {Function} 与えられたチャンクの処理が終了した場合に、
   (任意のエラー引数と共に) この関数を呼び出してください。
 
@@ -1201,15 +1239,16 @@ can with what is left, so that the data will be complete.
 In those cases, you can implement a `_flush` method, which will be
 called at the very end, after all the written data is consumed, but
 before emitting `end` to signal the end of the readable side.  Just
-like with `_transform`, call `outputFn` zero or more times, as
-appropriate, and call `callback` when the flush operation is complete.
+like with `_transform`, call `transform.push(chunk)` zero or more
+times, as appropriate, and call `callback` when the flush operation is
+complete.
 -->
 
 この場合、最後の最後 (書き込まれた全てのデータが消費された後、
 ただし読み込み側の終了を知らせる `end` が生成される前) に呼び出される
 `_flush` メソッドを実装することができます。
-`_transform` と同様、`outputFn` は何度 (0 回以上) でも適切に呼び出し、
-フラッシュ操作が完了した時に `callback` を呼び出します。
+`_transform` と同様、`transform.push(chunk)` を何度 (0 回以上) でも
+適切に呼び出し、フラッシュ操作が完了した時に `callback` を呼び出します。
 
 <!--
 This method is prefixed with an underscore because it is internal to
@@ -1257,7 +1296,7 @@ function SimpleProtocol(options) {
 SimpleProtocol.prototype = Object.create(
   Transform.prototype, { constructor: { value: SimpleProtocol }});
 
-SimpleProtocol.prototype._transform = function(chunk, output, done) {
+SimpleProtocol.prototype._transform = function(chunk, encoding, done) {
   if (!this._inBody) {
     // check if the chunk has a \n\n
     var split = -1;
@@ -1293,11 +1332,11 @@ SimpleProtocol.prototype._transform = function(chunk, output, done) {
       this.emit('header', this.header);
 
       // now, because we got some extra data, emit this first.
-      output(b);
+      this.push(b);
     }
   } else {
     // from there on, just provide the data to our consumer as-is.
-    output(b);
+    this.push(b);
   }
   done();
 };

@@ -31,7 +31,7 @@ function TestWriter() {
 }
 util.inherits(TestWriter, stream.Writable);
 
-TestWriter.prototype._write = function(buffer, callback) {
+TestWriter.prototype._write = function(buffer, encoding, callback) {
   callback(null);
 };
 
@@ -43,7 +43,7 @@ function TestReader() {
 util.inherits(TestReader, stream.Readable);
 
 TestReader.prototype._read = function(size) {
-  stream.push(new Buffer('hallo'));
+  this.push(new Buffer('hallo'));
 };
 
 var src = new TestReader();
