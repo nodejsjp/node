@@ -196,7 +196,11 @@ URL オブジェクトを引数に取り、フォーマットした URL 文字�
 
 <!--
 Take a base URL, and a href URL, and resolve them as a browser would for
-an anchor tag.
+an anchor tag.  Examples:
 -->
 
-ベースとなる URL と相対 URL を引数に取り、ブラウザがアンカータグに対して行うのと同様に URL を解決します。
+ベースとなる URL と相対 URL を引数に取り、ブラウザがアンカータグに対して行うのと同様に URL を解決します。例:
+
+    url.resolve('/one/two/three', 'four')         // '/one/two/four'
+    url.resolve('http://example.com/', '/one')    // 'http://example.com/one'
+    url.resolve('http://example.com/one', '/two') // 'http://example.com/two'
