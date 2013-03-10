@@ -317,12 +317,13 @@ on more than one address.
 * `worker` {Worker object}
 
 <!--
-When a workers IPC channel has disconnected this event is emitted. This will happen
-when the worker dies, usually after calling `.destroy()`.
+When a workers IPC channel has disconnected this event is emitted.
+This will happen when the worker dies, usually after calling
+`.kill()`.
 -->
 
 ワーカの IPC チャネルが切断された場合に生成されます。
-それはワーカが終了した場合や、`.destroy()` を呼び出した後に発生します。
+それはワーカが終了した場合や、`.kill()` を呼び出した後に発生します。
 
 <!--
 When calling `.disconnect()`, there may be a delay between the
@@ -574,12 +575,13 @@ See: [Child Process module](child_process.html)
 * {Boolean}
 
 <!--
-This property is a boolean. It is set when a worker dies after calling `.destroy()`
-or immediately after calling the `.disconnect()` method. Until then it is `undefined`.
+This property is a boolean. It is set when a worker dies after calling
+`.kill()` or immediately after calling the `.disconnect()` method.
+Until then it is `undefined`.
 -->
 
 このプロパティは論理値型です。
-これはワーカが `.destroy()` を呼び出して終了するか、
+これはワーカが `.kill()` を呼び出して終了するか、
 `.disconnect()` メソッドを呼び出した後に設定されます。
 それまでは `undefined` です。
 
@@ -615,7 +617,14 @@ This example will echo back all messages from the master:
       });
     }
 
-### worker.destroy()
+### worker.kill([signal='SIGTERM'])
+
+<!--
+* `signal` {String} Name of the kill signal to send to the worker
+  process.
+-->
+
+* `signal` {String} ワーカプロセスに送られるシグナルの名前です。
 
 <!--
 This function will kill the worker, and inform the master to not spawn a
@@ -632,9 +641,15 @@ boolean の `suicide` により、自発的かアクシデントによる終了�
       }
     });
 
-    // destroy worker
-    worker.destroy();
+    // kill worker
+    worker.kill();
 
+<!--
+This method is aliased as `worker.destroy()` for backwards
+compatibility.
+-->
+
+後方互換性のため、このメソッドには `worker.destroy()` という別名があります。
 
 ### worker.disconnect()
 
@@ -658,14 +673,14 @@ IPC チャネルが閉じられると `'disconnect'` イベントが生成され
 <!--
 Because there might be long living connections, it is useful to implement a timeout.
 This example ask the worker to disconnect and after 2 seconds it will destroy the
-server. An alternative would be to execute `worker.destroy()` after 2 seconds, but
+server. An alternative would be to execute `worker.kill()` after 2 seconds, but
 that would normally not allow the worker to do any cleanup if needed.
 -->
 
 長時間にわたる接続があるかもしれないため、これはタイムアウトを実装するために
 有益です。
 この例はワーカが IPC チャネルを閉じた後、2 秒でサーバから終了されます。
-他の方法として `worker.destroy()` を呼び出してから
+他の方法として `worker.kill()` を呼び出してから
 2 秒後とすることもできますが、その場合はワーカが必要なクリーンナップを
 行えないかもしれません。
 

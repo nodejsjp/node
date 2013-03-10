@@ -152,6 +152,16 @@ Execute each of the listeners in order with the supplied arguments.
 
 提供された引数の並びでそれぞれのリスナーを実行します。
 
+
+### Class Method: EventEmitter.listenerCount(emitter, event)
+
+<!--
+Return the number of listeners for a given event.
+-->
+
+与えられたイベントのリスナー数を返します。
+
+
 ### Event: 'newListener'
 
 * `event` {String} The event name
