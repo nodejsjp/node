@@ -28,6 +28,7 @@
 
 #include <assert.h>
 #include <string.h> // memcpy
+#include <limits.h>
 
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
 
@@ -247,15 +248,125 @@ Handle<Value> Buffer::BinarySlice(const Arguments &args) {
 }
 
 
+static bool contains_non_ascii_slow(const char* buf, size_t len) {
+  for (size_t i = 0; i < len; ++i) {
+    if (buf[i] & 0x80) return true;
+  }
+  return false;
+}
+
+
+static bool contains_non_ascii(const char* src, size_t len) {
+  if (len < 16) {
+    return contains_non_ascii_slow(src, len);
+  }
+
+  const unsigned bytes_per_word = BITS_PER_LONG / CHAR_BIT;
+  const unsigned align_mask = bytes_per_word - 1;
+  const unsigned unaligned = reinterpret_cast<uintptr_t>(src) & align_mask;
+
+  if (unaligned > 0) {
+    const unsigned n = bytes_per_word - unaligned;
+    if (contains_non_ascii_slow(src, n)) return true;
+    src += n;
+    len -= n;
+  }
+
+#if BITS_PER_LONG == 64
+  typedef uint64_t word;
+  const uint64_t mask = 0x8080808080808080ll;
+#else
+  typedef uint32_t word;
+  const uint32_t mask = 0x80808080l;
+#endif
+
+  const word* srcw = reinterpret_cast<const word*>(src);
+
+  for (size_t i = 0, n = len / bytes_per_word; i < n; ++i) {
+    if (srcw[i] & mask) return true;
+  }
+
+  const unsigned remainder = len & align_mask;
+  if (remainder > 0) {
+    const size_t offset = len - remainder;
+    if (contains_non_ascii_slow(src + offset, remainder)) return true;
+  }
+
+  return false;
+}
+
+
+static void force_ascii_slow(const char* src, char* dst, size_t len) {
+  for (size_t i = 0; i < len; ++i) {
+    dst[i] = src[i] & 0x7f;
+  }
+}
+
+
+static void force_ascii(const char* src, char* dst, size_t len) {
+  if (len < 16) {
+    force_ascii_slow(src, dst, len);
+    return;
+  }
+
+  const unsigned bytes_per_word = BITS_PER_LONG / CHAR_BIT;
+  const unsigned align_mask = bytes_per_word - 1;
+  const unsigned src_unalign = reinterpret_cast<uintptr_t>(src) & align_mask;
+  const unsigned dst_unalign = reinterpret_cast<uintptr_t>(dst) & align_mask;
+
+  if (src_unalign > 0) {
+    if (src_unalign == dst_unalign) {
+      const unsigned unalign = bytes_per_word - src_unalign;
+      force_ascii_slow(src, dst, unalign);
+      src += unalign;
+      dst += unalign;
+      len -= src_unalign;
+    } else {
+      force_ascii_slow(src, dst, len);
+      return;
+    }
+  }
+
+#if BITS_PER_LONG == 64
+  typedef uint64_t word;
+  const uint64_t mask = ~0x8080808080808080ll;
+#else
+  typedef uint32_t word;
+  const uint32_t mask = ~0x80808080l;
+#endif
+
+  const word* srcw = reinterpret_cast<const word*>(src);
+  word* dstw = reinterpret_cast<word*>(dst);
+
+  for (size_t i = 0, n = len / bytes_per_word; i < n; ++i) {
+    dstw[i] = srcw[i] & mask;
+  }
+
+  const unsigned remainder = len & align_mask;
+  if (remainder > 0) {
+    const size_t offset = len - remainder;
+    force_ascii_slow(src + offset, dst + offset, remainder);
+  }
+}
+
+
 Handle<Value> Buffer::AsciiSlice(const Arguments &args) {
   HandleScope scope;
   Buffer *parent = ObjectWrap::Unwrap<Buffer>(args.This());
   SLICE_ARGS(args[0], args[1])
 
   char* data = parent->data_ + start;
-  Local<String> string = String::New(data, end - start);
+  size_t len = end - start;
 
-  return scope.Close(string);
+  if (contains_non_ascii(data, len)) {
+    char* out = new char[len];
+    force_ascii(data, out, len);
+    Local<String> rc = String::New(out, len);
+    delete[] out;
+    return scope.Close(rc);
+  }
+
+  return scope.Close(String::New(data, len));
 }
 
 
@@ -267,6 +378,7 @@ Handle<Value> Buffer::Utf8Slice(const Arguments &args) {
   Local<String> string = String::New(data, end - start);
   return scope.Close(string);
 }
+
 
 Handle<Value> Buffer::Ucs2Slice(const Arguments &args) {
   HandleScope scope;

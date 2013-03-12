@@ -10,6 +10,31 @@ Datagram sockets are available through `require('dgram')`.
 
 データグラムソケットは `require('dgram')` で利用可能になります。
 
+<!--
+Important note: the behavior of `dgram.Socket#bind()` has changed in v0.10
+and is always asynchronous now.  If you have code that looks like this:
+-->
+
+重要な注意: `dgram.Socket#bind()` の振る舞いは v0.10 で変更され、
+それは常に非同期になりました。
+もし次のようなコードがあると:
+
+    var s = dgram.createSocket('udp4');
+    s.bind(1234);
+    s.addMembership('224.0.0.114');
+
+<!--
+You have to change it to this:
+-->
+
+これは次のように変更されなければなりません。
+
+    var s = dgram.createSocket('udp4');
+    s.bind(1234, function() {
+      s.addMembership('224.0.0.114');
+    });
+
+
 ## dgram.createSocket(type, [callback])
 
 <!--
@@ -218,18 +243,27 @@ informing the source that the data did not reach its intended recipient).
 意図した受信者に到達することはありません)。
 
 
-### dgram.bind(port, [address])
+### dgram.bind(port, [address], [callback])
 
 * `port` Integer
 * `address` String, Optional
+* `callback` Function, Optional
 
 <!--
-For UDP sockets, listen for datagrams on a named `port` and optional `address`. If
-`address` is not specified, the OS will try to listen on all addresses.
+For UDP sockets, listen for datagrams on a named `port` and optional `address`.
+If `address` is not specified, the OS will try to listen on all addresses.
 -->
 
 UDP ソケット用です。`port` とオプションの `address` でデータグラムを待ち受けます。
 `address` が指定されなければ、OS は全てのアドレスからの待ち受けを試みます。
+
+<!--
+The `callback` argument, if provided, is added as a one-shot `'listening'`
+event listener.
+-->
+
+`callback` 引数は、もし提供されると `'listening'` イベントの一回限りの
+リスナとして追加されます。
 
 <!--
 Example of a UDP server listening on port 41234:
