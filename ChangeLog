@@ -1,4 +1,35 @@
-2013.03.06, Version 0.9.12 (Unstable)
+2013.03.11, Version 0.10.0 (Stable)
+
+* npm: Upgrade to 1.2.14
+
+* core: Append filename properly in dlopen on windows (isaacs)
+
+* zlib: Manage flush flags appropriately (isaacs)
+
+* domains: Handle errors thrown in nested error handlers (isaacs)
+
+* buffer: Strip high bits when converting to ascii (Ben Noordhuis)
+
+* win/msi: Enable modify and repair (Bert Belder)
+
+* win/msi: Add feature selection for various node parts (Bert Belder)
+
+* win/msi: use consistent registry key paths (Bert Belder)
+
+* child_process: support sending dgram socket (Andreas Madsen)
+
+* fs: Raise EISDIR on Windows when calling fs.read/write on a dir (isaacs)
+
+* unix: fix strict aliasing warnings, macro-ify functions (Ben Noordhuis)
+
+* unix: honor UV_THREADPOOL_SIZE environment var (Ben Noordhuis)
+
+* win/tty: fix typo in color attributes enumeration (Bert Belder)
+
+* win/tty: don't touch insert mode or quick edit mode (Bert Belder)
+
+
+2013.03.06, Version 0.9.12 (Unstable), 0debf5a82934da805592b6496756cdf27c993abc
 
 * stream: Allow strings in Readable.push/unshift (isaacs)
 
@@ -8,7 +39,7 @@
 
 * stream: _write: takes an encoding argument (isaacs)
 
-* stream: _transform: remove no output() method, provide encoding (isaacs)
+* stream: _transform: remove output() method, provide encoding (isaacs)
 
 * stream: Don't require read(0) to emit 'readable' event (isaacs)
 
@@ -465,6 +496,17 @@
 * readline: Use one history item for reentered line (Vladimir Beloborodov)
 
 * Fix #3521 Make process.env more like a regular Object (isaacs)
+
+
+2013.03.07, Version 0.8.22 (Stable), 67a4cb4fe8c2346e30ffb83f7178e205cc2dab33
+
+* npm: Update to 1.2.14
+
+* cluster: propagate bind errors (Ben Noordhuis)
+
+* crypto: don't assert when calling Cipher#final() twice (Ben Noordhuis)
+
+* build, windows: disable SEH (Ben Noordhuis)
 
 
 2013.02.25, Version 0.8.21 (Stable), 530d8c05d4c546146f18e5ba811d7eb3b7b7c0c5
