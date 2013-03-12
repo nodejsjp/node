@@ -376,6 +376,16 @@ that some connections will be handled by the parent and some by the child.
 サーバは親プロセスと子プロセスで共有されることに注意してください。
 これはコネクションが時には親あるいは子で処理されることを意味します。
 
+<!--
+For `dgram` servers the workflow is exactly the same.  Here you listen on
+a `message` event instead of `connection` and use `server.bind` instead of
+`server.listen`.
+-->
+
+`dgram` サーバのワークフローも同じです。
+`connection` イベントの代わりに `message` イベントを監視し、
+`server.listen` の代わりに `server.bind` を使用してください。
+
 #### Example: sending socket object
 
 <!--
