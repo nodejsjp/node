@@ -662,6 +662,7 @@ The PID of the process.
 
     console.log('This process is pid ' + process.pid);
 
+
 ## process.title
 
 <!--
@@ -669,6 +670,31 @@ Getter/setter to set what is displayed in 'ps'.
 -->
 
 'ps' でどのよう表示されるかを設定するための getter/setter です。
+
+<!--
+When used as a setter, the maximum length is platform-specific and probably
+short.
+-->
+
+setter が使われる場合、その最大長はプラットフォーム依存で、おそらく短いです。
+
+<!--
+On Linux and OS X, it's limited to the size of the binary name plus the
+length of the command line arguments because it overwrites the argv memory.
+-->
+
+Linux と OS X では、それは argv のメモリを上書きするため、
+バイナリ名にコマンドライン引数を加えたものに制限されます。
+
+<!--
+v0.8 allowed for longer process title strings by also overwriting the environ
+memory but that was potentially insecure/confusing in some (rather obscure)
+cases.
+-->
+
+v0.8 はより長いプロセスタイトル文字列で環境を上書きしていましたが、
+それはいくつかの (はっきりしない) ケースにおいて、
+潜在的に危険で混乱していました。
 
 
 ## process.arch
