@@ -171,4 +171,22 @@ Return the number of listeners for a given event.
 This event is emitted any time someone adds a new listener.
 -->
 
-このイベントは誰かが新しいリスナーを追加するといつでも生成されます。
+このイベントは新しいリスナーが追加されるたびに生成されます。
+
+
+### Event: 'removeListener'
+
+<!--
+* `event` {String} The event name
+* `listener` {Function} The event handler function
+-->
+
+* `event` {String} イベント名
+* `listener` {Function} イベントハンドラ関数
+
+
+<!--
+This event is emitted any time someone removes a listener.
+-->
+
+このイベントはリスナが取り除かれるたびに生成されます。

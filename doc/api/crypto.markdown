@@ -221,11 +221,11 @@ is provided, then a buffer is returned.
 エンコーディングが与えられなかった場合はバッファが返されます。
 
 <!--
-Note: `hash` object can not be used after `digest()` method been
+Note: `hash` object can not be used after `digest()` method has been
 called.
 -->
 
-注意: `digest()` メソッドを呼び出した後で `hash` 
+注意: `digest()` メソッドが呼び出された後で `hash` 
 オブジェクトを使うことはできません。
 
 
@@ -294,11 +294,11 @@ is provided, then a buffer is returned.
 エンコーディングが与えられなかった場合はバッファが返されます。
 
 <!--
-Note: `hmac` object can not be used after `digest()` method been
+Note: `hmac` object can not be used after `digest()` method has been
 called.
 -->
 
-注意: `digest()` メソッドを呼び出した後で `hmac` 
+注意: `digest()` メソッドが呼び出された後で `hmac` 
 オブジェクトを使うことはできません。
 
 
@@ -407,7 +407,7 @@ encoding is provided, then a buffer is expected.
 
 The `output_encoding` specifies the output format of the enciphered
 data, and can be `'binary'`, `'base64'` or `'hex'`.  If no encoding is
-provided, then a buffer iis returned.
+provided, then a buffer is returned.
 -->
 
 `output_encoding` は暗号化されたデータの出力フォーマットを指定するもので、
@@ -434,11 +434,11 @@ provided, then a buffer is returned.
 エンコーディングが与えられなかった場合はバッファが返されます。
 
 <!--
-Note: `cipher` object can not be used after `final()` method been
+Note: `cipher` object can not be used after `final()` method has been
 called.
 -->
 
-注意: `final()` メソッドを呼び出した後で `cipher` 
+注意: `final()` メソッドが呼び出された後で `cipher` 
 オブジェクトを使うことはできません。
 
 ### cipher.setAutoPadding(auto_padding=true)
@@ -542,11 +542,11 @@ no encoding is provided, then a buffer is returned.
 エンコーディングが与えられなかった場合はバッファが返されます。
 
 <!--
-Note: `decipher` object can not be used after `final()` method been
+Note: `decipher` object can not be used after `final()` method has been
 called.
 -->
 
-注意: `final()` メソッドを呼び出した後で `decipher` 
+注意: `final()` メソッドが呼び出された後で `decipher` 
 オブジェクトを使うことはできません。
 
 ### decipher.setAutoPadding(auto_padding=true)
@@ -632,11 +632,11 @@ returned.
 エンコーディングが与えられなかった場合はバッファが返されます。
 
 <!--
-Note: `sign` object can not be used after `sign()` method been
+Note: `sign` object can not be used after `sign()` method has been
 called.
 -->
 
-注意: `sign()` メソッドを呼び出した後で `sign` 
+注意: `sign()` メソッドが呼び出された後で `sign` 
 オブジェクトを使うことはできません。
 
 ## crypto.createVerify(algorithm)
@@ -710,8 +710,12 @@ the data and public key.
 
 署名されたデータと公開鍵による検証の結果によって true または false を返します。
 
+<<<<<<< HEAD
 <!--
 Note: `verifier` object can not be used after `verify()` method been
+=======
+Note: `verifier` object can not be used after `verify()` method has been
+>>>>>>> v0.10
 called.
 -->
 
