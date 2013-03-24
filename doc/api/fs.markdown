@@ -106,35 +106,23 @@ relative to `process.cwd()`.
 
 <!--
 Most fs functions let you omit the callback argument. If you do, a default
-callback is used that rethrows errors. To get a trace to the original call
-site, set the NODE_DEBUG environment variable:
+callback is used that ignores errors, but prints a deprecation
+warning.
 -->
 
 fs モジュールのほとんどの関数はコールバック引数を省略することができます。
-そうすると、エラーを再スローするコールバックがデフォルトとして使用されます。
-本来の呼び出し元のトレースを取得するには、`NODE_DEBUG`
-環境変数を設定してください:
+そうすると、エラーを無視するコールバックがデフォルトとして使用され、
+廃止予定の警告が出力されます。
 
-    $ cat script.js
-    function bad() {
-      require('fs').readFile('/');
-    }
-    bad();
+<!--
+**IMPORTANT**: Omitting the callback is deprecated.  v0.12 will throw the
+errors as exceptions.
+-->
 
-    $ env NODE_DEBUG=fs node script.js
-    fs.js:66
-            throw err;
-                  ^
-    Error: EISDIR, read
-        at rethrow (fs.js:61:21)
-        at maybeCallback (fs.js:79:42)
-        at Object.fs.readFile (fs.js:153:18)
-        at bad (/path/to/script.js:2:17)
-        at Object.<anonymous> (/path/to/script.js:5:1)
-        <etc.>
+**重要**: コールバックの省略は廃止予定です。v0.12 は例外をスローするでしょう。
 
 
-## fs.rename(oldPath, newPath, [callback])
+## fs.rename(oldPath, newPath, callback)
 
 <!--
 Asynchronous rename(2). No arguments other than a possible exception are given
@@ -151,7 +139,7 @@ Synchronous rename(2).
 
 同期の rename(2)。
 
-## fs.ftruncate(fd, len, [callback])
+## fs.ftruncate(fd, len, callback)
 
 <!--
 Asynchronous ftruncate(2). No arguments other than a possible exception are
@@ -168,7 +156,7 @@ Synchronous ftruncate(2).
 
 同期の ftruncate(2)。
 
-## fs.truncate(path, len, [callback])
+## fs.truncate(path, len, callback)
 
 <!--
 Asynchronous truncate(2). No arguments other than a possible exception are
@@ -186,7 +174,7 @@ Synchronous truncate(2).
 
 同期の truncate(2)。
 
-## fs.chown(path, uid, gid, [callback])
+## fs.chown(path, uid, gid, callback)
 
 <!--
 Asynchronous chown(2). No arguments other than a possible exception are given
@@ -203,7 +191,7 @@ Synchronous chown(2).
 
 同期の chown(2)。
 
-## fs.fchown(fd, uid, gid, [callback])
+## fs.fchown(fd, uid, gid, callback)
 
 <!--
 Asynchronous fchown(2). No arguments other than a possible exception are given
@@ -220,7 +208,7 @@ Synchronous fchown(2).
 
 同期の fchown(2)。
 
-## fs.lchown(path, uid, gid, [callback])
+## fs.lchown(path, uid, gid, callback)
 
 <!--
 Asynchronous lchown(2). No arguments other than a possible exception are given
@@ -237,7 +225,7 @@ Synchronous lchown(2).
 
 同期の lchown(2)。
 
-## fs.chmod(path, mode, [callback])
+## fs.chmod(path, mode, callback)
 
 <!--
 Asynchronous chmod(2). No arguments other than a possible exception are given
@@ -254,7 +242,7 @@ Synchronous chmod(2).
 
 同期の chmod(2)。
 
-## fs.fchmod(fd, mode, [callback])
+## fs.fchmod(fd, mode, callback)
 
 <!--
 Asynchronous fchmod(2). No arguments other than a possible exception
@@ -271,7 +259,7 @@ Synchronous fchmod(2).
 
 同期の fchmod(2)。
 
-## fs.lchmod(path, mode, [callback])
+## fs.lchmod(path, mode, callback)
 
 <!--
 Asynchronous lchmod(2). No arguments other than a possible exception
@@ -294,7 +282,7 @@ Synchronous lchmod(2).
 
 同期の lchmod(2)。
 
-## fs.stat(path, [callback])
+## fs.stat(path, callback)
 
 <!--
 Asynchronous stat(2). The callback gets two arguments `(err, stats)` where
@@ -312,7 +300,7 @@ See the [fs.Stats](#fs.Stats) section below for more information.
 
 より詳しくは後述の [fs.Stats](#fs.Stats) の節を参照してください。
 
-## fs.lstat(path, [callback])
+## fs.lstat(path, callback)
 
 <!--
 Asynchronous lstat(2). The callback gets two arguments `(err, stats)` where
@@ -326,7 +314,7 @@ refers to.
 `lstat()` はパスがシンボリックリンクだった場合に、
 参照先のファイルではなくそのリンク自身が調べられる点を除いて `stat()` と同じす。
 
-## fs.fstat(fd, [callback])
+## fs.fstat(fd, callback)
 
 <!--
 Asynchronous fstat(2). The callback gets two arguments `(err, stats)` where
@@ -363,7 +351,7 @@ Synchronous fstat(2). Returns an instance of `fs.Stats`.
 
 同期の fstat(2)。`fs.Stats` のインスタンスを返します。
 
-## fs.link(srcpath, dstpath, [callback])
+## fs.link(srcpath, dstpath, callback)
 
 <!--
 Asynchronous link(2). No arguments other than a possible exception are given to
@@ -380,7 +368,7 @@ Synchronous link(2).
 
 同期の link(2)。
 
-## fs.symlink(srcpath, dstpath, [type], [callback])
+## fs.symlink(srcpath, dstpath, [type], callback)
 
 <!--
 Asynchronous symlink(2). No arguments other than a possible exception are given
@@ -408,7 +396,7 @@ Synchronous symlink(2).
 
 同期の symlink(2)。
 
-## fs.readlink(path, [callback])
+## fs.readlink(path, callback)
 
 <!--
 Asynchronous readlink(2). The callback gets two arguments `(err,
@@ -460,7 +448,7 @@ Synchronous realpath(2). Returns the resolved path.
 
 同期の realpath(2)。解決されたパスを返します。
 
-## fs.unlink(path, [callback])
+## fs.unlink(path, callback)
 
 <!--
 Asynchronous unlink(2). No arguments other than a possible exception are given
@@ -477,7 +465,7 @@ Synchronous unlink(2).
 
 同期の unlink(2)。
 
-## fs.rmdir(path, [callback])
+## fs.rmdir(path, callback)
 
 <!--
 Asynchronous rmdir(2). No arguments other than a possible exception are given
@@ -494,7 +482,7 @@ Synchronous rmdir(2).
 
 同期の rmdir(2)。
 
-## fs.mkdir(path, [mode], [callback])
+## fs.mkdir(path, [mode], callback)
 
 <!--
 Asynchronous mkdir(2). No arguments other than a possible exception are given
@@ -512,7 +500,7 @@ Synchronous mkdir(2).
 
 同期の mkdir(2)。
 
-## fs.readdir(path, [callback])
+## fs.readdir(path, callback)
 
 <!--
 Asynchronous readdir(3).  Reads the contents of a directory.
@@ -533,7 +521,7 @@ Synchronous readdir(3). Returns an array of filenames excluding `'.'` and
 
 同期の readdir(3)。`'.'` と `'..'` を除くディレクトリ内のファイル名の配列を返します。
 
-## fs.close(fd, [callback])
+## fs.close(fd, callback)
 
 <!--
 Asynchronous close(2).  No arguments other than a possible exception are given
@@ -550,7 +538,7 @@ Synchronous close(2).
 
 同期の close(2)。
 
-## fs.open(path, flags, [mode], [callback])
+## fs.open(path, flags, [mode], callback)
 
 <!--
 Asynchronous file open. See open(2). `flags` can be:
@@ -666,7 +654,7 @@ Synchronous open(2).
 
 同期の open(2)。
 
-## fs.utimes(path, atime, mtime, [callback])
+## fs.utimes(path, atime, mtime, callback)
 ## fs.utimesSync(path, atime, mtime)
 
 <!--
@@ -676,7 +664,7 @@ Change file timestamps of the file referenced by the supplied path.
 
 渡されたパスが参照するファイルのタイムスタンプを変更します。
 
-## fs.futimes(fd, atime, mtime, [callback])
+## fs.futimes(fd, atime, mtime, callback)
 ## fs.futimesSync(fd, atime, mtime)
 
 <!--
@@ -686,7 +674,7 @@ descriptor.
 
 渡されたファイル記述子が参照するファイルのタイムスタンプを変更します。
 
-## fs.fsync(fd, [callback])
+## fs.fsync(fd, callback)
 
 <!--
 Asynchronous fsync(2). No arguments other than a possible exception are given
@@ -703,7 +691,7 @@ Synchronous fsync(2).
 
 同期の fsync(2)。
 
-## fs.write(fd, buffer, offset, length, position, [callback])
+## fs.write(fd, buffer, offset, length, position, callback)
 
 <!--
 Write `buffer` to the file specified by `fd`.
@@ -755,7 +743,7 @@ Synchronous version of `fs.write()`. Returns the number of bytes written.
 
 同期版の `fs.write()`。書き込まれたバイト数を返します。
 
-## fs.read(fd, buffer, offset, length, position, [callback])
+## fs.read(fd, buffer, offset, length, position, callback)
 
 <!--
 Read data from the file specified by `fd`.
@@ -803,19 +791,21 @@ Synchronous version of `fs.read`. Returns the number of `bytesRead`.
 
 同期版の `fs.read`。`bytesRead` の数を返します。
 
-## fs.readFile(filename, [options], [callback])
+## fs.readFile(filename, [options], callback)
 
 <!--
 * `filename` {String}
 * `options` {Object}
   * `encoding` {String | Null} default = `null`
   * `flag` {String} default = `'r'`
+* `callback` {Function}
 -->
 
 * `filename` {String}
 * `options` {Object}
   * `encoding` {String | Null} デフォルトは `null`
   * `flag` {String} デフォルトは `'r'`
+* `callback` {Function}
 
 <!--
 Asynchronously reads the entire contents of a file. Example:
@@ -858,7 +848,7 @@ string. Otherwise it returns a buffer.
 そうでなければバッファを返します。
 
 
-## fs.writeFile(filename, data, [options], [callback])
+## fs.writeFile(filename, data, [options], callback)
 
 <!--
 * `filename` {String}
@@ -867,6 +857,7 @@ string. Otherwise it returns a buffer.
   * `encoding` {String | Null} default = `'utf8'`
   * `mode` {Number} default = `438` (aka `0666` in Octal)
   * `flag` {String} default = `'w'`
+* `callback` {Function}
 -->
 
 * `filename` {String}
@@ -875,6 +866,7 @@ string. Otherwise it returns a buffer.
   * `encoding` {String | Null} デフォルトは `'utf8'`
   * `mode` {Number} デフォルトは `438` (8進数の `0666`)
   * `flag` {String} デフォルトは `'w'`
+* `callback` {Function}
 
 <!--
 Asynchronously writes data to a file, replacing the file if it already exists.
@@ -912,7 +904,7 @@ The synchronous version of `fs.writeFile`.
 
 同期版の `fs.writeFile`。
 
-## fs.appendFile(filename, data, [options], [callback])
+## fs.appendFile(filename, data, [options], callback)
 
 <!--
 * `filename` {String}
@@ -921,6 +913,7 @@ The synchronous version of `fs.writeFile`.
   * `encoding` {String | Null} default = `'utf8'`
   * `mode` {Number} default = `438` (aka `0666` in Octal)
   * `flag` {String} default = `'a'`
+* `callback` {Function}
 -->
 
 * `filename` {String}
@@ -929,6 +922,7 @@ The synchronous version of `fs.writeFile`.
   * `encoding` {String | Null} デフォルトは `'utf8'`
   * `mode` {Number} デフォルトは `438` (8進数の `0666`)
   * `flag` {String} デフォルトは `'a'`
+* `callback` {Function}
 
 <!--
 Asynchronously append data to a file, creating the file if it not yet exists.
@@ -1147,7 +1141,7 @@ callback, and have some fallback logic if it is null.
       }
     });
 
-## fs.exists(path, [callback])
+## fs.exists(path, callback)
 
 <!--
 Test whether or not the given path exists by checking with the file system.
