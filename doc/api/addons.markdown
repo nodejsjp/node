@@ -27,8 +27,8 @@ API はいくつかのライブラリの知識が必要で、(現時点では) �
 <!--
  - [libuv](https://github.com/joyent/libuv), C event loop library.
    Anytime one needs to wait for a file descriptor to become readable,
-   wait for a timer, or wait for a signal to received one will need to
-   interface with libuv. That is, if you perform any I/O, libuv will
+   wait for a timer, or wait for a signal to be received one will need
+   to interface with libuv. That is, if you perform any I/O, libuv will
    need to be used.
 -->
 
@@ -95,10 +95,12 @@ First we create a file `hello.cc`:
     #include <node.h>
     #include <v8.h>
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     Handle<Value> Method(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
       return scope.Close(String::New("world"));
     }
 
@@ -271,19 +273,21 @@ function calls and return a result. This is the main and only needed source
     #define BUILDING_NODE_EXTENSION
     #include <node.h>
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     Handle<Value> Add(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       if (args.Length() < 2) {
         ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
-        return scope.Close(Undefined());
+        return scope.Close(Undefined(isolate));
       }
 
       if (!args[0]->IsNumber() || !args[1]->IsNumber()) {
         ThrowException(Exception::TypeError(String::New("Wrong arguments")));
-        return scope.Close(Undefined());
+        return scope.Close(Undefined(isolate));
       }
 
       Local<Number> num = Number::New(args[0]->NumberValue() +
@@ -322,17 +326,19 @@ JavaScript の関数を C++ の関数に渡してそこから呼び出すこと�
     #define BUILDING_NODE_EXTENSION
     #include <node.h>
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     Handle<Value> RunCallback(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       Local<Function> cb = Local<Function>::Cast(args[0]);
       const unsigned argc = 1;
       Local<Value> argv[argc] = { Local<Value>::New(String::New("hello world")) };
       cb->Call(Context::GetCurrent()->Global(), argc, argv);
 
-      return scope.Close(Undefined());
+      return scope.Close(Undefined(isolate));
     }
 
     void Init(Handle<Object> exports, Handle<Object> module) {
@@ -382,10 +388,12 @@ C++ 関数の中から新しいオブジェクトを作成して返すことが�
     #define BUILDING_NODE_EXTENSION
     #include <node.h>
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     Handle<Value> CreateObject(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       Local<Object> obj = Object::New();
       obj->Set(String::NewSymbol("msg"), args[0]->ToString());
@@ -426,15 +434,17 @@ wraps a C++ function:
     #define BUILDING_NODE_EXTENSION
     #include <node.h>
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     Handle<Value> MyFunction(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
       return scope.Close(String::New("hello world"));
     }
 
     Handle<Value> CreateFunction(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       Local<FunctionTemplate> tpl = FunctionTemplate::New(MyFunction);
       Local<Function> fn = tpl->GetFunction();
@@ -527,6 +537,8 @@ prototype:
     #include <node.h>
     #include "myobject.h"
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     MyObject::MyObject() {};
@@ -541,12 +553,12 @@ prototype:
       tpl->PrototypeTemplate()->Set(String::NewSymbol("plusOne"),
           FunctionTemplate::New(PlusOne)->GetFunction());
 
-      Persistent<Function> constructor = Persistent<Function>::New(tpl->GetFunction());
+      Persistent<Function> constructor = Persistent<Function>::New(isolate, tpl->GetFunction());
       exports->Set(String::NewSymbol("MyObject"), constructor);
     }
 
     Handle<Value> MyObject::New(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       MyObject* obj = new MyObject();
       obj->counter_ = args[0]->IsUndefined() ? 0 : args[0]->NumberValue();
@@ -556,7 +568,7 @@ prototype:
     }
 
     Handle<Value> MyObject::PlusOne(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       MyObject* obj = ObjectWrap::Unwrap<MyObject>(args.This());
       obj->counter_ += 1;
@@ -602,10 +614,12 @@ createObject` を `addon.cc` に登録しましょう:
     #include <node.h>
     #include "myobject.h"
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     Handle<Value> CreateObject(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
       return scope.Close(MyObject::NewInstance(args));
     }
 
@@ -659,6 +673,8 @@ The implementation is similar to the above in `myobject.cc`:
     #include <node.h>
     #include "myobject.h"
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     MyObject::MyObject() {};
@@ -675,11 +691,11 @@ The implementation is similar to the above in `myobject.cc`:
       tpl->PrototypeTemplate()->Set(String::NewSymbol("plusOne"),
           FunctionTemplate::New(PlusOne)->GetFunction());
 
-      constructor = Persistent<Function>::New(tpl->GetFunction());
+      constructor = Persistent<Function>::New(isolate, tpl->GetFunction());
     }
 
     Handle<Value> MyObject::New(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       MyObject* obj = new MyObject();
       obj->counter_ = args[0]->IsUndefined() ? 0 : args[0]->NumberValue();
@@ -689,7 +705,7 @@ The implementation is similar to the above in `myobject.cc`:
     }
 
     Handle<Value> MyObject::NewInstance(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       const unsigned argc = 1;
       Handle<Value> argv[argc] = { args[0] };
@@ -699,7 +715,7 @@ The implementation is similar to the above in `myobject.cc`:
     }
 
     Handle<Value> MyObject::PlusOne(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       MyObject* obj = ObjectWrap::Unwrap<MyObject>(args.This());
       obj->counter_ += 1;
@@ -744,15 +760,17 @@ C++ オブジェクトをラップして返すことに加えて、Node が提�
     #include <node.h>
     #include "myobject.h"
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     Handle<Value> CreateObject(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
       return scope.Close(MyObject::NewInstance(args));
     }
 
     Handle<Value> Add(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       MyObject* obj1 = node::ObjectWrap::Unwrap<MyObject>(
           args[0]->ToObject());
@@ -817,6 +835,8 @@ The implementation of `myobject.cc` is similar as before:
     #include <node.h>
     #include "myobject.h"
 
+    Isolate* isolate = Isolate::GetCurrent();
+
     using namespace v8;
 
     MyObject::MyObject() {};
@@ -834,7 +854,7 @@ The implementation of `myobject.cc` is similar as before:
     }
 
     Handle<Value> MyObject::New(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       MyObject* obj = new MyObject();
       obj->val_ = args[0]->IsUndefined() ? 0 : args[0]->NumberValue();
@@ -844,7 +864,7 @@ The implementation of `myobject.cc` is similar as before:
     }
 
     Handle<Value> MyObject::NewInstance(const Arguments& args) {
-      HandleScope scope;
+      HandleScope scope(isolate);
 
       const unsigned argc = 1;
       Handle<Value> argv[argc] = { args[0] };

@@ -15,6 +15,35 @@ provided by most web browsers, here the output is sent to stdout or stderr.
 ほとんどのブラウザで提供されているコンソールオブジェクトと同様ですが、
 出力は標準出力か標準エラー出力に送られます。
 
+<!--
+The console functions are synchronous when the destination is a terminal or
+a file (to avoid lost messages in case of premature exit) and asynchronous
+when it's a pipe (to avoid blocking for long periods of time).
+-->
+
+コンソール関数は出力先がターミナルまたはファイルの場合は同期
+(早すぎる終了によりメッセージが失われるケースを防ぐため)、
+パイプの場合は非同期 (長時間ブロックすることを防ぐため) です。
+
+<!--
+That is, in the following example, stdout is non-blocking while stderr
+is blocking:
+-->
+
+つまり、以下の例では標準出力はノンブロッキングですが、
+標準エラー出力はブロッキングです:
+
+    $ node script.js 2> error.log | tee info.log
+
+<!--
+In daily use, the blocking/non-blocking dichotomy is not something you
+should worry about unless you log huge amounts of data.
+-->
+
+通常の使用では、膨大な量のデータを記録するのではない限り、
+ブロッキング／ノンブロッキングのどちらなのかを心配する必要はありません。
+
+
 ## console.log([data], [...])
 
 <!--
@@ -63,10 +92,12 @@ Same as `console.error`.
 ## console.dir(obj)
 
 <!--
-Uses `util.inspect` on `obj` and prints resulting string to stdout.
+Uses `util.inspect` on `obj` and prints resulting string to stdout. This functi
+bypasses any custom `inspect()` function on `obj`.
 -->
 
 `util.inspect` を使って `obj` を文字列化した結果を標準出力にプリントします。
+この関数はあらゆるオブジェクトのカスタム `inspect()` 関数をバイパスします。
 
 ## console.time(label)
 

@@ -264,6 +264,24 @@ will invoke and use the result of when inspecting the object:
     util.inspect(obj);
       // "{nate}"
 
+<!--
+You may also return another Object entirely, and the returned String will be
+formatted according to the returned Object. This is similar to how
+`JSON.stringify()` works:
+-->
+
+全く別のオブジェクトを返すこともできます。
+戻り値の文字列は、そのオブジェクトに従ってフォーマットされます。
+これは `JSON.stringify()` の動作とよく似ています。
+
+    var obj = { foo: 'this will not show up in the inspect() output' };
+    obj.inspect = function(depth) {
+      return { bar: 'baz' };
+    };
+
+    util.inspect(obj);
+      // "{ bar: 'baz' }"
+
 
 ## util.isArray(object)
 

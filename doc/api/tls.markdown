@@ -147,6 +147,24 @@ TLS の拡張で、以下を可能にします。
   * SNI - 一つの TLS サーバでホスト名の異なる複数の証明書を使用。
 
 
+## tls.getCiphers()
+
+<!--
+Returns an array with the names of the supported SSL ciphers.
+-->
+
+サポートされている SSL 暗号名の配列を返します。
+
+<!--
+Example:
+-->
+
+例:
+
+    var ciphers = tls.getCiphers();
+    console.log(ciphers); // ['AES128-SHA', 'AES256-SHA', ...]
+
+
 ## tls.createServer(options, [secureConnectionListener])
 
 <!--
@@ -234,6 +252,10 @@ automatically set as a listener for the [secureConnection][] event.  The
     SecureContext). If `SNICallback` wasn't provided - default callback with
     high-level API will be used (see below).
 
+  - `sessionTimeout`: An integer specifiying the seconds after which TLS
+    session identifiers and TLS session tickets created by the server are
+    timed out. See [SSL_CTX_set_timeout] for more details.
+
   - `sessionIdContext`: A string containing a opaque identifier for session
     resumption. If `requestCert` is `true`, the default is MD5 hash value
     generated from command-line. Otherwise, the default is not provided.
@@ -314,6 +336,10 @@ automatically set as a listener for the [secureConnection][] event.  The
     を使用することができます)。
     `SNICallback` が渡されなかった場合は、デフォルトのコールバックとして
     後述する高水準 API が使用されます。
+
+  - `sessionTimeout`: サーバによって作成された TLS セッション識別子および TLS
+    セッションチケットがタイムアウトするまでの秒数を指定する整数値です。
+    より詳細は [SSL_CTX_set_timeout] を参照してください。
 
   - `sessionIdContext`: セッション再開のための識別子となる文字列です。
     `requestCedrt` が `true` の場合、デフォルトはコマンドライン引数から
@@ -1012,3 +1038,4 @@ The numeric representation of the remote port. For example, `443`.
 [secureConnection]: #tls_event_secureconnection
 [Stream]: stream.html#stream_stream
 [tls.Server]: #tls_class_tls_server
+[SSL_CTX_set_timeout]: http://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html

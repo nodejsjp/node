@@ -49,11 +49,18 @@ Example:
 
 <!--
 Join all arguments together and normalize the resulting path.
-Non-string arguments are ignored.
 -->
 
 全ての引数を一つに結合し、結果として得られるパスを正規化します。
-文字列でない引数は無視されます。
+
+<!--
+Arguments must be strings.  In v0.8, non-string arguments were
+silently ignored.  In v0.10 and up, an exception is thrown.
+-->
+
+引数は文字列でなくてはなりません。
+v0.8 では、非文字列の引数は静かに無視されていました。
+v0.10 以降では、例外がスローされます。
 
 <!--
 Example:

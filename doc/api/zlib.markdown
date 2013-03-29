@@ -378,34 +378,42 @@ Unzip で生のバッファを解凍します。
 <!--
 Each class takes an options object.  All options are optional.  (The
 convenience methods use the default settings for all options.)
-
-Note that some options are only
-relevant when compressing, and are ignored by the decompression classes.
-
-* chunkSize (default: 16*1024)
-* windowBits
-* level (compression only)
-* memLevel (compression only)
-* strategy (compression only)
-* dictionary (deflate/inflate only, empty dictionary by default)
-
-See the description of `deflateInit2` and `inflateInit2`
-at <http://zlib.net/manual.html#Advanced> for more information on these.
 -->
 
 どのクラスもオプションオブジェクトを受け取ります。
 全てのオプションは任意です
 (簡易メソッドは全てのオプションでデフォルト値を使用します)。
 
+<!--
+Note that some options are only relevant when compressing, and are
+ignored by the decompression classes.
+-->
+
 いくつかのオプションは圧縮にだけ関連し、
 解凍するクラスでは無視されることに注意してください。
 
+<!--
+* flush (default: `zlib.Z_NO_FLUSH`)
+* chunkSize (default: 16*1024)
+* windowBits
+* level (compression only)
+* memLevel (compression only)
+* strategy (compression only)
+* dictionary (deflate/inflate only, empty dictionary by default)
+-->
+
+* flush (デフォルト: `zlib.Z_NO_FLUSH`)
 * chunkSize (デフォルト: 16*1024)
 * windowBits
 * level (圧縮のみ)
 * memLevel (圧縮のみ)
 * strategy (圧縮のみ)
 * dictionary (deflate/inflate のみ、デフォルトは空の辞書です)
+
+<!--
+See the description of `deflateInit2` and `inflateInit2` at
+<http://zlib.net/manual.html#Advanced> for more information on these.
+-->
 
 これらの詳細は <http://zlib.net/manual.html#Advanced> の
 `deflateInit2` および `inflateInit2` の説明を参照してください。
