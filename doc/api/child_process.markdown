@@ -57,6 +57,39 @@ The ChildProcess class is not intended to be used directly.  Use the
 それらは親プロセスの標準入出力ストリームを共有するかもしれませんし、
 独立したストリームオブジェクトにパイプでつながれているかもしれません。
 
+### Event:  'error'
+
+<!--
+* `err` {Error Object} the error.
+-->
+
+* `err` {Error Object} エラー。
+
+<!--
+Emitted when:
+-->
+
+次の場合に生成されます:
+
+<!--
+1. The process could not be spawned, or
+2. The process could not be killed, or
+3. Sending a message to the child process failed for whatever reason.
+-->
+
+1. プロセスを起動できなかった、または
+2. プロセスを殺すことができなかった、または
+3. 何らかの理由で子プロセスにメッセージを送信することが失敗した。
+
+<!--
+See also [`ChildProcess#kill()`](#child_process_child_kill_signal) and
+[`ChildProcess#send()`](#child_process_child_send_message_sendhandle).
+-->
+
+[`ChildProcess#kill()`](#child_process_child_kill_signal) および
+[`ChildProcess#send()`](#child_process_child_send_message_sendhandle)
+も参照してください。
+
 ### Event:  'exit'
 
 <!--
@@ -245,8 +278,25 @@ be sent `'SIGTERM'`. See `signal(7)` for a list of available signals.
     grep.kill('SIGHUP');
 
 <!--
-Note that while the function is called `kill`, the signal delivered to the child
-process may not actually kill it.  `kill` really just sends a signal to a process.
+May emit an `'error'` event when the signal cannot be delivered. Sending a
+signal to a child process that has already exited is not an error but may
+have unforeseen consequences: if the PID (the process ID) has been reassigned
+to another process, the signal will be delivered to that process instead.
+What happens next is anyone's guess.
+-->
+
+シグナルを送ることができなかった場合は `'error'` イベントが
+生成されるかもしれません。
+既に終了した子プロセスへシグナルを送信してもエラーにはならず、
+予想しない結果になるかもしれません:
+PID (プロセス ID) が他のプロセスに再割り当てされると、
+シグナルはそのプロセスに送信されてしまいます。
+それで何が起こるかは誰にも予想できません。
+
+<!--
+Note that while the function is called `kill`, the signal delivered to the
+child process may not actually kill it.  `kill` really just sends a signal
+to a process.
 -->
 
 この関数は `kill` と呼ばれるものの、
@@ -334,6 +384,14 @@ second argument to the `message` event.
 `child.send()` の `sendHandle` オプションは TCP サーバまたは
 ソケットオブジェクトを他のプロセスに送信するためのものです。
 子プロセスはそれを `'message'` イベントの第 2 引数として受信します。
+
+<!--
+Emits an `'error'` event if the message cannot be sent, for example because
+the child process has already exited.
+-->
+
+たとえば子プロセスが既に終了した場合など、メッセージを送信できなかった場合は
+`'error'` イベントが生成されます。
 
 #### Example: sending server object
 

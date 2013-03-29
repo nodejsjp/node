@@ -86,7 +86,7 @@ to the resulting mode.
 結果のモードは `isRaw` に設定されます。
 
 
-## Class WriteStream
+## Class: WriteStream
 
 <!--
 A `net.Socket` subclass that represents the writable portion of a tty. In normal

@@ -47,7 +47,7 @@ Example:
 例:
 
     var ciphers = crypto.getCiphers();
-    console.log(ciphers); // ['AES128-SHA', 'AES256-SHA', ...]
+    console.log(ciphers); // ['AES-128-CBC', 'AES-128-CBC-HMAC-SHA1', ...]
 
 
 ## crypto.getHashes()
@@ -710,12 +710,8 @@ the data and public key.
 
 署名されたデータと公開鍵による検証の結果によって true または false を返します。
 
-<<<<<<< HEAD
 <!--
-Note: `verifier` object can not be used after `verify()` method been
-=======
 Note: `verifier` object can not be used after `verify()` method has been
->>>>>>> v0.10
 called.
 -->
 
