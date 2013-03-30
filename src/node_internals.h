@@ -48,6 +48,12 @@ inline static int snprintf(char* buf, unsigned int len, const char* fmt, ...) {
 }
 #endif
 
+#if defined(__x86_64__)
+# define BITS_PER_LONG 64
+#else
+# define BITS_PER_LONG 32
+#endif
+
 #ifndef offset_of
 // g++ in strict mode complains loudly about the system offsetof() macro
 // because it uses NULL as the base address.
@@ -93,7 +99,7 @@ inline static v8::Handle<v8::Value> ThrowRangeError(const char* errmsg) {
   assert(!args.Holder().IsEmpty());                                         \
   assert(args.Holder()->InternalFieldCount() > 0);                          \
   type* wrap = static_cast<type*>(                                          \
-      args.Holder()->GetPointerFromInternalField(0));                \
+      args.Holder()->GetAlignedPointerFromInternalField(0));                \
   if (!wrap) {                                                              \
     fprintf(stderr, #type ": Aborting due to unwrap failure at %s:%d\n",    \
             __FILE__, __LINE__);                                            \

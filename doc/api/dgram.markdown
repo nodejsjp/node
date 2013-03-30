@@ -10,6 +10,31 @@ Datagram sockets are available through `require('dgram')`.
 
 データグラムソケットは `require('dgram')` で利用可能になります。
 
+<!--
+Important note: the behavior of `dgram.Socket#bind()` has changed in v0.10
+and is always asynchronous now.  If you have code that looks like this:
+-->
+
+重要な注意: `dgram.Socket#bind()` の振る舞いは v0.10 で変更され、
+それは常に非同期になりました。
+もし次のようなコードがあると:
+
+    var s = dgram.createSocket('udp4');
+    s.bind(1234);
+    s.addMembership('224.0.0.114');
+
+<!--
+You have to change it to this:
+-->
+
+これは次のように変更されなければなりません。
+
+    var s = dgram.createSocket('udp4');
+    s.bind(1234, function() {
+      s.addMembership('224.0.0.114');
+    });
+
+
 ## dgram.createSocket(type, [callback])
 
 <!--
@@ -47,7 +72,7 @@ with `socket.address().address` and `socket.address().port`.
 そのアドレスとポートは `socket.address().address` および
 `socket.address().port` で取得することができます。
 
-## Class: Socket
+## Class: dgram.Socket
 
 <!--
 The dgram Socket class encapsulates the datagram functionality.  It
@@ -105,7 +130,7 @@ Emitted when an error occurs.
 
 エラーが発生すると生成されます。
 
-### dgram.send(buf, offset, length, port, address, [callback])
+### socket.send(buf, offset, length, port, address, [callback])
 
 <!--
 * `buf` Buffer object.  Message to be sent
@@ -218,18 +243,27 @@ informing the source that the data did not reach its intended recipient).
 意図した受信者に到達することはありません)。
 
 
-### dgram.bind(port, [address])
+### socket.bind(port, [address], [callback])
 
 * `port` Integer
 * `address` String, Optional
+* `callback` Function, Optional
 
 <!--
-For UDP sockets, listen for datagrams on a named `port` and optional `address`. If
-`address` is not specified, the OS will try to listen on all addresses.
+For UDP sockets, listen for datagrams on a named `port` and optional `address`.
+If `address` is not specified, the OS will try to listen on all addresses.
 -->
 
 UDP ソケット用です。`port` とオプションの `address` でデータグラムを待ち受けます。
 `address` が指定されなければ、OS は全てのアドレスからの待ち受けを試みます。
+
+<!--
+The `callback` argument, if provided, is added as a one-shot `'listening'`
+event listener.
+-->
+
+`callback` 引数は、もし提供されると `'listening'` イベントの一回限りの
+リスナとして追加されます。
 
 <!--
 Example of a UDP server listening on port 41234:
@@ -256,7 +290,7 @@ Example of a UDP server listening on port 41234:
     // server listening 0.0.0.0:41234
 
 
-### dgram.close()
+### socket.close()
 
 <!--
 Close the underlying socket and stop listening for data on it.
@@ -264,7 +298,7 @@ Close the underlying socket and stop listening for data on it.
 
 下層のソケットをクローズし、データの待ち受けを終了します。
 
-### dgram.address()
+### socket.address()
 
 <!--
 Returns an object containing the address information for a socket.  For UDP sockets,
@@ -274,7 +308,7 @@ this object will contain `address` , `family` and `port`.
 オブジェクトが持っているソケットのアドレス情報を返します。
 このオブジェクトは `address`、`port`、そして `family` を持っています。
 
-### dgram.setBroadcast(flag)
+### socket.setBroadcast(flag)
 
 * `flag` Boolean
 
@@ -286,7 +320,7 @@ may be sent to a local interface's broadcast address.
 ソケットのオプション `SO_BROADCAST` を設定またはクリアします。
 このオプションが設定されると、UDP パケットはローカルインタフェースのブロードキャスト用アドレスに送信されます。
 
-### dgram.setTTL(ttl)
+### socket.setTTL(ttl)
 
 * `ttl` Integer
 
@@ -311,7 +345,7 @@ systems is 64.
 
 `setTTL()` の引数は 1 から 255 のホップ数でです。ほとんどのシステムでデフォルトは 64 です。
 
-### dgram.setMulticastTTL(ttl)
+### socket.setMulticastTTL(ttl)
 
 * `ttl` Integer
 
@@ -332,7 +366,7 @@ TTL がルーターによって 0 までデクリメントされると、それ�
 `setMulticastTTL()` の引数はホップを表す数値で、0 から 255 の間です。
 ほとんどのシステムでデフォルトは 1 です。
 
-### dgram.setMulticastLoopback(flag)
+### socket.setMulticastLoopback(flag)
 
 * `flag` Boolean
 
@@ -344,7 +378,7 @@ packets will also be received on the local interface.
 `IP_MULTICAST_LOOP` ソケットオプションを設定またはクリアします。
 このオプションが設定されると、マルチキャストのパケットはローカルインタフェースでも受信できるようになります。
 
-### dgram.addMembership(multicastAddress, [multicastInterface])
+### socket.addMembership(multicastAddress, [multicastInterface])
 
 * `multicastAddress` String
 * `multicastInterface` String, Optional
@@ -360,7 +394,7 @@ interfaces.
 
 `multicastInterface` が指定されなかった場合は、全ての妥当なインタフェースをメンバーシップに加えようとします。
 
-### dgram.dropMembership(multicastAddress, [multicastInterface])
+### socket.dropMembership(multicastAddress, [multicastInterface])
 
 * `multicastAddress` String
 * `multicastInterface` String, Optional
@@ -380,7 +414,7 @@ interfaces.
 
 `multicastInterface` が指定されなかった場合は、全ての妥当なインタフェースをメンバーシップから削除しようとします。
 
-### dgram.unref()
+### socket.unref()
 
 <!--
 Calling `unref` on a socket will allow the program to exit if this is the only
@@ -392,7 +426,7 @@ active socket in the event system. If the socket is already `unref`d calling
 終了することができるように、`unref` を呼び出します。
 既に `unref` されたソケットで再び `unref` が呼び出されても影響はありません。
 
-### dgram.ref()
+### socket.ref()
 
 <!--
 Opposite of `unref`, calling `ref` on a previously `unref`d socket will *not*
