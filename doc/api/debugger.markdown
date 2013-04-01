@@ -140,7 +140,7 @@ prints the active watchers. To remove a watcher, type
 * `next`, `n` - Step next
 * `step`, `s` - Step in
 * `out`, `o` - Step out
-* `pause` - Pause running code (like pause button in Developer TOols)
+* `pause` - Pause running code (like pause button in Developer Tools)
 -->
 
 * `cont`, `c` - 実行を継続します。

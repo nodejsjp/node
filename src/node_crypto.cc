@@ -927,6 +927,11 @@ int Connection::HandleSSLError(const char* func, int rv, ZeroStatus zs) {
     DEBUG_PRINT("[%p] SSL: %s want read\n", ssl_, func);
     return 0;
 
+  } else if (err == SSL_ERROR_ZERO_RETURN) {
+    handle_->Set(String::New("error"),
+                 Exception::Error(String::New("ZERO_RETURN")));
+    return rv;
+
   } else {
     HandleScope scope;
     BUF_MEM* mem;
@@ -1307,11 +1312,6 @@ Handle<Value> Connection::EncIn(const Arguments& args) {
   size_t buffer_length = Buffer::Length(args[0]);
 
   size_t off = args[1]->Int32Value();
-  if (off >= buffer_length) {
-    return ThrowException(Exception::Error(
-          String::New("Offset is out of bounds")));
-  }
-
   size_t len = args[2]->Int32Value();
   if (off + len > buffer_length) {
     return ThrowException(Exception::Error(
@@ -1353,11 +1353,6 @@ Handle<Value> Connection::ClearOut(const Arguments& args) {
   size_t buffer_length = Buffer::Length(args[0]);
 
   size_t off = args[1]->Int32Value();
-  if (off >= buffer_length) {
-    return ThrowException(Exception::Error(
-          String::New("Offset is out of bounds")));
-  }
-
   size_t len = args[2]->Int32Value();
   if (off + len > buffer_length) {
     return ThrowException(Exception::Error(
@@ -1425,11 +1420,6 @@ Handle<Value> Connection::EncOut(const Arguments& args) {
   size_t buffer_length = Buffer::Length(args[0]);
 
   size_t off = args[1]->Int32Value();
-  if (off >= buffer_length) {
-    return ThrowException(Exception::Error(
-          String::New("Offset is out of bounds")));
-  }
-
   size_t len = args[2]->Int32Value();
   if (off + len > buffer_length) {
     return ThrowException(Exception::Error(
@@ -1464,11 +1454,6 @@ Handle<Value> Connection::ClearIn(const Arguments& args) {
   size_t buffer_length = Buffer::Length(args[0]);
 
   size_t off = args[1]->Int32Value();
-  if (off > buffer_length) {
-    return ThrowException(Exception::Error(
-          String::New("Offset is out of bounds")));
-  }
-
   size_t len = args[2]->Int32Value();
   if (off + len > buffer_length) {
     return ThrowException(Exception::Error(
@@ -3930,11 +3915,13 @@ Handle<Value> RandomBytes(const Arguments& args) {
   // maybe allow a buffer to write to? cuts down on object creation
   // when generating random data in a loop
   if (!args[0]->IsUint32()) {
-    Local<String> s = String::New("Argument #1 must be number > 0");
-    return ThrowException(Exception::TypeError(s));
+    return ThrowTypeError("Argument #1 must be number > 0");
   }
 
-  const size_t size = args[0]->Uint32Value();
+  const uint32_t size = args[0]->Uint32Value();
+  if (size > Buffer::kMaxLength) {
+    return ThrowTypeError("size > Buffer::kMaxLength");
+  }
 
   RandomBytesRequest* req = new RandomBytesRequest();
   req->error_ = 0;
@@ -3966,7 +3953,7 @@ Handle<Value> RandomBytes(const Arguments& args) {
 }
 
 
-Handle<Value> GetCiphers(const Arguments& args) {
+Handle<Value> GetSSLCiphers(const Arguments& args) {
   HandleScope scope;
 
   SSL_CTX* ctx = SSL_CTX_new(TLSv1_server_method());
@@ -3995,19 +3982,28 @@ Handle<Value> GetCiphers(const Arguments& args) {
 }
 
 
-static void add_hash_to_array(const EVP_MD* md,
-                              const char* from,
-                              const char* to,
-                              void* arg) {
+template <class TypeName>
+static void array_push_back(const TypeName* md,
+                            const char* from,
+                            const char* to,
+                            void* arg) {
   Local<Array>& arr = *static_cast<Local<Array>*>(arg);
   arr->Set(arr->Length(), String::New(from));
+}
+
+
+Handle<Value> GetCiphers(const Arguments& args) {
+  HandleScope scope;
+  Local<Array> arr = Array::New();
+  EVP_CIPHER_do_all_sorted(array_push_back<EVP_CIPHER>, &arr);
+  return scope.Close(arr);
 }
 
 
 Handle<Value> GetHashes(const Arguments& args) {
   HandleScope scope;
   Local<Array> arr = Array::New();
-  EVP_MD_do_all_sorted(add_hash_to_array, &arr);
+  EVP_MD_do_all_sorted(array_push_back<EVP_MD>, &arr);
   return scope.Close(arr);
 }
 
@@ -4051,6 +4047,7 @@ void InitCrypto(Handle<Object> target) {
   NODE_SET_METHOD(target, "PBKDF2", PBKDF2);
   NODE_SET_METHOD(target, "randomBytes", RandomBytes<false>);
   NODE_SET_METHOD(target, "pseudoRandomBytes", RandomBytes<true>);
+  NODE_SET_METHOD(target, "getSSLCiphers", GetSSLCiphers);
   NODE_SET_METHOD(target, "getCiphers", GetCiphers);
   NODE_SET_METHOD(target, "getHashes", GetHashes);
 

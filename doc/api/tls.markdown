@@ -147,6 +147,24 @@ TLS の拡張で、以下を可能にします。
   * SNI - 一つの TLS サーバでホスト名の異なる複数の証明書を使用。
 
 
+## tls.getCiphers()
+
+<!--
+Returns an array with the names of the supported SSL ciphers.
+-->
+
+サポートされている SSL 暗号名の配列を返します。
+
+<!--
+Example:
+-->
+
+例:
+
+    var ciphers = tls.getCiphers();
+    console.log(ciphers); // ['AES128-SHA', 'AES256-SHA', ...]
+
+
 ## tls.createServer(options, [secureConnectionListener])
 
 <!--

@@ -177,6 +177,30 @@ refer to pipes, they are non-blocking like other streams.
 それらはブロックします。
 パイプを参照しているケースでは、他のストリームと同様にブロックしません。
 
+<!--
+To check if Node is being run in a TTY context, read the `isTTY` property
+on `process.stderr`, `process.stdout`, or `process.stdin`:
+-->
+
+Node が TTY のコンテキストで実行されているかチェックするには、
+`process.stderr`, `process.stdout`, または `process.stdin` の
+`isTTY` プロパティを参照します。
+
+    $ node -p "Boolean(process.stdin.isTTY)"
+    true
+    $ echo "foo" | node -p "Boolean(process.stdin.isTTY)"
+    false
+
+    $ node -p "Boolean(process.stdout.isTTY)"
+    true
+    $ node -p "Boolean(process.stdout.isTTY)" | cat
+    false
+
+<!--
+See [the tty docs](tty.html#tty_tty) for more information.
+-->
+
+より詳細は [the tty docs](tty.html#tty_tty) を参照してください。
 
 ## process.stderr
 
