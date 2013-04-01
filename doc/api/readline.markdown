@@ -163,7 +163,7 @@ stream.
 
 入力と出力を持つ readline インタフェースを表現するクラスです。
 
-### rl.setPrompt(prompt, length)
+### rl.setPrompt(prompt)
 
 <!--
 Sets the prompt, for example when you run `node` on the command line, you see

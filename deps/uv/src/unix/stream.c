@@ -131,7 +131,6 @@ static void uv__stream_osx_select(void* arg) {
   char buf[1024];
   fd_set sread;
   fd_set swrite;
-  fd_set serror;
   int events;
   int fd;
   int r;
@@ -154,17 +153,15 @@ static void uv__stream_osx_select(void* arg) {
     /* Watch fd using select(2) */
     FD_ZERO(&sread);
     FD_ZERO(&swrite);
-    FD_ZERO(&serror);
 
     if (uv_is_readable(stream))
       FD_SET(fd, &sread);
     if (uv_is_writable(stream))
       FD_SET(fd, &swrite);
-    FD_SET(fd, &serror);
     FD_SET(s->int_fd, &sread);
 
     /* Wait indefinitely for fd events */
-    r = select(max_fd + 1, &sread, &swrite, &serror, NULL);
+    r = select(max_fd + 1, &sread, &swrite, NULL, NULL);
     if (r == -1) {
       if (errno == EINTR)
         continue;
@@ -203,8 +200,6 @@ static void uv__stream_osx_select(void* arg) {
       events |= UV__POLLIN;
     if (FD_ISSET(fd, &swrite))
       events |= UV__POLLOUT;
-    if (FD_ISSET(fd, &serror))
-      events |= UV__POLLERR;
 
     uv_mutex_lock(&s->mutex);
     s->events |= events;
@@ -249,7 +244,8 @@ static void uv__stream_osx_select_cb(uv_async_t* handle, int status) {
   s->events = 0;
   uv_mutex_unlock(&s->mutex);
 
-  assert(0 == (events & UV__POLLERR));
+  assert(events != 0);
+  assert(events == (events & (UV__POLLIN | UV__POLLOUT)));
 
   /* Invoke callback on event-loop */
   if ((events & UV__POLLIN) && uv__io_active(&stream->io_watcher, UV__POLLIN))
@@ -268,7 +264,7 @@ static void uv__stream_osx_cb_close(uv_handle_t* async) {
 }
 
 
-static int uv__stream_try_select(uv_stream_t* stream, int fd) {
+int uv__stream_try_select(uv_stream_t* stream, int* fd) {
   /*
    * kqueue doesn't work with some files from /dev mount on osx.
    * select(2) in separate thread for those fds
@@ -288,7 +284,7 @@ static int uv__stream_try_select(uv_stream_t* stream, int fd) {
     return uv__set_sys_error(stream->loop, errno);
   }
 
-  EV_SET(&filter[0], fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
+  EV_SET(&filter[0], *fd, EVFILT_READ, EV_ADD | EV_ENABLE, 0, 0, 0);
 
   /* Use small timeout, because we only want to capture EINVALs */
   timeout.tv_sec = 0;
@@ -308,7 +304,7 @@ static int uv__stream_try_select(uv_stream_t* stream, int fd) {
   if (s == NULL)
     return uv__set_artificial_error(stream->loop, UV_ENOMEM);
 
-  s->fd = fd;
+  s->fd = *fd;
 
   if (uv_async_init(stream->loop, &s->async, uv__stream_osx_select_cb)) {
     SAVE_ERRNO(free(s));
@@ -336,6 +332,7 @@ static int uv__stream_try_select(uv_stream_t* stream, int fd) {
 
   s->stream = stream;
   stream->select = s;
+  *fd = s->fake_fd;
 
   return 0;
 
@@ -367,21 +364,6 @@ int uv__stream_open(uv_stream_t* stream, int fd, int flags) {
     if ((stream->flags & UV_TCP_KEEPALIVE) && uv__tcp_keepalive(fd, 1, 60))
       return uv__set_sys_error(stream->loop, errno);
   }
-
-#if defined(__APPLE__)
-  {
-    uv__stream_select_t* s;
-    int r;
-
-    r = uv__stream_try_select(stream, fd);
-    if (r == -1)
-      return r;
-
-    s = stream->select;
-    if (s != NULL)
-      fd = s->fake_fd;
-  }
-#endif /* defined(__APPLE__) */
 
   stream->io_watcher.fd = fd;
 
