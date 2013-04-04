@@ -1513,12 +1513,11 @@ static uid_t uid_by_name(const char* name) {
   struct passwd pwd;
   struct passwd* pp;
   char buf[8192];
-  int rc;
 
   errno = 0;
   pp = NULL;
 
-  if ((rc = getpwnam_r(name, &pwd, buf, sizeof(buf), &pp)) == 0 && pp != NULL) {
+  if (getpwnam_r(name, &pwd, buf, sizeof(buf), &pp) == 0 && pp != NULL) {
     return pp->pw_uid;
   }
 
@@ -1551,12 +1550,11 @@ static gid_t gid_by_name(const char* name) {
   struct group pwd;
   struct group* pp;
   char buf[8192];
-  int rc;
 
   errno = 0;
   pp = NULL;
 
-  if ((rc = getgrnam_r(name, &pwd, buf, sizeof(buf), &pp)) == 0 && pp != NULL) {
+  if (getgrnam_r(name, &pwd, buf, sizeof(buf), &pp) == 0 && pp != NULL) {
     return pp->gr_gid;
   }
 
@@ -2356,9 +2354,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   versions->Set(String::NewSymbol("node"), String::New(NODE_VERSION+1));
   versions->Set(String::NewSymbol("v8"), String::New(V8::GetVersion()));
   versions->Set(String::NewSymbol("ares"), String::New(ARES_VERSION_STR));
-  versions->Set(String::NewSymbol("uv"), String::New(
-               NODE_STRINGIFY(UV_VERSION_MAJOR) "."
-               NODE_STRINGIFY(UV_VERSION_MINOR)));
+  versions->Set(String::NewSymbol("uv"), String::New(uv_version_string()));
   versions->Set(String::NewSymbol("zlib"), String::New(ZLIB_VERSION));
 #if HAVE_OPENSSL
   // Stupid code to slice out the version string.
