@@ -706,7 +706,7 @@ Note that `process.stderr` and `process.stdout` are never closed until
 the process exits, regardless of the specified options.
 -->
 
-オプションの指定にかかわらず、`process.stderr` および `process.stdou`
+オプションの指定にかかわらず、`process.stderr` および `process.stdout`
 はプロセスが終了するまで決してクローズされないことに注意してください。
 
 ### readable.unpipe([destination])
