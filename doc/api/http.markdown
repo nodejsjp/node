@@ -1115,36 +1115,26 @@ argument which is an instance of `http.IncomingMessage`.
 
 <!--
 During the `'response'` event, one can add listeners to the
-response object; particularly to listen for the `'data'` event. Note that
-the `'response'` event is called before any part of the response body is received,
-so there is no need to worry about racing to catch the first part of the
-body. As long as a listener for `'data'` is added during the `'response'`
-event, the entire body will be caught.
+response object; particularly to listen for the `'data'` event.
 -->
 
 `'response'` イベントの間、レスポンスオブジェクトにリスナーを加えることができます;
 とりわけ `'data'` イベントのリスナーです。
-`'response'` イベントはレスポンスボディのどの部分を受信するよりも前に呼び出されることに注意してください。
-そのため、ボディの最初の部分の受信と競合することを心配する必要はありません。
-`'response'` イベントの間に `'data'` イベントのリスナーが加えられる限り、
-ボディ全体を受信することができます。
 
+<!--
+If no `'response'` handler is added, then the response will be
+entirely discarded.  However, if you add a `'response'` event handler,
+then you **must** consume the data from the response object, either by
+calling `response.read()` whenever there is a `'readable'` event, or
+by adding a `'data'` handler, or by calling the `.resume()` method.
+Until the data is consumed, the `'end'` event will not fire.
+-->
 
-    // Good
-    request.on('response', function (response) {
-      response.on('data', function (chunk) {
-        console.log('BODY: ' + chunk);
-      });
-    });
-
-    // Bad - misses all or part of the body
-    request.on('response', function (response) {
-      setTimeout(function () {
-        response.on('data', function (chunk) {
-          console.log('BODY: ' + chunk);
-        });
-      }, 10);
-    });
+`'response'` ハンドラが加えられない場合、レスポンスは完全に捨てられます。
+しかし、`'response'` イベントハンドラを加えた場合は、
+`'readable'` イベントが発生した時に `response.read()` を呼ぶか、
+`'data'` ハンドラを加えるか、`.resume()` メソッドを呼び出すかのいずれかにより、
+レスポンスオブジェクトからのデータを消費しなければ *なりません* 。
 
 <!--
 This is a `Writable Stream`.
@@ -1458,46 +1448,12 @@ respectively. It may be used to access response status, headers and data.
 それはステータス、ヘッダ、およびデータにアクセスするために使われます。
 
 <!--
-It implements the [Readable Stream][] interface. `http.IncomingMessage` is an
-[EventEmitter][] with the following events:
+It implements the [Readable Stream][] interface, as well as the
+following additional events, methods, and properties.
 -->
 
-これは [Readable Stream][] インタフェースを実装します。
-`http.IncomingMessage` はは以下のイベントを持つ [EventEmitter][] です:
-
-### Event: 'data'
-
-`function (chunk) { }`
-
-<!--
-Emitted when a piece of the message body is received. The chunk is a string if
-an encoding has been set with `message.setEncoding()`, otherwise it's
-a [Buffer][].
--->
-
-メッセージボディの断片を受信した場合に生成されます。
-`message.setEncoding()` によってエンコーディングが設定されている場合、
-チャンクは文字列です。それ以外の場合は [Buffer][] です。
-
-<!--
-Note that the __data will be lost__ if there is no listener when a
-`IncomingMessage` emits a `'data'` event.
--->
-
-`IncomingMessage` が `'data'` イベントを生成した時にリスナが存在しなければ、
-__データは失われる__ことに注意してください。
-
-### Event: 'end'
-
-`function () { }`
-
-<!--
-Emitted exactly once for each response. After that, no more `'data'` events
-will be emitted on the response.
--->
-
-レスポンスごとに厳密に一回生成されます。
-その後、このレスポンスで `'data'` イベントが生成されることはありません。
+これは [Readable Stream][] インタフェースの実装で、
+以下のイベント、メソッド、およびプロパティを追加で持ちます。
 
 ### Event: 'close'
 
@@ -1512,13 +1468,11 @@ Indicates that the underlaying connection was terminated before
 下層の接続が切断されたことを示します。
 
 <!--
-Just like `'end'`, this event occurs only once per response, and no more
-`'data'` events will fire afterwards. See [http.ServerResponse][]'s `'close'`
-event for more information.
+Just like `'end'`, this event occurs only once per response. See
+[http.ServerResponse][]'s `'close'` event for more information.
 -->
 
-`'end'` のように、このイベントはレスポンス毎に一回生成され、
-`'data'` イベントはそれ以上生成されません。
+`'end'` のように、このイベントはレスポンス毎に一回生成されます。
 [http.ServerRequest][] の `'close'` イベントにより多くの情報があります。
 
 ### message.httpVersion
@@ -1584,39 +1538,6 @@ Calls `message.connection.setTimeout(msecs, callback)`.
 -->
 
 `message.connection.setTimeout(msecs, callback)` を呼びます。
-
-### message.setEncoding([encoding])
-
-<!--
-Set the encoding for data emitted by the `'data'` event. See [stream.setEncoding()][] for more
-information.
--->
-
-`'data'` イベントによって生成されるデータのエンコーディングを設定します。
-詳細は [stream.setEncoding()][] を参照してください。
-
-<!--
-Should be set before any `'data'` events have been emitted.
--->
-
-あらゆる `'data'` イベントが生成されるよりも前に設定されなければなりません。
-
-### message.pause()
-
-<!--
-Pauses request/response from emitting events.  Useful to throttle back a download.
--->
-
-リクエスト／レスポンスによるイベントの生成を中断します。
-ダウンロード速度を落とすのに便利です。
-
-### message.resume()
-
-<!--
-Resumes a paused request/response.
--->
-
-中断されたリクエスト／レスポンスを再開します。
 
 ### message.method
 

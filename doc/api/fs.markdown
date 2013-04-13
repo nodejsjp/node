@@ -646,6 +646,10 @@ POSIX システムでは、シンボリックリンクは辿られません。
 排他モードはネットワークファイルシステムでは動くかもしれませんし、
 動かないかもしれません。
 
+On Linux, positional writes don't work when the file is opened in append mode.
+The kernel ignores the position argument and always appends the data to
+the end of the file.
+
 ## fs.openSync(path, flags, [mode])
 
 <!--
@@ -734,6 +738,10 @@ without waiting for the callback. For this scenario,
 
 同じファイルに対してコールバックされるのを待つことなく `fs.write()` を何度も呼び出すことは、安全ではないことに注意してください。
 このシナリオでは、 `fs.createWriteStream()` を強く推奨します。
+
+On Linux, positional writes don't work when the file is opened in append mode.
+The kernel ignores the position argument and always appends the data to
+the end of the file.
 
 ## fs.writeSync(fd, buffer, offset, length, position)
 

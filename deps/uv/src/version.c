@@ -19,6 +19,7 @@
  * IN THE SOFTWARE.
  */
 
+#include "uv.h"
 
  /*
  * Versions with an even minor version (e.g. 0.6.1 or 1.0.4) are API and ABI
@@ -26,9 +27,12 @@
  * releases.
  */
 
+#undef UV_VERSION_MAJOR   /* TODO(bnoordhuis) Remove in v0.11. */
+#undef UV_VERSION_MINOR   /* TODO(bnoordhuis) Remove in v0.11. */
+
 #define UV_VERSION_MAJOR 0
 #define UV_VERSION_MINOR 10
-#define UV_VERSION_PATCH 3
+#define UV_VERSION_PATCH 4
 #define UV_VERSION_IS_RELEASE 1
 
 
