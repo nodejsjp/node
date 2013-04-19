@@ -1473,7 +1473,7 @@ Just like `'end'`, this event occurs only once per response. See
 -->
 
 `'end'` のように、このイベントはレスポンス毎に一回生成されます。
-[http.ServerRequest][] の `'close'` イベントにより多くの情報があります。
+[http.ServerResponse][] の `'close'` イベントにより多くの情報があります。
 
 ### message.httpVersion
 
