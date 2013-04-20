@@ -548,7 +548,8 @@ class MacroAssembler: public Assembler {
   // on access to global objects across environments. The holder register
   // is left untouched, but the scratch register is clobbered.
   void CheckAccessGlobalProxy(Register holder_reg,
-                              Register scratch,
+                              Register scratch1,
+                              Register scratch2,
                               Label* miss);
 
   void GetNumberHash(Register r0, Register scratch);
@@ -582,22 +583,22 @@ class MacroAssembler: public Assembler {
                 Label* gc_required,
                 AllocationFlags flags);
 
-  void AllocateInNewSpace(int header_size,
-                          ScaleFactor element_size,
-                          Register element_count,
-                          RegisterValueType element_count_type,
-                          Register result,
-                          Register result_end,
-                          Register scratch,
-                          Label* gc_required,
-                          AllocationFlags flags);
+  void Allocate(int header_size,
+                ScaleFactor element_size,
+                Register element_count,
+                RegisterValueType element_count_type,
+                Register result,
+                Register result_end,
+                Register scratch,
+                Label* gc_required,
+                AllocationFlags flags);
 
-  void AllocateInNewSpace(Register object_size,
-                          Register result,
-                          Register result_end,
-                          Register scratch,
-                          Label* gc_required,
-                          AllocationFlags flags);
+  void Allocate(Register object_size,
+                Register result,
+                Register result_end,
+                Register scratch,
+                Label* gc_required,
+                AllocationFlags flags);
 
   // Undo allocation in new space. The object passed and objects allocated after
   // it will no longer be allocated. Make sure that no pointers are left to the
@@ -806,6 +807,8 @@ class MacroAssembler: public Assembler {
     return code_object_;
   }
 
+  // Insert code to verify that the x87 stack has the specified depth (0-7)
+  void VerifyX87StackDepth(uint32_t depth);
 
   // ---------------------------------------------------------------------------
   // StatsCounter support

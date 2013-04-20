@@ -57,7 +57,7 @@ Handle<Value> HandleWrap::Ref(const Arguments& args) {
 
   UNWRAP_NO_ABORT(HandleWrap)
 
-  if (wrap) {
+  if (wrap != NULL && wrap->handle__ != NULL) {
     uv_ref(wrap->handle__);
     wrap->flags_ &= ~kUnref;
   }
@@ -71,7 +71,7 @@ Handle<Value> HandleWrap::Unref(const Arguments& args) {
 
   UNWRAP_NO_ABORT(HandleWrap)
 
-  if (wrap) {
+  if (wrap != NULL && wrap->handle__ != NULL) {
     uv_unref(wrap->handle__);
     wrap->flags_ |= kUnref;
   }
@@ -84,7 +84,7 @@ Handle<Value> HandleWrap::Close(const Arguments& args) {
   HandleScope scope(node_isolate);
 
   HandleWrap *wrap = static_cast<HandleWrap*>(
-      args.Holder()->GetAlignedPointerFromInternalField(0));
+      args.This()->GetAlignedPointerFromInternalField(0));
 
   // guard against uninitialized handle or double close
   if (wrap == NULL || wrap->handle__ == NULL) {

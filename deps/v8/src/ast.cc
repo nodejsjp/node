@@ -128,7 +128,8 @@ Assignment::Assignment(Isolate* isolate,
       pos_(pos),
       binary_operation_(NULL),
       assignment_id_(GetNextId(isolate)),
-      is_monomorphic_(false) { }
+      is_monomorphic_(false),
+      store_mode_(STANDARD_STORE) { }
 
 
 Token::Value Assignment::binary_op() const {
@@ -413,12 +414,9 @@ void Property::RecordTypeFeedback(TypeFeedbackOracle* oracle,
   is_monomorphic_ = oracle->LoadIsMonomorphicNormal(this);
   receiver_types_.Clear();
   if (key()->IsPropertyName()) {
-    ArrayLengthStub array_stub(Code::LOAD_IC);
     FunctionPrototypeStub proto_stub(Code::LOAD_IC);
     StringLengthStub string_stub(Code::LOAD_IC, false);
-    if (oracle->LoadIsStub(this, &array_stub)) {
-      is_array_length_ = true;
-    } else if (oracle->LoadIsStub(this, &string_stub)) {
+    if (oracle->LoadIsStub(this, &string_stub)) {
       is_string_length_ = true;
     } else if (oracle->LoadIsStub(this, &proto_stub)) {
       is_function_prototype_ = true;
@@ -455,9 +453,11 @@ void Assignment::RecordTypeFeedback(TypeFeedbackOracle* oracle,
   } else if (is_monomorphic_) {
     // Record receiver type for monomorphic keyed stores.
     receiver_types_.Add(oracle->StoreMonomorphicReceiverType(id), zone);
+    store_mode_ = oracle->GetStoreMode(id);
   } else if (oracle->StoreIsPolymorphic(id)) {
     receiver_types_.Reserve(kMaxKeyedPolymorphism, zone);
     oracle->CollectKeyedReceiverTypes(id, &receiver_types_);
+    store_mode_ = oracle->GetStoreMode(id);
   }
 }
 
@@ -475,6 +475,7 @@ void CountOperation::RecordTypeFeedback(TypeFeedbackOracle* oracle,
     receiver_types_.Reserve(kMaxKeyedPolymorphism, zone);
     oracle->CollectKeyedReceiverTypes(id, &receiver_types_);
   }
+  store_mode_ = oracle->GetStoreMode(id);
 }
 
 
@@ -508,6 +509,11 @@ bool Call::ComputeTarget(Handle<Map> type, Handle<String> name) {
   }
   LookupResult lookup(type->GetIsolate());
   while (true) {
+    // If a dictionary map is found in the prototype chain before the actual
+    // target, a new target can always appear. In that case, bail out.
+    // TODO(verwaest): Alternatively a runtime negative lookup on the normal
+    // receiver or prototype could be added.
+    if (type->is_dictionary_map()) return false;
     type->LookupDescriptor(NULL, *name, &lookup);
     if (lookup.IsFound()) {
       switch (lookup.type()) {
@@ -533,7 +539,6 @@ bool Call::ComputeTarget(Handle<Map> type, Handle<String> name) {
     if (!type->prototype()->IsJSObject()) return false;
     // Go up the prototype chain, recording where we are currently.
     holder_ = Handle<JSObject>(JSObject::cast(type->prototype()));
-    if (!holder_->HasFastProperties()) return false;
     type = Handle<Map>(holder()->map());
   }
 }
@@ -1061,6 +1066,7 @@ DONT_OPTIMIZE_NODE(ModuleVariable)
 DONT_OPTIMIZE_NODE(ModulePath)
 DONT_OPTIMIZE_NODE(ModuleUrl)
 DONT_OPTIMIZE_NODE(ModuleStatement)
+DONT_OPTIMIZE_NODE(Yield)
 DONT_OPTIMIZE_NODE(WithStatement)
 DONT_OPTIMIZE_NODE(TryCatchStatement)
 DONT_OPTIMIZE_NODE(TryFinallyStatement)

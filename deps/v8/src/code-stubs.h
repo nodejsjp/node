@@ -47,7 +47,6 @@ namespace internal {
   V(Compare)                             \
   V(CompareIC)                           \
   V(MathPow)                             \
-  V(ArrayLength)                         \
   V(StringLength)                        \
   V(FunctionPrototype)                   \
   V(StoreArrayLength)                    \
@@ -259,15 +258,17 @@ class PlatformCodeStub : public CodeStub {
 };
 
 
+enum StubFunctionMode { NOT_JS_FUNCTION_STUB_MODE, JS_FUNCTION_STUB_MODE };
+
 struct CodeStubInterfaceDescriptor {
   CodeStubInterfaceDescriptor()
       : register_param_count_(-1),
         stack_parameter_count_(NULL),
-        extra_expression_stack_count_(0),
+        function_mode_(NOT_JS_FUNCTION_STUB_MODE),
         register_params_(NULL) { }
   int register_param_count_;
   const Register* stack_parameter_count_;
-  int extra_expression_stack_count_;
+  StubFunctionMode function_mode_;
   Register* register_params_;
   Address deoptimization_handler_;
 
@@ -392,17 +393,24 @@ class ToNumberStub: public PlatformCodeStub {
 
 class FastNewClosureStub : public PlatformCodeStub {
  public:
-  explicit FastNewClosureStub(LanguageMode language_mode)
-    : language_mode_(language_mode) { }
+  explicit FastNewClosureStub(LanguageMode language_mode, bool is_generator)
+    : language_mode_(language_mode),
+      is_generator_(is_generator) { }
 
   void Generate(MacroAssembler* masm);
 
  private:
+  class StrictModeBits: public BitField<bool, 0, 1> {};
+  class IsGeneratorBits: public BitField<bool, 1, 1> {};
+
   Major MajorKey() { return FastNewClosure; }
-  int MinorKey() { return language_mode_ == CLASSIC_MODE
-        ? kNonStrictMode : kStrictMode; }
+  int MinorKey() {
+    return StrictModeBits::encode(language_mode_ != CLASSIC_MODE) |
+      IsGeneratorBits::encode(is_generator_);
+  }
 
   LanguageMode language_mode_;
+  bool is_generator_;
 };
 
 
@@ -442,7 +450,7 @@ class FastNewBlockContextStub : public PlatformCodeStub {
 };
 
 
-class FastCloneShallowArrayStub : public PlatformCodeStub {
+class FastCloneShallowArrayStub : public HydrogenCodeStub {
  public:
   // Maximum length of copied elements array.
   static const int kMaximumClonedLength = 8;
@@ -466,7 +474,31 @@ class FastCloneShallowArrayStub : public PlatformCodeStub {
     ASSERT_LE(length_, kMaximumClonedLength);
   }
 
-  void Generate(MacroAssembler* masm);
+  Mode mode() const { return mode_; }
+  int length() const { return length_; }
+  AllocationSiteMode allocation_site_mode() const {
+    return allocation_site_mode_;
+  }
+
+  ElementsKind ComputeElementsKind() const {
+    switch (mode()) {
+      case CLONE_ELEMENTS:
+      case COPY_ON_WRITE_ELEMENTS:
+        return FAST_ELEMENTS;
+      case CLONE_DOUBLE_ELEMENTS:
+        return FAST_DOUBLE_ELEMENTS;
+      case CLONE_ANY_ELEMENTS:
+        /*fall-through*/;
+    }
+    UNREACHABLE();
+    return LAST_ELEMENTS_KIND;
+  }
+
+  virtual Handle<Code> GenerateCode();
+
+  virtual void InitializeInterfaceDescriptor(
+      Isolate* isolate,
+      CodeStubInterfaceDescriptor* descriptor);
 
  private:
   Mode mode_;
@@ -594,16 +626,6 @@ class ICStub: public PlatformCodeStub {
 
  private:
   Code::Kind kind_;
-};
-
-
-class ArrayLengthStub: public ICStub {
- public:
-  explicit ArrayLengthStub(Code::Kind kind) : ICStub(kind) { }
-  virtual void Generate(MacroAssembler* masm);
-
- private:
-  virtual CodeStub::Major MajorKey() { return ArrayLength; }
 };
 
 
@@ -755,7 +777,7 @@ class BinaryOpStub: public PlatformCodeStub {
  private:
   Token::Value op_;
   OverwriteMode mode_;
-  bool platform_specific_bit_;  // Indicates SSE3 on IA32, VFP2 on ARM.
+  bool platform_specific_bit_;  // Indicates SSE3 on IA32.
 
   // Operand type information determined at runtime.
   BinaryOpIC::TypeInfo left_type_;
@@ -1312,6 +1334,47 @@ class KeyedLoadFastElementStub : public HydrogenCodeStub {
 };
 
 
+class KeyedStoreFastElementStub : public HydrogenCodeStub {
+ public:
+  KeyedStoreFastElementStub(bool is_js_array,
+                            ElementsKind elements_kind,
+                            KeyedAccessStoreMode mode) {
+    bit_field_ = ElementsKindBits::encode(elements_kind) |
+        IsJSArrayBits::encode(is_js_array) |
+        StoreModeBits::encode(mode);
+  }
+
+  Major MajorKey() { return KeyedStoreElement; }
+  int MinorKey() { return bit_field_; }
+
+  bool is_js_array() const {
+    return IsJSArrayBits::decode(bit_field_);
+  }
+
+  ElementsKind elements_kind() const {
+    return ElementsKindBits::decode(bit_field_);
+  }
+
+  KeyedAccessStoreMode store_mode() const {
+    return StoreModeBits::decode(bit_field_);
+  }
+
+  virtual Handle<Code> GenerateCode();
+
+  virtual void InitializeInterfaceDescriptor(
+      Isolate* isolate,
+      CodeStubInterfaceDescriptor* descriptor);
+
+ private:
+  class ElementsKindBits: public BitField<ElementsKind,      0, 8> {};
+  class StoreModeBits: public BitField<KeyedAccessStoreMode, 8, 4> {};
+  class IsJSArrayBits: public BitField<bool,                12, 1> {};
+  uint32_t bit_field_;
+
+  DISALLOW_COPY_AND_ASSIGN(KeyedStoreFastElementStub);
+};
+
+
 class TransitionElementsKindStub : public HydrogenCodeStub {
  public:
   TransitionElementsKindStub(ElementsKind from_kind,
@@ -1447,6 +1510,7 @@ class ToBooleanStub: public PlatformCodeStub {
     SMI,
     SPEC_OBJECT,
     STRING,
+    SYMBOL,
     HEAP_NUMBER,
     NUMBER_OF_TYPES
   };
@@ -1570,22 +1634,27 @@ class StoreArrayLiteralElementStub : public PlatformCodeStub {
 
 class StubFailureTrampolineStub : public PlatformCodeStub {
  public:
-  static const int kMaxExtraExpressionStackCount = 1;
-
-  explicit StubFailureTrampolineStub(int extra_expression_stack_count)
-      : extra_expression_stack_count_(extra_expression_stack_count) {}
+  explicit StubFailureTrampolineStub(StubFunctionMode function_mode)
+      : fp_registers_(CanUseFPRegisters()), function_mode_(function_mode) {}
 
   virtual bool IsPregenerated() { return true; }
 
   static void GenerateAheadOfTime(Isolate* isolate);
 
  private:
+  class FPRegisters:       public BitField<bool,                0, 1> {};
+  class FunctionModeField: public BitField<StubFunctionMode,    1, 1> {};
+
   Major MajorKey() { return StubFailureTrampoline; }
-  int MinorKey() { return extra_expression_stack_count_; }
+  int MinorKey() {
+    return FPRegisters::encode(fp_registers_) |
+        FunctionModeField::encode(function_mode_);
+  }
 
   void Generate(MacroAssembler* masm);
 
-  int extra_expression_stack_count_;
+  bool fp_registers_;
+  StubFunctionMode function_mode_;
 
   DISALLOW_COPY_AND_ASSIGN(StubFailureTrampolineStub);
 };

@@ -55,7 +55,7 @@ namespace internal {
   F(IsPropertyEnumerable, 2, 1) \
   F(GetPropertyNames, 1, 1) \
   F(GetPropertyNamesFast, 1, 1) \
-  F(GetLocalPropertyNames, 1, 1) \
+  F(GetLocalPropertyNames, 2, 1) \
   F(GetLocalElementNames, 1, 1) \
   F(GetInterceptorInfo, 1, 1) \
   F(GetNamedInterceptorPropertyNames, 1, 1) \
@@ -64,6 +64,7 @@ namespace internal {
   F(ToFastProperties, 1, 1) \
   F(FinishArrayPrototypeSetup, 1, 1) \
   F(SpecialArrayFunctions, 1, 1) \
+  F(IsClassicModeFunction, 1, 1) \
   F(GetDefaultReceiver, 1, 1) \
   \
   F(GetPrototype, 1, 1) \
@@ -129,6 +130,7 @@ namespace internal {
   F(NumberToString, 1, 1) \
   F(NumberToStringSkipCache, 1, 1) \
   F(NumberToInteger, 1, 1) \
+  F(NumberToPositiveInteger, 1, 1) \
   F(NumberToIntegerMapMinusZero, 1, 1) \
   F(NumberToJSUint32, 1, 1) \
   F(NumberToJSInt32, 1, 1) \
@@ -195,8 +197,6 @@ namespace internal {
   F(ParseJson, 1, 1) \
   F(BasicJSONStringify, 1, 1) \
   F(QuoteJSONString, 1, 1) \
-  F(QuoteJSONStringComma, 1, 1) \
-  F(QuoteJSONStringArray, 1, 1) \
   \
   /* Strings */ \
   F(StringCharCodeAt, 2, 1) \
@@ -218,6 +218,7 @@ namespace internal {
   F(NumberToFixed, 2, 1) \
   F(NumberToExponential, 2, 1) \
   F(NumberToPrecision, 2, 1)
+
 
 #define RUNTIME_FUNCTION_LIST_ALWAYS_2(F) \
   /* Reflection */ \
@@ -295,11 +296,15 @@ namespace internal {
   F(CreateArrayLiteral, 3, 1) \
   F(CreateArrayLiteralShallow, 3, 1) \
   \
+  /* Harmony generators */ \
+  F(CreateJSGeneratorObject, 0, 1) \
+  \
   /* Harmony modules */ \
   F(IsJSModule, 1, 1) \
   \
   /* Harmony symbols */ \
-  F(CreateSymbol, 0, 1) \
+  F(CreateSymbol, 1, 1) \
+  F(SymbolName, 1, 1) \
   \
   /* Harmony proxies */ \
   F(CreateJSProxy, 2, 1) \
@@ -340,6 +345,17 @@ namespace internal {
   F(GetObservationState, 0, 1) \
   F(ObservationWeakMapCreate, 0, 1) \
   F(UnwrapGlobalProxy, 1, 1) \
+  \
+  /* Harmony typed arrays */ \
+  F(ArrayBufferInitialize, 2, 1)\
+  F(ArrayBufferGetByteLength, 1, 1)\
+  F(ArrayBufferSliceImpl, 3, 1) \
+  \
+  F(TypedArrayInitialize, 5, 1) \
+  F(TypedArrayGetBuffer, 1, 1) \
+  F(TypedArrayGetByteLength, 1, 1) \
+  F(TypedArrayGetByteOffset, 1, 1) \
+  F(TypedArrayGetLength, 1, 1) \
   \
   /* Statements */ \
   F(NewClosure, 3, 1) \
@@ -514,7 +530,6 @@ namespace internal {
 #define INLINE_FUNCTION_LIST(F) \
   F(IsSmi, 1, 1)                                                             \
   F(IsNonNegativeSmi, 1, 1)                                                  \
-  F(IsSymbol, 1, 1)                                                          \
   F(IsArray, 1, 1)                                                           \
   F(IsRegExp, 1, 1)                                                          \
   F(IsConstructCall, 0, 1)                                                   \
@@ -694,7 +709,13 @@ class Runtime : public AllStatic {
       Handle<Object> value,
       PropertyAttributes attr);
 
-  MUST_USE_RESULT static MaybeObject* ForceDeleteObjectProperty(
+  MUST_USE_RESULT static MaybeObject* DeleteObjectProperty(
+      Isolate* isolate,
+      Handle<JSReceiver> object,
+      Handle<Object> key,
+      JSReceiver::DeleteMode mode);
+
+  MUST_USE_RESULT static MaybeObject* HasObjectProperty(
       Isolate* isolate,
       Handle<JSReceiver> object,
       Handle<Object> key);

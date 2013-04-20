@@ -171,6 +171,7 @@ class RegisteredExtension {
   V(Object, JSObject)                          \
   V(Array, JSArray)                            \
   V(String, String)                            \
+  V(Symbol, Symbol)                            \
   V(Script, Object)                            \
   V(Function, JSFunction)                      \
   V(Message, JSObject)                         \
@@ -196,6 +197,8 @@ class Utils {
       v8::internal::Handle<v8::internal::JSFunction> obj);
   static inline Local<String> ToLocal(
       v8::internal::Handle<v8::internal::String> obj);
+  static inline Local<Symbol> ToLocal(
+      v8::internal::Handle<v8::internal::Symbol> obj);
   static inline Local<RegExp> ToLocal(
       v8::internal::Handle<v8::internal::JSRegExp> obj);
   static inline Local<Object> ToLocal(
@@ -268,6 +271,7 @@ MAKE_TO_LOCAL(ToLocal, Context, Context)
 MAKE_TO_LOCAL(ToLocal, Object, Value)
 MAKE_TO_LOCAL(ToLocal, JSFunction, Function)
 MAKE_TO_LOCAL(ToLocal, String, String)
+MAKE_TO_LOCAL(ToLocal, Symbol, Symbol)
 MAKE_TO_LOCAL(ToLocal, JSRegExp, RegExp)
 MAKE_TO_LOCAL(ToLocal, JSObject, Object)
 MAKE_TO_LOCAL(ToLocal, JSArray, Array)
@@ -294,6 +298,9 @@ MAKE_TO_LOCAL(ToLocal, DeclaredAccessorDescriptor, DeclaredAccessorDescriptor)
   v8::internal::Handle<v8::internal::To> Utils::OpenHandle(                 \
     const v8::From* that, bool allow_empty_handle) {                        \
     EXTRA_CHECK(allow_empty_handle || that != NULL);                        \
+    EXTRA_CHECK(that == NULL ||                                             \
+        !(*reinterpret_cast<v8::internal::To**>(                            \
+            const_cast<v8::From*>(that)))->IsFailure());                    \
     return v8::internal::Handle<v8::internal::To>(                          \
         reinterpret_cast<v8::internal::To**>(const_cast<v8::From*>(that))); \
   }
@@ -569,8 +576,8 @@ void HandleScopeImplementer::DeleteExtensions(internal::Object** prev_limit) {
 #endif
 
     blocks_.RemoveLast();
-#ifdef DEBUG
-    v8::ImplementationUtilities::ZapHandleRange(block_start, block_limit);
+#ifdef ENABLE_EXTRA_CHECKS
+    internal::HandleScope::ZapRange(block_start, block_limit);
 #endif
     if (spare_ != NULL) {
       DeleteArray(spare_);

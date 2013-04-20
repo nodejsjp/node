@@ -191,11 +191,9 @@ CpuFeatureScope::CpuFeatureScope(AssemblerBase* assembler, CpuFeature f)
   uint64_t mask = static_cast<uint64_t>(1) << f;
   // TODO(svenpanne) This special case below doesn't belong here!
 #if V8_TARGET_ARCH_ARM
-  // VFP2 and ARMv7 are implied by VFP3.
+  // ARMv7 is implied by VFP3.
   if (f == VFP3) {
-    mask |=
-        static_cast<uint64_t>(1) << VFP2 |
-        static_cast<uint64_t>(1) << ARMv7;
+    mask |= static_cast<uint64_t>(1) << ARMv7;
   }
 #endif
   assembler_->set_enabled_cpu_features(old_enabled_ | mask);
@@ -927,20 +925,9 @@ void ExternalReference::InitializeMathExpData() {
     math_exp_log_table_array = new double[kTableSize];
     for (int i = 0; i < kTableSize; i++) {
       double value = pow(2, i / kTableSizeDouble);
-
       uint64_t bits = BitCast<uint64_t, double>(value);
       bits &= (static_cast<uint64_t>(1) << 52) - 1;
       double mantissa = BitCast<double, uint64_t>(bits);
-
-      // <just testing>
-      uint64_t doublebits;
-      memcpy(&doublebits, &value, sizeof doublebits);
-      doublebits &= (static_cast<uint64_t>(1) << 52) - 1;
-      double mantissa2;
-      memcpy(&mantissa2, &doublebits, sizeof mantissa2);
-      CHECK_EQ(mantissa, mantissa2);
-      // </just testing>
-
       math_exp_log_table_array[i] = mantissa;
     }
 
@@ -1199,6 +1186,20 @@ ExternalReference ExternalReference::old_pointer_space_allocation_limit_address(
     Isolate* isolate) {
   return ExternalReference(
       isolate->heap()->OldPointerSpaceAllocationLimitAddress());
+}
+
+
+ExternalReference ExternalReference::old_data_space_allocation_top_address(
+    Isolate* isolate) {
+  return ExternalReference(
+      isolate->heap()->OldDataSpaceAllocationTopAddress());
+}
+
+
+ExternalReference ExternalReference::old_data_space_allocation_limit_address(
+    Isolate* isolate) {
+  return ExternalReference(
+      isolate->heap()->OldDataSpaceAllocationLimitAddress());
 }
 
 

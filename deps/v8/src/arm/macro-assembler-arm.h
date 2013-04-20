@@ -460,6 +460,19 @@ class MacroAssembler: public Assembler {
             const MemOperand& dst,
             Condition cond = al);
 
+  // Ensure that FPSCR contains values needed by JavaScript.
+  // We need the NaNModeControlBit to be sure that operations like
+  // vadd and vsub generate the Canonical NaN (if a NaN must be generated).
+  // In VFP3 it will be always the Canonical NaN.
+  // In VFP2 it will be either the Canonical NaN or the negative version
+  // of the Canonical NaN. It doesn't matter if we have two values. The aim
+  // is to be sure to never generate the hole NaN.
+  void VFPEnsureFPSCRState(Register scratch);
+
+  // If the value is a NaN, canonicalize the value else, do nothing.
+  void VFPCanonicalizeNaN(const DwVfpRegister value,
+                          const Condition cond = al);
+
   // Compare double values and move the result to the normal condition flags.
   void VFPCompareAndSetFlags(const DwVfpRegister src1,
                              const DwVfpRegister src2,
@@ -679,12 +692,12 @@ class MacroAssembler: public Assembler {
                 Label* gc_required,
                 AllocationFlags flags);
 
-  void AllocateInNewSpace(Register object_size,
-                          Register result,
-                          Register scratch1,
-                          Register scratch2,
-                          Label* gc_required,
-                          AllocationFlags flags);
+  void Allocate(Register object_size,
+                Register result,
+                Register scratch1,
+                Register scratch2,
+                Label* gc_required,
+                AllocationFlags flags);
 
   // Undo allocation in new space. The object passed and objects allocated after
   // it will no longer be allocated. The caller must make sure that no pointers
@@ -743,7 +756,11 @@ class MacroAssembler: public Assembler {
                                    Label* gc_required);
 
   // Copies a fixed number of fields of heap objects from src to dst.
-  void CopyFields(Register dst, Register src, RegList temps, int field_count);
+  void CopyFields(Register dst,
+                  Register src,
+                  DwVfpRegister double_scratch,
+                  SwVfpRegister single_scratch,
+                  int field_count);
 
   // Copies a number of bytes from src to dst. All registers are clobbered. On
   // exit src and dst will point to the place just after where the last byte was
@@ -960,29 +977,21 @@ class MacroAssembler: public Assembler {
   // Exits with 'result' holding the answer.
   void ECMAConvertNumberToInt32(Register source,
                                 Register result,
-                                Register scratch,
-                                Register input_high,
                                 Register input_low,
+                                Register input_high,
+                                Register scratch,
                                 DwVfpRegister double_scratch1,
                                 DwVfpRegister double_scratch2);
 
   // Performs a truncating conversion of a floating point number as used by
   // the JS bitwise operations. See ECMA-262 9.5: ToInt32.
   // Exits with 'result' holding the answer and all other registers clobbered.
-  void ECMAToInt32VFP(Register result,
-                      DwVfpRegister double_input,
-                      DwVfpRegister double_scratch,
-                      Register scratch,
-                      Register input_high,
-                      Register input_low);
-
-  // Performs a truncating conversion of a floating point number as used by
-  // the JS bitwise operations. See ECMA-262 9.5: ToInt32.
-  // Exits with 'result' holding the answer.
-  void ECMAToInt32NoVFP(Register result,
-                        Register scratch,
-                        Register input_high,
-                        Register input_low);
+  void ECMAToInt32(Register result,
+                   DwVfpRegister double_input,
+                   DwVfpRegister double_scratch,
+                   Register scratch,
+                   Register input_high,
+                   Register input_low);
 
   // Count leading zeros in a 32 bit word.  On ARM5 and later it uses the clz
   // instruction.  On pre-ARM5 hardware this routine gives the wrong answer
@@ -1140,7 +1149,9 @@ class MacroAssembler: public Assembler {
 
   // EABI variant for double arguments in use.
   bool use_eabi_hardfloat() {
-#if USE_EABI_HARDFLOAT
+#ifdef __arm__
+    return OS::ArmUsingHardFloat();
+#elif USE_EABI_HARDFLOAT
     return true;
 #else
     return false;

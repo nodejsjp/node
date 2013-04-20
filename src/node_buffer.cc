@@ -973,7 +973,7 @@ Handle<Value> Buffer::MakeFastBuffer(const Arguments &args) {
   }
 
   Buffer *buffer = ObjectWrap::Unwrap<Buffer>(args[0]->ToObject());
-  Local<Object> fast_buffer = args[1]->ToObject();;
+  Local<Object> fast_buffer = args[1]->ToObject();
   uint32_t offset = args[2]->Uint32Value();
   uint32_t length = args[3]->Uint32Value();
 
@@ -1137,7 +1137,8 @@ void Buffer::Initialize(Handle<Object> target) {
   target->Set(String::NewSymbol("setFastBufferConstructor"),
               FunctionTemplate::New(SetFastBufferConstructor)->GetFunction());
 
-  HeapProfiler::DefineWrapperClass(BUFFER_CLASS_ID, WrapperInfo);
+  v8::HeapProfiler* heap_profiler = node_isolate->GetHeapProfiler();
+  heap_profiler->SetWrapperClassInfoProvider(BUFFER_CLASS_ID, WrapperInfo);
 }
 
 

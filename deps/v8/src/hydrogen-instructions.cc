@@ -685,7 +685,7 @@ void HValue::Kill() {
     HValue* operand = OperandAt(i);
     if (operand == NULL) continue;
     HUseListNode* first = operand->use_list_;
-    if (first != NULL && first->value() == this && first->index() == i) {
+    if (first != NULL && first->value()->CheckFlag(kIsDead)) {
       operand->use_list_ = first->tail();
     }
   }
@@ -806,6 +806,9 @@ void HInstruction::PrintTo(StringStream* stream) {
   PrintRangeTo(stream);
   PrintChangesTo(stream);
   PrintTypeTo(stream);
+  if (CheckFlag(HValue::kHasNoObservableSideEffects)) {
+    stream->Add(" [noOSE]");
+  }
 }
 
 
@@ -1277,7 +1280,8 @@ Representation HBranch::observed_input_representation(int index) {
       ToBooleanStub::UNDEFINED |
       ToBooleanStub::NULL_TYPE |
       ToBooleanStub::SPEC_OBJECT |
-      ToBooleanStub::STRING);
+      ToBooleanStub::STRING |
+      ToBooleanStub::SYMBOL);
   if (expected_input_types_.ContainsAnyOf(tagged_types)) {
     return Representation::Tagged();
   } else if (expected_input_types_.Contains(ToBooleanStub::HEAP_NUMBER)) {
@@ -1467,15 +1471,6 @@ void HChange::PrintDataTo(StringStream* stream) {
 }
 
 
-void HJSArrayLength::PrintDataTo(StringStream* stream) {
-  value()->PrintNameTo(stream);
-  if (HasTypeCheck()) {
-    stream->Add(" ");
-    typecheck()->PrintNameTo(stream);
-  }
-}
-
-
 HValue* HUnaryMathOperation::Canonicalize() {
   if (op() == kMathFloor) {
     // If the input is integer32 then we replace the floor instruction
@@ -1589,10 +1584,10 @@ void HCheckMaps::SetSideEffectDominator(GVNFlag side_effect,
   // for which the map is known.
   if (HasNoUses() && dominator->IsStoreNamedField()) {
     HStoreNamedField* store = HStoreNamedField::cast(dominator);
-    Handle<Map> map = store->transition();
-    if (map.is_null() || store->object() != value()) return;
+    UniqueValueId map_unique_id = store->transition_unique_id();
+    if (!map_unique_id.IsInitialized() || store->object() != value()) return;
     for (int i = 0; i < map_set()->length(); i++) {
-      if (map.is_identical_to(map_set()->at(i))) {
+      if (map_unique_id == map_unique_ids_.at(i)) {
         DeleteAndReplaceWith(NULL);
         return;
       }
@@ -1988,20 +1983,25 @@ void HPhi::AddIndirectUsesTo(int* dest) {
 }
 
 
-void HSimulate::MergeInto(HSimulate* other) {
-  for (int i = 0; i < values_.length(); ++i) {
-    HValue* value = values_[i];
-    if (HasAssignedIndexAt(i)) {
-      other->AddAssignedValue(GetAssignedIndexAt(i), value);
-    } else {
-      if (other->pop_count_ > 0) {
-        other->pop_count_--;
+void HSimulate::MergeWith(ZoneList<HSimulate*>* list) {
+  while (!list->is_empty()) {
+    HSimulate* from = list->RemoveLast();
+    ZoneList<HValue*>* from_values = &from->values_;
+    for (int i = 0; i < from_values->length(); ++i) {
+      if (from->HasAssignedIndexAt(i)) {
+        AddAssignedValue(from->GetAssignedIndexAt(i),
+                         from_values->at(i));
       } else {
-        other->AddPushedValue(value);
+        if (pop_count_ > 0) {
+          pop_count_--;
+        } else {
+          AddPushedValue(from_values->at(i));
+        }
       }
     }
+    pop_count_ += from->pop_count_;
+    from->DeleteAndReplaceWith(NULL);
   }
-  other->pop_count_ += pop_count();
 }
 
 
@@ -2047,6 +2047,7 @@ static bool IsInteger32(double value) {
 
 HConstant::HConstant(Handle<Object> handle, Representation r)
   : handle_(handle),
+    unique_id_(),
     has_int32_value_(false),
     has_double_value_(false),
     is_internalized_string_(false),
@@ -2075,11 +2076,13 @@ HConstant::HConstant(Handle<Object> handle, Representation r)
 
 
 HConstant::HConstant(Handle<Object> handle,
+                     UniqueValueId unique_id,
                      Representation r,
                      HType type,
                      bool is_internalize_string,
                      bool boolean_value)
     : handle_(handle),
+      unique_id_(unique_id),
       has_int32_value_(false),
       has_double_value_(false),
       is_internalized_string_(is_internalize_string),
@@ -2095,7 +2098,9 @@ HConstant::HConstant(Handle<Object> handle,
 HConstant::HConstant(int32_t integer_value,
                      Representation r,
                      Handle<Object> optional_handle)
-    : has_int32_value_(true),
+    : handle_(optional_handle),
+      unique_id_(),
+      has_int32_value_(true),
       has_double_value_(true),
       is_internalized_string_(false),
       boolean_value_(integer_value != 0),
@@ -2108,7 +2113,9 @@ HConstant::HConstant(int32_t integer_value,
 HConstant::HConstant(double double_value,
                      Representation r,
                      Handle<Object> optional_handle)
-    : has_int32_value_(IsInteger32(double_value)),
+    : handle_(optional_handle),
+      unique_id_(),
+      has_int32_value_(IsInteger32(double_value)),
       has_double_value_(true),
       is_internalized_string_(false),
       boolean_value_(double_value != 0 && !isnan(double_value)),
@@ -2133,8 +2140,12 @@ HConstant* HConstant::CopyToRepresentation(Representation r, Zone* zone) const {
   if (has_int32_value_) return new(zone) HConstant(int32_value_, r, handle_);
   if (has_double_value_) return new(zone) HConstant(double_value_, r, handle_);
   ASSERT(!handle_.is_null());
-  return new(zone) HConstant(
-      handle_, r, type_from_value_, is_internalized_string_, boolean_value_);
+  return new(zone) HConstant(handle_,
+                             unique_id_,
+                             r,
+                             type_from_value_,
+                             is_internalized_string_,
+                             boolean_value_);
 }
 
 
@@ -2415,6 +2426,10 @@ void HParameter::PrintDataTo(StringStream* stream) {
 void HLoadNamedField::PrintDataTo(StringStream* stream) {
   object()->PrintNameTo(stream);
   stream->Add(" @%d%s", offset(), is_in_object() ? "[in-object]" : "");
+  if (HasTypeCheck()) {
+    stream->Add(" ");
+    typecheck()->PrintNameTo(stream);
+  }
 }
 
 
@@ -2455,6 +2470,8 @@ HLoadNamedFieldPolymorphic::HLoadNamedFieldPolymorphic(HValue* context,
                                                        Zone* zone)
     : types_(Min(types->length(), kMaxLoadPolymorphism), zone),
       name_(name),
+      types_unique_ids_(0, zone),
+      name_unique_id_(),
       need_generic_(false) {
   SetOperandAt(0, context);
   SetOperandAt(1, object);
@@ -2521,15 +2538,39 @@ HLoadNamedFieldPolymorphic::HLoadNamedFieldPolymorphic(HValue* context,
 }
 
 
-bool HLoadNamedFieldPolymorphic::DataEquals(HValue* value) {
-  HLoadNamedFieldPolymorphic* other = HLoadNamedFieldPolymorphic::cast(value);
-  if (types_.length() != other->types()->length()) return false;
-  if (!name_.is_identical_to(other->name())) return false;
-  if (need_generic_ != other->need_generic_) return false;
+void HCheckMaps::FinalizeUniqueValueId() {
+  if (!map_unique_ids_.is_empty()) return;
+  Zone* zone = block()->zone();
+  map_unique_ids_.Initialize(map_set_.length(), zone);
+  for (int i = 0; i < map_set_.length(); i++) {
+    map_unique_ids_.Add(UniqueValueId(map_set_.at(i)), zone);
+  }
+}
+
+
+void HLoadNamedFieldPolymorphic::FinalizeUniqueValueId() {
+  if (!types_unique_ids_.is_empty()) return;
+  Zone* zone = block()->zone();
+  types_unique_ids_.Initialize(types_.length(), zone);
   for (int i = 0; i < types_.length(); i++) {
+    types_unique_ids_.Add(UniqueValueId(types_.at(i)), zone);
+  }
+  name_unique_id_ = UniqueValueId(name_);
+}
+
+
+bool HLoadNamedFieldPolymorphic::DataEquals(HValue* value) {
+  ASSERT_EQ(types_.length(), types_unique_ids_.length());
+  HLoadNamedFieldPolymorphic* other = HLoadNamedFieldPolymorphic::cast(value);
+  if (name_unique_id_ != other->name_unique_id_) return false;
+  if (types_unique_ids_.length() != other->types_unique_ids_.length()) {
+    return false;
+  }
+  if (need_generic_ != other->need_generic_) return false;
+  for (int i = 0; i < types_unique_ids_.length(); i++) {
     bool found = false;
-    for (int j = 0; j < types_.length(); j++) {
-      if (types_.at(j).is_identical_to(other->types()->at(i))) {
+    for (int j = 0; j < types_unique_ids_.length(); j++) {
+      if (types_unique_ids_.at(j) == other->types_unique_ids_.at(i)) {
         found = true;
         break;
       }
@@ -2589,6 +2630,10 @@ bool HLoadKeyed::UsesMustHandleHole() const {
     return false;
   }
 
+  if (IsExternalArrayElementsKind(elements_kind())) {
+    return false;
+  }
+
   if (hole_mode() == ALLOW_RETURN_HOLE) return true;
 
   if (IsFastDoubleElementsKind(elements_kind())) {
@@ -2608,6 +2653,10 @@ bool HLoadKeyed::UsesMustHandleHole() const {
 
 bool HLoadKeyed::RequiresHoleCheck() const {
   if (IsFastPackedElementsKind(elements_kind())) {
+    return false;
+  }
+
+  if (IsExternalArrayElementsKind(elements_kind())) {
     return false;
   }
 
@@ -2912,12 +2961,6 @@ void HAllocate::PrintDataTo(StringStream* stream) {
 }
 
 
-HType HFastLiteral::CalculateInferredType() {
-  // TODO(mstarzinger): Be smarter, could also be JSArray here.
-  return HType::JSObject();
-}
-
-
 HType HArrayLiteral::CalculateInferredType() {
   return HType::JSArray();
 }
@@ -3036,8 +3079,17 @@ bool HStoreKeyed::NeedsCanonicalization() {
   // If value is an integer or smi or comes from the result of a keyed load or
   // constant then it is either be a non-hole value or in the case of a constant
   // the hole is only being stored explicitly: no need for canonicalization.
-  if (value()->IsLoadKeyed() || value()->IsConstant()) {
+  //
+  // The exception to that is keyed loads from external float or double arrays:
+  // these can load arbitrary representation of NaN.
+
+  if (value()->IsConstant()) {
     return false;
+  }
+
+  if (value()->IsLoadKeyed()) {
+    return IsExternalFloatOrDoubleElementsKind(
+        HLoadKeyed::cast(value())->elements_kind());
   }
 
   if (value()->IsChange()) {

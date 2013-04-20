@@ -657,6 +657,16 @@ POSIX システムでは、シンボリックリンクは辿られません。
 排他モードはネットワークファイルシステムでは動くかもしれませんし、
 動かないかもしれません。
 
+<!--
+On Linux, positional writes don't work when the file is opened in append mode.
+The kernel ignores the position argument and always appends the data to
+the end of the file.
+-->
+
+Linux では、ファイルを追記モードでオープンした場合、
+ポジションを指定した書き込みは動作しません。
+カーネルはポジション引数を無視し、データを常にファイルの最後に追記します。
+
 ## fs.openSync(path, flags, [mode])
 
 <!--
@@ -745,6 +755,16 @@ without waiting for the callback. For this scenario,
 
 同じファイルに対してコールバックされるのを待つことなく `fs.write()` を何度も呼び出すことは、安全ではないことに注意してください。
 このシナリオでは、 `fs.createWriteStream()` を強く推奨します。
+
+<!--
+On Linux, positional writes don't work when the file is opened in append mode.
+The kernel ignores the position argument and always appends the data to
+the end of the file.
+-->
+
+Linux では、ファイルを追記モードでオープンした場合、
+ポジションを指定した書き込みは動作しません。
+カーネルはポジション引数を無視し、データを常にファイルの最後に追記します。
 
 ## fs.writeSync(fd, buffer, offset, length, position)
 
@@ -1283,7 +1303,7 @@ start at 0. The `encoding` can be `'utf8'`, `'ascii'`, or `'base64'`.
 
 <!--
 If `autoClose` is false, then the file descriptor won't be closed, even if
-there's an error.  It is your responsiblity to close it and make sure
+there's an error.  It is your responsibility to close it and make sure
 there's no file descriptor leak.  If `autoClose` is set to true (default
 behavior), on `error` or `end` the file descriptor will be closed
 automatically.
