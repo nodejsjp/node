@@ -119,6 +119,22 @@ public:
 };
 #endif
 
+#if (defined CAN_USE_VFP3_INSTRUCTIONS) || !(defined ARM_TEST)
+# define ENABLE_VFP3_DEFAULT true
+#else
+# define ENABLE_VFP3_DEFAULT false
+#endif
+#if (defined CAN_USE_ARMV7_INSTRUCTIONS) || !(defined ARM_TEST)
+# define ENABLE_ARMV7_DEFAULT true
+#else
+# define ENABLE_ARMV7_DEFAULT false
+#endif
+#if (defined CAN_USE_VFP32DREGS) || !(defined ARM_TEST)
+# define ENABLE_32DREGS_DEFAULT true
+#else
+# define ENABLE_32DREGS_DEFAULT false
+#endif
+
 #define DEFINE_bool(nam, def, cmt) FLAG(BOOL, bool, nam, def, cmt)
 #define DEFINE_int(nam, def, cmt) FLAG(INT, int, nam, def, cmt)
 #define DEFINE_float(nam, def, cmt) FLAG(FLOAT, double, nam, def, cmt)
@@ -148,6 +164,9 @@ DEFINE_bool(harmony_collections, false,
             "enable harmony collections (sets, maps, and weak maps)")
 DEFINE_bool(harmony_observation, false,
             "enable harmony object observation (implies harmony collections")
+DEFINE_bool(harmony_typed_arrays, false,
+            "enable harmony typed arrays")
+DEFINE_bool(harmony_generators, false, "enable harmony generators")
 DEFINE_bool(harmony, false, "enable all harmony features (except typeof)")
 DEFINE_implication(harmony, harmony_scoping)
 DEFINE_implication(harmony, harmony_modules)
@@ -155,18 +174,22 @@ DEFINE_implication(harmony, harmony_symbols)
 DEFINE_implication(harmony, harmony_proxies)
 DEFINE_implication(harmony, harmony_collections)
 DEFINE_implication(harmony, harmony_observation)
+DEFINE_implication(harmony, harmony_generators)
 DEFINE_implication(harmony_modules, harmony_scoping)
 DEFINE_implication(harmony_observation, harmony_collections)
+DEFINE_implication(harmony, harmony_typed_arrays)
 
 // Flags for experimental implementation features.
 DEFINE_bool(packed_arrays, true, "optimizes arrays that have no holes")
 DEFINE_bool(smi_only_arrays, true, "tracks arrays with only smi values")
 DEFINE_bool(compiled_transitions, false, "use optimizing compiler to "
             "generate array elements transition stubs")
+DEFINE_bool(compiled_keyed_stores, true, "use optimizing compiler to "
+            "generate keyed store stubs")
 DEFINE_bool(clever_optimizations,
             true,
             "Optimize object size, Array shift, DOM strings and string +")
-DEFINE_bool(pretenure_literals, false, "allocate literals in old space")
+DEFINE_bool(pretenure_literals, true, "allocate literals in old space")
 
 // Flags for data representation optimizations
 DEFINE_bool(unbox_double_arrays, true, "automatically unbox arrays of doubles")
@@ -301,12 +324,9 @@ DEFINE_bool(enable_rdtsc, true,
             "enable use of RDTSC instruction if available")
 DEFINE_bool(enable_sahf, true,
             "enable use of SAHF instruction if available (X64 only)")
-DEFINE_bool(enable_vfp3, true,
-            "enable use of VFP3 instructions if available - this implies "
-            "enabling ARMv7 and VFP2 instructions (ARM only)")
-DEFINE_bool(enable_vfp2, true,
-            "enable use of VFP2 instructions if available")
-DEFINE_bool(enable_armv7, true,
+DEFINE_bool(enable_vfp3, ENABLE_VFP3_DEFAULT,
+            "enable use of VFP3 instructions if available")
+DEFINE_bool(enable_armv7, ENABLE_ARMV7_DEFAULT,
             "enable use of ARMv7 instructions if available (ARM only)")
 DEFINE_bool(enable_sudiv, true,
             "enable use of SDIV and UDIV instructions if available (ARM only)")
@@ -315,10 +335,8 @@ DEFINE_bool(enable_movw_movt, false,
             "instruction pairs (ARM only)")
 DEFINE_bool(enable_unaligned_accesses, true,
             "enable unaligned accesses for ARMv7 (ARM only)")
-DEFINE_bool(enable_32dregs, true,
+DEFINE_bool(enable_32dregs, ENABLE_32DREGS_DEFAULT,
             "enable use of d16-d31 registers on ARM - this requires VFP3")
-DEFINE_bool(enable_fpu, true,
-            "enable use of MIPS FPU instructions if available (MIPS only)")
 DEFINE_bool(enable_vldr_imm, false,
             "enable use of constant pools for double immediate (ARM only)")
 
@@ -424,7 +442,7 @@ DEFINE_bool(trace_external_memory, false,
             "it is adjusted.")
 DEFINE_bool(collect_maps, true,
             "garbage collect maps from which no objects can be reached")
-DEFINE_bool(weak_embedded_maps_in_optimized_code, true,
+DEFINE_bool(weak_embedded_maps_in_optimized_code, false,
             "make maps embedded in optimized code weak")
 DEFINE_bool(flush_code, true,
             "flush code that we expect not to use again (during full gc)")
@@ -495,6 +513,8 @@ DEFINE_int(sim_stack_alignment, 8,
            "Stack alingment in bytes in simulator (4 or 8, 8 is default)")
 
 // isolate.cc
+DEFINE_bool(abort_on_uncaught_exception, false,
+            "abort program (dump core) when an uncaught exception is thrown")
 DEFINE_bool(trace_exception, false,
             "print stack trace when throwing exceptions")
 DEFINE_bool(preallocate_message_memory, false,

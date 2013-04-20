@@ -45,6 +45,10 @@
 #include "../include/v8-testing.h"
 #endif  // V8_SHARED
 
+#ifdef ENABLE_VTUNE_JIT_INTERFACE
+#include "third_party/vtune/v8-vtune.h"
+#endif
+
 #include "d8.h"
 
 #ifndef V8_SHARED
@@ -144,6 +148,11 @@ class DumbLineEditor: public LineEditor {
 
 Handle<String> DumbLineEditor::Prompt(const char* prompt) {
   printf("%s", prompt);
+#if defined(__native_client__)
+  // Native Client libc is used to being embedded in Chrome and
+  // has trouble recognizing when to flush.
+  fflush(stdout);
+#endif
   return Shell::ReadFromStdin(isolate_);
 }
 
@@ -227,11 +236,13 @@ bool Shell::ExecuteString(Isolate* isolate,
           }
 #if !defined(V8_SHARED)
         } else {
+          v8::TryCatch try_catch;
           Context::Scope context_scope(utility_context_);
           Handle<Object> global = utility_context_->Global();
           Handle<Value> fun = global->Get(String::New("Stringify"));
           Handle<Value> argv[1] = { result };
           Handle<Value> s = Handle<Function>::Cast(fun)->Call(global, 1, argv);
+          if (try_catch.HasCaught()) return true;
           v8::String::Utf8Value str(s);
           fwrite(*str, sizeof(**str), str.length(), stdout);
           printf("\n");
@@ -902,12 +913,6 @@ Handle<Value> Shell::Float64Array(const Arguments& args) {
 
 Handle<Value> Shell::Uint8ClampedArray(const Arguments& args) {
   return CreateExternalArray(args, kExternalPixelArray, sizeof(uint8_t));
-}
-
-
-Handle<Value> Shell::Yield(const Arguments& args) {
-  v8::Unlocker unlocker(args.GetIsolate());
-  return Undefined(args.GetIsolate());
 }
 
 
@@ -1925,6 +1930,9 @@ int Shell::Main(int argc, char* argv[]) {
   DumbLineEditor dumb_line_editor(isolate);
   {
     Initialize(isolate);
+#ifdef ENABLE_VTUNE_JIT_INTERFACE
+    vTune::InitilizeVtuneForV8();
+#endif
     Symbols symbols(isolate);
     InitializeDebugger(isolate);
 

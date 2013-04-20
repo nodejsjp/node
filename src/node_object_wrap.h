@@ -50,7 +50,7 @@ class NODE_EXTERN ObjectWrap {
     if (!handle_.IsEmpty()) {
       assert(handle_.IsNearDeath(node_isolate));
       handle_.ClearWeak(node_isolate);
-      handle_->SetInternalField(0, v8::Undefined());
+      handle_->SetAlignedPointerInInternalField(0, 0);
       handle_.Dispose(node_isolate);
       handle_.Clear();
     }
@@ -116,7 +116,7 @@ class NODE_EXTERN ObjectWrap {
   static void WeakCallback(v8::Isolate* env,
                            v8::Persistent<v8::Value> value,
                            void* data) {
-    v8::HandleScope scope;
+    v8::HandleScope scope(node_isolate);
 
     ObjectWrap *obj = static_cast<ObjectWrap*>(data);
     assert(value == obj->handle_);

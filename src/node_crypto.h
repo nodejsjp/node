@@ -137,8 +137,7 @@ class ClientHelloParser {
   ClientHelloParser(Connection* c) : conn_(c),
                                      state_(kWaiting),
                                      offset_(0),
-                                     body_offset_(0),
-                                     written_(0) {
+                                     body_offset_(0) {
   }
 
   size_t Write(const uint8_t* data, size_t len);
@@ -154,7 +153,6 @@ class ClientHelloParser {
   uint8_t data_[18432];
   size_t offset_;
   size_t body_offset_;
-  size_t written_;
 };
 
 class Connection : ObjectWrap {
@@ -227,7 +225,7 @@ class Connection : ObjectWrap {
   void SetShutdownFlags();
 
   static Connection* Unwrap(const v8::Arguments& args) {
-    Connection* ss = ObjectWrap::Unwrap<Connection>(args.Holder());
+    Connection* ss = ObjectWrap::Unwrap<Connection>(args.This());
     ss->ClearError();
     return ss;
   }

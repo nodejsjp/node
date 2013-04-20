@@ -1204,6 +1204,7 @@ void Deoptimizer::DoComputeCompiledStubFrame(TranslationIterator* iterator,
   // and the standard stack frame slots.  Include space for an argument
   // object to the callee and optionally the space to pass the argument
   // object to the stub failure handler.
+  ASSERT(descriptor->register_param_count_ >= 0);
   int height_in_bytes = kPointerSize * descriptor->register_param_count_ +
       sizeof(Arguments) + kPointerSize;
   int fixed_frame_size = StandardFrameConstants::kFixedFrameSize;
@@ -1280,29 +1281,37 @@ void Deoptimizer::DoComputeCompiledStubFrame(TranslationIterator* iterator,
   }
 
   intptr_t caller_arg_count = 0;
-  if (descriptor->stack_parameter_count_ != NULL) {
-    caller_arg_count =
-        input_->GetRegister(descriptor->stack_parameter_count_->code());
-  }
+  bool arg_count_known = descriptor->stack_parameter_count_ == NULL;
 
   // Build the Arguments object for the caller's parameters and a pointer to it.
   output_frame_offset -= kPointerSize;
-  value = frame_ptr + StandardFrameConstants::kCallerSPOffset +
-      (caller_arg_count - 1) * kPointerSize;
-  output_frame->SetFrameSlot(output_frame_offset, value);
+  int args_arguments_offset = output_frame_offset;
+  intptr_t the_hole = reinterpret_cast<intptr_t>(
+      isolate_->heap()->the_hole_value());
+  if (arg_count_known) {
+    value = frame_ptr + StandardFrameConstants::kCallerSPOffset +
+        (caller_arg_count - 1) * kPointerSize;
+  } else {
+    value = the_hole;
+  }
+
+  output_frame->SetFrameSlot(args_arguments_offset, value);
   if (trace_) {
     PrintF("    0x%08" V8PRIxPTR ": [top + %d] <- 0x%08"
-           V8PRIxPTR " ; args.arguments\n",
-           top_address + output_frame_offset, output_frame_offset, value);
+           V8PRIxPTR " ; args.arguments %s\n",
+           top_address + args_arguments_offset, args_arguments_offset, value,
+           arg_count_known ? "" : "(the hole)");
   }
 
   output_frame_offset -= kPointerSize;
-  value = caller_arg_count;
-  output_frame->SetFrameSlot(output_frame_offset, value);
+  int length_frame_offset = output_frame_offset;
+  value = arg_count_known ? caller_arg_count : the_hole;
+  output_frame->SetFrameSlot(length_frame_offset, value);
   if (trace_) {
     PrintF("    0x%08" V8PRIxPTR ": [top + %d] <- 0x%08"
-           V8PRIxPTR " ; args.length\n",
-           top_address + output_frame_offset, output_frame_offset, value);
+           V8PRIxPTR " ; args.length %s\n",
+           top_address + length_frame_offset, length_frame_offset, value,
+           arg_count_known ? "" : "(the hole)");
   }
 
   output_frame_offset -= kPointerSize;
@@ -1321,6 +1330,20 @@ void Deoptimizer::DoComputeCompiledStubFrame(TranslationIterator* iterator,
     DoTranslateCommand(iterator, 0, output_frame_offset);
   }
 
+  if (!arg_count_known) {
+    DoTranslateCommand(iterator, 0, length_frame_offset,
+                       TRANSLATED_VALUE_IS_NATIVE);
+    caller_arg_count = output_frame->GetFrameSlot(length_frame_offset);
+    value = frame_ptr + StandardFrameConstants::kCallerSPOffset +
+        (caller_arg_count - 1) * kPointerSize;
+    output_frame->SetFrameSlot(args_arguments_offset, value);
+    if (trace_) {
+      PrintF("    0x%08" V8PRIxPTR ": [top + %d] <- 0x%08"
+             V8PRIxPTR " ; args.arguments\n",
+             top_address + args_arguments_offset, args_arguments_offset, value);
+    }
+  }
+
   ASSERT(0 == output_frame_offset);
 
   // Copy the double registers from the input into the output frame.
@@ -1331,8 +1354,9 @@ void Deoptimizer::DoComputeCompiledStubFrame(TranslationIterator* iterator,
 
   // Compute this frame's PC, state, and continuation.
   Code* trampoline = NULL;
-  int extra = descriptor->extra_expression_stack_count_;
-  StubFailureTrampolineStub(extra).FindCodeInCache(&trampoline, isolate_);
+  StubFunctionMode function_mode = descriptor->function_mode_;
+  StubFailureTrampolineStub(function_mode).FindCodeInCache(&trampoline,
+                                                           isolate_);
   ASSERT(trampoline != NULL);
   output_frame->SetPc(reinterpret_cast<intptr_t>(
       trampoline->instruction_start()));
@@ -1476,12 +1500,25 @@ void Deoptimizer::MaterializeHeapNumbersForDebuggerInspectableFrame(
 #endif
 
 
+static const char* TraceValueType(bool is_smi, bool is_native) {
+  if (is_native) {
+    return "native";
+  } else if (is_smi) {
+    return "smi";
+  }
+
+  return "heap number";
+}
+
+
 void Deoptimizer::DoTranslateCommand(TranslationIterator* iterator,
-                                     int frame_index,
-                                     unsigned output_offset) {
+    int frame_index,
+    unsigned output_offset,
+    DeoptimizerTranslatedValueType value_type) {
   disasm::NameConverter converter;
   // A GC-safe temporary placeholder that we can put in the output frame.
   const intptr_t kPlaceholder = reinterpret_cast<intptr_t>(Smi::FromInt(0));
+  bool is_native = value_type == TRANSLATED_VALUE_IS_NATIVE;
 
   // Ignore commands marked as duplicate and act on the first non-duplicate.
   Translation::Opcode opcode =
@@ -1524,7 +1561,9 @@ void Deoptimizer::DoTranslateCommand(TranslationIterator* iterator,
     case Translation::INT32_REGISTER: {
       int input_reg = iterator->Next();
       intptr_t value = input_->GetRegister(input_reg);
-      bool is_smi = Smi::IsValid(value);
+      bool is_smi = (value_type == TRANSLATED_VALUE_IS_TAGGED) &&
+          Smi::IsValid(value);
+
       if (trace_) {
         PrintF(
             "    0x%08" V8PRIxPTR ": [top + %d] <- %" V8PRIdPTR " ; %s (%s)\n",
@@ -1532,15 +1571,18 @@ void Deoptimizer::DoTranslateCommand(TranslationIterator* iterator,
             output_offset,
             value,
             converter.NameOfCPURegister(input_reg),
-            is_smi ? "smi" : "heap number");
+            TraceValueType(is_smi, is_native));
       }
       if (is_smi) {
         intptr_t tagged_value =
             reinterpret_cast<intptr_t>(Smi::FromInt(static_cast<int>(value)));
         output_[frame_index]->SetFrameSlot(output_offset, tagged_value);
+      } else if (value_type == TRANSLATED_VALUE_IS_NATIVE) {
+        output_[frame_index]->SetFrameSlot(output_offset, value);
       } else {
         // We save the untagged value on the side and store a GC-safe
         // temporary placeholder in the frame.
+        ASSERT(value_type == TRANSLATED_VALUE_IS_TAGGED);
         AddDoubleValue(output_[frame_index]->GetTop() + output_offset,
                        static_cast<double>(static_cast<int32_t>(value)));
         output_[frame_index]->SetFrameSlot(output_offset, kPlaceholder);
@@ -1551,7 +1593,8 @@ void Deoptimizer::DoTranslateCommand(TranslationIterator* iterator,
     case Translation::UINT32_REGISTER: {
       int input_reg = iterator->Next();
       uintptr_t value = static_cast<uintptr_t>(input_->GetRegister(input_reg));
-      bool is_smi = (value <= static_cast<uintptr_t>(Smi::kMaxValue));
+      bool is_smi = (value_type == TRANSLATED_VALUE_IS_TAGGED) &&
+          (value <= static_cast<uintptr_t>(Smi::kMaxValue));
       if (trace_) {
         PrintF(
             "    0x%08" V8PRIxPTR ": [top + %d] <- %" V8PRIuPTR
@@ -1560,15 +1603,18 @@ void Deoptimizer::DoTranslateCommand(TranslationIterator* iterator,
             output_offset,
             value,
             converter.NameOfCPURegister(input_reg),
-            is_smi ? "smi" : "heap number");
+            TraceValueType(is_smi, is_native));
       }
       if (is_smi) {
         intptr_t tagged_value =
             reinterpret_cast<intptr_t>(Smi::FromInt(static_cast<int>(value)));
         output_[frame_index]->SetFrameSlot(output_offset, tagged_value);
+      } else if (value_type == TRANSLATED_VALUE_IS_NATIVE) {
+        output_[frame_index]->SetFrameSlot(output_offset, value);
       } else {
         // We save the untagged value on the side and store a GC-safe
         // temporary placeholder in the frame.
+        ASSERT(value_type == TRANSLATED_VALUE_IS_TAGGED);
         AddDoubleValue(output_[frame_index]->GetTop() + output_offset,
                        static_cast<double>(static_cast<uint32_t>(value)));
         output_[frame_index]->SetFrameSlot(output_offset, kPlaceholder);
@@ -1617,7 +1663,8 @@ void Deoptimizer::DoTranslateCommand(TranslationIterator* iterator,
       unsigned input_offset =
           input_->GetOffsetFromSlotIndex(input_slot_index);
       intptr_t value = input_->GetFrameSlot(input_offset);
-      bool is_smi = Smi::IsValid(value);
+      bool is_smi = (value_type == TRANSLATED_VALUE_IS_TAGGED) &&
+          Smi::IsValid(value);
       if (trace_) {
         PrintF("    0x%08" V8PRIxPTR ": ",
                output_[frame_index]->GetTop() + output_offset);
@@ -1625,15 +1672,18 @@ void Deoptimizer::DoTranslateCommand(TranslationIterator* iterator,
                output_offset,
                value,
                input_offset,
-               is_smi ? "smi" : "heap number");
+               TraceValueType(is_smi, is_native));
       }
       if (is_smi) {
         intptr_t tagged_value =
             reinterpret_cast<intptr_t>(Smi::FromInt(static_cast<int>(value)));
         output_[frame_index]->SetFrameSlot(output_offset, tagged_value);
+      } else if (value_type == TRANSLATED_VALUE_IS_NATIVE) {
+        output_[frame_index]->SetFrameSlot(output_offset, value);
       } else {
         // We save the untagged value on the side and store a GC-safe
         // temporary placeholder in the frame.
+        ASSERT(value_type == TRANSLATED_VALUE_IS_TAGGED);
         AddDoubleValue(output_[frame_index]->GetTop() + output_offset,
                        static_cast<double>(static_cast<int32_t>(value)));
         output_[frame_index]->SetFrameSlot(output_offset, kPlaceholder);
@@ -1647,7 +1697,8 @@ void Deoptimizer::DoTranslateCommand(TranslationIterator* iterator,
           input_->GetOffsetFromSlotIndex(input_slot_index);
       uintptr_t value =
           static_cast<uintptr_t>(input_->GetFrameSlot(input_offset));
-      bool is_smi = (value <= static_cast<uintptr_t>(Smi::kMaxValue));
+      bool is_smi = (value_type == TRANSLATED_VALUE_IS_TAGGED) &&
+          (value <= static_cast<uintptr_t>(Smi::kMaxValue));
       if (trace_) {
         PrintF("    0x%08" V8PRIxPTR ": ",
                output_[frame_index]->GetTop() + output_offset);
@@ -1655,15 +1706,18 @@ void Deoptimizer::DoTranslateCommand(TranslationIterator* iterator,
                output_offset,
                value,
                input_offset,
-               is_smi ? "smi" : "heap number");
+               TraceValueType(is_smi, is_native));
       }
       if (is_smi) {
         intptr_t tagged_value =
             reinterpret_cast<intptr_t>(Smi::FromInt(static_cast<int>(value)));
         output_[frame_index]->SetFrameSlot(output_offset, tagged_value);
+      } else if (value_type == TRANSLATED_VALUE_IS_NATIVE) {
+        output_[frame_index]->SetFrameSlot(output_offset, value);
       } else {
         // We save the untagged value on the side and store a GC-safe
         // temporary placeholder in the frame.
+        ASSERT(value_type == TRANSLATED_VALUE_IS_TAGGED);
         AddDoubleValue(output_[frame_index]->GetTop() + output_offset,
                        static_cast<double>(static_cast<uint32_t>(value)));
         output_[frame_index]->SetFrameSlot(output_offset, kPlaceholder);
@@ -1976,52 +2030,96 @@ bool Deoptimizer::DoOsrTranslateCommand(TranslationIterator* iterator,
 }
 
 
-void Deoptimizer::PatchStackCheckCode(Code* unoptimized_code,
-                                      Code* check_code,
-                                      Code* replacement_code) {
-  // Iterate over the stack check table and patch every stack check
+void Deoptimizer::PatchInterruptCode(Code* unoptimized_code,
+                                     Code* interrupt_code,
+                                     Code* replacement_code) {
+  // Iterate over the back edge table and patch every interrupt
   // call to an unconditional call to the replacement code.
   ASSERT(unoptimized_code->kind() == Code::FUNCTION);
-  ASSERT(!unoptimized_code->stack_check_patched_for_osr());
-  Address stack_check_cursor = unoptimized_code->instruction_start() +
-      unoptimized_code->stack_check_table_offset();
-  uint32_t table_length = Memory::uint32_at(stack_check_cursor);
-  stack_check_cursor += kIntSize;
+  int loop_nesting_level = unoptimized_code->allow_osr_at_loop_nesting_level();
+  Address back_edge_cursor = unoptimized_code->instruction_start() +
+      unoptimized_code->back_edge_table_offset();
+  uint32_t table_length = Memory::uint32_at(back_edge_cursor);
+  back_edge_cursor += kIntSize;
   for (uint32_t i = 0; i < table_length; ++i) {
-    uint32_t pc_offset = Memory::uint32_at(stack_check_cursor + kIntSize);
-    Address pc_after = unoptimized_code->instruction_start() + pc_offset;
-    PatchStackCheckCodeAt(unoptimized_code,
-                          pc_after,
-                          check_code,
-                          replacement_code);
-    stack_check_cursor += 2 * kIntSize;
-  }
-  unoptimized_code->set_stack_check_patched_for_osr(true);
-}
-
-
-void Deoptimizer::RevertStackCheckCode(Code* unoptimized_code,
-                                       Code* check_code,
-                                       Code* replacement_code) {
-  // Iterate over the stack check table and revert the patched
-  // stack check calls.
-  ASSERT(unoptimized_code->kind() == Code::FUNCTION);
-  ASSERT(unoptimized_code->stack_check_patched_for_osr());
-  Address stack_check_cursor = unoptimized_code->instruction_start() +
-      unoptimized_code->stack_check_table_offset();
-  uint32_t table_length = Memory::uint32_at(stack_check_cursor);
-  stack_check_cursor += kIntSize;
-  for (uint32_t i = 0; i < table_length; ++i) {
-    uint32_t pc_offset = Memory::uint32_at(stack_check_cursor + kIntSize);
-    Address pc_after = unoptimized_code->instruction_start() + pc_offset;
-    RevertStackCheckCodeAt(unoptimized_code,
+    uint8_t loop_depth = Memory::uint8_at(back_edge_cursor + 2 * kIntSize);
+    if (loop_depth == loop_nesting_level) {
+      // Loop back edge has the loop depth that we want to patch.
+      uint32_t pc_offset = Memory::uint32_at(back_edge_cursor + kIntSize);
+      Address pc_after = unoptimized_code->instruction_start() + pc_offset;
+      PatchInterruptCodeAt(unoptimized_code,
                            pc_after,
-                           check_code,
+                           interrupt_code,
                            replacement_code);
-    stack_check_cursor += 2 * kIntSize;
+    }
+    back_edge_cursor += FullCodeGenerator::kBackEdgeEntrySize;
   }
-  unoptimized_code->set_stack_check_patched_for_osr(false);
+  unoptimized_code->set_back_edges_patched_for_osr(true);
+#ifdef DEBUG
+  Deoptimizer::VerifyInterruptCode(
+      unoptimized_code, interrupt_code, replacement_code, loop_nesting_level);
+#endif  // DEBUG
 }
+
+
+void Deoptimizer::RevertInterruptCode(Code* unoptimized_code,
+                                      Code* interrupt_code,
+                                      Code* replacement_code) {
+  // Iterate over the back edge table and revert the patched interrupt calls.
+  ASSERT(unoptimized_code->kind() == Code::FUNCTION);
+  ASSERT(unoptimized_code->back_edges_patched_for_osr());
+  int loop_nesting_level = unoptimized_code->allow_osr_at_loop_nesting_level();
+  Address back_edge_cursor = unoptimized_code->instruction_start() +
+      unoptimized_code->back_edge_table_offset();
+  uint32_t table_length = Memory::uint32_at(back_edge_cursor);
+  back_edge_cursor += kIntSize;
+  for (uint32_t i = 0; i < table_length; ++i) {
+    uint8_t loop_depth = Memory::uint8_at(back_edge_cursor + 2 * kIntSize);
+    if (loop_depth <= loop_nesting_level) {
+      uint32_t pc_offset = Memory::uint32_at(back_edge_cursor + kIntSize);
+      Address pc_after = unoptimized_code->instruction_start() + pc_offset;
+      RevertInterruptCodeAt(unoptimized_code,
+                            pc_after,
+                            interrupt_code,
+                            replacement_code);
+    }
+    back_edge_cursor += FullCodeGenerator::kBackEdgeEntrySize;
+  }
+  unoptimized_code->set_back_edges_patched_for_osr(false);
+#ifdef DEBUG
+  // Assert that none of the back edges are patched anymore.
+  Deoptimizer::VerifyInterruptCode(
+      unoptimized_code, interrupt_code, replacement_code, -1);
+#endif  // DEBUG
+}
+
+
+#ifdef DEBUG
+void Deoptimizer::VerifyInterruptCode(Code* unoptimized_code,
+                                      Code* interrupt_code,
+                                      Code* replacement_code,
+                                      int loop_nesting_level) {
+  CHECK(unoptimized_code->kind() == Code::FUNCTION);
+  Address back_edge_cursor = unoptimized_code->instruction_start() +
+      unoptimized_code->back_edge_table_offset();
+  uint32_t table_length = Memory::uint32_at(back_edge_cursor);
+  back_edge_cursor += kIntSize;
+  for (uint32_t i = 0; i < table_length; ++i) {
+    uint8_t loop_depth = Memory::uint8_at(back_edge_cursor + 2 * kIntSize);
+    CHECK_LE(loop_depth, Code::kMaxLoopNestingMarker);
+    // Assert that all back edges for shallower loops (and only those)
+    // have already been patched.
+    uint32_t pc_offset = Memory::uint32_at(back_edge_cursor + kIntSize);
+    Address pc_after = unoptimized_code->instruction_start() + pc_offset;
+    CHECK_EQ((loop_depth <= loop_nesting_level),
+             InterruptCodeIsPatched(unoptimized_code,
+                                    pc_after,
+                                    interrupt_code,
+                                    replacement_code));
+    back_edge_cursor += FullCodeGenerator::kBackEdgeEntrySize;
+  }
+}
+#endif  // DEBUG
 
 
 unsigned Deoptimizer::ComputeInputFrameSize() const {
@@ -2130,7 +2228,8 @@ void Deoptimizer::EnsureCodeForDeoptimizationEntry(Isolate* isolate,
   ASSERT(static_cast<int>(Deoptimizer::GetMaxDeoptTableSize()) >=
          desc.instr_size);
   chunk->CommitArea(desc.instr_size);
-  memcpy(chunk->area_start(), desc.buffer, desc.instr_size);
+  CopyBytes(chunk->area_start(), desc.buffer,
+      static_cast<size_t>(desc.instr_size));
   CPU::FlushICache(chunk->area_start(), desc.instr_size);
 
   if (type == EAGER) {
@@ -2273,7 +2372,8 @@ int32_t TranslationIterator::Next() {
 Handle<ByteArray> TranslationBuffer::CreateByteArray(Factory* factory) {
   int length = contents_.length();
   Handle<ByteArray> result = factory->NewByteArray(length, TENURED);
-  memcpy(result->GetDataStartAddress(), contents_.ToVector().start(), length);
+  OS::MemCopy(
+      result->GetDataStartAddress(), contents_.ToVector().start(), length);
   return result;
 }
 

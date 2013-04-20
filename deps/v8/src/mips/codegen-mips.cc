@@ -62,7 +62,6 @@ double fast_exp_simulator(double x) {
 
 
 UnaryMathFunction CreateExpFunction() {
-  if (!CpuFeatures::IsSupported(FPU)) return &exp;
   if (!FLAG_fast_math) return &exp;
   size_t actual_size;
   byte* buffer = static_cast<byte*>(OS::Allocate(1 * KB, &actual_size, true));
@@ -72,7 +71,6 @@ UnaryMathFunction CreateExpFunction() {
   MacroAssembler masm(NULL, buffer, static_cast<int>(actual_size));
 
   {
-    CpuFeatureScope use_fpu(&masm, FPU);
     DoubleRegister input = f12;
     DoubleRegister result = f0;
     DoubleRegister double_scratch1 = f4;
@@ -94,7 +92,7 @@ UnaryMathFunction CreateExpFunction() {
     if (!IsMipsSoftFloatABI) {
       // Result is already in f0, nothing to do.
     } else {
-      __ Move(a0, a1, result);
+      __ Move(v0, v1, result);
     }
     __ Ret();
   }
@@ -184,7 +182,6 @@ void ElementsTransitionGenerator::GenerateSmiToDouble(
   //  -- t0    : scratch (elements)
   // -----------------------------------
   Label loop, entry, convert_hole, gc_required, only_change_map, done;
-  bool fpu_supported = CpuFeatures::IsSupported(FPU);
 
   Register scratch = t6;
 
@@ -206,8 +203,9 @@ void ElementsTransitionGenerator::GenerateSmiToDouble(
   // Allocate new FixedDoubleArray.
   __ sll(scratch, t1, 2);
   __ Addu(scratch, scratch, FixedDoubleArray::kHeaderSize);
-  __ AllocateInNewSpace(scratch, t2, t3, t5, &gc_required, NO_ALLOCATION_FLAGS);
+  __ Allocate(scratch, t2, t3, t5, &gc_required, NO_ALLOCATION_FLAGS);
   // t2: destination FixedDoubleArray, not tagged as heap object
+
   // Set destination FixedDoubleArray's length and map.
   __ LoadRoot(t5, Heap::kFixedDoubleArrayMapRootIndex);
   __ sw(t1, MemOperand(t2, FixedDoubleArray::kLengthOffset));
@@ -248,8 +246,6 @@ void ElementsTransitionGenerator::GenerateSmiToDouble(
   // t2: end of destination FixedDoubleArray, not tagged
   // t3: begin of FixedDoubleArray element fields, not tagged
 
-  if (!fpu_supported) __ Push(a1, a0);
-
   __ Branch(&entry);
 
   __ bind(&only_change_map);
@@ -277,25 +273,11 @@ void ElementsTransitionGenerator::GenerateSmiToDouble(
   __ UntagAndJumpIfNotSmi(t5, t5, &convert_hole);
 
   // Normal smi, convert to double and store.
-  if (fpu_supported) {
-    CpuFeatureScope scope(masm, FPU);
-    __ mtc1(t5, f0);
-    __ cvt_d_w(f0, f0);
-    __ sdc1(f0, MemOperand(t3));
-    __ Addu(t3, t3, kDoubleSize);
-  } else {
-    FloatingPointHelper::ConvertIntToDouble(masm,
-                                            t5,
-                                            FloatingPointHelper::kCoreRegisters,
-                                            f0,
-                                            a0,
-                                            a1,
-                                            t7,
-                                            f0);
-    __ sw(a0, MemOperand(t3));  // mantissa
-    __ sw(a1, MemOperand(t3, kIntSize));  // exponent
-    __ Addu(t3, t3, kDoubleSize);
-  }
+  __ mtc1(t5, f0);
+  __ cvt_d_w(f0, f0);
+  __ sdc1(f0, MemOperand(t3));
+  __ Addu(t3, t3, kDoubleSize);
+
   __ Branch(&entry);
 
   // Hole found, store the-hole NaN.
@@ -314,7 +296,6 @@ void ElementsTransitionGenerator::GenerateSmiToDouble(
   __ bind(&entry);
   __ Branch(&loop, lt, t3, Operand(t2));
 
-  if (!fpu_supported) __ Pop(a1, a0);
   __ pop(ra);
   __ bind(&done);
 }
@@ -351,7 +332,7 @@ void ElementsTransitionGenerator::GenerateDoubleToObject(
   // Allocate new FixedArray.
   __ sll(a0, t1, 1);
   __ Addu(a0, a0, FixedDoubleArray::kHeaderSize);
-  __ AllocateInNewSpace(a0, t2, t3, t5, &gc_required, NO_ALLOCATION_FLAGS);
+  __ Allocate(a0, t2, t3, t5, &gc_required, NO_ALLOCATION_FLAGS);
   // t2: destination FixedArray, not tagged as heap object
   // Set destination FixedDoubleArray's length and map.
   __ LoadRoot(t5, Heap::kFixedArrayMapRootIndex);
@@ -702,7 +683,7 @@ void Code::PatchPlatformCodeAge(byte* sequence,
   uint32_t young_length;
   byte* young_sequence = GetNoCodeAgeSequence(&young_length);
   if (age == kNoAge) {
-    memcpy(sequence, young_sequence, young_length);
+    CopyBytes(sequence, young_sequence, young_length);
     CPU::FlushICache(sequence, young_length);
   } else {
     Code* stub = GetCodeAgeStub(age, parity);

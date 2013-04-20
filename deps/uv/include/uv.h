@@ -45,11 +45,6 @@ extern "C" {
 # define UV_EXTERN /* nothing */
 #endif
 
-
-#define UV_VERSION_MAJOR 0
-#define UV_VERSION_MINOR 10
-
-
 #if defined(_MSC_VER) && _MSC_VER < 1600
 # include "uv-private/stdint-msvc2008.h"
 #else
@@ -294,8 +289,8 @@ UV_EXTERN uint64_t uv_now(uv_loop_t*);
  * Get backend file descriptor. Only kqueue, epoll and event ports are
  * supported.
  *
- * This can be used in conjunction with uv_run_once() to poll in one thread and
- * run the event loop's event callbacks in another.
+ * This can be used in conjunction with `uv_run(loop, UV_RUN_NOWAIT)` to
+ * poll in one thread and run the event loop's event callbacks in another.
  *
  * Useful for embedding libuv's event loop in another event loop.
  * See test/test-embed.c for an example.
@@ -434,7 +429,7 @@ UV_EXTERN const char* uv_err_name(uv_err_t err);
   /* read-only */                                                             \
   uv_req_type type;                                                           \
   /* private */                                                               \
-  ngx_queue_t active_queue;                                                   \
+  void* active_queue[2];                                                      \
   UV_REQ_PRIVATE_FIELDS                                                       \
 
 /* Abstract base class of all requests. */
@@ -474,7 +469,7 @@ struct uv_shutdown_s {
   uv_loop_t* loop;                                                            \
   uv_handle_type type;                                                        \
   /* private */                                                               \
-  ngx_queue_t handle_queue;                                                   \
+  void* handle_queue[2];                                                      \
   UV_HANDLE_PRIVATE_FIELDS                                                    \
 
 /* The abstract base class of all handles.  */
@@ -792,6 +787,12 @@ UV_EXTERN int uv_udp_init(uv_loop_t*, uv_udp_t* handle);
 
 /*
  * Opens an existing file descriptor or SOCKET as a udp handle.
+ *
+ * Unix only:
+ *  The only requirement of the sock argument is that it follows the
+ *  datagram contract (works in unconnected mode, supports sendmsg()/recvmsg(),
+ *  etc.). In other words, other datagram-type sockets like raw sockets or
+ *  netlink sockets can also be passed to this function.
  */
 UV_EXTERN int uv_udp_open(uv_udp_t* handle, uv_os_sock_t sock);
 
@@ -1478,6 +1479,10 @@ struct uv_interface_address_s {
     struct sockaddr_in address4;
     struct sockaddr_in6 address6;
   } address;
+  union {
+    struct sockaddr_in netmask4;
+    struct sockaddr_in6 netmask6;
+  } netmask;
 };
 
 UV_EXTERN char** uv_setup_args(int argc, char** argv);
@@ -1958,8 +1963,8 @@ struct uv_loop_s {
   uv_err_t last_err;
   /* Loop reference counting */
   unsigned int active_handles;
-  ngx_queue_t handle_queue;
-  ngx_queue_t active_reqs;
+  void* handle_queue[2];
+  void* active_reqs[2];
   /* Internal flag to signal loop stop */
   unsigned int stop_flag;
   UV_LOOP_PRIVATE_FIELDS

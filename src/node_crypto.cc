@@ -20,6 +20,7 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "node_crypto.h"
+#include "node_crypto_bio.h"
 #include "node_crypto_groups.h"
 #include "v8.h"
 
@@ -169,7 +170,7 @@ void SecureContext::Initialize(Handle<Object> target) {
 Handle<Value> SecureContext::New(const Arguments& args) {
   HandleScope scope(node_isolate);
   SecureContext *p = new SecureContext();
-  p->Wrap(args.Holder());
+  p->Wrap(args.This());
   return args.This();
 }
 
@@ -177,7 +178,7 @@ Handle<Value> SecureContext::New(const Arguments& args) {
 Handle<Value> SecureContext::Init(const Arguments& args) {
   HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   OPENSSL_CONST SSL_METHOD *method = SSLv23_method();
 
@@ -294,7 +295,7 @@ int SecureContext::NewSessionCallback(SSL* s, SSL_SESSION* sess) {
 // Takes a string or buffer and loads it into a BIO.
 // Caller responsible for BIO_free_all-ing the returned object.
 static BIO* LoadBIO (Handle<Value> v) {
-  BIO *bio = BIO_new(BIO_s_mem());
+  BIO *bio = BIO_new(NodeBIO::GetMethod());
   if (!bio) return NULL;
 
   HandleScope scope(node_isolate);
@@ -341,7 +342,7 @@ static X509* LoadX509 (Handle<Value> v) {
 Handle<Value> SecureContext::SetKey(const Arguments& args) {
   HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   unsigned int len = args.Length();
   if (len != 1 && len != 2) {
@@ -446,7 +447,7 @@ end:
 Handle<Value> SecureContext::SetCert(const Arguments& args) {
   HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   if (args.Length() != 1) {
     return ThrowException(Exception::TypeError(
@@ -477,7 +478,7 @@ Handle<Value> SecureContext::AddCACert(const Arguments& args) {
   bool newCAStore = false;
   HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   if (args.Length() != 1) {
     return ThrowException(Exception::TypeError(String::New("Bad parameter")));
@@ -507,7 +508,7 @@ Handle<Value> SecureContext::AddCACert(const Arguments& args) {
 Handle<Value> SecureContext::AddCRL(const Arguments& args) {
   HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   if (args.Length() != 1) {
     return ThrowException(Exception::TypeError(String::New("Bad parameter")));
@@ -539,7 +540,7 @@ Handle<Value> SecureContext::AddCRL(const Arguments& args) {
 Handle<Value> SecureContext::AddRootCerts(const Arguments& args) {
   HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   assert(sc->ca_store_ == NULL);
 
@@ -547,7 +548,7 @@ Handle<Value> SecureContext::AddRootCerts(const Arguments& args) {
     root_cert_store = X509_STORE_new();
 
     for (int i = 0; root_certs[i]; i++) {
-      BIO *bp = BIO_new(BIO_s_mem());
+      BIO *bp = BIO_new(NodeBIO::GetMethod());
 
       if (!BIO_write(bp, root_certs[i], strlen(root_certs[i]))) {
         BIO_free_all(bp);
@@ -578,7 +579,7 @@ Handle<Value> SecureContext::AddRootCerts(const Arguments& args) {
 Handle<Value> SecureContext::SetCiphers(const Arguments& args) {
   HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   if (args.Length() != 1 || !args[0]->IsString()) {
     return ThrowException(Exception::TypeError(String::New("Bad parameter")));
@@ -593,7 +594,7 @@ Handle<Value> SecureContext::SetCiphers(const Arguments& args) {
 Handle<Value> SecureContext::SetOptions(const Arguments& args) {
   HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   if (args.Length() != 1 || !args[0]->IntegerValue()) {
     return ThrowException(Exception::TypeError(String::New("Bad parameter")));
@@ -607,7 +608,7 @@ Handle<Value> SecureContext::SetOptions(const Arguments& args) {
 Handle<Value> SecureContext::SetSessionIdContext(const Arguments& args) {
   HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   if (args.Length() != 1 || !args[0]->IsString()) {
     return ThrowException(Exception::TypeError(String::New("Bad parameter")));
@@ -637,9 +638,9 @@ Handle<Value> SecureContext::SetSessionIdContext(const Arguments& args) {
 }
 
 Handle<Value> SecureContext::SetSessionTimeout(const Arguments& args) {
-  HandleScope scope;
+  HandleScope scope(node_isolate);
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   if (args.Length() != 1 || !args[0]->IsInt32()) {
     return ThrowTypeError("Bad parameter");
@@ -653,7 +654,7 @@ Handle<Value> SecureContext::SetSessionTimeout(const Arguments& args) {
 
 Handle<Value> SecureContext::Close(const Arguments& args) {
   HandleScope scope(node_isolate);
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
   sc->FreeCTXMem();
   return False(node_isolate);
 }
@@ -670,7 +671,7 @@ Handle<Value> SecureContext::LoadPKCS12(const Arguments& args) {
   char* pass = NULL;
   bool ret = false;
 
-  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.Holder());
+  SecureContext *sc = ObjectWrap::Unwrap<SecureContext>(args.This());
 
   if (args.Length() < 1) {
     return ThrowException(Exception::TypeError(
@@ -1212,7 +1213,7 @@ Handle<Value> Connection::New(const Arguments& args) {
   HandleScope scope(node_isolate);
 
   Connection *p = new Connection();
-  p->Wrap(args.Holder());
+  p->Wrap(args.This());
 
   if (args.Length() < 1 || !args[0]->IsObject()) {
     return ThrowException(Exception::Error(String::New(
@@ -1224,8 +1225,8 @@ Handle<Value> Connection::New(const Arguments& args) {
   bool is_server = args[1]->BooleanValue();
 
   p->ssl_ = SSL_new(sc->ctx_);
-  p->bio_read_ = BIO_new(BIO_s_mem());
-  p->bio_write_ = BIO_new(BIO_s_mem());
+  p->bio_read_ = BIO_new(NodeBIO::GetMethod());
+  p->bio_write_ = BIO_new(NodeBIO::GetMethod());
 
   SSL_set_app_data(p->ssl_, p);
 
@@ -1498,7 +1499,9 @@ Handle<Value> Connection::ClearIn(const Arguments& args) {
 
   int bytes_written = SSL_write(ss->ssl_, buffer_data + off, len);
 
-  ss->HandleSSLError("SSL_write:ClearIn", bytes_written, kZeroIsAnError);
+  ss->HandleSSLError("SSL_write:ClearIn",
+                     bytes_written,
+                     len == 0 ? kZeroIsNotAnError : kZeroIsAnError);
   ss->SetShutdownFlags();
 
   return scope.Close(Integer::New(bytes_written, node_isolate));
@@ -1983,7 +1986,8 @@ Handle<Value> Connection::GetNegotiatedProto(const Arguments& args) {
       return False(node_isolate);
     }
 
-    return String::New((const char*) npn_proto, npn_proto_len);
+    return scope.Close(String::New(reinterpret_cast<const char*>(npn_proto),
+                                   npn_proto_len));
   } else {
     return ss->selectedNPNProto_;
   }
@@ -3173,7 +3177,8 @@ Handle<Value> DiffieHellman::ComputeSecret(const Arguments& args) {
   // allocated buffer.
   if (size != dataSize) {
     assert(dataSize > size);
-    memset(data + size, 0, dataSize - size);
+    memmove(data + dataSize - size, data, size);
+    memset(data, 0, dataSize - size);
   }
 
   Local<Value> outString;
@@ -3566,7 +3571,7 @@ static void array_push_back(const TypeName* md,
 
 
 Handle<Value> GetCiphers(const Arguments& args) {
-  HandleScope scope;
+  HandleScope scope(node_isolate);
   Local<Array> arr = Array::New();
   EVP_CIPHER_do_all_sorted(array_push_back<EVP_CIPHER>, &arr);
   return scope.Close(arr);

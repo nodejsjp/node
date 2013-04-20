@@ -78,7 +78,7 @@ inline static int snprintf(char* buf, unsigned int len, const char* fmt, ...) {
 // sometimes fails to resolve it...
 #define THROW_ERROR(fun)                                                      \
   do {                                                                        \
-    v8::HandleScope scope;                                                    \
+    v8::HandleScope scope(node_isolate);                                      \
     return v8::ThrowException(fun(v8::String::New(errmsg)));                  \
   }                                                                           \
   while (0)
@@ -96,10 +96,10 @@ inline static v8::Handle<v8::Value> ThrowRangeError(const char* errmsg) {
 }
 
 #define UNWRAP(type)                                                        \
-  assert(!args.Holder().IsEmpty());                                         \
-  assert(args.Holder()->InternalFieldCount() > 0);                          \
+  assert(!args.This().IsEmpty());                                           \
+  assert(args.This()->InternalFieldCount() > 0);                            \
   type* wrap = static_cast<type*>(                                          \
-      args.Holder()->GetAlignedPointerFromInternalField(0));                \
+      args.This()->GetAlignedPointerFromInternalField(0));                  \
   if (!wrap) {                                                              \
     fprintf(stderr, #type ": Aborting due to unwrap failure at %s:%d\n",    \
             __FILE__, __LINE__);                                            \
@@ -109,6 +109,9 @@ inline static v8::Handle<v8::Value> ThrowRangeError(const char* errmsg) {
 v8::Handle<v8::Value> FromConstructorTemplate(
     v8::Persistent<v8::FunctionTemplate> t,
     const v8::Arguments& args);
+
+// allow for quick domain check
+extern bool using_domains;
 
 } // namespace node
 

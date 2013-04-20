@@ -103,6 +103,7 @@ enum BindingFlags {
   V(NUMBER_FUNCTION_INDEX, JSFunction, number_function) \
   V(STRING_FUNCTION_INDEX, JSFunction, string_function) \
   V(STRING_FUNCTION_PROTOTYPE_MAP_INDEX, Map, string_function_prototype_map) \
+  V(SYMBOL_FUNCTION_INDEX, JSFunction, symbol_function) \
   V(OBJECT_FUNCTION_INDEX, JSFunction, object_function) \
   V(INTERNAL_ARRAY_FUNCTION_INDEX, JSFunction, internal_array_function) \
   V(ARRAY_FUNCTION_INDEX, JSFunction, array_function) \
@@ -156,7 +157,6 @@ enum BindingFlags {
   V(ALLOW_CODE_GEN_FROM_STRINGS_INDEX, Object, allow_code_gen_from_strings) \
   V(ERROR_MESSAGE_FOR_CODE_GEN_FROM_STRINGS_INDEX, Object, \
     error_message_for_code_gen_from_strings) \
-  V(SYMBOL_DELEGATE_INDEX, JSObject, symbol_delegate) \
   V(TO_COMPLETE_PROPERTY_DESCRIPTOR_INDEX, JSFunction, \
     to_complete_property_descriptor) \
   V(DERIVED_HAS_TRAP_INDEX, JSFunction, derived_has_trap) \
@@ -165,6 +165,11 @@ enum BindingFlags {
   V(PROXY_ENUMERATE_INDEX, JSFunction, proxy_enumerate) \
   V(OBSERVERS_NOTIFY_CHANGE_INDEX, JSFunction, observers_notify_change) \
   V(OBSERVERS_DELIVER_CHANGES_INDEX, JSFunction, observers_deliver_changes) \
+  V(GENERATOR_FUNCTION_MAP_INDEX, Map, generator_function_map) \
+  V(STRICT_MODE_GENERATOR_FUNCTION_MAP_INDEX, Map, \
+    strict_mode_generator_function_map) \
+  V(GENERATOR_OBJECT_PROTOTYPE_MAP_INDEX, Map, \
+    generator_object_prototype_map) \
   V(RANDOM_SEED_INDEX, ByteArray, random_seed)
 
 // JSFunctions are pairs (context, function code), sometimes also called
@@ -251,6 +256,7 @@ class Context: public FixedArray {
     NUMBER_FUNCTION_INDEX,
     STRING_FUNCTION_INDEX,
     STRING_FUNCTION_PROTOTYPE_MAP_INDEX,
+    SYMBOL_FUNCTION_INDEX,
     OBJECT_FUNCTION_INDEX,
     INTERNAL_ARRAY_FUNCTION_INDEX,
     ARRAY_FUNCTION_INDEX,
@@ -287,7 +293,6 @@ class Context: public FixedArray {
     EMBEDDER_DATA_INDEX,
     ALLOW_CODE_GEN_FROM_STRINGS_INDEX,
     ERROR_MESSAGE_FOR_CODE_GEN_FROM_STRINGS_INDEX,
-    SYMBOL_DELEGATE_INDEX,
     TO_COMPLETE_PROPERTY_DESCRIPTOR_INDEX,
     DERIVED_HAS_TRAP_INDEX,
     DERIVED_GET_TRAP_INDEX,
@@ -295,6 +300,9 @@ class Context: public FixedArray {
     PROXY_ENUMERATE_INDEX,
     OBSERVERS_NOTIFY_CHANGE_INDEX,
     OBSERVERS_DELIVER_CHANGES_INDEX,
+    GENERATOR_FUNCTION_MAP_INDEX,
+    STRICT_MODE_GENERATOR_FUNCTION_MAP_INDEX,
+    GENERATOR_OBJECT_PROTOTYPE_MAP_INDEX,
     RANDOM_SEED_INDEX,
 
     // Properties from here are treated as weak references by the full GC.
@@ -437,6 +445,16 @@ class Context: public FixedArray {
   // Code generation support.
   static int SlotOffset(int index) {
     return kHeaderSize + index * kPointerSize - kHeapObjectTag;
+  }
+
+  static int FunctionMapIndex(LanguageMode language_mode, bool is_generator) {
+    return is_generator
+      ? (language_mode == CLASSIC_MODE
+         ? GENERATOR_FUNCTION_MAP_INDEX
+         : STRICT_MODE_GENERATOR_FUNCTION_MAP_INDEX)
+      : (language_mode == CLASSIC_MODE
+         ? FUNCTION_MAP_INDEX
+         : STRICT_MODE_FUNCTION_MAP_INDEX);
   }
 
   static const int kSize = kHeaderSize + NATIVE_CONTEXT_SLOTS * kPointerSize;

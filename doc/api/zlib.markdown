@@ -303,19 +303,16 @@ Gzip または Deflate で圧縮されたストリームをヘッダで自動判
 <!--type=misc-->
 
 <!--
-All of these take a string or buffer as the first argument, and call the
-supplied callback with `callback(error, result)`.  The
-compression/decompression engine is created using the default settings
-in all convenience methods.  To supply different options, use the
-zlib classes directly.
+All of these take a string or buffer as the first argument, an optional second
+argument to supply options to the zlib classes and will call the supplied
+callback with `callback(error, result)`.
 -->
 
-これらは全て第 1 引数として文字列またはバッファを受け取り、
+これらは全て第 1 引数として文字列またはバッファを、
+任意の第 2 引数で zlib クラスのオプションを受け取り、
 与えられたコールバック `callback(error, result)` を呼び出します。
-全ての簡易メソッドで、圧縮・解凍エンジンはデフォルトの設定で作成されます。
-異なったオプションを与えるには、zlib のクラスを直接使用してください。
 
-## zlib.deflate(buf, callback)
+## zlib.deflate(buf, [options], callback)
 
 <!--
 Compress a string with Deflate.
@@ -323,7 +320,7 @@ Compress a string with Deflate.
 
 Deflate で文字列を圧縮します。
 
-## zlib.deflateRaw(buf, callback)
+## zlib.deflateRaw(buf, [options], callback)
 
 <!--
 Compress a string with DeflateRaw.
@@ -331,7 +328,7 @@ Compress a string with DeflateRaw.
 
 DeflateRaw で文字列を圧縮します。
 
-## zlib.gzip(buf, callback)
+## zlib.gzip(buf, [options], callback)
 
 <!--
 Compress a string with Gzip.
@@ -339,7 +336,7 @@ Compress a string with Gzip.
 
 Gzip で文字列を圧縮します。
 
-## zlib.gunzip(buf, callback)
+## zlib.gunzip(buf, [options], callback)
 
 <!--
 Decompress a raw Buffer with Gunzip.
@@ -347,7 +344,7 @@ Decompress a raw Buffer with Gunzip.
 
 Gunzip で生のバッファを解凍します。
 
-## zlib.inflate(buf, callback)
+## zlib.inflate(buf, [options], callback)
 
 <!--
 Decompress a raw Buffer with Inflate.
@@ -355,7 +352,7 @@ Decompress a raw Buffer with Inflate.
 
 Infrate で生のバッファを解凍します。
 
-## zlib.inflateRaw(buf, callback)
+## zlib.inflateRaw(buf, [options], callback)
 
 <!--
 Decompress a raw Buffer with InflateRaw.
@@ -363,7 +360,7 @@ Decompress a raw Buffer with InflateRaw.
 
 InflateRaw で生のバッファを解凍します。
 
-## zlib.unzip(buf, callback)
+## zlib.unzip(buf, [options], callback)
 
 <!--
 Decompress a raw Buffer with Unzip.
@@ -376,13 +373,11 @@ Unzip で生のバッファを解凍します。
 <!--type=misc-->
 
 <!--
-Each class takes an options object.  All options are optional.  (The
-convenience methods use the default settings for all options.)
+Each class takes an options object.  All options are optional.
 -->
 
 どのクラスもオプションオブジェクトを受け取ります。
 全てのオプションは任意です
-(簡易メソッドは全てのオプションでデフォルト値を使用します)。
 
 <!--
 Note that some options are only relevant when compressing, and are
