@@ -220,12 +220,12 @@ static void Generate_JSConstructStubHelper(MacroAssembler* masm,
       __ movzxbq(rdi, FieldOperand(rax, Map::kInstanceSizeOffset));
       __ shl(rdi, Immediate(kPointerSizeLog2));
       // rdi: size of new object
-      __ AllocateInNewSpace(rdi,
-                            rbx,
-                            rdi,
-                            no_reg,
-                            &rt_call,
-                            NO_ALLOCATION_FLAGS);
+      __ Allocate(rdi,
+                  rbx,
+                  rdi,
+                  no_reg,
+                  &rt_call,
+                  NO_ALLOCATION_FLAGS);
       // Allocated the JSObject, now initialize the fields.
       // rax: initial map
       // rbx: JSObject (not HeapObject tagged - the actual address).
@@ -287,14 +287,14 @@ static void Generate_JSConstructStubHelper(MacroAssembler* masm,
       // rbx: JSObject
       // rdi: start of next object (will be start of FixedArray)
       // rdx: number of elements in properties array
-      __ AllocateInNewSpace(FixedArray::kHeaderSize,
-                            times_pointer_size,
-                            rdx,
-                            rdi,
-                            rax,
-                            no_reg,
-                            &undo_allocation,
-                            RESULT_CONTAINS_TOP);
+      __ Allocate(FixedArray::kHeaderSize,
+                  times_pointer_size,
+                  rdx,
+                  rdi,
+                  rax,
+                  no_reg,
+                  &undo_allocation,
+                  RESULT_CONTAINS_TOP);
 
       // Initialize the FixedArray.
       // rbx: JSObject
@@ -415,10 +415,6 @@ static void Generate_JSConstructStubHelper(MacroAssembler* masm,
     STATIC_ASSERT(LAST_SPEC_OBJECT_TYPE == LAST_TYPE);
     __ CmpObjectType(rax, FIRST_SPEC_OBJECT_TYPE, rcx);
     __ j(above_equal, &exit);
-
-    // Symbols are "objects".
-    __ CmpInstanceType(rcx, SYMBOL_TYPE);
-    __ j(equal, &exit);
 
     // Throw away the result of the constructor invocation and use the
     // on-stack receiver as the result.
@@ -1216,14 +1212,14 @@ static void AllocateJSArray(MacroAssembler* masm,
   // requested elements.
   SmiIndex index =
       masm->SmiToIndex(kScratchRegister, array_size, kPointerSizeLog2);
-  __ AllocateInNewSpace(JSArray::kSize + FixedArray::kHeaderSize,
-                        index.scale,
-                        index.reg,
-                        result,
-                        elements_array_end,
-                        scratch,
-                        gc_required,
-                        TAG_OBJECT);
+  __ Allocate(JSArray::kSize + FixedArray::kHeaderSize,
+              index.scale,
+              index.reg,
+              result,
+              elements_array_end,
+              scratch,
+              gc_required,
+              TAG_OBJECT);
 
   // Allocated the JSArray. Now initialize the fields except for the elements
   // array.
@@ -1841,21 +1837,7 @@ void Builtins::Generate_ArgumentsAdaptorTrampoline(MacroAssembler* masm) {
 
 
 void Builtins::Generate_OnStackReplacement(MacroAssembler* masm) {
-  // Get the loop depth of the stack guard check. This is recorded in
-  // a test(rax, depth) instruction right after the call.
-  Label stack_check;
-  __ movq(rbx, Operand(rsp, 0));  // return address
-  __ movzxbq(rbx, Operand(rbx, 1));  // depth
-
-  // Get the loop nesting level at which we allow OSR from the
-  // unoptimized code and check if we want to do OSR yet. If not we
-  // should perform a stack guard check so we can get interrupts while
-  // waiting for on-stack replacement.
   __ movq(rax, Operand(rbp, JavaScriptFrameConstants::kFunctionOffset));
-  __ movq(rcx, FieldOperand(rax, JSFunction::kSharedFunctionInfoOffset));
-  __ movq(rcx, FieldOperand(rcx, SharedFunctionInfo::kCodeOffset));
-  __ cmpb(rbx, FieldOperand(rcx, Code::kAllowOSRAtLoopNestingLevelOffset));
-  __ j(greater, &stack_check);
 
   // Pass the function to optimize as the argument to the on-stack
   // replacement runtime function.
@@ -1870,21 +1852,6 @@ void Builtins::Generate_OnStackReplacement(MacroAssembler* masm) {
   Label skip;
   __ SmiCompare(rax, Smi::FromInt(-1));
   __ j(not_equal, &skip, Label::kNear);
-  __ ret(0);
-
-  // If we decide not to perform on-stack replacement we perform a
-  // stack guard check to enable interrupts.
-  __ bind(&stack_check);
-  Label ok;
-  __ CompareRoot(rsp, Heap::kStackLimitRootIndex);
-  __ j(above_equal, &ok, Label::kNear);
-
-  StackCheckStub stub;
-  __ TailCallStub(&stub);
-  if (FLAG_debug_code) {
-    __ Abort("Unreachable code: returned from tail call.");
-  }
-  __ bind(&ok);
   __ ret(0);
 
   __ bind(&skip);

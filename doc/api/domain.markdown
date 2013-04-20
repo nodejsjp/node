@@ -118,9 +118,11 @@ d.on('error', function(er) {
   // This is no better than process.on('uncaughtException')!
   console.log('error, but oh well', er.message);
 });
-require('http').createServer(function(req, res) {
-  handleRequest(req, res);
-}).listen(PORT);
+d.run(function() {
+  require('http').createServer(function(req, res) {
+    handleRequest(req, res);
+  }).listen(PORT);
+});
 ```
 
 <!--

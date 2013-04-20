@@ -150,7 +150,6 @@ namespace internal {
   V(HeapNumber, minus_zero_value, MinusZeroValue)                              \
   V(Map, neander_map, NeanderMap)                                              \
   V(JSObject, message_listeners, MessageListeners)                             \
-  V(Foreign, prototype_accessors, PrototypeAccessors)                          \
   V(UnseededNumberDictionary, code_stubs, CodeStubs)                           \
   V(UnseededNumberDictionary, non_monomorphic_cache, NonMonomorphicCache)      \
   V(PolymorphicCodeCache, polymorphic_code_cache, PolymorphicCodeCache)        \
@@ -210,9 +209,13 @@ namespace internal {
   V(index_string, "index")                                               \
   V(last_index_string, "lastIndex")                                      \
   V(object_string, "object")                                             \
+  V(payload_string, "payload")                                           \
   V(prototype_string, "prototype")                                       \
   V(string_string, "string")                                             \
   V(String_string, "String")                                             \
+  V(unknown_field_string, "unknownField")                                \
+  V(symbol_string, "symbol")                                             \
+  V(Symbol_string, "Symbol")                                             \
   V(Date_string, "Date")                                                 \
   V(this_string, "this")                                                 \
   V(to_string_string, "toString")                                        \
@@ -220,6 +223,7 @@ namespace internal {
   V(undefined_string, "undefined")                                       \
   V(value_of_string, "valueOf")                                          \
   V(stack_string, "stack")                                               \
+  V(toJSON_string, "toJSON")                                             \
   V(InitializeVarGlobal_string, "InitializeVarGlobal")                   \
   V(InitializeConstGlobal_string, "InitializeConstGlobal")               \
   V(KeyedLoadElementMonomorphic_string,                                  \
@@ -520,6 +524,7 @@ class Heap {
   int InitialSemiSpaceSize() { return initial_semispace_size_; }
   intptr_t MaxOldGenerationSize() { return max_old_generation_size_; }
   intptr_t MaxExecutableSize() { return max_executable_size_; }
+  int MaxNewSpaceAllocationSize() { return InitialSemiSpaceSize() * 3/4; }
 
   // Returns the capacity of the heap in bytes w/o growing. Heap grows when
   // more spaces are needed until it reaches the limit.
@@ -597,6 +602,13 @@ class Heap {
     return old_pointer_space_->allocation_limit_address();
   }
 
+  Address* OldDataSpaceAllocationTopAddress() {
+    return old_data_space_->allocation_top_address();
+  }
+  Address* OldDataSpaceAllocationLimitAddress() {
+    return old_data_space_->allocation_limit_address();
+  }
+
   // Uncommit unused semi space.
   bool UncommitFromSpace() { return new_space_.UncommitFromSpace(); }
 
@@ -612,6 +624,9 @@ class Heap {
   MUST_USE_RESULT MaybeObject* AllocateJSObjectWithAllocationSite(
       JSFunction* constructor,
       Handle<Object> allocation_site_info_payload);
+
+  MUST_USE_RESULT MaybeObject* AllocateJSGeneratorObject(
+      JSFunction* function);
 
   MUST_USE_RESULT MaybeObject* AllocateJSModule(Context* context,
                                                 ScopeInfo* scope_info);
@@ -878,12 +893,11 @@ class Heap {
       void* external_pointer,
       PretenureFlag pretenure);
 
-  // Allocate a symbol.
+  // Allocate a symbol in old space.
   // Returns Failure::RetryAfterGC(requested_bytes, space) if the allocation
   // failed.
   // Please note this does not perform a garbage collection.
-  MUST_USE_RESULT MaybeObject* AllocateSymbol(
-      PretenureFlag pretenure = NOT_TENURED);
+  MUST_USE_RESULT MaybeObject* AllocateSymbol();
 
   // Allocate a tenured JS global property cell.
   // Returns Failure::RetryAfterGC(requested_bytes, space) if the allocation
@@ -1326,6 +1340,10 @@ class Heap {
   inline bool InOldPointerSpace(Address address);
   inline bool InOldPointerSpace(Object* object);
 
+  // Returns whether the object resides in old data space.
+  inline bool InOldDataSpace(Address address);
+  inline bool InOldDataSpace(Object* object);
+
   // Checks whether an address/object in the heap (including auxiliary
   // area and unused area).
   bool Contains(Address addr);
@@ -1493,6 +1511,12 @@ class Heap {
   MUST_USE_RESULT MaybeObject* AllocateRawFixedArray(int length);
   MUST_USE_RESULT MaybeObject* AllocateRawFixedArray(int length,
                                                      PretenureFlag pretenure);
+
+  // Predicate that governs global pre-tenuring decisions based on observed
+  // promotion rates of previous collections.
+  inline bool ShouldGloballyPretenure() {
+    return new_space_high_promotion_mode_active_;
+  }
 
   inline intptr_t PromotedTotalSize() {
     return PromotedSpaceSizeOfObjects() + PromotedExternalMemorySize();
@@ -1821,38 +1845,6 @@ class Heap {
   }
 
   void CheckpointObjectStats();
-
-  // We don't use a ScopedLock here since we want to lock the heap
-  // only when FLAG_parallel_recompilation is true.
-  class RelocationLock {
-   public:
-    explicit RelocationLock(Heap* heap) : heap_(heap) {
-      if (FLAG_parallel_recompilation) {
-        heap_->relocation_mutex_->Lock();
-#ifdef DEBUG
-        heap_->relocation_mutex_locked_ = true;
-#endif  // DEBUG
-      }
-    }
-
-    ~RelocationLock() {
-      if (FLAG_parallel_recompilation) {
-#ifdef DEBUG
-        heap_->relocation_mutex_locked_ = false;
-#endif  // DEBUG
-        heap_->relocation_mutex_->Unlock();
-      }
-    }
-
-#ifdef DEBUG
-    static bool IsLocked(Heap* heap) {
-      return heap->relocation_mutex_locked_;
-    }
-#endif  // DEBUG
-
-   private:
-    Heap* heap_;
-  };
 
  private:
   Heap();
@@ -2322,11 +2314,6 @@ class Heap {
   VisitorDispatchTable<ScavengingCallback> scavenging_visitors_table_;
 
   MemoryChunk* chunks_queued_for_free_;
-
-  Mutex* relocation_mutex_;
-#ifdef DEBUG
-  bool relocation_mutex_locked_;
-#endif  // DEBUG;
 
   friend class Factory;
   friend class GCTracer;

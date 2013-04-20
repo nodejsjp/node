@@ -1,4 +1,31 @@
-2013.03.28, Version 0.11.0 (Unstable)
+2013.04.19, Version 0.11.1 (Unstable)
+
+* V8: upgrade to 3.18.0
+
+* uv: Upgrade to v0.11.1
+
+* http: split into multiple separate modules (Timothy J Fontaine)
+
+* http: escape unsafe characters in request path (Ben Noordhuis)
+
+* url: Escape all unwise characters (isaacs)
+
+* build: depend on v8 postmortem-metadata if enabled (Paddy Byers)
+
+* etw: update prototypes to match dtrace provider (Timothy J Fontaine)
+
+* buffer: change output of Buffer.prototype.toJSON() (David Braun)
+
+* dtrace: actually use the _handle.fd value (Timothy J Fontaine)
+
+* dtrace: pass more arguments to probes (Dave Pacheco)
+
+* build: allow building with dtrace on osx (Dave Pacheco)
+
+* zlib: allow passing options to convenience methods (Kyle Robinson Young)
+
+
+2013.03.28, Version 0.11.0 (Unstable), bce38b3d74e64fcb7d04a2dd551151da6168cdc5
 
 * V8: update to 3.17.13
 
@@ -31,6 +58,64 @@
 * util: custom `inspect()` method may return an Object (Nathan Rajlich)
 
 * console: `console.dir()` bypasses inspect() methods (Nathan Rajlich)
+
+
+2013.04.11, Version 0.10.4 (Stable)
+
+* uv: Upgrade to 0.10.4
+
+* npm: Upgrade to 1.2.18
+
+* v8: Avoid excessive memory growth in JSON.parse (Fedor Indutny)
+
+* child_process, cluster: fix O(n*m) scan of cmd string (Ben Noordhuis)
+
+* net: fix socket.bytesWritten Buffers support (Fedor Indutny)
+
+* buffer: fix offset checks (Łukasz Walukiewicz)
+
+* stream: call write cb before finish event (isaacs)
+
+* http: Support write(data, 'hex') (isaacs)
+
+* crypto: dh secret should be left-padded (Fedor Indutny)
+
+* process: expose NODE_MODULE_VERSION in process.versions (Rod Vagg)
+
+* crypto: fix constructor call in crypto streams (Andreas Madsen)
+
+* net: account for encoding in .byteLength (Fedor Indutny)
+
+* net: fix buffer iteration in bytesWritten (Fedor Indutny)
+
+* crypto: zero is not an error if writing 0 bytes (Fedor Indutny)
+
+* tls: Re-enable check of CN-ID in cert verification (Tobias Müllerleile)
+
+
+2013.04.03, Version 0.10.3 (Stable), d4982f6f5e4a9a703127489a553b8d782997ea43
+
+* npm: Upgrade to 1.2.17
+
+* child_process: acknowledge sent handles (Fedor Indutny)
+
+* etw: update prototypes to match dtrace provider (Timothy J Fontaine)
+
+* dtrace: pass more arguments to probes (Dave Pacheco)
+
+* build: allow building with dtrace on osx (Dave Pacheco)
+
+* http: Remove legacy ECONNRESET workaround code (isaacs)
+
+* http: Ensure socket cleanup on client response end (isaacs)
+
+* tls: Destroy socket when encrypted side closes (isaacs)
+
+* repl: isSyntaxError() catches "strict mode" errors (Nathan Rajlich)
+
+* crypto: Pass options to ctor calls (isaacs)
+
+* src: tie process.versions.uv to uv_version_string() (Ben Noordhuis)
 
 
 2013.03.28, Version 0.10.2 (Stable), 1e0de9c426e07a260bbec2d2196c2d2db8eb8886

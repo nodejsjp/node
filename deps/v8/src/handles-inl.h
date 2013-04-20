@@ -59,7 +59,6 @@ inline bool Handle<T>::is_identical_to(const Handle<T> other) const {
   if (FLAG_enable_slow_asserts) {
     Isolate* isolate = Isolate::Current();
     CHECK(isolate->AllowHandleDereference() ||
-          Heap::RelocationLock::IsLocked(isolate->heap()) ||
           !isolate->optimizing_compiler_thread()->IsOptimizerThread());
   }
 #endif  // DEBUG
@@ -107,7 +106,7 @@ void HandleScope::CloseScope() {
     current->limit = prev_limit_;
     DeleteExtensions(isolate_);
   }
-#ifdef DEBUG
+#ifdef ENABLE_EXTRA_CHECKS
   ZapRange(prev_next_, prev_limit_);
 #endif
 }

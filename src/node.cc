@@ -133,7 +133,7 @@ static bool use_debug_agent = false;
 static bool debug_wait_connect = false;
 static int debug_port=5858;
 static int max_stack_size = 0;
-static bool using_domains = false;
+bool using_domains = false;
 
 // used by C++ modules as well
 bool no_deprecation = false;
@@ -899,10 +899,10 @@ Handle<Value> FromConstructorTemplate(Persistent<FunctionTemplate> t,
 }
 
 
-Handle<Value> UsingDomains(const Arguments& args) {
-  HandleScope scope;
+Handle<Value> SetupDomainUse(const Arguments& args) {
+  HandleScope scope(node_isolate);
   if (using_domains)
-    return scope.Close(Undefined());
+    return Undefined();
   using_domains = true;
   Local<Value> tdc_v = process->Get(String::New("_tickDomainCallback"));
   Local<Value> ndt_v = process->Get(String::New("_nextDomainTick"));
@@ -918,7 +918,7 @@ Handle<Value> UsingDomains(const Arguments& args) {
   Local<Function> ndt = ndt_v.As<Function>();
   process->Set(String::New("_tickCallback"), tdc);
   process->Set(String::New("nextTick"), ndt);
-  process_tickCallback = Persistent<Function>::New(tdc);
+  process_tickCallback = Persistent<Function>::New(node_isolate, tdc);
   return Undefined();
 }
 
@@ -1516,12 +1516,11 @@ static uid_t uid_by_name(const char* name) {
   struct passwd pwd;
   struct passwd* pp;
   char buf[8192];
-  int rc;
 
   errno = 0;
   pp = NULL;
 
-  if ((rc = getpwnam_r(name, &pwd, buf, sizeof(buf), &pp)) == 0 && pp != NULL) {
+  if (getpwnam_r(name, &pwd, buf, sizeof(buf), &pp) == 0 && pp != NULL) {
     return pp->pw_uid;
   }
 
@@ -1554,12 +1553,11 @@ static gid_t gid_by_name(const char* name) {
   struct group pwd;
   struct group* pp;
   char buf[8192];
-  int rc;
 
   errno = 0;
   pp = NULL;
 
-  if ((rc = getgrnam_r(name, &pwd, buf, sizeof(buf), &pp)) == 0 && pp != NULL) {
+  if (getgrnam_r(name, &pwd, buf, sizeof(buf), &pp) == 0 && pp != NULL) {
     return pp->gr_gid;
   }
 
@@ -2365,6 +2363,8 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   versions->Set(String::NewSymbol("ares"), String::New(ARES_VERSION_STR));
   versions->Set(String::NewSymbol("uv"), String::New(uv_version_string()));
   versions->Set(String::NewSymbol("zlib"), String::New(ZLIB_VERSION));
+  versions->Set(String::NewSymbol("modules"),
+                String::New(NODE_STRINGIFY(NODE_MODULE_VERSION)));
 #if HAVE_OPENSSL
   // Stupid code to slice out the version string.
   int c, l = strlen(OPENSSL_VERSION_TEXT);
@@ -2379,7 +2379,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
     }
   }
   versions->Set(String::NewSymbol("openssl"),
-                String::New(OPENSSL_VERSION_TEXT + i, j - i));
+                String::New(&OPENSSL_VERSION_TEXT[i], j - i));
 #endif
 
 
@@ -2509,7 +2509,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 
   NODE_SET_METHOD(process, "binding", Binding);
 
-  NODE_SET_METHOD(process, "_usingDomains", UsingDomains);
+  NODE_SET_METHOD(process, "_setupDomainUse", SetupDomainUse);
 
   // values use to cross communicate with processNextTick
   Local<Object> info_box = Object::New();
@@ -3145,7 +3145,7 @@ int Start(int argc, char *argv[]) {
   V8::Initialize();
   {
     Locker locker(node_isolate);
-    HandleScope handle_scope;
+    HandleScope handle_scope(node_isolate);
 
     // Create the one and only Context.
     Persistent<Context> context = Context::New();

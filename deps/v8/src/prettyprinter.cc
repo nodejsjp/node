@@ -353,6 +353,12 @@ void PrettyPrinter::VisitAssignment(Assignment* node) {
 }
 
 
+void PrettyPrinter::VisitYield(Yield* node) {
+  Print("yield ");
+  Visit(node->expression());
+}
+
+
 void PrettyPrinter::VisitThrow(Throw* node) {
   Print("throw ");
   Visit(node->exception());
@@ -499,7 +505,7 @@ void PrettyPrinter::Print(const char* format, ...) {
       const int slack = 32;
       int new_size = size_ + (size_ >> 1) + slack;
       char* new_output = NewArray<char>(new_size);
-      memcpy(new_output, output_, pos_);
+      OS::MemCopy(new_output, output_, pos_);
       DeleteArray(output_);
       output_ = new_output;
       size_ = new_size;
@@ -1056,6 +1062,11 @@ void AstPrinter::VisitAssignment(Assignment* node) {
   IndentedScope indent(this, Token::Name(node->op()), node);
   Visit(node->target());
   Visit(node->value());
+}
+
+
+void AstPrinter::VisitYield(Yield* node) {
+  PrintIndentedVisit("YIELD", node->expression());
 }
 
 
