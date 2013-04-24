@@ -355,6 +355,24 @@ stream._read = function(n) {
 * return {Boolean} より多くの追加が実行されるべきかどうか
 
 <!--
+Note: **This function should usually be called by Readable consumers,
+NOT by implementors of Readable subclasses.**  It does not indicate
+the end of a `_read()` transaction in the way that
+`readable.push(chunk)` does.  If you find that you have to call
+`this.unshift(chunk)` in your Readable class, then there's a good
+chance you ought to be using the
+[stream.Transform](#stream_class_stream_transform) class instead.
+-->
+
+注意: **この関数は通常、Readable サブクラスの実装者ではなく、
+Readable の消費者から呼び出されるべきものです。**
+それは `readable.push(chunk)` のように `_read()` トランザクションの終了を
+示すことはありません。
+もし Readable クラスの中で `this.unshift(chunk)` を呼び出す必要性を
+見出したなら、代わりに [stream.Transform](#stream_class_stream_transform) を
+使用すべき可能性があります。
+
+<!--
 This is the corollary of `readable.push(chunk)`.  Rather than putting
 the data at the *end* of the read queue, it puts it at the *front* of
 the read queue.
@@ -365,21 +383,24 @@ the read queue.
 読み込みキューの *先頭* に加えます。
 
 <!--
-This is useful in certain use-cases where a stream is being consumed
-by a parser, which needs to "un-consume" some data that it has
-optimistically pulled out of the source.
+This is useful in certain cases where a stream is being consumed by a
+parser, which needs to "un-consume" some data that it has
+optimistically pulled out of the source, so that the stream can be
+passed on to some other party.
 -->
 
-これはストリームがパーサによって消費されるユースケースにおいて有用です。
-それはソースから楽観的に取り出したデータを「消費しなかったことにする」
-場合に必要です。
+これはストリームがパーサによって消費されるケースにおいて有用です。
+それはソースから楽観的に取り出したデータを「消費しなかった」ことにして、
+ストリームが他のところにデータを渡せるようにする場合に必要です。
 
 ```javascript
 // A parser for a simple data protocol.
 // The "header" is a JSON object, followed by 2 \n characters, and
 // then a message body.
 //
-// Note: This can be done more simply as a Transform stream.  See below.
+// NOTE: This can be done more simply as a Transform stream!
+// Using Readable directly for this is sub-optimal.  See the
+// alternative example below under the Transform section.
 
 function SimpleProtocol(source, options) {
   if (!(this instanceof SimpleProtocol))

@@ -1962,7 +1962,8 @@ Handle<Value> Connection::GetNegotiatedProto(const Arguments& args) {
       return False();
     }
 
-    return String::New((const char*) npn_proto, npn_proto_len);
+    return scope.Close(String::New(reinterpret_cast<const char*>(npn_proto),
+                                   npn_proto_len));
   } else {
     return ss->selectedNPNProto_;
   }
@@ -3008,15 +3009,15 @@ class Sign : public ObjectWrap {
     unsigned int md_len;
     Local<Value> outString;
 
-    md_len = 8192; // Maximum key size is 8192 bits
-    md_value = new unsigned char[md_len];
-
     ASSERT_IS_BUFFER(args[0]);
     ssize_t len = Buffer::Length(args[0]);
 
     char* buf = new char[len];
     ssize_t written = DecodeWrite(buf, len, args[0], BUFFER);
     assert(written == len);
+
+    md_len = 8192; // Maximum key size is 8192 bits
+    md_value = new unsigned char[md_len];
 
     int r = sign->SignFinal(&md_value, &md_len, buf, len);
     if (r == 0) {
@@ -3241,7 +3242,7 @@ class Verify : public ObjectWrap {
     ssize_t hwritten = DecodeWrite((char*)hbuf, hlen, args[1], BINARY);
     assert(hwritten == hlen);
 
-    int r=-1;
+    int r;
 
     r = verify->VerifyFinal(kbuf, klen, hbuf, hlen);
 

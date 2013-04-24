@@ -19,43 +19,24 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-var assert = require('assert');
-var cp = require('child_process');
-var fs = require('fs');
-var path = require('path');
 var common = require('../common');
-var msg = {test: 'this'};
-var nodePath = process.execPath;
-var copyPath = path.join(common.tmpDir, 'node-copy.exe');
+var assert = require('assert');
 
-if (process.env.FORK) {
-  assert(process.send);
-  assert.equal(process.argv[0], copyPath);
-  process.send(msg);
-  process.exit();
-}
-else {
-  try {
-    fs.unlinkSync(copyPath);
-  }
-  catch (e) {
-    if (e.code !== 'ENOENT') throw e;
-  }
-  fs.writeFileSync(copyPath, fs.readFileSync(nodePath));
-  fs.chmodSync(copyPath, '0755');
+var crypto = require('crypto');
+var stream = require('stream')
+var s = new stream.PassThrough();
+var h = crypto.createHash('sha1');
+var expect = '15987e60950cf22655b9323bc1e281f9c4aff47e';
+var gotData = false;
 
-  // slow but simple
-  var envCopy = JSON.parse(JSON.stringify(process.env));
-  envCopy.FORK = 'true';
-  var child = require('child_process').fork(__filename, {
-    execPath: copyPath,
-    env: envCopy
-  });
-  child.on('message', common.mustCall(function(recv) {
-    assert.deepEqual(msg, recv);
-  }));
-  child.on('exit', common.mustCall(function(code) {
-    fs.unlinkSync(copyPath);
-    assert.equal(code, 0);
-  }));
-}
+process.on('exit', function() {
+  assert(gotData);
+  console.log('ok');
+});
+
+s.pipe(h).on('data', function(c) {
+  assert.equal(c, expect);
+  gotData = true;
+}).setEncoding('hex');
+
+s.end('aoeu');
