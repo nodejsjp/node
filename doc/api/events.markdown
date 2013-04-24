@@ -27,11 +27,15 @@ there aren't any strict restrictions on that, as any string will be accepted.
 
 <!--
 Functions can then be attached to objects, to be executed when an event
-is emitted. These functions are called _listeners_.
+is emitted. These functions are called _listeners_. Inside a listener
+function, `this` refers to the `EventEmitter` that the listener was
+attached to.
 -->
 
 関数をオブジェクトにアタッチすることができ、それはイベントが生成された時に実行されます。
 これらの関数は*リスナー*と呼ばれます。
+リスナ関数の中では、`this` はそのリスナがアタッチされた `EventEmitter`
+を参照します。
 
 
 ## Class: events.EventEmitter
