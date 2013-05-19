@@ -30,6 +30,7 @@
 
 #include "allocation.h"
 #include "arguments.h"
+#include "code-stubs.h"
 #include "ic-inl.h"
 #include "macro-assembler.h"
 #include "objects.h"
@@ -78,6 +79,12 @@ class StubCache {
                               Handle<JSObject> holder);
 
   Handle<Code> FindIC(Handle<Name> name,
+                      Handle<Map> stub_holder_map,
+                      Code::Kind kind,
+                      Code::StubType type,
+                      Code::ExtraICState extra_state = Code::kNoExtraICState);
+
+  Handle<Code> FindIC(Handle<Name> name,
                       Handle<JSObject> stub_holder,
                       Code::Kind kind,
                       Code::StubType type,
@@ -105,7 +112,8 @@ class StubCache {
   Handle<Code> ComputeLoadField(Handle<Name> name,
                                 Handle<JSObject> object,
                                 Handle<JSObject> holder,
-                                PropertyIndex field_index);
+                                PropertyIndex field_index,
+                                Representation representation);
 
   Handle<Code> ComputeLoadCallback(Handle<Name> name,
                                    Handle<JSObject> object,
@@ -140,7 +148,8 @@ class StubCache {
   Handle<Code> ComputeKeyedLoadField(Handle<Name> name,
                                      Handle<JSObject> object,
                                      Handle<JSObject> holder,
-                                     PropertyIndex field_index);
+                                     PropertyIndex field_index,
+                                     Representation representation);
 
   Handle<Code> ComputeKeyedLoadCallback(
       Handle<Name> name,
@@ -271,6 +280,12 @@ class StubCache {
 
   // ---
 
+  Handle<Code> ComputeCompareNil(Handle<Map> receiver_map,
+                                 NilValue nil,
+                                 CompareNilICStub::Types types);
+
+  // ---
+
   Handle<Code> ComputeLoadElementPolymorphic(MapHandleList* receiver_maps);
   Handle<Code> ComputeStoreElementPolymorphic(MapHandleList* receiver_maps,
                                               KeyedAccessStoreMode store_mode,
@@ -278,6 +293,7 @@ class StubCache {
 
   Handle<Code> ComputePolymorphicIC(MapHandleList* receiver_maps,
                                     CodeHandleList* handlers,
+                                    int number_of_valid_maps,
                                     Handle<Name> name);
 
   // Finds the Code object stored in the Heap::non_monomorphic_cache().
@@ -297,7 +313,7 @@ class StubCache {
 
   // Collect all maps that match the name and flags.
   void CollectMatchingMaps(SmallMapList* types,
-                           Name* name,
+                           Handle<Name> name,
                            Code::Flags flags,
                            Handle<Context> native_context,
                            Zone* zone);
@@ -492,13 +508,9 @@ class StubCompiler BASE_EMBEDDED {
   static void GenerateFastPropertyLoad(MacroAssembler* masm,
                                        Register dst,
                                        Register src,
-                                       Handle<JSObject> holder,
-                                       PropertyIndex index);
-  static void DoGenerateFastPropertyLoad(MacroAssembler* masm,
-                                         Register dst,
-                                         Register src,
-                                         bool inobject,
-                                         int index);
+                                       bool inobject,
+                                       int index,
+                                       Representation representation);
 
   static void GenerateLoadArrayLength(MacroAssembler* masm,
                                       Register receiver,
@@ -528,8 +540,10 @@ class StubCompiler BASE_EMBEDDED {
                                Register value_reg,
                                Register scratch1,
                                Register scratch2,
+                               Register scratch3,
                                Label* miss_label,
-                               Label* miss_restore_name);
+                               Label* miss_restore_name,
+                               Label* slow);
 
   void GenerateStoreField(MacroAssembler* masm,
                           Handle<JSObject> object,
@@ -550,6 +564,14 @@ class StubCompiler BASE_EMBEDDED {
       default: UNREACHABLE();
     }
     return Builtins::kLoadIC_Miss;
+  }
+  static Builtins::Name SlowBuiltin(Code::Kind kind) {
+    switch (kind) {
+      case Code::STORE_IC: return Builtins::kStoreIC_Slow;
+      case Code::KEYED_STORE_IC: return Builtins::kKeyedStoreIC_Slow;
+      default: UNREACHABLE();
+    }
+    return Builtins::kStoreIC_Slow;
   }
   static void TailCallBuiltin(MacroAssembler* masm, Builtins::Name name);
 
@@ -629,7 +651,8 @@ class BaseLoadStubCompiler: public StubCompiler {
   Handle<Code> CompileLoadField(Handle<JSObject> object,
                                 Handle<JSObject> holder,
                                 Handle<Name> name,
-                                PropertyIndex index);
+                                PropertyIndex index,
+                                Representation representation);
 
   Handle<Code> CompileLoadCallback(Handle<JSObject> object,
                                    Handle<JSObject> holder,
@@ -681,7 +704,8 @@ class BaseLoadStubCompiler: public StubCompiler {
 
   void GenerateLoadField(Register reg,
                          Handle<JSObject> holder,
-                         PropertyIndex index);
+                         PropertyIndex field,
+                         Representation representation);
   void GenerateLoadConstant(Handle<JSFunction> value);
   void GenerateLoadCallback(Register reg,
                             Handle<ExecutableAccessorInfo> callback);

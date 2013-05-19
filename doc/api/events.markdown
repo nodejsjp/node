@@ -27,12 +27,15 @@ there aren't any strict restrictions on that, as any string will be accepted.
 
 <!--
 Functions can then be attached to objects, to be executed when an event
-is emitted. These functions are called _listeners_.
+is emitted. These functions are called _listeners_. Inside a listener
+function, `this` refers to the `EventEmitter` that the listener was
+attached to.
 -->
 
 関数をオブジェクトにアタッチすることができ、それはイベントが生成された時に実行されます。
-これらの関数は*リスナー*と呼ばれます。
-
+これらの関数は*リスナ*と呼ばれます。
+リスナ関数の中では、`this` はリスナがアタッチされている `EventEmitter`
+を参照します。
 
 ## Class: events.EventEmitter
 
@@ -74,6 +77,12 @@ Adds a listener to the end of the listeners array for the specified event.
       console.log('someone connected!');
     });
 
+<!--
+Returns emitter, so calls can be chained.
+-->
+
+EventEmitter 自身を返すので、呼び出しをチェーンすることができます。
+
 ### emitter.once(event, listener)
 
 <!--
@@ -88,6 +97,12 @@ it is removed.
     server.once('connection', function (stream) {
       console.log('Ah, we have our first user!');
     });
+
+<!--
+Returns emitter, so calls can be chained.
+-->
+
+EventEmitter 自身を返すので、呼び出しをチェーンすることができます。
 
 ### emitter.removeListener(event, listener)
 
@@ -106,6 +121,11 @@ Remove a listener from the listener array for the specified event.
     // ...
     server.removeListener('connection', callback);
 
+<!--
+Returns emitter, so calls can be chained.
+-->
+
+EventEmitter 自身を返すので、呼び出しをチェーンすることができます。
 
 ### emitter.removeAllListeners([event])
 
@@ -115,20 +135,54 @@ Removes all listeners, or those of the specified event.
 
 全てのリスナーまたは指定されたイベントに対するリスナーを削除します。
 
+<!--
+Returns emitter, so calls can be chained.
+-->
+
+EventEmitter 自身を返すので、呼び出しをチェーンすることができます。
+
 ### emitter.setMaxListeners(n)
 
 <!--
 By default EventEmitters will print a warning if more than 10 listeners are
-added for a particular event. This is a useful default which helps finding memory leaks.
-Obviously not all Emitters should be limited to 10. This function allows
-that to be increased. Set to zero for unlimited.
+added for a particular event. This is a useful default which helps finding
+memory leaks. Obviously not all Emitters should be limited to 10. This function
+allows that to be increased. Set to zero for unlimited.
 -->
 
-デフォルトでは、EventEmitter は 10 を越えるリスナが特定のイベントに追加されると警告を出力します。
+デフォルトでは、10 を越えるリスナが特定のイベントに追加されると、
+EventEmitter は警告を出力します。
 これはメモリリークを見つけるために役に立つデフォルト値です。
-全ての EventEmitter が 10 に制限されなければならないわけではないことは明らかです。
-この関数は制限を増やすことを許可します。
+全ての EventEmitter が 10 に制限されなければならないわけではないことは
+明らかです。この関数は制限を増やすことを許可します。
 0 を設定すると無制限になります。
+
+<!--
+Returns emitter, so calls can be chained.
+-->
+
+EventEmitter 自身を返すので、呼び出しをチェーンすることができます。
+
+### EventEmitter.defaultMaxListeners
+
+<!--
+`emitter.setMaxListeners(n)` sets the maximum on a per-instance basis.
+This class property lets you set it for *all* `EventEmitter` instances,
+current and future, effective immediately. Use with care.
+-->
+
+`emitter.setMaxListeners(n)` はインスタンス毎の上限を設定します。
+このクラスプロパティは、現在と将来の *全ての* `EventEmitter`
+インスタンスの上限を即座に設定します。
+注意して使用してください。
+
+<!--
+Note that `emitter.setMaxListeners(n)` still has precedence over
+`EventEmitter.defaultMaxListeners`.
+-->
+
+`emitter.setMaxListeners(n)` は `EventEmitter.defaultMaxListeners` よりも
+優先されることに注意してください。
 
 ### emitter.listeners(event)
 
@@ -151,6 +205,12 @@ Execute each of the listeners in order with the supplied arguments.
 -->
 
 提供された引数の並びでそれぞれのリスナーを実行します。
+
+<!--
+Returns `true` if event had listeners, `false` otherwise.
+-->
+
+イベントに対応するリスナがあった場合は `true`、それ以外は `false` を返します。
 
 
 ### Class Method: EventEmitter.listenerCount(emitter, event)

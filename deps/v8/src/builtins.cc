@@ -194,57 +194,58 @@ BUILTIN(EmptyFunction) {
 }
 
 
-#define CONVERT_ARG_STUB_CALLER_ARGS(name)                           \
-  Arguments* name = reinterpret_cast<Arguments*>(args[0]);
-
-
 RUNTIME_FUNCTION(MaybeObject*, ArrayConstructor_StubFailure) {
-  CONVERT_ARG_STUB_CALLER_ARGS(caller_args);
-  // ASSERT(args.length() == 3);
-  Handle<JSFunction> function = args.at<JSFunction>(1);
-  Handle<Object> type_info = args.at<Object>(2);
+  // If we get 2 arguments then they are the stub parameters (constructor, type
+  // info).  If we get 3, then the first one is a pointer to the arguments
+  // passed by the caller.
+  Arguments empty_args(0, NULL);
+  bool no_caller_args = args.length() == 2;
+  ASSERT(no_caller_args || args.length() == 3);
+  int parameters_start = no_caller_args ? 0 : 1;
+  Arguments* caller_args = no_caller_args
+      ? &empty_args
+      : reinterpret_cast<Arguments*>(args[0]);
+  Handle<JSFunction> constructor = args.at<JSFunction>(parameters_start);
+  Handle<Object> type_info = args.at<Object>(parameters_start + 1);
 
-  JSArray* array = NULL;
   bool holey = false;
   if (caller_args->length() == 1 && (*caller_args)[0]->IsSmi()) {
     int value = Smi::cast((*caller_args)[0])->value();
     holey = (value > 0 && value < JSObject::kInitialMaxFastElementArray);
   }
 
+  JSArray* array;
   MaybeObject* maybe_array;
-  if (*type_info != isolate->heap()->undefined_value()) {
+  if (*type_info != isolate->heap()->undefined_value() &&
+      JSGlobalPropertyCell::cast(*type_info)->value()->IsSmi()) {
     JSGlobalPropertyCell* cell = JSGlobalPropertyCell::cast(*type_info);
-    if (cell->value()->IsSmi()) {
-      Smi* smi = Smi::cast(cell->value());
-      ElementsKind to_kind = static_cast<ElementsKind>(smi->value());
-      if (holey && !IsFastHoleyElementsKind(to_kind)) {
-        to_kind = GetHoleyElementsKind(to_kind);
-        // Update the allocation site info to reflect the advice alteration.
-        cell->set_value(Smi::FromInt(to_kind));
-      }
+    Smi* smi = Smi::cast(cell->value());
+    ElementsKind to_kind = static_cast<ElementsKind>(smi->value());
+    if (holey && !IsFastHoleyElementsKind(to_kind)) {
+      to_kind = GetHoleyElementsKind(to_kind);
+      // Update the allocation site info to reflect the advice alteration.
+      cell->set_value(Smi::FromInt(to_kind));
+    }
 
-      AllocationSiteMode mode = AllocationSiteInfo::GetMode(to_kind);
-      if (mode == TRACK_ALLOCATION_SITE) {
-        maybe_array = isolate->heap()->AllocateEmptyJSArrayWithAllocationSite(
-            to_kind, type_info);
-      } else {
-        maybe_array = isolate->heap()->AllocateEmptyJSArray(to_kind);
-      }
-      if (!maybe_array->To(&array)) return maybe_array;
+    maybe_array = isolate->heap()->AllocateJSObjectWithAllocationSite(
+        *constructor, type_info);
+    if (!maybe_array->To(&array)) return maybe_array;
+  } else {
+    ElementsKind kind = constructor->initial_map()->elements_kind();
+    ASSERT(kind == GetInitialFastElementsKind());
+    maybe_array = isolate->heap()->AllocateJSObject(*constructor);
+    if (!maybe_array->To(&array)) return maybe_array;
+    // We might need to transition to holey
+    if (holey) {
+      kind = GetHoleyElementsKind(kind);
+      maybe_array = array->TransitionElementsKind(kind);
+      if (maybe_array->IsFailure()) return maybe_array;
     }
   }
 
-  ASSERT(function->has_initial_map());
-  ElementsKind kind = function->initial_map()->elements_kind();
-  if (holey) {
-    kind = GetHoleyElementsKind(kind);
-  }
-
-  if (array == NULL) {
-    maybe_array = isolate->heap()->AllocateEmptyJSArray(kind);
-    if (!maybe_array->To(&array)) return maybe_array;
-  }
-
+  maybe_array = isolate->heap()->AllocateJSArrayStorage(array, 0, 0,
+      DONT_INITIALIZE_ARRAY_ELEMENTS);
+  if (maybe_array->IsFailure()) return maybe_array;
   maybe_array = ArrayConstructInitializeElements(array, caller_args);
   if (maybe_array->IsFailure()) return maybe_array;
   return array;
@@ -942,7 +943,7 @@ BUILTIN(ArraySplice) {
       if (start < kMinInt || start > kMaxInt) {
         return CallJsBuiltin(isolate, "ArraySplice", args);
       }
-      relative_start = static_cast<int>(start);
+      relative_start = std::isnan(start) ? 0 : static_cast<int>(start);
     } else if (!arg1->IsUndefined()) {
       return CallJsBuiltin(isolate, "ArraySplice", args);
     }
@@ -1329,7 +1330,7 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallHelper(
     v8::Handle<v8::Value> value;
     {
       // Leaving JavaScript.
-      VMState state(isolate, EXTERNAL);
+      VMState<EXTERNAL> state(isolate);
       ExternalCallbackScope call_scope(isolate,
                                        v8::ToCData<Address>(callback_obj));
       value = callback(new_args);
@@ -1406,7 +1407,7 @@ MUST_USE_RESULT static MaybeObject* HandleApiCallAsFunctionOrConstructor(
     v8::Handle<v8::Value> value;
     {
       // Leaving JavaScript.
-      VMState state(isolate, EXTERNAL);
+      VMState<EXTERNAL> state(isolate);
       ExternalCallbackScope call_scope(isolate,
                                        v8::ToCData<Address>(callback_obj));
       value = callback(new_args);
@@ -1509,6 +1510,11 @@ static void Generate_KeyedLoadIC_IndexedInterceptor(MacroAssembler* masm) {
 static void Generate_KeyedLoadIC_NonStrictArguments(MacroAssembler* masm) {
   KeyedLoadIC::GenerateNonStrictArguments(masm);
 }
+
+static void Generate_StoreIC_Slow(MacroAssembler* masm) {
+  StoreIC::GenerateSlow(masm);
+}
+
 
 static void Generate_StoreIC_Initialize(MacroAssembler* masm) {
   StoreIC::GenerateInitialize(masm);
@@ -1624,6 +1630,11 @@ static void Generate_KeyedLoadIC_DebugBreak(MacroAssembler* masm) {
 
 static void Generate_KeyedStoreIC_DebugBreak(MacroAssembler* masm) {
   Debug::GenerateKeyedStoreICDebugBreak(masm);
+}
+
+
+static void Generate_CompareNilIC_DebugBreak(MacroAssembler* masm) {
+  Debug::GenerateCompareNilICDebugBreak(masm);
 }
 
 

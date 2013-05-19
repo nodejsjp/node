@@ -25,9 +25,11 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include "v8.h"
 #include "hydrogen.h"
 
+#include <algorithm>
+
+#include "v8.h"
 #include "codegen.h"
 #include "full-codegen.h"
 #include "hashmap.h"
@@ -113,11 +115,10 @@ void HBasicBlock::AddInstruction(HInstruction* instr) {
   ASSERT(!IsStartBlock() || !IsFinished());
   ASSERT(!instr->IsLinked());
   ASSERT(!IsFinished());
-  // Make sure that we never add instructions without knowing
-  // what the previous ast id is.
-  ASSERT(instr->IsSimulate() || instr->IsGoto() ||
-         !last_environment()->previous_ast_id().IsNone());
+
   if (first_ == NULL) {
+    ASSERT(last_environment() != NULL);
+    ASSERT(!last_environment()->ast_id().IsNone());
     HBlockEntry* entry = new(zone()) HBlockEntry();
     entry->InitializeAsFirst(this);
     first_ = last_ = entry;
@@ -184,7 +185,9 @@ void HBasicBlock::Finish(HControlInstruction* end) {
 }
 
 
-void HBasicBlock::Goto(HBasicBlock* block, FunctionState* state) {
+void HBasicBlock::Goto(HBasicBlock* block,
+                       FunctionState* state,
+                       bool add_simulate) {
   bool drop_extra = state != NULL &&
       state->inlining_kind() == DROP_EXTRA_ON_RETURN;
 
@@ -193,7 +196,7 @@ void HBasicBlock::Goto(HBasicBlock* block, FunctionState* state) {
     last_environment_ = last_environment()->DiscardInlined(drop_extra);
   }
 
-  AddSimulate(BailoutId::None());
+  if (add_simulate) AddSimulate(BailoutId::None());
   HGoto* instr = new(zone()) HGoto(block);
   Finish(instr);
 }
@@ -215,12 +218,10 @@ void HBasicBlock::AddLeaveInlined(HValue* return_value,
 }
 
 
-void HBasicBlock::SetInitialEnvironment(HEnvironment* env,
-                                        BailoutId previous_ast_id) {
+void HBasicBlock::SetInitialEnvironment(HEnvironment* env) {
   ASSERT(!HasEnvironment());
   ASSERT(first() == NULL);
   UpdateEnvironment(env);
-  env->set_previous_ast_id(previous_ast_id);
 }
 
 
@@ -236,11 +237,7 @@ void HBasicBlock::SetJoinId(BailoutId ast_id) {
             predecessor->last_environment()->closure()->shared()
               ->VerifyBailoutId(ast_id)));
     simulate->set_ast_id(ast_id);
-  }
-  HEnvironment* last_environment = this->last_environment();
-  ASSERT(last_environment || IsFinished());
-  if (last_environment != NULL) {
-    last_environment->set_previous_ast_id(ast_id);
+    predecessor->last_environment()->set_ast_id(ast_id);
   }
 }
 
@@ -301,9 +298,7 @@ void HBasicBlock::RegisterPredecessor(HBasicBlock* pred) {
     }
   } else if (!HasEnvironment() && !IsFinished()) {
     ASSERT(!IsLoopHeader());
-    HEnvironment* new_env = pred->last_environment()->Copy();
-    SetInitialEnvironment(new_env,
-                          pred->last_environment()->previous_ast_id());
+    SetInitialEnvironment(pred->last_environment()->Copy());
   }
 
   predecessors_.Add(pred, zone());
@@ -516,9 +511,8 @@ class ReachabilityAnalyzer BASE_EMBEDDED {
 
 
 void HGraph::Verify(bool do_full_verify) const {
-  // Allow dereferencing for debug mode verification.
-  HandleDereferenceGuard allow_handle_deref(isolate(),
-                                            HandleDereferenceGuard::ALLOW);
+  Heap::RelocationLock(isolate()->heap());
+  ALLOW_HANDLE_DEREF(isolate(), "debug mode verification");
   for (int i = 0; i < blocks_.length(); i++) {
     HBasicBlock* block = blocks_.at(i);
 
@@ -552,6 +546,18 @@ void HGraph::Verify(bool do_full_verify) const {
     for (int j = 0; j < block->phis()->length(); j++) {
       HPhi* phi = block->phis()->at(j);
       phi->Verify();
+    }
+
+    // Check that all join blocks have predecessors that end with an
+    // unconditional goto and agree on their environment node id.
+    if (block->predecessors()->length() >= 2) {
+      BailoutId id =
+          block->predecessors()->first()->last_environment()->ast_id();
+      for (int k = 0; k < block->predecessors()->length(); k++) {
+        HBasicBlock* predecessor = block->predecessors()->at(k);
+        ASSERT(predecessor->end()->IsGoto());
+        ASSERT(predecessor->last_environment()->ast_id() == id);
+      }
     }
   }
 
@@ -598,6 +604,19 @@ HConstant* HGraph::GetConstantInt32(SetOncePointer<HConstant>* pointer,
 }
 
 
+HConstant* HGraph::GetConstantSmi(SetOncePointer<HConstant>* pointer,
+                                  int32_t value) {
+  if (!pointer->is_set()) {
+    HConstant* constant =
+        new(zone()) HConstant(Handle<Object>(Smi::FromInt(value), isolate()),
+                              Representation::Tagged());
+    constant->InsertAfter(GetConstantUndefined());
+    pointer->set(constant);
+  }
+  return pointer->get();
+}
+
+
 HConstant* HGraph::GetConstant0() {
   return GetConstantInt32(&constant_0_, 0);
 }
@@ -622,6 +641,7 @@ HConstant* HGraph::GetConstant##Name() {                                       \
         Representation::Tagged(),                                              \
         htype,                                                                 \
         false,                                                                 \
+        true,                                                                  \
         boolean_value);                                                        \
     constant->InsertAfter(GetConstantUndefined());                             \
     constant_##name##_.set(constant);                                          \
@@ -633,72 +653,20 @@ HConstant* HGraph::GetConstant##Name() {                                       \
 DEFINE_GET_CONSTANT(True, true, HType::Boolean(), true)
 DEFINE_GET_CONSTANT(False, false, HType::Boolean(), false)
 DEFINE_GET_CONSTANT(Hole, the_hole, HType::Tagged(), false)
+DEFINE_GET_CONSTANT(Null, null, HType::Tagged(), false)
+
+
+HConstant* HGraph::GetConstantSmi0() {
+  return GetConstantSmi(&constant_smi_0_, 0);
+}
+
+
+HConstant* HGraph::GetConstantSmi1() {
+  return GetConstantSmi(&constant_smi_1_, 1);
+}
+
 
 #undef DEFINE_GET_CONSTANT
-
-
-HGraphBuilder::CheckBuilder::CheckBuilder(HGraphBuilder* builder)
-    : builder_(builder),
-      finished_(false),
-      id_(builder->current_block()->last_environment()->previous_ast_id()) {
-  HEnvironment* env = builder->environment();
-  failure_block_ = builder->CreateBasicBlock(env->CopyWithoutHistory(), id_);
-  merge_block_ = builder->CreateBasicBlock(env->CopyWithoutHistory(), id_);
-}
-
-
-HValue* HGraphBuilder::CheckBuilder::CheckNotUndefined(HValue* value) {
-  HEnvironment* env = builder_->environment();
-  HIsNilAndBranch* compare =
-      new(zone()) HIsNilAndBranch(value, kStrictEquality, kUndefinedValue);
-  HBasicBlock* success_block =
-      builder_->CreateBasicBlock(env->CopyWithoutHistory(), id_);
-  HBasicBlock* failure_block =
-      builder_->CreateBasicBlock(env->CopyWithoutHistory(), id_);
-  compare->SetSuccessorAt(0, failure_block);
-  compare->SetSuccessorAt(1, success_block);
-  failure_block->Goto(failure_block_);
-  builder_->current_block()->Finish(compare);
-  builder_->set_current_block(success_block);
-  return compare;
-}
-
-
-HValue* HGraphBuilder::CheckBuilder::CheckIntegerCompare(HValue* left,
-                                                         HValue* right,
-                                                         Token::Value op) {
-  HEnvironment* env = builder_->environment();
-  HCompareIDAndBranch* compare =
-      new(zone()) HCompareIDAndBranch(left, right, op);
-  compare->AssumeRepresentation(Representation::Integer32());
-  HBasicBlock* success_block =
-      builder_->CreateBasicBlock(env->CopyWithoutHistory(), id_);
-  HBasicBlock* failure_block =
-      builder_->CreateBasicBlock(env->CopyWithoutHistory(), id_);
-  compare->SetSuccessorAt(0, success_block);
-  compare->SetSuccessorAt(1, failure_block);
-  failure_block->Goto(failure_block_);
-  builder_->current_block()->Finish(compare);
-  builder_->set_current_block(success_block);
-  return compare;
-}
-
-
-HValue* HGraphBuilder::CheckBuilder::CheckIntegerEq(HValue* left,
-                                                    HValue* right) {
-  return CheckIntegerCompare(left, right, Token::EQ);
-}
-
-
-void HGraphBuilder::CheckBuilder::End() {
-  ASSERT(!finished_);
-  builder_->current_block()->Goto(merge_block_);
-  failure_block_->SetJoinId(id_);
-  failure_block_->FinishExitWithDeoptimization(HDeoptimize::kUseAll);
-  builder_->set_current_block(merge_block_);
-  merge_block_->SetJoinId(id_);
-  finished_ = true;
-}
 
 
 HConstant* HGraph::GetInvalidContext() {
@@ -706,19 +674,47 @@ HConstant* HGraph::GetInvalidContext() {
 }
 
 
-HGraphBuilder::IfBuilder::IfBuilder(HGraphBuilder* builder)
+HGraphBuilder::IfBuilder::IfBuilder(HGraphBuilder* builder, int position)
     : builder_(builder),
+      position_(position),
       finished_(false),
+      did_then_(false),
       did_else_(false),
-      id_(builder->current_block()->last_environment()->previous_ast_id()) {
+      did_and_(false),
+      did_or_(false),
+      captured_(false),
+      needs_compare_(true),
+      split_edge_merge_block_(NULL) {
   HEnvironment* env = builder->environment();
-  first_true_block_ = builder->CreateBasicBlock(env->Copy(), id_);
+  first_true_block_ = builder->CreateBasicBlock(env->Copy());
   last_true_block_ = NULL;
-  first_false_block_ = builder->CreateBasicBlock(env->Copy(), id_);
+  first_false_block_ = builder->CreateBasicBlock(env->Copy());
 }
 
 
-HInstruction* HGraphBuilder::IfBuilder::BeginIf(
+HGraphBuilder::IfBuilder::IfBuilder(
+    HGraphBuilder* builder,
+    HIfContinuation* continuation)
+    : builder_(builder),
+      position_(RelocInfo::kNoPosition),
+      finished_(false),
+      did_then_(false),
+      did_else_(false),
+      did_and_(false),
+      did_or_(false),
+      captured_(false),
+      needs_compare_(false),
+      first_true_block_(NULL),
+      first_false_block_(NULL),
+      split_edge_merge_block_(NULL),
+      merge_block_(NULL) {
+  continuation->Continue(&first_true_block_,
+                         &first_false_block_,
+                         &position_);
+}
+
+
+HInstruction* HGraphBuilder::IfBuilder::IfCompare(
     HValue* left,
     HValue* right,
     Token::Value token,
@@ -728,58 +724,161 @@ HInstruction* HGraphBuilder::IfBuilder::BeginIf(
   compare->set_observed_input_representation(input_representation,
                                              input_representation);
   compare->ChangeRepresentation(input_representation);
-  compare->SetSuccessorAt(0, first_true_block_);
-  compare->SetSuccessorAt(1, first_false_block_);
-  builder_->current_block()->Finish(compare);
-  builder_->set_current_block(first_true_block_);
+  AddCompare(compare);
   return compare;
 }
 
 
-HInstruction* HGraphBuilder::IfBuilder::BeginIfObjectsEqual(
-    HValue* left,
-    HValue* right) {
-  HCompareObjectEqAndBranch* compare =
-      new(zone()) HCompareObjectEqAndBranch(left, right);
-  compare->SetSuccessorAt(0, first_true_block_);
-  compare->SetSuccessorAt(1, first_false_block_);
-  builder_->current_block()->Finish(compare);
-  builder_->set_current_block(first_true_block_);
+HInstruction* HGraphBuilder::IfBuilder::IfCompareMap(HValue* left,
+                                                     Handle<Map> map) {
+  HCompareMap* compare =
+      new(zone()) HCompareMap(left, map,
+                              first_true_block_, first_false_block_);
+  AddCompare(compare);
   return compare;
 }
 
 
-HInstruction* HGraphBuilder::IfBuilder::BeginIfMapEquals(HValue* value,
-                                                         Handle<Map> map) {
-  HCompareMap* compare = new(zone())
-      HCompareMap(value, map, first_true_block_, first_false_block_);
+void HGraphBuilder::IfBuilder::AddCompare(HControlInstruction* compare) {
+  if (split_edge_merge_block_ != NULL) {
+    HEnvironment* env = first_false_block_->last_environment();
+    HBasicBlock* split_edge =
+        builder_->CreateBasicBlock(env->Copy());
+    if (did_or_) {
+      compare->SetSuccessorAt(0, split_edge);
+      compare->SetSuccessorAt(1, first_false_block_);
+    } else {
+      compare->SetSuccessorAt(0, first_true_block_);
+      compare->SetSuccessorAt(1, split_edge);
+    }
+    split_edge->GotoNoSimulate(split_edge_merge_block_);
+  } else {
+    compare->SetSuccessorAt(0, first_true_block_);
+    compare->SetSuccessorAt(1, first_false_block_);
+  }
   builder_->current_block()->Finish(compare);
-  builder_->set_current_block(first_true_block_);
-  return compare;
+  needs_compare_ = false;
 }
 
 
-void HGraphBuilder::IfBuilder::BeginElse() {
+void HGraphBuilder::IfBuilder::Or() {
+  ASSERT(!did_and_);
+  did_or_ = true;
+  HEnvironment* env = first_false_block_->last_environment();
+  if (split_edge_merge_block_ == NULL) {
+    split_edge_merge_block_ =
+        builder_->CreateBasicBlock(env->Copy());
+    first_true_block_->GotoNoSimulate(split_edge_merge_block_);
+    first_true_block_ = split_edge_merge_block_;
+  }
+  builder_->set_current_block(first_false_block_);
+  first_false_block_ = builder_->CreateBasicBlock(env->Copy());
+}
+
+
+void HGraphBuilder::IfBuilder::And() {
+  ASSERT(!did_or_);
+  did_and_ = true;
+  HEnvironment* env = first_false_block_->last_environment();
+  if (split_edge_merge_block_ == NULL) {
+    split_edge_merge_block_ = builder_->CreateBasicBlock(env->Copy());
+    first_false_block_->GotoNoSimulate(split_edge_merge_block_);
+    first_false_block_ = split_edge_merge_block_;
+  }
+  builder_->set_current_block(first_true_block_);
+  first_true_block_ = builder_->CreateBasicBlock(env->Copy());
+}
+
+
+void HGraphBuilder::IfBuilder::CaptureContinuation(
+    HIfContinuation* continuation) {
+  ASSERT(!finished_);
+  ASSERT(!captured_);
+  HBasicBlock* true_block = last_true_block_ == NULL
+      ? first_true_block_
+      : last_true_block_;
+  HBasicBlock* false_block = did_else_ && (first_false_block_ != NULL)
+      ? builder_->current_block()
+      : first_false_block_;
+  continuation->Capture(true_block, false_block, position_);
+  captured_ = true;
+  End();
+}
+
+
+void HGraphBuilder::IfBuilder::Then() {
+  ASSERT(!captured_);
+  ASSERT(!finished_);
+  did_then_ = true;
+  if (needs_compare_) {
+    // Handle if's without any expressions, they jump directly to the "else"
+    // branch.
+    builder_->current_block()->GotoNoSimulate(first_false_block_);
+    first_true_block_ = NULL;
+  }
+  builder_->set_current_block(first_true_block_);
+}
+
+
+void HGraphBuilder::IfBuilder::Else() {
+  ASSERT(did_then_);
+  ASSERT(!captured_);
+  ASSERT(!finished_);
   last_true_block_ = builder_->current_block();
-  ASSERT(!last_true_block_->IsFinished());
+  ASSERT(first_true_block_ == NULL || !last_true_block_->IsFinished());
   builder_->set_current_block(first_false_block_);
   did_else_ = true;
 }
 
 
+void HGraphBuilder::IfBuilder::Deopt() {
+  HBasicBlock* block = builder_->current_block();
+  block->FinishExitWithDeoptimization(HDeoptimize::kUseAll);
+  if (did_else_) {
+    first_false_block_ = NULL;
+  } else {
+    first_true_block_ = NULL;
+  }
+}
+
+
+void HGraphBuilder::IfBuilder::Return(HValue* value) {
+  HBasicBlock* block = builder_->current_block();
+  block->Finish(new(zone()) HReturn(value,
+                                    builder_->environment()->LookupContext(),
+                                    builder_->graph()->GetConstantMinus1()));
+  if (did_else_) {
+    first_false_block_ = NULL;
+  } else {
+    first_true_block_ = NULL;
+  }
+}
+
+
 void HGraphBuilder::IfBuilder::End() {
-  ASSERT(!finished_);
-  if (!did_else_) BeginElse();
-  ASSERT(!last_true_block_->IsFinished());
-  HBasicBlock* last_false_block = builder_->current_block();
-  ASSERT(!last_false_block->IsFinished());
-  HEnvironment* merge_env =
-      last_true_block_->last_environment()->CopyWithoutHistory();
-  merge_block_ = builder_->CreateBasicBlock(merge_env, id_);
-  last_true_block_->Goto(merge_block_);
-  last_false_block->Goto(merge_block_);
-  merge_block_->SetJoinId(id_);
-  builder_->set_current_block(merge_block_);
+  if (!captured_) {
+    ASSERT(did_then_);
+    if (!did_else_) {
+      last_true_block_ = builder_->current_block();
+    }
+    if (first_true_block_ == NULL) {
+      // Deopt on true. Nothing to do, just continue the false block.
+    } else if (first_false_block_ == NULL) {
+      // Deopt on false. Nothing to do except switching to the true block.
+      builder_->set_current_block(last_true_block_);
+    } else {
+      HEnvironment* merge_env = last_true_block_->last_environment()->Copy();
+      merge_block_ = builder_->CreateBasicBlock(merge_env);
+      ASSERT(!finished_);
+      if (!did_else_) Else();
+      ASSERT(!last_true_block_->IsFinished());
+      HBasicBlock* last_false_block = builder_->current_block();
+      ASSERT(!last_false_block->IsFinished());
+      last_true_block_->GotoNoSimulate(merge_block_);
+      last_false_block->GotoNoSimulate(merge_block_);
+      builder_->set_current_block(merge_block_);
+    }
+  }
   finished_ = true;
 }
 
@@ -790,9 +889,8 @@ HGraphBuilder::LoopBuilder::LoopBuilder(HGraphBuilder* builder,
     : builder_(builder),
       context_(context),
       direction_(direction),
-      id_(builder->current_block()->last_environment()->previous_ast_id()),
       finished_(false) {
-  header_block_ = builder->CreateLoopHeaderBlock(id_);
+  header_block_ = builder->CreateLoopHeaderBlock();
   body_block_ = NULL;
   exit_block_ = NULL;
 }
@@ -809,12 +907,12 @@ HValue* HGraphBuilder::LoopBuilder::BeginBody(
   phi_->AddInput(initial);
   phi_->ChangeRepresentation(Representation::Integer32());
   env->Push(initial);
-  builder_->current_block()->Goto(header_block_);
+  builder_->current_block()->GotoNoSimulate(header_block_);
 
   HEnvironment* body_env = env->Copy();
   HEnvironment* exit_env = env->Copy();
-  body_block_ = builder_->CreateBasicBlock(body_env, id_);
-  exit_block_ = builder_->CreateBasicBlock(exit_env, id_);
+  body_block_ = builder_->CreateBasicBlock(body_env);
+  exit_block_ = builder_->CreateBasicBlock(exit_env);
   // Remove the phi from the expression stack
   body_env->Pop();
 
@@ -863,9 +961,8 @@ void HGraphBuilder::LoopBuilder::EndBody() {
 
   // Push the new increment value on the expression stack to merge into the phi.
   builder_->environment()->Push(increment_);
-  builder_->current_block()->Goto(header_block_);
+  builder_->current_block()->GotoNoSimulate(header_block_);
   header_block_->loop_information()->RegisterBackEdge(body_block_);
-  header_block_->SetJoinId(id_);
 
   builder_->set_current_block(exit_block_);
   // Pop the phi from the expression stack
@@ -900,7 +997,6 @@ void HGraphBuilder::AddSimulate(BailoutId id,
   ASSERT(current_block() != NULL);
   ASSERT(no_side_effects_scope_count_ == 0);
   current_block()->AddSimulate(id, removable);
-  environment()->set_previous_ast_id(id);
 }
 
 
@@ -935,20 +1031,34 @@ HReturn* HGraphBuilder::AddReturn(HValue* value) {
 }
 
 
-HBasicBlock* HGraphBuilder::CreateBasicBlock(HEnvironment* env,
-                                             BailoutId previous_ast_id) {
+HBasicBlock* HGraphBuilder::CreateBasicBlock(HEnvironment* env) {
   HBasicBlock* b = graph()->CreateBasicBlock();
-  b->SetInitialEnvironment(env, previous_ast_id);
+  b->SetInitialEnvironment(env);
   return b;
 }
 
 
-HBasicBlock* HGraphBuilder::CreateLoopHeaderBlock(BailoutId previous_ast_id) {
+HBasicBlock* HGraphBuilder::CreateLoopHeaderBlock() {
   HBasicBlock* header = graph()->CreateBasicBlock();
   HEnvironment* entry_env = environment()->CopyAsLoopHeader(header);
-  header->SetInitialEnvironment(entry_env, previous_ast_id);
+  header->SetInitialEnvironment(entry_env);
   header->AttachLoopInformation();
   return header;
+}
+
+
+HValue* HGraphBuilder::BuildCheckNonSmi(HValue* obj) {
+  HCheckNonSmi* check = new(zone()) HCheckNonSmi(obj);
+  AddInstruction(check);
+  return check;
+}
+
+
+HValue* HGraphBuilder::BuildCheckMap(HValue* obj,
+                                              Handle<Map> map) {
+  HCheckMaps* check = HCheckMaps::New(obj, map, zone());
+  AddInstruction(check);
+  return check;
 }
 
 
@@ -1049,14 +1159,16 @@ HValue* HGraphBuilder::BuildCheckForCapacityGrow(HValue* object,
   Zone* zone = this->zone();
   IfBuilder length_checker(this);
 
-  length_checker.BeginIf(length, key, Token::EQ);
+  length_checker.IfCompare(length, key, Token::EQ);
+  length_checker.Then();
 
   HValue* current_capacity =
       AddInstruction(new(zone) HFixedArrayBaseLength(elements));
 
   IfBuilder capacity_checker(this);
 
-  capacity_checker.BeginIf(length, current_capacity, Token::EQ);
+  capacity_checker.IfCompare(length, current_capacity, Token::EQ);
+  capacity_checker.Then();
 
   HValue* context = environment()->LookupContext();
 
@@ -1068,7 +1180,7 @@ HValue* HGraphBuilder::BuildCheckForCapacityGrow(HValue* object,
                                                    new_capacity);
 
   environment()->Push(new_elements);
-  capacity_checker.BeginElse();
+  capacity_checker.Else();
 
   environment()->Push(elements);
   capacity_checker.End();
@@ -1080,15 +1192,18 @@ HValue* HGraphBuilder::BuildCheckForCapacityGrow(HValue* object,
     new_length->ClearFlag(HValue::kCanOverflow);
 
     Factory* factory = isolate()->factory();
+    Representation representation = IsFastElementsKind(kind)
+        ? Representation::Smi() : Representation::Tagged();
     HInstruction* length_store = AddInstruction(new(zone) HStoreNamedField(
         object,
         factory->length_field_string(),
         new_length, true,
+        representation,
         JSArray::kLengthOffset));
     length_store->SetGVNFlag(kChangesArrayLengths);
   }
 
-  length_checker.BeginElse();
+  length_checker.Else();
 
   AddBoundsCheck(key, length, ALLOW_SMI_KEY);
   environment()->Push(elements);
@@ -1108,19 +1223,19 @@ HValue* HGraphBuilder::BuildCopyElementsOnWrite(HValue* object,
 
   IfBuilder cow_checker(this);
 
-  cow_checker.BeginIfMapEquals(elements,
-                               Handle<Map>(heap->fixed_cow_array_map()));
+  cow_checker.IfCompareMap(elements,
+                           Handle<Map>(heap->fixed_cow_array_map()));
+  cow_checker.Then();
 
   HValue* capacity =
       AddInstruction(new(zone) HFixedArrayBaseLength(elements));
 
   HValue* new_elements = BuildGrowElementsCapacity(object, elements,
-                                                   kind, length,
-                                                   capacity);
+                                                   kind, length, capacity);
 
   environment()->Push(new_elements);
 
-  cow_checker.BeginElse();
+  cow_checker.Else();
 
   environment()->Push(elements);
 
@@ -1156,11 +1271,10 @@ HInstruction* HGraphBuilder::BuildUncheckedMonomorphicElementAccess(
   }
   bool fast_smi_only_elements = IsFastSmiElementsKind(elements_kind);
   bool fast_elements = IsFastObjectElementsKind(elements_kind);
-  HValue* elements =
-      AddInstruction(new(zone) HLoadElements(object, mapcheck));
+  HValue* elements = AddLoadElements(object, mapcheck);
   if (is_store && (fast_elements || fast_smi_only_elements) &&
       store_mode != STORE_NO_TRANSITION_HANDLE_COW) {
-    HCheckMaps* check_cow_map = new(zone) HCheckMaps(
+    HCheckMaps* check_cow_map = HCheckMaps::New(
         elements, isolate()->factory()->fixed_array_map(), zone);
     check_cow_map->ClearGVNFlag(kDependsOnElementsKind);
     AddInstruction(check_cow_map);
@@ -1175,19 +1289,22 @@ HInstruction* HGraphBuilder::BuildUncheckedMonomorphicElementAccess(
   HValue* checked_key = NULL;
   if (IsExternalArrayElementsKind(elements_kind)) {
     if (store_mode == STORE_NO_TRANSITION_IGNORE_OUT_OF_BOUNDS) {
+      NoObservableSideEffectsScope no_effects(this);
       HLoadExternalArrayPointer* external_elements =
           new(zone) HLoadExternalArrayPointer(elements);
       AddInstruction(external_elements);
       IfBuilder length_checker(this);
-      length_checker.BeginIf(key, length, Token::LT);
-      CheckBuilder negative_checker(this);
-      HValue* bounds_check = negative_checker.CheckIntegerCompare(
+      length_checker.IfCompare(key, length, Token::LT);
+      length_checker.Then();
+      IfBuilder negative_checker(this);
+      HValue* bounds_check = negative_checker.IfCompare(
           key, graph()->GetConstant0(), Token::GTE);
-      negative_checker.End();
+      negative_checker.Then();
       HInstruction* result = BuildExternalArrayElementAccess(
           external_elements, key, val, bounds_check,
           elements_kind, is_store);
       AddInstruction(result);
+      negative_checker.ElseDeopt();
       length_checker.End();
       return result;
     } else {
@@ -1216,7 +1333,11 @@ HInstruction* HGraphBuilder::BuildUncheckedMonomorphicElementAccess(
 
     elements = BuildCheckForCapacityGrow(object, elements, elements_kind,
                                          length, key, is_js_array);
-    checked_key = key;
+    if (!key->type().IsSmi()) {
+      checked_key = AddInstruction(new(zone) HCheckSmiOrInt32(key));
+    } else {
+      checked_key = key;
+    }
   } else {
     checked_key = AddBoundsCheck(
         key, length, ALLOW_SMI_KEY, checked_index_representation);
@@ -1228,7 +1349,7 @@ HInstruction* HGraphBuilder::BuildUncheckedMonomorphicElementAccess(
         elements = BuildCopyElementsOnWrite(object, elements, elements_kind,
                                             length);
       } else {
-        HCheckMaps* check_cow_map = new(zone) HCheckMaps(
+        HCheckMaps* check_cow_map = HCheckMaps::New(
             elements, isolate()->factory()->fixed_array_map(), zone);
         check_cow_map->ClearGVNFlag(kDependsOnElementsKind);
         AddInstruction(check_cow_map);
@@ -1264,8 +1385,10 @@ HValue* HGraphBuilder::BuildAllocateElements(HValue* context,
   total_size->ChangeRepresentation(Representation::Integer32());
   total_size->ClearFlag(HValue::kCanOverflow);
 
-  HAllocate::Flags flags = HAllocate::CAN_ALLOCATE_IN_NEW_SPACE;
+  HAllocate::Flags flags = HAllocate::DefaultFlags(kind);
   if (FLAG_pretenure_literals) {
+    // TODO(hpayer): When pretenuring can be internalized, flags can become
+    // private to HAllocate.
     if (IsFastDoubleElementsKind(kind)) {
       flags = static_cast<HAllocate::Flags>(
           flags | HAllocate::CAN_ALLOCATE_IN_OLD_DATA_SPACE);
@@ -1273,10 +1396,6 @@ HValue* HGraphBuilder::BuildAllocateElements(HValue* context,
       flags = static_cast<HAllocate::Flags>(
           flags | HAllocate::CAN_ALLOCATE_IN_OLD_POINTER_SPACE);
     }
-  }
-  if (IsFastDoubleElementsKind(kind)) {
-    flags = static_cast<HAllocate::Flags>(
-        flags | HAllocate::ALLOCATE_DOUBLE_ALIGNED);
   }
 
   HValue* elements =
@@ -1297,9 +1416,12 @@ void HGraphBuilder::BuildInitializeElements(HValue* elements,
   BuildStoreMap(elements, map);
 
   Handle<String> fixed_array_length_field_name = factory->length_field_string();
+  Representation representation = IsFastElementsKind(kind)
+      ? Representation::Smi() : Representation::Tagged();
   HInstruction* store_length =
       new(zone) HStoreNamedField(elements, fixed_array_length_field_name,
-                                 capacity, true, FixedArray::kLengthOffset);
+                                 capacity, true, representation,
+                                 FixedArray::kLengthOffset);
   AddInstruction(store_length);
 }
 
@@ -1307,10 +1429,69 @@ void HGraphBuilder::BuildInitializeElements(HValue* elements,
 HValue* HGraphBuilder::BuildAllocateAndInitializeElements(HValue* context,
                                                           ElementsKind kind,
                                                           HValue* capacity) {
-  HValue* new_elements =
-      BuildAllocateElements(context, kind, capacity);
+  HValue* new_elements = BuildAllocateElements(context, kind, capacity);
   BuildInitializeElements(new_elements, kind, capacity);
   return new_elements;
+}
+
+
+HInnerAllocatedObject* HGraphBuilder::BuildJSArrayHeader(HValue* array,
+    HValue* array_map,
+    AllocationSiteMode mode,
+    HValue* allocation_site_payload,
+    HValue* length_field) {
+
+  BuildStoreMap(array, array_map);
+
+  HConstant* empty_fixed_array =
+      new(zone()) HConstant(
+          Handle<FixedArray>(isolate()->heap()->empty_fixed_array()),
+          Representation::Tagged());
+  AddInstruction(empty_fixed_array);
+
+  AddInstruction(new(zone()) HStoreNamedField(array,
+      isolate()->factory()->properties_field_symbol(),
+      empty_fixed_array,
+      true,
+      Representation::Tagged(),
+      JSArray::kPropertiesOffset));
+
+  HInstruction* length_store = AddInstruction(
+      new(zone()) HStoreNamedField(array,
+                                   isolate()->factory()->length_field_string(),
+                                   length_field,
+                                   true,
+                                   Representation::Tagged(),
+                                   JSArray::kLengthOffset));
+  length_store->SetGVNFlag(kChangesArrayLengths);
+
+  if (mode == TRACK_ALLOCATION_SITE) {
+    BuildCreateAllocationSiteInfo(array,
+                                  JSArray::kSize,
+                                  allocation_site_payload);
+  }
+
+  int elements_location = JSArray::kSize;
+  if (mode == TRACK_ALLOCATION_SITE) {
+    elements_location += AllocationSiteInfo::kSize;
+  }
+
+  HInnerAllocatedObject* elements = new(zone()) HInnerAllocatedObject(
+      array,
+      elements_location);
+  AddInstruction(elements);
+
+  HInstruction* elements_store = AddInstruction(
+      new(zone()) HStoreNamedField(
+          array,
+          isolate()->factory()->elements_field_string(),
+          elements,
+          true,
+          Representation::Tagged(),
+          JSArray::kElementsOffset));
+  elements_store->SetGVNFlag(kChangesElementsPointer);
+
+  return elements;
 }
 
 
@@ -1321,7 +1502,9 @@ HInstruction* HGraphBuilder::BuildStoreMap(HValue* object,
   Handle<String> map_field_name = factory->map_field_string();
   HInstruction* store_map =
       new(zone) HStoreNamedField(object, map_field_name, map,
-                                 true, JSObject::kMapOffset);
+                                 true, Representation::Tagged(),
+                                 JSObject::kMapOffset);
+  store_map->ClearGVNFlag(kChangesInobjectFields);
   store_map->SetGVNFlag(kChangesMaps);
   AddInstruction(store_map);
   return store_map;
@@ -1334,6 +1517,18 @@ HInstruction* HGraphBuilder::BuildStoreMap(HValue* object,
   HValue* map_constant =
       AddInstruction(new(zone) HConstant(map, Representation::Tagged()));
   return BuildStoreMap(object, map_constant);
+}
+
+
+HLoadNamedField* HGraphBuilder::AddLoadElements(HValue* object,
+    HValue* typecheck) {
+  HLoadNamedField* instr = new(zone()) HLoadNamedField(object, true,
+      Representation::Tagged(), JSObject::kElementsOffset, typecheck);
+  AddInstruction(instr);
+  instr->SetGVNFlag(kDependsOnElementsPointer);
+  instr->ClearGVNFlag(kDependsOnMaps);
+  instr->ClearGVNFlag(kDependsOnInobjectFields);
+  return instr;
 }
 
 
@@ -1402,7 +1597,7 @@ HValue* HGraphBuilder::BuildGrowElementsCapacity(HValue* object,
   HInstruction* elements_store = AddInstruction(new(zone) HStoreNamedField(
       object,
       factory->elements_field_string(),
-      new_elements, true,
+      new_elements, true, Representation::Tagged(),
       JSArray::kElementsOffset));
   elements_store->SetGVNFlag(kChangesElementsPointer);
 
@@ -1427,13 +1622,38 @@ void HGraphBuilder::BuildFillElementsWithHole(HValue* context,
       : AddInstruction(new(zone) HConstant(nan_double,
                                            Representation::Double()));
 
-  LoopBuilder builder(this, context, LoopBuilder::kPostIncrement);
+  // Special loop unfolding case
+  static const int kLoopUnfoldLimit = 4;
+  bool unfold_loop = false;
+  int initial_capacity = JSArray::kPreallocatedArrayElements;
+  if (from->IsConstant() && to->IsConstant() &&
+      initial_capacity <= kLoopUnfoldLimit) {
+    HConstant* constant_from = HConstant::cast(from);
+    HConstant* constant_to = HConstant::cast(to);
 
-  HValue* key = builder.BeginBody(from, to, Token::LT);
+    if (constant_from->HasInteger32Value() &&
+        constant_from->Integer32Value() == 0 &&
+        constant_to->HasInteger32Value() &&
+        constant_to->Integer32Value() == initial_capacity) {
+      unfold_loop = true;
+    }
+  }
 
-  AddInstruction(new(zone) HStoreKeyed(elements, key, hole, elements_kind));
+  if (unfold_loop) {
+    for (int i = 0; i < initial_capacity; i++) {
+      HInstruction* key = AddInstruction(new(zone)
+                             HConstant(i, Representation::Integer32()));
+      AddInstruction(new(zone) HStoreKeyed(elements, key, hole, elements_kind));
+    }
+  } else {
+    LoopBuilder builder(this, context, LoopBuilder::kPostIncrement);
 
-  builder.EndBody();
+    HValue* key = builder.BeginBody(from, to, Token::LT);
+
+    AddInstruction(new(zone) HStoreKeyed(elements, key, hole, elements_kind));
+
+    builder.EndBody();
+  }
 }
 
 
@@ -1500,12 +1720,7 @@ HValue* HGraphBuilder::BuildCloneShallowArray(HContext* context,
         : FixedArray::SizeFor(length);
   }
 
-  HAllocate::Flags allocate_flags = HAllocate::CAN_ALLOCATE_IN_NEW_SPACE;
-  if (IsFastDoubleElementsKind(kind)) {
-    allocate_flags = static_cast<HAllocate::Flags>(
-        allocate_flags | HAllocate::ALLOCATE_DOUBLE_ALIGNED);
-  }
-
+  HAllocate::Flags allocate_flags = HAllocate::DefaultFlags(kind);
   // Allocate both the JS array and the elements array in one big
   // allocation. This avoids multiple limit checks.
   HValue* size_in_bytes =
@@ -1519,13 +1734,13 @@ HValue* HGraphBuilder::BuildCloneShallowArray(HContext* context,
   // Copy the JS array part.
   for (int i = 0; i < JSArray::kSize; i += kPointerSize) {
     if ((i != JSArray::kElementsOffset) || (length == 0)) {
-      HInstruction* value =
-          AddInstruction(new(zone) HLoadNamedField(boilerplate, true, i));
+      HInstruction* value = AddInstruction(new(zone) HLoadNamedField(
+          boilerplate, true, Representation::Tagged(), i));
       if (i != JSArray::kMapOffset) {
         AddInstruction(new(zone) HStoreNamedField(object,
                                                   factory->empty_string(),
-                                                  value,
-                                                  true, i));
+                                                  value, true,
+                                                  Representation::Tagged(), i));
       } else {
         BuildStoreMap(object, value);
       }
@@ -1534,38 +1749,30 @@ HValue* HGraphBuilder::BuildCloneShallowArray(HContext* context,
 
   // Create an allocation site info if requested.
   if (mode == TRACK_ALLOCATION_SITE) {
-    HValue* alloc_site =
-        AddInstruction(new(zone) HInnerAllocatedObject(object, JSArray::kSize));
-    Handle<Map> alloc_site_map(isolate()->heap()->allocation_site_info_map());
-    BuildStoreMap(alloc_site, alloc_site_map);
-    int alloc_payload_offset = AllocationSiteInfo::kPayloadOffset;
-    AddInstruction(new(zone) HStoreNamedField(alloc_site,
-                                              factory->empty_string(),
-                                              boilerplate,
-                                              true, alloc_payload_offset));
+    BuildCreateAllocationSiteInfo(object, JSArray::kSize, boilerplate);
   }
 
   if (length > 0) {
     // Get hold of the elements array of the boilerplate and setup the
     // elements pointer in the resulting object.
-    HValue* boilerplate_elements =
-        AddInstruction(new(zone) HLoadElements(boilerplate, NULL));
+    HValue* boilerplate_elements = AddLoadElements(boilerplate);
     HValue* object_elements =
         AddInstruction(new(zone) HInnerAllocatedObject(object, elems_offset));
     AddInstruction(new(zone) HStoreNamedField(object,
                                               factory->elements_field_string(),
-                                              object_elements,
-                                              true, JSObject::kElementsOffset));
+                                              object_elements, true,
+                                              Representation::Tagged(),
+                                              JSObject::kElementsOffset));
 
     // Copy the elements array header.
     for (int i = 0; i < FixedArrayBase::kHeaderSize; i += kPointerSize) {
       HInstruction* value =
-          AddInstruction(new(zone) HLoadNamedField(boilerplate_elements,
-                                                   true, i));
+          AddInstruction(new(zone) HLoadNamedField(
+              boilerplate_elements, true, Representation::Tagged(), i));
       AddInstruction(new(zone) HStoreNamedField(object_elements,
                                                 factory->empty_string(),
-                                                value,
-                                                true, i));
+                                                value, true,
+                                                Representation::Tagged(), i));
     }
 
     // Copy the elements array contents.
@@ -1588,6 +1795,223 @@ HValue* HGraphBuilder::BuildCloneShallowArray(HContext* context,
   }
 
   return object;
+}
+
+
+void HGraphBuilder::BuildCompareNil(
+    HValue* value,
+    EqualityKind kind,
+    CompareNilICStub::Types types,
+    Handle<Map> map,
+    int position,
+    HIfContinuation* continuation) {
+  IfBuilder if_nil(this, position);
+  bool needs_or = false;
+  if ((types & CompareNilICStub::kCompareAgainstNull) != 0) {
+    if (needs_or) if_nil.Or();
+    if_nil.If<HCompareObjectEqAndBranch>(value, graph()->GetConstantNull());
+    needs_or = true;
+  }
+  if ((types & CompareNilICStub::kCompareAgainstUndefined) != 0) {
+    if (needs_or) if_nil.Or();
+    if_nil.If<HCompareObjectEqAndBranch>(value,
+                                         graph()->GetConstantUndefined());
+    needs_or = true;
+  }
+  // Handle either undetectable or monomorphic, not both.
+  ASSERT(((types & CompareNilICStub::kCompareAgainstUndetectable) == 0) ||
+         ((types & CompareNilICStub::kCompareAgainstMonomorphicMap) == 0));
+  if ((types & CompareNilICStub::kCompareAgainstUndetectable) != 0) {
+    if (needs_or) if_nil.Or();
+    if_nil.If<HIsUndetectableAndBranch>(value);
+  } else {
+    if_nil.Then();
+    if_nil.Else();
+    if ((types & CompareNilICStub::kCompareAgainstMonomorphicMap) != 0) {
+      BuildCheckNonSmi(value);
+      // For ICs, the map checked below is a sentinel map that gets replaced by
+      // the monomorphic map when the code is used as a template to generate a
+      // new IC. For optimized functions, there is no sentinel map, the map
+      // emitted below is the actual monomorphic map.
+      BuildCheckMap(value, map);
+    } else {
+      if (kind == kNonStrictEquality) {
+        if_nil.Deopt();
+      }
+    }
+  }
+
+  if_nil.CaptureContinuation(continuation);
+}
+
+
+HValue* HGraphBuilder::BuildCreateAllocationSiteInfo(HValue* previous_object,
+                                                     int previous_object_size,
+                                                     HValue* payload) {
+  HInnerAllocatedObject* alloc_site = new(zone())
+        HInnerAllocatedObject(previous_object, previous_object_size);
+  AddInstruction(alloc_site);
+  Handle<Map> alloc_site_map(isolate()->heap()->allocation_site_info_map());
+  BuildStoreMap(alloc_site, alloc_site_map);
+  AddInstruction(new(zone()) HStoreNamedField(alloc_site,
+      isolate()->factory()->payload_string(),
+      payload,
+      true,
+      Representation::Tagged(),
+      AllocationSiteInfo::kPayloadOffset));
+  return alloc_site;
+}
+
+
+HInstruction* HGraphBuilder::BuildGetNativeContext(HValue* context) {
+  HInstruction* global_object = AddInstruction(new(zone())
+                                               HGlobalObject(context));
+  HInstruction* native_context = AddInstruction(new(zone())
+      HLoadNamedField(global_object, true, Representation::Tagged(),
+                      GlobalObject::kNativeContextOffset));
+  return native_context;
+}
+
+
+HInstruction* HGraphBuilder::BuildGetArrayFunction(HValue* context) {
+  HInstruction* native_context = BuildGetNativeContext(context);
+  int offset = Context::kHeaderSize +
+      kPointerSize * Context::ARRAY_FUNCTION_INDEX;
+  HInstruction* array_function = AddInstruction(new(zone())
+      HLoadNamedField(native_context, true, Representation::Tagged(), offset));
+  return array_function;
+}
+
+
+HGraphBuilder::JSArrayBuilder::JSArrayBuilder(HGraphBuilder* builder,
+                                              ElementsKind kind,
+                                              HValue* allocation_site_payload,
+                                              AllocationSiteMode mode) :
+        builder_(builder),
+        kind_(kind),
+        allocation_site_payload_(allocation_site_payload) {
+  if (mode == DONT_TRACK_ALLOCATION_SITE) {
+    mode_ = mode;
+  } else {
+    mode_ = AllocationSiteInfo::GetMode(kind);
+  }
+}
+
+
+HValue* HGraphBuilder::JSArrayBuilder::EmitMapCode(HValue* context) {
+  HInstruction* native_context = builder()->BuildGetNativeContext(context);
+  int offset = Context::kHeaderSize +
+      kPointerSize * Context::JS_ARRAY_MAPS_INDEX;
+  HInstruction* map_array = AddInstruction(new(zone())
+      HLoadNamedField(native_context, true, Representation::Tagged(), offset));
+  offset = kind_ * kPointerSize + FixedArrayBase::kHeaderSize;
+  return AddInstruction(new(zone()) HLoadNamedField(
+      map_array, true, Representation::Tagged(), offset));
+}
+
+
+HValue* HGraphBuilder::JSArrayBuilder::EstablishAllocationSize(
+    HValue* length_node) {
+  HValue* context = builder()->environment()->LookupContext();
+  ASSERT(length_node != NULL);
+
+  int base_size = JSArray::kSize;
+  if (mode_ == TRACK_ALLOCATION_SITE) {
+    base_size += AllocationSiteInfo::kSize;
+  }
+
+  if (IsFastDoubleElementsKind(kind_)) {
+    base_size += FixedDoubleArray::kHeaderSize;
+  } else {
+    base_size += FixedArray::kHeaderSize;
+  }
+
+  HInstruction* elements_size_value = new(zone())
+      HConstant(elements_size(), Representation::Integer32());
+  AddInstruction(elements_size_value);
+  HInstruction* mul = HMul::New(zone(), context, length_node,
+                                elements_size_value);
+  mul->ChangeRepresentation(Representation::Integer32());
+  mul->ClearFlag(HValue::kCanOverflow);
+  AddInstruction(mul);
+
+  HInstruction* base = new(zone()) HConstant(base_size,
+                                             Representation::Integer32());
+  AddInstruction(base);
+  HInstruction* total_size = HAdd::New(zone(), context, base, mul);
+  total_size->ChangeRepresentation(Representation::Integer32());
+  total_size->ClearFlag(HValue::kCanOverflow);
+  AddInstruction(total_size);
+  return total_size;
+}
+
+
+HValue* HGraphBuilder::JSArrayBuilder::EstablishEmptyArrayAllocationSize() {
+  int base_size = JSArray::kSize;
+  if (mode_ == TRACK_ALLOCATION_SITE) {
+    base_size += AllocationSiteInfo::kSize;
+  }
+
+  base_size += IsFastDoubleElementsKind(kind_)
+      ? FixedDoubleArray::SizeFor(initial_capacity())
+      : FixedArray::SizeFor(initial_capacity());
+
+  HConstant* array_size =
+      new(zone()) HConstant(base_size, Representation::Integer32());
+  AddInstruction(array_size);
+  return array_size;
+}
+
+
+HValue* HGraphBuilder::JSArrayBuilder::AllocateEmptyArray() {
+  HValue* size_in_bytes = EstablishEmptyArrayAllocationSize();
+  HConstant* capacity =
+      new(zone()) HConstant(initial_capacity(), Representation::Integer32());
+  AddInstruction(capacity);
+  return AllocateArray(size_in_bytes,
+                       capacity,
+                       builder()->graph()->GetConstant0(),
+                       true);
+}
+
+
+HValue* HGraphBuilder::JSArrayBuilder::AllocateArray(HValue* capacity,
+                                                     HValue* length_field,
+                                                     bool fill_with_hole) {
+  HValue* size_in_bytes = EstablishAllocationSize(capacity);
+  return AllocateArray(size_in_bytes, capacity, length_field, fill_with_hole);
+}
+
+
+HValue* HGraphBuilder::JSArrayBuilder::AllocateArray(HValue* size_in_bytes,
+                                                     HValue* capacity,
+                                                     HValue* length_field,
+                                                     bool fill_with_hole) {
+  HValue* context = builder()->environment()->LookupContext();
+
+  // Allocate (dealing with failure appropriately)
+  HAllocate::Flags flags = HAllocate::DefaultFlags(kind_);
+  HAllocate* new_object = new(zone()) HAllocate(context, size_in_bytes,
+                                                HType::JSArray(), flags);
+  AddInstruction(new_object);
+
+  // Fill in the fields: map, properties, length
+  HValue* map = EmitMapCode(context);
+  elements_location_ = builder()->BuildJSArrayHeader(new_object,
+                                                     map,
+                                                     mode_,
+                                                     allocation_site_payload_,
+                                                     length_field);
+
+  // Initialize the elements
+  builder()->BuildInitializeElements(elements_location_, kind_, capacity);
+
+  if (fill_with_hole) {
+    builder()->BuildFillElementsWithHole(context, elements_location_, kind_,
+                                         graph()->GetConstant0(), capacity);
+  }
+
+  return new_object;
 }
 
 
@@ -1684,9 +2108,9 @@ HGraph::HGraph(CompilationInfo* info)
     start_environment_ =
         new(zone_) HEnvironment(NULL, info->scope(), info->closure(), zone_);
   }
+  start_environment_->set_ast_id(BailoutId::FunctionEntry());
   entry_block_ = CreateBasicBlock();
-  entry_block_->SetInitialEnvironment(start_environment_,
-                                      BailoutId::FunctionEntry());
+  entry_block_->SetInitialEnvironment(start_environment_);
 }
 
 
@@ -3364,7 +3788,44 @@ void HInferRepresentation::Analyze() {
     }
   }
 
-  // (3a) Use the phi reachability information from step 2 to
+  // Set truncation flags for groups of connected phis. This is a conservative
+  // approximation; the flag will be properly re-computed after representations
+  // have been determined.
+  if (phi_count > 0) {
+    BitVector* done = new(zone()) BitVector(phi_count, graph_->zone());
+    for (int i = 0; i < phi_count; ++i) {
+      if (done->Contains(i)) continue;
+
+      // Check if all uses of all connected phis in this group are truncating.
+      bool all_uses_everywhere_truncating = true;
+      for (BitVector::Iterator it(connected_phis.at(i));
+           !it.Done();
+           it.Advance()) {
+        int index = it.Current();
+        all_uses_everywhere_truncating &=
+            phi_list->at(index)->CheckFlag(HInstruction::kTruncatingToInt32);
+        done->Add(index);
+      }
+      if (all_uses_everywhere_truncating) {
+        continue;  // Great, nothing to do.
+      }
+      // Clear truncation flag of this group of connected phis.
+      for (BitVector::Iterator it(connected_phis.at(i));
+           !it.Done();
+           it.Advance()) {
+        int index = it.Current();
+        phi_list->at(index)->ClearFlag(HInstruction::kTruncatingToInt32);
+      }
+    }
+  }
+
+  // Simplify constant phi inputs where possible.
+  // This step uses kTruncatingToInt32 flags of phis.
+  for (int i = 0; i < phi_count; ++i) {
+    phi_list->at(i)->SimplifyConstantInputs();
+  }
+
+  // Use the phi reachability information from step 2 to
   // push information about values which can't be converted to integer
   // without deoptimization through the phi use-def chains, avoiding
   // unnecessary deoptimizations later.
@@ -3381,7 +3842,7 @@ void HInferRepresentation::Analyze() {
     }
   }
 
-  // (3b) Use the phi reachability information from step 2 to
+  // Use the phi reachability information from step 2 to
   // sum up the non-phi use counts of all connected phis.
   for (int i = 0; i < phi_count; ++i) {
     HPhi* phi = phi_list->at(i);
@@ -3639,36 +4100,50 @@ void HGraph::InsertRepresentationChanges() {
   // int32-phis allow truncation and iteratively remove the ones that
   // are used in an operation that does not allow a truncating
   // conversion.
-  // TODO(fschneider): Replace this with a worklist-based iteration.
+  ZoneList<HPhi*> worklist(8, zone());
+
   for (int i = 0; i < phi_list()->length(); i++) {
     HPhi* phi = phi_list()->at(i);
     if (phi->representation().IsInteger32()) {
       phi->SetFlag(HValue::kTruncatingToInt32);
     }
   }
-  bool change = true;
-  while (change) {
-    change = false;
-    for (int i = 0; i < phi_list()->length(); i++) {
-      HPhi* phi = phi_list()->at(i);
-      if (!phi->CheckFlag(HValue::kTruncatingToInt32)) continue;
-      for (HUseIterator it(phi->uses()); !it.Done(); it.Advance()) {
-        // If a Phi is used as a non-truncating int32 or as a double,
-        // clear its "truncating" flag.
-        HValue* use = it.value();
-        Representation input_representation =
-            use->RequiredInputRepresentation(it.index());
-        if ((input_representation.IsInteger32() &&
-             !use->CheckFlag(HValue::kTruncatingToInt32)) ||
-            input_representation.IsDouble()) {
-          if (FLAG_trace_representation) {
-            PrintF("#%d Phi is not truncating because of #%d %s\n",
-                   phi->id(), it.value()->id(), it.value()->Mnemonic());
-          }
-          phi->ClearFlag(HValue::kTruncatingToInt32);
-          change = true;
-          break;
+
+  for (int i = 0; i < phi_list()->length(); i++) {
+    HPhi* phi = phi_list()->at(i);
+    for (HUseIterator it(phi->uses()); !it.Done(); it.Advance()) {
+      // If a Phi is used as a non-truncating int32 or as a double,
+      // clear its "truncating" flag.
+      HValue* use = it.value();
+      Representation input_representation =
+          use->RequiredInputRepresentation(it.index());
+      if ((input_representation.IsInteger32() &&
+           !use->CheckFlag(HValue::kTruncatingToInt32)) ||
+          input_representation.IsDouble()) {
+        if (FLAG_trace_representation) {
+          PrintF("#%d Phi is not truncating because of #%d %s\n",
+                 phi->id(), it.value()->id(), it.value()->Mnemonic());
         }
+        phi->ClearFlag(HValue::kTruncatingToInt32);
+        worklist.Add(phi, zone());
+        break;
+      }
+    }
+  }
+
+  while (!worklist.is_empty()) {
+    HPhi* current = worklist.RemoveLast();
+    for (int i = 0; i < current->OperandCount(); ++i) {
+      HValue* input = current->OperandAt(i);
+      if (input->IsPhi() &&
+          input->representation().IsInteger32() &&
+          input->CheckFlag(HValue::kTruncatingToInt32)) {
+        if (FLAG_trace_representation) {
+          PrintF("#%d Phi is not truncating because of #%d %s\n",
+                 input->id(), current->id(), current->Mnemonic());
+        }
+        input->ClearFlag(HValue::kTruncatingToInt32);
+        worklist.Add(HPhi::cast(input), zone());
       }
     }
   }
@@ -3839,8 +4314,8 @@ bool Uint32Analysis::CheckPhiOperands(HPhi* phi) {
     HValue* operand = phi->OperandAt(j);
     if (!operand->CheckFlag(HInstruction::kUint32)) {
       // Lazyly mark constants that fit into uint32 range with kUint32 flag.
-      if (operand->IsConstant() &&
-          HConstant::cast(operand)->IsUint32()) {
+      if (operand->IsInteger32Constant() &&
+          operand->GetInteger32Constant() >= 0) {
         operand->SetFlag(HInstruction::kUint32);
         continue;
       }
@@ -4099,6 +4574,22 @@ void EffectContext::ReturnControl(HControlInstruction* instr,
 }
 
 
+void EffectContext::ReturnContinuation(HIfContinuation* continuation,
+                                       BailoutId ast_id) {
+  HBasicBlock* true_branch = NULL;
+  HBasicBlock* false_branch = NULL;
+  continuation->Continue(&true_branch, &false_branch, NULL);
+  if (!continuation->IsTrueReachable()) {
+    owner()->set_current_block(false_branch);
+  } else if (!continuation->IsFalseReachable()) {
+    owner()->set_current_block(true_branch);
+  } else {
+    HBasicBlock* join = owner()->CreateJoin(true_branch, false_branch, ast_id);
+    owner()->set_current_block(join);
+  }
+}
+
+
 void ValueContext::ReturnInstruction(HInstruction* instr, BailoutId ast_id) {
   ASSERT(!instr->IsControlInstruction());
   if (!arguments_allowed() && instr->CheckFlag(HValue::kIsArguments)) {
@@ -4132,6 +4623,29 @@ void ValueContext::ReturnControl(HControlInstruction* instr, BailoutId ast_id) {
 }
 
 
+void ValueContext::ReturnContinuation(HIfContinuation* continuation,
+                                      BailoutId ast_id) {
+  HBasicBlock* materialize_true = NULL;
+  HBasicBlock* materialize_false = NULL;
+  continuation->Continue(&materialize_true, &materialize_false, NULL);
+  if (continuation->IsTrueReachable()) {
+    owner()->set_current_block(materialize_true);
+    owner()->Push(owner()->graph()->GetConstantTrue());
+    owner()->set_current_block(materialize_true);
+  }
+  if (continuation->IsFalseReachable()) {
+    owner()->set_current_block(materialize_false);
+    owner()->Push(owner()->graph()->GetConstantFalse());
+    owner()->set_current_block(materialize_false);
+  }
+  if (continuation->TrueAndFalseReachable()) {
+    HBasicBlock* join =
+        owner()->CreateJoin(materialize_true, materialize_false, ast_id);
+    owner()->set_current_block(join);
+  }
+}
+
+
 void TestContext::ReturnInstruction(HInstruction* instr, BailoutId ast_id) {
   ASSERT(!instr->IsControlInstruction());
   HOptimizedGraphBuilder* builder = owner();
@@ -4156,6 +4670,21 @@ void TestContext::ReturnControl(HControlInstruction* instr, BailoutId ast_id) {
   owner()->current_block()->Finish(instr);
   empty_true->Goto(if_true(), owner()->function_state());
   empty_false->Goto(if_false(), owner()->function_state());
+  owner()->set_current_block(NULL);
+}
+
+
+void TestContext::ReturnContinuation(HIfContinuation* continuation,
+                                     BailoutId ast_id) {
+  HBasicBlock* true_branch = NULL;
+  HBasicBlock* false_branch = NULL;
+  continuation->Continue(&true_branch, &false_branch, NULL);
+  if (continuation->IsTrueReachable()) {
+    true_branch->Goto(if_true(), owner()->function_state());
+  }
+  if (continuation->IsFalseReachable()) {
+    false_branch->Goto(if_false(), owner()->function_state());
+  }
   owner()->set_current_block(NULL);
 }
 
@@ -4296,8 +4825,7 @@ bool HOptimizedGraphBuilder::BuildGraph() {
   // values (but not instructions), present in the initial environment and
   // not replayed by the Lithium translation.
   HEnvironment* initial_env = environment()->CopyWithoutHistory();
-  HBasicBlock* body_entry = CreateBasicBlock(initial_env,
-                                             BailoutId::FunctionEntry());
+  HBasicBlock* body_entry = CreateBasicBlock(initial_env);
   current_block()->Goto(body_entry);
   body_entry->SetJoinId(BailoutId::FunctionEntry());
   set_current_block(body_entry);
@@ -4923,6 +5451,9 @@ void HGraph::DeadCodeElimination() {
 
   while (!worklist.is_empty()) {
     HInstruction* instr = worklist.RemoveLast();
+    // This happens when an instruction is used multiple times as operand. That
+    // in turn could happen through GVN.
+    if (!instr->IsLinked()) continue;
     if (FLAG_trace_dead_code_elimination) {
       HeapStringAllocator allocator;
       StringStream stream(&allocator);
@@ -5541,7 +6072,7 @@ void HOptimizedGraphBuilder::VisitDoWhileStatement(DoWhileStatement* stmt) {
   ASSERT(current_block()->HasPredecessor());
   ASSERT(current_block() != NULL);
   bool osr_entry = PreProcessOsrEntry(stmt);
-  HBasicBlock* loop_entry = CreateLoopHeaderBlock(stmt->EntryId());
+  HBasicBlock* loop_entry = CreateLoopHeaderBlock();
   current_block()->Goto(loop_entry);
   set_current_block(loop_entry);
   if (osr_entry) graph()->set_osr_loop_entry(loop_entry);
@@ -5584,7 +6115,7 @@ void HOptimizedGraphBuilder::VisitWhileStatement(WhileStatement* stmt) {
   ASSERT(current_block()->HasPredecessor());
   ASSERT(current_block() != NULL);
   bool osr_entry = PreProcessOsrEntry(stmt);
-  HBasicBlock* loop_entry = CreateLoopHeaderBlock(stmt->EntryId());
+  HBasicBlock* loop_entry = CreateLoopHeaderBlock();
   current_block()->Goto(loop_entry);
   set_current_block(loop_entry);
   if (osr_entry) graph()->set_osr_loop_entry(loop_entry);
@@ -5631,7 +6162,7 @@ void HOptimizedGraphBuilder::VisitForStatement(ForStatement* stmt) {
   }
   ASSERT(current_block() != NULL);
   bool osr_entry = PreProcessOsrEntry(stmt);
-  HBasicBlock* loop_entry = CreateLoopHeaderBlock(stmt->EntryId());
+  HBasicBlock* loop_entry = CreateLoopHeaderBlock();
   current_block()->Goto(loop_entry);
   set_current_block(loop_entry);
   if (osr_entry) graph()->set_osr_loop_entry(loop_entry);
@@ -5726,7 +6257,7 @@ void HOptimizedGraphBuilder::VisitForInStatement(ForInStatement* stmt) {
       HForInCacheArray::cast(index_cache));
 
   bool osr_entry = PreProcessOsrEntry(stmt);
-  HBasicBlock* loop_entry = CreateLoopHeaderBlock(stmt->EntryId());
+  HBasicBlock* loop_entry = CreateLoopHeaderBlock();
   current_block()->Goto(loop_entry);
   set_current_block(loop_entry);
   if (osr_entry) graph()->set_osr_loop_entry(loop_entry);
@@ -6163,10 +6694,16 @@ static bool IsFastLiteral(Handle<JSObject> boilerplate,
   if (properties->length() > 0) {
     return false;
   } else {
-    int nof = boilerplate->map()->inobject_properties();
-    for (int i = 0; i < nof; i++) {
+    Handle<DescriptorArray> descriptors(
+        boilerplate->map()->instance_descriptors());
+    int limit = boilerplate->map()->NumberOfOwnDescriptors();
+    for (int i = 0; i < limit; i++) {
+      PropertyDetails details = descriptors->GetDetails(i);
+      if (details.type() != FIELD) continue;
+      Representation representation = details.representation();
+      int index = descriptors->GetFieldIndex(i);
       if ((*max_properties)-- == 0) return false;
-      Handle<Object> value(boilerplate->InObjectPropertyAt(i), isolate);
+      Handle<Object> value(boilerplate->InObjectPropertyAt(index), isolate);
       if (value->IsJSObject()) {
         Handle<JSObject> value_object = Handle<JSObject>::cast(value);
         if (!IsFastLiteral(value_object,
@@ -6176,6 +6713,8 @@ static bool IsFastLiteral(Handle<JSObject> boilerplate,
                            pointer_size)) {
           return false;
         }
+      } else if (representation.IsDouble()) {
+        *data_size += HeapNumber::kSize;
       }
     }
   }
@@ -6217,12 +6756,15 @@ void HOptimizedGraphBuilder::VisitObjectLiteral(ObjectLiteral* expr) {
                                pointer_size,
                                DONT_TRACK_ALLOCATION_SITE);
   } else {
+    Handle<FixedArray> closure_literals(closure->literals(), isolate());
     literal = AddInstruction(
         new(zone()) HObjectLiteral(context,
                                    expr->constant_properties(),
+                                   closure_literals,
                                    expr->fast_elements(),
                                    expr->literal_index(),
                                    expr->depth(),
+                                   expr->may_store_doubles(),
                                    expr->has_function()));
   }
 
@@ -6308,7 +6850,7 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
   HValue* context = environment()->LookupContext();
   HInstruction* literal;
 
-  Handle<FixedArray> literals(environment()->closure()->literals());
+  Handle<FixedArray> literals(environment()->closure()->literals(), isolate());
   Handle<Object> raw_boilerplate(literals->get(expr->literal_index()),
                                  isolate());
 
@@ -6360,6 +6902,7 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
     literal = AddInstruction(
                   new(zone()) HArrayLiteral(context,
                                             original_boilerplate_object,
+                                            literals,
                                             length,
                                             expr->literal_index(),
                                             expr->depth(),
@@ -6370,7 +6913,7 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
   // of the property values and is the value of the entire expression.
   Push(literal);
 
-  HLoadElements* elements = NULL;
+  HInstruction* elements = NULL;
 
   for (int i = 0; i < length; i++) {
     Expression* subexpr = subexprs->at(i);
@@ -6382,10 +6925,7 @@ void HOptimizedGraphBuilder::VisitArrayLiteral(ArrayLiteral* expr) {
     HValue* value = Pop();
     if (!Smi::IsValid(i)) return Bailout("Non-smi key in array literal");
 
-    // Pass in literal as dummy depedency, since  the receiver always has
-    // elements.
-    elements = new(zone()) HLoadElements(literal, literal);
-    AddInstruction(elements);
+    elements = AddLoadElements(literal);
 
     HValue* key = AddInstruction(
         new(zone()) HConstant(Handle<Object>(Smi::FromInt(i), isolate()),
@@ -6443,21 +6983,36 @@ static bool ComputeLoadStoreField(Handle<Map> type,
 
 
 static int ComputeLoadStoreFieldIndex(Handle<Map> type,
-                                      Handle<String> name,
                                       LookupResult* lookup) {
   ASSERT(lookup->IsField() || lookup->IsTransitionToField(*type));
   if (lookup->IsField()) {
     return lookup->GetLocalFieldIndexFromMap(*type);
   } else {
     Map* transition = lookup->GetTransitionMapFromMap(*type);
-    return transition->PropertyIndexFor(*name) - type->inobject_properties();
+    int descriptor = transition->LastAdded();
+    int index = transition->instance_descriptors()->GetFieldIndex(descriptor);
+    return index - type->inobject_properties();
+  }
+}
+
+
+static Representation ComputeLoadStoreRepresentation(Handle<Map> type,
+                                                     LookupResult* lookup) {
+  if (lookup->IsField()) {
+    return lookup->representation();
+  } else {
+    Map* transition = lookup->GetTransitionMapFromMap(*type);
+    int descriptor = transition->LastAdded();
+    PropertyDetails details =
+        transition->instance_descriptors()->GetDetails(descriptor);
+    return details.representation();
   }
 }
 
 
 void HOptimizedGraphBuilder::AddCheckMap(HValue* object, Handle<Map> map) {
   AddInstruction(new(zone()) HCheckNonSmi(object));
-  AddInstruction(new(zone()) HCheckMaps(object, map, zone()));
+  AddInstruction(HCheckMaps::New(object, map, zone()));
 }
 
 
@@ -6505,8 +7060,9 @@ HInstruction* HOptimizedGraphBuilder::BuildStoreNamedField(
         zone()));
   }
 
-  int index = ComputeLoadStoreFieldIndex(map, name, lookup);
+  int index = ComputeLoadStoreFieldIndex(map, lookup);
   bool is_in_object = index < 0;
+  Representation representation = ComputeLoadStoreRepresentation(map, lookup);
   int offset = index * kPointerSize;
   if (index < 0) {
     // Negative property indices are in-object properties, indexed
@@ -6515,9 +7071,33 @@ HInstruction* HOptimizedGraphBuilder::BuildStoreNamedField(
   } else {
     offset += FixedArray::kHeaderSize;
   }
-  HStoreNamedField* instr =
-      new(zone()) HStoreNamedField(object, name, value, is_in_object, offset);
-  if (lookup->IsTransitionToField(*map)) {
+  bool transition_to_field = lookup->IsTransitionToField(*map);
+  if (FLAG_track_double_fields && representation.IsDouble()) {
+    if (transition_to_field) {
+      NoObservableSideEffectsScope no_side_effects(this);
+      HInstruction* heap_number_size = AddInstruction(new(zone()) HConstant(
+          HeapNumber::kSize, Representation::Integer32()));
+      HInstruction* double_box = AddInstruction(new(zone()) HAllocate(
+          environment()->LookupContext(), heap_number_size,
+          HType::HeapNumber(), HAllocate::CAN_ALLOCATE_IN_NEW_SPACE));
+      BuildStoreMap(double_box, isolate()->factory()->heap_number_map());
+      AddInstruction(new(zone()) HStoreNamedField(
+          double_box, name, value, true,
+          Representation::Double(), HeapNumber::kValueOffset));
+      value = double_box;
+      representation = Representation::Tagged();
+    } else {
+      HInstruction* double_box = AddInstruction(new(zone()) HLoadNamedField(
+          object, is_in_object, Representation::Tagged(), offset));
+      double_box->set_type(HType::HeapNumber());
+      return new(zone()) HStoreNamedField(
+          double_box, name, value, true,
+          Representation::Double(), HeapNumber::kValueOffset);
+    }
+  }
+  HStoreNamedField* instr = new(zone()) HStoreNamedField(
+      object, name, value, is_in_object, representation, offset);
+  if (transition_to_field) {
     Handle<Map> transition(lookup->GetTransitionMapFromMap(*map));
     instr->set_transition(transition);
     // TODO(fschneider): Record the new map type of the object in the IR to
@@ -6586,7 +7166,7 @@ bool HOptimizedGraphBuilder::HandlePolymorphicArrayLengthLoad(
   AddInstruction(new(zone()) HCheckNonSmi(object));
 
   HInstruction* typecheck =
-    AddInstruction(new(zone()) HCheckMaps(object, types, zone()));
+    AddInstruction(HCheckMaps::New(object, types, zone()));
   HInstruction* instr =
     HLoadNamedField::NewArrayLength(zone(), object, typecheck);
   instr->set_position(expr->position());
@@ -6599,22 +7179,31 @@ void HOptimizedGraphBuilder::HandlePolymorphicLoadNamedField(Property* expr,
     HValue* object,
     SmallMapList* types,
     Handle<String> name) {
-  int count = 0;
-  int previous_field_offset = 0;
-  bool previous_field_is_in_object = false;
-  bool is_monomorphic_field = true;
 
   if (HandlePolymorphicArrayLengthLoad(expr, object, types, name))
     return;
 
-  Handle<Map> map;
-  LookupResult lookup(isolate());
-  for (int i = 0; i < types->length() && count < kMaxLoadPolymorphism; ++i) {
-    map = types->at(i);
-    if (ComputeLoadStoreField(map, name, &lookup, false)) {
-      int index = ComputeLoadStoreFieldIndex(map, name, &lookup);
+  AddInstruction(new(zone()) HCheckNonSmi(object));
+
+  // Use monomorphic load if property lookup results in the same field index
+  // for all maps. Requires special map check on the set of all handled maps.
+  HInstruction* instr = NULL;
+  if (types->length() > 0 && types->length() <= kMaxLoadPolymorphism) {
+    LookupResult lookup(isolate());
+    int previous_field_offset = 0;
+    bool previous_field_is_in_object = false;
+    Representation representation = Representation::None();
+    int count;
+    for (count = 0; count < types->length(); ++count) {
+      Handle<Map> map = types->at(count);
+      if (!ComputeLoadStoreField(map, name, &lookup, false)) break;
+
+      int index = ComputeLoadStoreFieldIndex(map, &lookup);
+      Representation new_representation =
+          ComputeLoadStoreRepresentation(map, &lookup);
       bool is_in_object = index < 0;
       int offset = index * kPointerSize;
+
       if (index < 0) {
         // Negative property indices are in-object properties, indexed
         // from the end of the fixed part of the object.
@@ -6622,31 +7211,33 @@ void HOptimizedGraphBuilder::HandlePolymorphicLoadNamedField(Property* expr,
       } else {
         offset += FixedArray::kHeaderSize;
       }
+
       if (count == 0) {
         previous_field_offset = offset;
         previous_field_is_in_object = is_in_object;
-      } else if (is_monomorphic_field) {
-        is_monomorphic_field = (offset == previous_field_offset) &&
-                               (is_in_object == previous_field_is_in_object);
+        representation = new_representation;
+      } else if (offset != previous_field_offset ||
+                 is_in_object != previous_field_is_in_object ||
+                 (FLAG_track_fields &&
+                  !representation.IsCompatibleForLoad(new_representation))) {
+        break;
       }
-      ++count;
+
+      representation = representation.generalize(new_representation);
+    }
+
+    if (count == types->length()) {
+      AddInstruction(HCheckMaps::New(object, types, zone()));
+      instr = DoBuildLoadNamedField(
+          object, previous_field_is_in_object,
+          representation, previous_field_offset);
     }
   }
 
-  // Use monomorphic load if property lookup results in the same field index
-  // for all maps.  Requires special map check on the set of all handled maps.
-  AddInstruction(new(zone()) HCheckNonSmi(object));
-  HInstruction* instr;
-  if (count == types->length() && is_monomorphic_field) {
-    AddInstruction(new(zone()) HCheckMaps(object, types, zone()));
-    instr = BuildLoadNamedField(object, map, &lookup);
-  } else {
+  if (instr == NULL) {
     HValue* context = environment()->LookupContext();
-    instr = new(zone()) HLoadNamedFieldPolymorphic(context,
-                                                   object,
-                                                   types,
-                                                   name,
-                                                   zone());
+    instr = new(zone()) HLoadNamedFieldPolymorphic(
+        context, object, types, name, zone());
   }
 
   instr->set_position(expr->position());
@@ -6795,16 +7386,16 @@ void HOptimizedGraphBuilder::HandlePropertyAssignment(Assignment* expr) {
     // Keyed store.
     CHECK_ALIVE(VisitForValue(prop->key()));
     CHECK_ALIVE(VisitForValue(expr->value()));
-    HValue* value = Pop();
-    HValue* key = Pop();
-    HValue* object = Pop();
+    HValue* value = environment()->ExpressionStackAt(0);
+    HValue* key = environment()->ExpressionStackAt(1);
+    HValue* object = environment()->ExpressionStackAt(2);
     bool has_side_effects = false;
     HandleKeyedElementAccess(object, key, value, expr, expr->AssignmentId(),
                              expr->position(),
                              true,  // is_store
                              &has_side_effects);
+    Drop(3);
     Push(value);
-    ASSERT(has_side_effects);  // Stores always have side effects.
     AddSimulate(expr->AssignmentId(), REMOVABLE_SIMULATE);
     return ast_context()->ReturnValue(Pop());
   }
@@ -7205,16 +7796,37 @@ HLoadNamedField* HOptimizedGraphBuilder::BuildLoadNamedField(
     Handle<Map> map,
     LookupResult* lookup) {
   int index = lookup->GetLocalFieldIndexFromMap(*map);
-  if (index < 0) {
-    // Negative property indices are in-object properties, indexed
-    // from the end of the fixed part of the object.
-    int offset = (index * kPointerSize) + map->instance_size();
-    return new(zone()) HLoadNamedField(object, true, offset);
-  } else {
-    // Non-negative property indices are in the properties array.
-    int offset = (index * kPointerSize) + FixedArray::kHeaderSize;
-    return new(zone()) HLoadNamedField(object, false, offset);
+  // Negative property indices are in-object properties, indexed from the end of
+  // the fixed part of the object. Non-negative property indices are in the
+  // properties array.
+  int inobject = index < 0;
+  Representation representation = lookup->representation();
+  int offset = inobject
+      ? index * kPointerSize + map->instance_size()
+      : index * kPointerSize + FixedArray::kHeaderSize;
+  return DoBuildLoadNamedField(object, inobject, representation, offset);
+}
+
+
+HLoadNamedField* HGraphBuilder::DoBuildLoadNamedField(
+    HValue* object,
+    bool inobject,
+    Representation representation,
+    int offset) {
+  bool load_double = false;
+  if (representation.IsDouble()) {
+    representation = Representation::Tagged();
+    load_double = FLAG_track_double_fields;
   }
+  HLoadNamedField* field =
+      new(zone()) HLoadNamedField(object, inobject, representation, offset);
+  if (load_double) {
+    AddInstruction(field);
+    field->set_type(HType::HeapNumber());
+    return new(zone()) HLoadNamedField(
+        field, true, Representation::Double(), HeapNumber::kValueOffset);
+  }
+  return field;
 }
 
 
@@ -7316,8 +7928,7 @@ HInstruction* HOptimizedGraphBuilder::BuildMonomorphicElementAccess(
     Handle<Map> map,
     bool is_store,
     KeyedAccessStoreMode store_mode) {
-  HCheckMaps* mapcheck = new(zone()) HCheckMaps(object, map,
-                                                zone(), dependency);
+  HCheckMaps* mapcheck = HCheckMaps::New(object, map, zone(), dependency);
   AddInstruction(mapcheck);
   if (dependency) {
     mapcheck->ClearGVNFlag(kDependsOnElementsKind);
@@ -7374,7 +7985,7 @@ HInstruction* HOptimizedGraphBuilder::TryBuildConsolidatedElementLoad(
   }
   if (!has_double_maps && !has_smi_or_object_maps) return NULL;
 
-  HCheckMaps* check_maps = new(zone()) HCheckMaps(object, maps, zone());
+  HCheckMaps* check_maps = HCheckMaps::New(object, maps, zone());
   AddInstruction(check_maps);
   HInstruction* instr = BuildUncheckedMonomorphicElementAccess(
       object, key, val, check_maps,
@@ -7485,8 +8096,7 @@ HValue* HOptimizedGraphBuilder::HandlePolymorphicElementAccess(
 
   HInstruction* elements_kind_instr =
       AddInstruction(new(zone()) HElementsKind(object));
-  HInstruction* elements =
-      AddInstruction(new(zone()) HLoadElements(object, checkspec));
+  HInstruction* elements = AddLoadElements(object, checkspec);
   HLoadExternalArrayPointer* external_elements = NULL;
   HInstruction* checked_key = NULL;
 
@@ -7526,7 +8136,7 @@ HValue* HOptimizedGraphBuilder::HandlePolymorphicElementAccess(
       HInstruction* access;
       if (IsFastElementsKind(elements_kind)) {
         if (is_store && !IsFastDoubleElementsKind(elements_kind)) {
-          AddInstruction(new(zone()) HCheckMaps(
+          AddInstruction(HCheckMaps::New(
               elements, isolate()->factory()->fixed_array_map(),
               zone(), elements_kind_branch));
         }
@@ -7560,10 +8170,12 @@ HValue* HOptimizedGraphBuilder::HandlePolymorphicElementAccess(
         }
 
         *has_side_effects |= access->HasObservableSideEffects();
+        // The caller will use has_side_effects and add correct Simulate.
+        access->SetFlag(HValue::kHasNoObservableSideEffects);
         if (position != -1) {
           access->set_position(position);
         }
-        if_jsarray->Goto(join);
+        if_jsarray->GotoNoSimulate(join);
 
         set_current_block(if_fastobject);
         length = AddInstruction(new(zone()) HFixedArrayBaseLength(elements));
@@ -7583,18 +8195,19 @@ HValue* HOptimizedGraphBuilder::HandlePolymorphicElementAccess(
             elements_kind_branch, elements_kind, is_store));
       }
       *has_side_effects |= access->HasObservableSideEffects();
+      // The caller will use has_side_effects and add correct Simulate.
+      access->SetFlag(HValue::kHasNoObservableSideEffects);
       if (position != RelocInfo::kNoPosition) access->set_position(position);
       if (!is_store) {
         Push(access);
       }
-      current_block()->Goto(join);
+      current_block()->GotoNoSimulate(join);
       set_current_block(if_false);
     }
   }
 
   // Deopt if none of the cases matched.
   current_block()->FinishExitWithDeoptimization(HDeoptimize::kNoUses);
-  join->SetJoinId(ast_id);
   set_current_block(join);
   return is_store ? NULL : Pop();
 }
@@ -7873,14 +8486,12 @@ class FunctionSorter {
 };
 
 
-static int CompareHotness(void const* a, void const* b) {
-  FunctionSorter const* function1 = reinterpret_cast<FunctionSorter const*>(a);
-  FunctionSorter const* function2 = reinterpret_cast<FunctionSorter const*>(b);
-  int diff = function1->ticks() - function2->ticks();
-  if (diff != 0) return -diff;
-  diff = function1->ast_length() - function2->ast_length();
-  if (diff != 0) return diff;
-  return function1->src_length() - function2->src_length();
+inline bool operator<(const FunctionSorter& lhs, const FunctionSorter& rhs) {
+  int diff = lhs.ticks() - rhs.ticks();
+  if (diff != 0) return diff > 0;
+  diff = lhs.ast_length() - rhs.ast_length();
+  if (diff != 0) return diff < 0;
+  return lhs.src_length() < rhs.src_length();
 }
 
 
@@ -7923,10 +8534,7 @@ void HOptimizedGraphBuilder::HandlePolymorphicCallNamed(
     }
   }
 
-  qsort(reinterpret_cast<void*>(&order[0]),
-        ordered_functions,
-        sizeof(order[0]),
-        &CompareHotness);
+  std::sort(order, order + ordered_functions);
 
   HBasicBlock* number_block = NULL;
 
@@ -8279,7 +8887,6 @@ bool HOptimizedGraphBuilder::TryInline(CallKind call_kind,
 
   AddSimulate(return_id);
   current_block()->UpdateEnvironment(inner_env);
-  inner_env->set_previous_ast_id(BailoutId::FunctionEntry());
   ZoneList<HValue*>* arguments_values = NULL;
 
   // If the function uses arguments copy current arguments values
@@ -8504,6 +9111,18 @@ bool HOptimizedGraphBuilder::TryInlineBuiltinFunctionCall(Call* expr,
         return true;
       }
       break;
+    case kMathImul:
+      if (expr->arguments()->length() == 2) {
+        HValue* right = Pop();
+        HValue* left = Pop();
+        Drop(1);  // Receiver.
+        HValue* context = environment()->LookupContext();
+        HInstruction* op = HMul::NewImul(zone(), context, left, right);
+        if (drop_extra) Drop(1);  // Optionally drop the function.
+        ast_context()->ReturnInstruction(op, expr->id());
+        return true;
+      }
+      break;
     default:
       // Not supported for inlining yet.
       break;
@@ -8543,6 +9162,18 @@ bool HOptimizedGraphBuilder::TryInlineBuiltinMethodCall(
         AddInstruction(char_code);
         HInstruction* result =
             HStringCharFromCode::New(zone(), context, char_code);
+        ast_context()->ReturnInstruction(result, expr->id());
+        return true;
+      }
+      break;
+    case kStringFromCharCode:
+      if (argument_count == 2 && check_type == RECEIVER_MAP_CHECK) {
+        AddCheckConstantFunction(expr->holder(), receiver, receiver_map);
+        HValue* argument = Pop();
+        HValue* context = environment()->LookupContext();
+        Drop(1);  // Receiver.
+        HInstruction* result =
+            HStringCharFromCode::New(zone(), context, argument);
         ast_context()->ReturnInstruction(result, expr->id());
         return true;
       }
@@ -8600,9 +9231,7 @@ bool HOptimizedGraphBuilder::TryInlineBuiltinMethodCall(
           } else if (exponent == 2.0) {
             result = HMul::New(zone(), context, left, left);
           }
-        } else if (right->IsConstant() &&
-                   HConstant::cast(right)->HasInteger32Value() &&
-                   HConstant::cast(right)->Integer32Value() == 2) {
+        } else if (right->EqualsInteger32Constant(2)) {
           result = HMul::New(zone(), context, left, left);
         }
 
@@ -8637,6 +9266,18 @@ bool HOptimizedGraphBuilder::TryInlineBuiltinMethodCall(
                                                      : HMathMinMax::kMathMax;
         HInstruction* result =
             HMathMinMax::New(zone(), context, left, right, op);
+        ast_context()->ReturnInstruction(result, expr->id());
+        return true;
+      }
+      break;
+    case kMathImul:
+      if (argument_count == 3 && check_type == RECEIVER_MAP_CHECK) {
+        AddCheckConstantFunction(expr->holder(), receiver, receiver_map);
+        HValue* right = Pop();
+        HValue* left = Pop();
+        Drop(1);  // Receiver.
+        HValue* context = environment()->LookupContext();
+        HInstruction* result = HMul::NewImul(zone(), context, left, right);
         ast_context()->ReturnInstruction(result, expr->id());
         return true;
       }
@@ -9073,19 +9714,28 @@ void HOptimizedGraphBuilder::VisitCallNew(CallNew* expr) {
   } else {
     // The constructor function is both an operand to the instruction and an
     // argument to the construct call.
+    bool use_call_new_array = FLAG_optimize_constructed_arrays &&
+        !(expr->target().is_null()) &&
+        *(expr->target()) == isolate()->global_context()->array_function();
+
     CHECK_ALIVE(VisitArgument(expr->expression()));
     HValue* constructor = HPushArgument::cast(Top())->argument();
     CHECK_ALIVE(VisitArgumentList(expr->arguments()));
     HCallNew* call;
-    if (FLAG_optimize_constructed_arrays &&
-        !(expr->target().is_null()) &&
-        *(expr->target()) == isolate()->global_context()->array_function()) {
+    if (use_call_new_array) {
+      // TODO(mvstanton): It would be better to use the already created global
+      // property cell that is shared by full code gen. That way, any transition
+      // information that happened after crankshaft won't be lost.  The right
+      // way to do that is to begin passing the cell to the type feedback oracle
+      // instead of just the value in the cell. Do this in a follow-up checkin.
       Handle<Object> feedback = oracle()->GetInfo(expr->CallNewFeedbackId());
       ASSERT(feedback->IsSmi());
       Handle<JSGlobalPropertyCell> cell =
           isolate()->factory()->NewJSGlobalPropertyCell(feedback);
-      AddInstruction(new(zone()) HCheckFunction(constructor,
-          Handle<JSFunction>(isolate()->global_context()->array_function())));
+
+      // TODO(mvstanton): Here we should probably insert code to check if the
+      // type cell elements kind is different from when we compiled, and deopt
+      // in that case. Do this in a follow-up checin.
       call = new(zone()) HCallNewArray(context, constructor, argument_count,
                                        cell);
     } else {
@@ -9160,7 +9810,6 @@ void HOptimizedGraphBuilder::VisitUnaryOperation(UnaryOperation* expr) {
     case Token::DELETE: return VisitDelete(expr);
     case Token::VOID: return VisitVoid(expr);
     case Token::TYPEOF: return VisitTypeof(expr);
-    case Token::ADD: return VisitAdd(expr);
     case Token::SUB: return VisitSub(expr);
     case Token::BIT_NOT: return VisitBitNot(expr);
     case Token::NOT: return VisitNot(expr);
@@ -9218,21 +9867,6 @@ void HOptimizedGraphBuilder::VisitTypeof(UnaryOperation* expr) {
 }
 
 
-void HOptimizedGraphBuilder::VisitAdd(UnaryOperation* expr) {
-  CHECK_ALIVE(VisitForValue(expr->expression()));
-  HValue* value = Pop();
-  HValue* context = environment()->LookupContext();
-  HInstruction* instr =
-      HMul::New(zone(), context, value, graph()->GetConstant1());
-  if (instr->IsBinaryOperation()) {
-    // Since we don't have type feedback, we must be cautious/pessimistic.
-    HBinaryOperation::cast(instr)->set_observed_input_representation(
-        Representation::Tagged(), Representation::Tagged());
-  }
-  return ast_context()->ReturnInstruction(instr, expr->id());
-}
-
-
 void HOptimizedGraphBuilder::VisitSub(UnaryOperation* expr) {
   CHECK_ALIVE(VisitForValue(expr->expression()));
   HValue* value = Pop();
@@ -9246,7 +9880,8 @@ void HOptimizedGraphBuilder::VisitSub(UnaryOperation* expr) {
     info = TypeInfo::Unknown();
   }
   if (instr->IsBinaryOperation()) {
-    HBinaryOperation::cast(instr)->set_observed_input_representation(rep, rep);
+    HBinaryOperation::cast(instr)->set_observed_input_representation(1, rep);
+    HBinaryOperation::cast(instr)->set_observed_input_representation(2, rep);
   }
   return ast_context()->ReturnInstruction(instr, expr->id());
 }
@@ -9507,7 +10142,7 @@ void HOptimizedGraphBuilder::VisitCountOperation(CountOperation* expr) {
       if (has_side_effects) AddSimulate(prop->LoadId(), REMOVABLE_SIMULATE);
 
       after = BuildIncrement(returns_original_input, expr);
-      input = Pop();
+      input = environment()->ExpressionStackAt(0);
 
       expr->RecordTypeFeedback(oracle(), zone());
       HandleKeyedElementAccess(obj, key, after, expr, expr->AssignmentId(),
@@ -9515,10 +10150,10 @@ void HOptimizedGraphBuilder::VisitCountOperation(CountOperation* expr) {
                                true,  // is_store
                                &has_side_effects);
 
-      // Drop the key from the bailout environment.  Overwrite the receiver
-      // with the result of the operation, and the placeholder with the
-      // original value if necessary.
-      Drop(1);
+      // Drop the key and the original value from the bailout environment.
+      // Overwrite the receiver with the result of the operation, and the
+      // placeholder with the original value if necessary.
+      Drop(2);
       environment()->SetExpressionStackAt(0, after);
       if (returns_original_input) environment()->SetExpressionStackAt(1, input);
       ASSERT(has_side_effects);  // Stores always have side effects.
@@ -9687,7 +10322,8 @@ HInstruction* HOptimizedGraphBuilder::BuildBinaryOperation(
 
   if (instr->IsBinaryOperation()) {
     HBinaryOperation* binop = HBinaryOperation::cast(instr);
-    binop->set_observed_input_representation(left_rep, right_rep);
+    binop->set_observed_input_representation(1, left_rep);
+    binop->set_observed_input_representation(2, right_rep);
     binop->initialize_output_representation(result_rep);
   }
   return instr;
@@ -10067,7 +10703,8 @@ void HOptimizedGraphBuilder::VisitCompareOperation(CompareOperation* expr) {
     if (combined_rep.IsTagged() || combined_rep.IsNone()) {
       HCompareGeneric* result =
           new(zone()) HCompareGeneric(context, left, right, op);
-      result->set_observed_input_representation(left_rep, right_rep);
+      result->set_observed_input_representation(1, left_rep);
+      result->set_observed_input_representation(2, right_rep);
       result->set_position(expr->position());
       return ast_context()->ReturnInstruction(result, expr->id());
     } else {
@@ -10089,9 +10726,24 @@ void HOptimizedGraphBuilder::HandleLiteralCompareNil(CompareOperation* expr,
   ASSERT(current_block()->HasPredecessor());
   EqualityKind kind =
       expr->op() == Token::EQ_STRICT ? kStrictEquality : kNonStrictEquality;
-  HIsNilAndBranch* instr = new(zone()) HIsNilAndBranch(value, kind, nil);
-  instr->set_position(expr->position());
-  return ast_context()->ReturnControl(instr, expr->id());
+  HIfContinuation continuation;
+  TypeFeedbackId id = expr->CompareOperationFeedbackId();
+  CompareNilICStub::Types types;
+  if (kind == kStrictEquality) {
+    if (nil == kNullValue) {
+      types = CompareNilICStub::kCompareAgainstNull;
+    } else {
+      types = CompareNilICStub::kCompareAgainstUndefined;
+    }
+  } else {
+    types = static_cast<CompareNilICStub::Types>(
+        oracle()->CompareNilTypes(id));
+    if (types == 0) types = CompareNilICStub::kFullCompare;
+  }
+  Handle<Map> map_handle(oracle()->CompareNilMonomorphicReceiverType(id));
+  BuildCompareNil(value, kind, types, map_handle,
+                  expr->position(), &continuation);
+  return ast_context()->ReturnContinuation(&continuation, expr->id());
 }
 
 
@@ -10173,7 +10825,6 @@ void HOptimizedGraphBuilder::BuildEmitDeepCopy(
       elements->map() != isolate()->heap()->fixed_cow_array_map()) ?
           elements->Size() : 0;
   int elements_offset = *offset + object_size;
-  int inobject_properties = boilerplate_object->map()->inobject_properties();
   if (create_allocation_site_info) {
     elements_offset += AllocationSiteInfo::kSize;
     *offset += AllocationSiteInfo::kSize;
@@ -10187,42 +10838,55 @@ void HOptimizedGraphBuilder::BuildEmitDeepCopy(
   // Copy in-object properties.
   HValue* object_properties =
       AddInstruction(new(zone) HInnerAllocatedObject(target, object_offset));
-  for (int i = 0; i < inobject_properties; i++) {
+
+  Handle<DescriptorArray> descriptors(
+      boilerplate_object->map()->instance_descriptors());
+  int limit = boilerplate_object->map()->NumberOfOwnDescriptors();
+
+  for (int i = 0; i < limit; i++) {
+    PropertyDetails details = descriptors->GetDetails(i);
+    if (details.type() != FIELD) continue;
+    int index = descriptors->GetFieldIndex(i);
+    int property_offset = boilerplate_object->GetInObjectPropertyOffset(index);
+    Handle<Name> name(descriptors->GetKey(i));
     Handle<Object> value =
-        Handle<Object>(boilerplate_object->InObjectPropertyAt(i),
+        Handle<Object>(boilerplate_object->InObjectPropertyAt(index),
         isolate());
     if (value->IsJSObject()) {
       Handle<JSObject> value_object = Handle<JSObject>::cast(value);
       Handle<JSObject> original_value_object = Handle<JSObject>::cast(
-          Handle<Object>(original_boilerplate_object->InObjectPropertyAt(i),
+          Handle<Object>(original_boilerplate_object->InObjectPropertyAt(index),
               isolate()));
       HInstruction* value_instruction =
           AddInstruction(new(zone) HInnerAllocatedObject(target, *offset));
       AddInstruction(new(zone) HStoreNamedField(
-          object_properties, factory->unknown_field_string(), value_instruction,
-          true, boilerplate_object->GetInObjectPropertyOffset(i)));
+          object_properties, name, value_instruction, true,
+          Representation::Tagged(), property_offset));
       BuildEmitDeepCopy(value_object, original_value_object, target,
                         offset, DONT_TRACK_ALLOCATION_SITE);
     } else {
+      Representation representation = details.representation();
       HInstruction* value_instruction = AddInstruction(new(zone) HConstant(
           value, Representation::Tagged()));
+      if (representation.IsDouble()) {
+        HInstruction* double_box =
+            AddInstruction(new(zone) HInnerAllocatedObject(target, *offset));
+        BuildStoreMap(double_box, factory->heap_number_map());
+        AddInstruction(new(zone) HStoreNamedField(
+            double_box, name, value_instruction, true,
+            Representation::Double(), HeapNumber::kValueOffset));
+        value_instruction = double_box;
+        *offset += HeapNumber::kSize;
+      }
       AddInstruction(new(zone) HStoreNamedField(
-          object_properties, factory->unknown_field_string(), value_instruction,
-          true, boilerplate_object->GetInObjectPropertyOffset(i)));
+          object_properties, name, value_instruction, true,
+          Representation::Tagged(), property_offset));
     }
   }
 
   // Build Allocation Site Info if desired
   if (create_allocation_site_info) {
-    HValue* alloc_site =
-        AddInstruction(new(zone) HInnerAllocatedObject(target, JSArray::kSize));
-    Handle<Map> alloc_site_map(isolate()->heap()->allocation_site_info_map());
-    BuildStoreMap(alloc_site, alloc_site_map);
-    int alloc_payload_offset = AllocationSiteInfo::kPayloadOffset;
-    AddInstruction(new(zone) HStoreNamedField(alloc_site,
-                                              factory->payload_string(),
-                                              original_boilerplate,
-                                              true, alloc_payload_offset));
+    BuildCreateAllocationSiteInfo(target, JSArray::kSize, original_boilerplate);
   }
 
   if (object_elements != NULL) {
@@ -10311,7 +10975,7 @@ HValue* HOptimizedGraphBuilder::BuildCopyObjectHeader(
       object_header,
       factory->elements_field_string(),
       elements,
-      true, JSObject::kElementsOffset));
+      true, Representation::Tagged(), JSObject::kElementsOffset));
   elements_store->SetGVNFlag(kChangesElementsPointer);
 
   Handle<Object> properties_field =
@@ -10321,8 +10985,9 @@ HValue* HOptimizedGraphBuilder::BuildCopyObjectHeader(
       properties_field, Representation::None()));
   AddInstruction(new(zone) HStoreNamedField(object_header,
                                             factory->empty_string(),
-                                            properties,
-                                            true, JSObject::kPropertiesOffset));
+                                            properties, true,
+                                            Representation::Tagged(),
+                                            JSObject::kPropertiesOffset));
 
   if (boilerplate_object->IsJSArray()) {
     Handle<JSArray> boilerplate_array =
@@ -10331,11 +10996,15 @@ HValue* HOptimizedGraphBuilder::BuildCopyObjectHeader(
         Handle<Object>(boilerplate_array->length(), isolate());
     HInstruction* length = AddInstruction(new(zone) HConstant(
         length_field, Representation::None()));
+    ASSERT(boilerplate_array->length()->IsSmi());
+    Representation representation =
+        IsFastElementsKind(boilerplate_array->GetElementsKind())
+        ? Representation::Smi() : Representation::Tagged();
     HInstruction* length_store = AddInstruction(new(zone) HStoreNamedField(
         object_header,
         factory->length_field_string(),
         length,
-        true, JSArray::kLengthOffset));
+        true, representation, JSArray::kLengthOffset));
     length_store->SetGVNFlag(kChangesArrayLengths);
   }
 
@@ -10728,6 +11397,7 @@ void HOptimizedGraphBuilder::GenerateSetValueOf(CallRuntime* call) {
                                               name,
                                               value,
                                               true,  // in-object store.
+                                              Representation::Tagged(),
                                               JSValue::kValueOffset));
   if_js_value->Goto(join);
   join->SetJoinId(call->id());
@@ -11014,6 +11684,17 @@ void HOptimizedGraphBuilder::GenerateFastAsciiArrayJoin(CallRuntime* call) {
 }
 
 
+// Support for generators.
+void HOptimizedGraphBuilder::GenerateGeneratorSend(CallRuntime* call) {
+  return Bailout("inlined runtime function: GeneratorSend");
+}
+
+
+void HOptimizedGraphBuilder::GenerateGeneratorThrow(CallRuntime* call) {
+  return Bailout("inlined runtime function: GeneratorThrow");
+}
+
+
 #undef CHECK_BAILOUT
 #undef CHECK_ALIVE
 
@@ -11033,7 +11714,6 @@ HEnvironment::HEnvironment(HEnvironment* outer,
       pop_count_(0),
       push_count_(0),
       ast_id_(BailoutId::None()),
-      previous_ast_id_(BailoutId::None()),
       zone_(zone) {
   Initialize(scope->num_parameters() + 1, scope->num_stack_slots(), 0);
 }
@@ -11050,7 +11730,6 @@ HEnvironment::HEnvironment(Zone* zone, int parameter_count)
       pop_count_(0),
       push_count_(0),
       ast_id_(BailoutId::None()),
-      previous_ast_id_(BailoutId::None()),
       zone_(zone) {
   Initialize(parameter_count, 0, 0);
 }
@@ -11067,7 +11746,6 @@ HEnvironment::HEnvironment(const HEnvironment* other, Zone* zone)
       pop_count_(0),
       push_count_(0),
       ast_id_(other->ast_id()),
-      previous_ast_id_(BailoutId::None()),
       zone_(zone) {
   Initialize(other);
 }
@@ -11088,7 +11766,6 @@ HEnvironment::HEnvironment(HEnvironment* outer,
       pop_count_(0),
       push_count_(0),
       ast_id_(BailoutId::None()),
-      previous_ast_id_(BailoutId::None()),
       zone_(zone) {
 }
 
@@ -11338,16 +12015,14 @@ void HTracer::TraceCompilation(CompilationInfo* info) {
 
 void HTracer::TraceLithium(const char* name, LChunk* chunk) {
   ASSERT(!FLAG_parallel_recompilation);
-  HandleDereferenceGuard allow_handle_deref(chunk->isolate(),
-                                            HandleDereferenceGuard::ALLOW);
+  ALLOW_HANDLE_DEREF(chunk->isolate(), "debug output");
   Trace(name, chunk->graph(), chunk);
 }
 
 
 void HTracer::TraceHydrogen(const char* name, HGraph* graph) {
   ASSERT(!FLAG_parallel_recompilation);
-  HandleDereferenceGuard allow_handle_deref(graph->isolate(),
-                                            HandleDereferenceGuard::ALLOW);
+  ALLOW_HANDLE_DEREF(graph->isolate(), "debug output");
   Trace(name, graph, NULL);
 }
 

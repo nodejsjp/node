@@ -83,6 +83,7 @@ void MacroAssembler::StoreRoot(Register source,
 
 void MacroAssembler::LoadHeapObject(Register result,
                                     Handle<HeapObject> object) {
+  ALLOW_HANDLE_DEREF(isolate(), "using raw address");
   if (isolate()->heap()->InNewSpace(*object)) {
     Handle<JSGlobalPropertyCell> cell =
         isolate()->factory()->NewJSGlobalPropertyCell(object);
@@ -2457,6 +2458,7 @@ void MacroAssembler::Jump(Handle<Code> code,
                           const Operand& rt,
                           BranchDelaySlot bd) {
   ASSERT(RelocInfo::IsCodeTarget(rmode));
+  ALLOW_HANDLE_DEREF(isolate(), "embedding raw address");
   Jump(reinterpret_cast<intptr_t>(code.location()), rmode, cond, rs, rt, bd);
 }
 
@@ -2544,6 +2546,7 @@ int MacroAssembler::CallSize(Handle<Code> code,
                              Register rs,
                              const Operand& rt,
                              BranchDelaySlot bd) {
+  ALLOW_HANDLE_DEREF(isolate(), "using raw address");
   return CallSize(reinterpret_cast<Address>(code.location()),
       rmode, cond, rs, rt, bd);
 }
@@ -2564,6 +2567,7 @@ void MacroAssembler::Call(Handle<Code> code,
     SetRecordedAstId(ast_id);
     rmode = RelocInfo::CODE_TARGET_WITH_ID;
   }
+  ALLOW_HANDLE_DEREF(isolate(), "embedding raw address");
   Call(reinterpret_cast<Address>(code.location()), rmode, cond, rs, rt, bd);
   ASSERT_EQ(CallSize(code, rmode, ast_id, cond, rs, rt, bd),
             SizeOfCodeGeneratedSince(&start));
@@ -3131,8 +3135,34 @@ void MacroAssembler::AllocateAsciiConsString(Register result,
                                              Register scratch1,
                                              Register scratch2,
                                              Label* gc_required) {
-  Allocate(ConsString::kSize, result, scratch1, scratch2, gc_required,
-           TAG_OBJECT);
+  Label allocate_new_space, install_map;
+  AllocationFlags flags = TAG_OBJECT;
+
+  ExternalReference high_promotion_mode = ExternalReference::
+      new_space_high_promotion_mode_active_address(isolate());
+  li(scratch1, Operand(high_promotion_mode));
+  lw(scratch1, MemOperand(scratch1, 0));
+  Branch(&allocate_new_space, eq, scratch1, Operand(zero_reg));
+
+  Allocate(ConsString::kSize,
+           result,
+           scratch1,
+           scratch2,
+           gc_required,
+           static_cast<AllocationFlags>(flags | PRETENURE_OLD_POINTER_SPACE));
+
+  jmp(&install_map);
+
+  bind(&allocate_new_space);
+  Allocate(ConsString::kSize,
+           result,
+           scratch1,
+           scratch2,
+           gc_required,
+           flags);
+
+  bind(&install_map);
+
   InitializeNewString(result,
                       length,
                       Heap::kConsAsciiStringMapRootIndex,
@@ -3743,6 +3773,7 @@ void MacroAssembler::InvokeFunction(Register function,
 
 
 void MacroAssembler::InvokeFunction(Handle<JSFunction> function,
+                                    const ParameterCount& expected,
                                     const ParameterCount& actual,
                                     InvokeFlag flag,
                                     const CallWrapper& call_wrapper,
@@ -3754,7 +3785,6 @@ void MacroAssembler::InvokeFunction(Handle<JSFunction> function,
   LoadHeapObject(a1, function);
   lw(cp, FieldMemOperand(a1, JSFunction::kContextOffset));
 
-  ParameterCount expected(function->shared()->formal_parameter_count());
   // We call indirectly through the code field in the function to
   // allow recompilation to take effect without changing any of the
   // call sites.
@@ -3921,8 +3951,9 @@ void MacroAssembler::CallApiFunctionAndReturn(ExternalReference function,
   if (FLAG_log_timer_events) {
     FrameScope frame(this, StackFrame::MANUAL);
     PushSafepointRegisters();
-    PrepareCallCFunction(0, a0);
-    CallCFunction(ExternalReference::log_enter_external_function(isolate()), 0);
+    PrepareCallCFunction(1, a0);
+    li(a0, Operand(ExternalReference::isolate_address(isolate())));
+    CallCFunction(ExternalReference::log_enter_external_function(isolate()), 1);
     PopSafepointRegisters();
   }
 
@@ -3941,8 +3972,9 @@ void MacroAssembler::CallApiFunctionAndReturn(ExternalReference function,
   if (FLAG_log_timer_events) {
     FrameScope frame(this, StackFrame::MANUAL);
     PushSafepointRegisters();
-    PrepareCallCFunction(0, a0);
-    CallCFunction(ExternalReference::log_leave_external_function(isolate()), 0);
+    PrepareCallCFunction(1, a0);
+    li(a0, Operand(ExternalReference::isolate_address(isolate())));
+    CallCFunction(ExternalReference::log_leave_external_function(isolate()), 1);
     PopSafepointRegisters();
   }
 
@@ -3996,7 +4028,7 @@ void MacroAssembler::CallApiFunctionAndReturn(ExternalReference function,
   mov(s0, v0);
   mov(a0, v0);
   PrepareCallCFunction(1, s1);
-  li(a0, Operand(ExternalReference::isolate_address()));
+  li(a0, Operand(ExternalReference::isolate_address(isolate())));
   CallCFunction(ExternalReference::delete_handle_scope_extensions(isolate()),
       1);
   mov(v0, s0);
@@ -5126,6 +5158,18 @@ void MacroAssembler::CheckPageFlag(
   lw(scratch, MemOperand(scratch, MemoryChunk::kFlagsOffset));
   And(scratch, scratch, Operand(mask));
   Branch(condition_met, cc, scratch, Operand(zero_reg));
+}
+
+
+void MacroAssembler::CheckMapDeprecated(Handle<Map> map,
+                                        Register scratch,
+                                        Label* if_deprecated) {
+  if (map->CanBeDeprecated()) {
+    li(scratch, Operand(map));
+    lw(scratch, FieldMemOperand(scratch, Map::kBitField3Offset));
+    And(scratch, scratch, Operand(Smi::FromInt(Map::Deprecated::kMask)));
+    Branch(if_deprecated, ne, scratch, Operand(zero_reg));
+  }
 }
 
 

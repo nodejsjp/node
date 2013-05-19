@@ -31,6 +31,8 @@ var kMessages = {
   // Error
   cyclic_proto:                  ["Cyclic __proto__ value"],
   code_gen_from_strings:         ["%0"],
+  generator_running:             ["Generator is already running"],
+  generator_finished:            ["Generator has already finished"],
   // TypeError
   unexpected_token:              ["Unexpected token ", "%0"],
   unexpected_token_number:       ["Unexpected number"],
@@ -99,16 +101,24 @@ var kMessages = {
   observe_type_non_string:       ["Invalid changeRecord with non-string 'type' property"],
   observe_notify_non_notifier:   ["notify called on non-notifier object"],
   proto_poison_pill:             ["Generic use of __proto__ accessor not allowed"],
+  parameterless_typed_array_constr:
+                                 ["%0"," constructor should have at least one argument."],
+  not_typed_array:               ["this is not a typed array."],
+  invalid_argument:              ["invalid_argument"],
   // RangeError
   invalid_array_length:          ["Invalid array length"],
   invalid_array_buffer_length:   ["Invalid array buffer length"],
   invalid_typed_array_offset:    ["Start offset is too large"],
   invalid_typed_array_length:    ["Length is too large"],
   invalid_typed_array_alignment: ["%0", "of", "%1", "should be a multiple of", "%3"],
+  typed_array_set_source_too_large:
+                                 ["Source is too large"],
   stack_overflow:                ["Maximum call stack size exceeded"],
   invalid_time_value:            ["Invalid time value"],
   // SyntaxError
-  unable_to_parse:               ["Parse error"],
+  paren_in_arg_string:           ["Function arg string contains parenthesis"],
+  not_isvar:                     ["builtin %IS_VAR: not a variable"],
+  single_function_literal:       ["Single function literal required"],
   invalid_regexp_flags:          ["Invalid flags supplied to RegExp constructor '", "%0", "'"],
   invalid_regexp:                ["Invalid RegExp pattern /", "%0", "/"],
   illegal_break:                 ["Illegal break statement"],
@@ -158,7 +168,7 @@ var kMessages = {
   symbol_to_string:              ["Conversion from symbol to string"],
   invalid_module_path:           ["Module does not export '", "%0", "', or export is not itself a module"],
   module_type_error:             ["Module '", "%0", "' used improperly"],
-  module_export_undefined:       ["Export '", "%0", "' is not defined in module"],
+  module_export_undefined:       ["Export '", "%0", "' is not defined in module"]
 };
 
 

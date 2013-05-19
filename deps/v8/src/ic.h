@@ -45,6 +45,7 @@ namespace internal {
   ICU(KeyedCallIC_Miss)                               \
   ICU(StoreIC_Miss)                                   \
   ICU(StoreIC_ArrayLength)                            \
+  ICU(StoreIC_Slow)                                   \
   ICU(SharedStoreIC_ExtendStorage)                    \
   ICU(KeyedStoreIC_Miss)                              \
   ICU(KeyedStoreIC_MissForceGeneric)                  \
@@ -59,6 +60,8 @@ namespace internal {
   ICU(UnaryOp_Patch)                                  \
   ICU(BinaryOp_Patch)                                 \
   ICU(CompareIC_Miss)                                 \
+  ICU(CompareNilIC_Miss)                              \
+  ICU(Unreachable)                                    \
   ICU(ToBoolean_Patch)
 //
 // IC is the base class for LoadIC, StoreIC, CallIC, KeyedLoadIC,
@@ -182,7 +185,7 @@ class IC {
                   Handle<JSObject> receiver,
                   Handle<String> name,
                   Handle<Code> code);
-  virtual void UpdateMegamorphicCache(Map* map, String* name, Code* code);
+  virtual void UpdateMegamorphicCache(Map* map, Name* name, Code* code);
   virtual Handle<Code> megamorphic_stub() {
     UNREACHABLE();
     return Handle<Code>::null();
@@ -469,7 +472,7 @@ class KeyedLoadIC: public LoadIC {
   virtual Handle<Code> ComputeLoadHandler(LookupResult* lookup,
                                           Handle<JSObject> receiver,
                                           Handle<String> name);
-  virtual void UpdateMegamorphicCache(Map* map, String* name, Code* code) { }
+  virtual void UpdateMegamorphicCache(Map* map, Name* name, Code* code) { }
 
  private:
   // Stub accessors.
@@ -502,6 +505,7 @@ class StoreIC: public IC {
   }
 
   // Code generators for stub routines. Only called once at startup.
+  static void GenerateSlow(MacroAssembler* masm);
   static void GenerateInitialize(MacroAssembler* masm) { GenerateMiss(masm); }
   static void GenerateMiss(MacroAssembler* masm);
   static void GenerateMegamorphic(MacroAssembler* masm,
@@ -618,7 +622,7 @@ class KeyedStoreIC: public StoreIC {
                                                StrictModeFlag strict_mode,
                                                Handle<JSObject> receiver,
                                                Handle<String> name);
-  virtual void UpdateMegamorphicCache(Map* map, String* name, Code* code) { }
+  virtual void UpdateMegamorphicCache(Map* map, Name* name, Code* code) { }
 
   virtual Handle<Code> megamorphic_stub() {
     return isolate()->builtins()->KeyedStoreIC_Generic();
@@ -775,6 +779,26 @@ class CompareIC: public IC {
 };
 
 
+class CompareNilIC: public IC {
+ public:
+  explicit CompareNilIC(Isolate* isolate) : IC(EXTRA_CALL_FRAME, isolate) {}
+
+  MUST_USE_RESULT MaybeObject* CompareNil(Handle<Object> object);
+
+  static Handle<Code> GetUninitialized();
+
+  static Code* GetRawUninitialized(EqualityKind kind, NilValue nil);
+
+  static void Clear(Address address, Code* target);
+
+  void patch(Code* code);
+
+  static MUST_USE_RESULT MaybeObject* DoCompareNilSlow(EqualityKind kind,
+                                                       NilValue nil,
+                                                       Handle<Object> object);
+};
+
+
 class ToBooleanIC: public IC {
  public:
   explicit ToBooleanIC(Isolate* isolate) : IC(NO_EXTRA_FRAME, isolate) { }
@@ -789,6 +813,8 @@ void PatchInlinedSmiCode(Address address, InlinedSmiCheck check);
 
 DECLARE_RUNTIME_FUNCTION(MaybeObject*, KeyedLoadIC_MissFromStubFailure);
 DECLARE_RUNTIME_FUNCTION(MaybeObject*, KeyedStoreIC_MissFromStubFailure);
+DECLARE_RUNTIME_FUNCTION(MaybeObject*, CompareNilIC_Miss);
+
 
 } }  // namespace v8::internal
 

@@ -37,6 +37,17 @@
 namespace v8 {
 namespace internal {
 
+
+CodeStubInterfaceDescriptor::CodeStubInterfaceDescriptor()
+    : register_param_count_(-1),
+      stack_parameter_count_(NULL),
+      hint_stack_parameter_count_(-1),
+      function_mode_(NOT_JS_FUNCTION_STUB_MODE),
+      register_params_(NULL),
+      deoptimization_handler_(NULL),
+      miss_handler_(IC_Utility(IC::kUnreachable), Isolate::Current()) { }
+
+
 bool CodeStub::FindCodeInCache(Code** code_out, Isolate* isolate) {
   UnseededNumberDictionary* stubs = isolate->heap()->code_stubs();
   int index = stubs->FindEntry(GetKey());
@@ -67,7 +78,7 @@ void CodeStub::RecordCodeGeneration(Code* code, Isolate* isolate) {
 }
 
 
-int CodeStub::GetCodeKind() {
+Code::Kind CodeStub::GetCodeKind() const {
   return Code::STUB;
 }
 
@@ -98,7 +109,7 @@ Handle<Code> PlatformCodeStub::GenerateCode() {
 
   // Copy the generated code into a heap object.
   Code::Flags flags = Code::ComputeFlags(
-      static_cast<Code::Kind>(GetCodeKind()),
+      GetCodeKind(),
       GetICState(),
       GetExtraICState(),
       GetStubType(),
@@ -308,7 +319,7 @@ void ICCompareStub::AddToSpecialCache(Handle<Code> new_object) {
 bool ICCompareStub::FindCodeInSpecialCache(Code** code_out, Isolate* isolate) {
   Factory* factory = isolate->factory();
   Code::Flags flags = Code::ComputeFlags(
-      static_cast<Code::Kind>(GetCodeKind()),
+      GetCodeKind(),
       UNINITIALIZED);
   ASSERT(op_ == Token::EQ || op_ == Token::EQ_STRICT);
   Handle<Object> probe(
@@ -394,6 +405,44 @@ void ICCompareStub::Generate(MacroAssembler* masm) {
       GenerateGeneric(masm);
       break;
   }
+}
+
+
+CompareNilICStub::Types CompareNilICStub::GetPatchedICFlags(
+    Code::ExtraICState extra_ic_state,
+    Handle<Object> object,
+    bool* already_monomorphic) {
+  Types types = TypesField::decode(extra_ic_state);
+  NilValue nil = NilValueField::decode(extra_ic_state);
+  EqualityKind kind = EqualityKindField::decode(extra_ic_state);
+  ASSERT(types != CompareNilICStub::kFullCompare);
+  *already_monomorphic =
+      (types & CompareNilICStub::kCompareAgainstMonomorphicMap) != 0;
+  if (kind == kStrictEquality) {
+    if (nil == kNullValue) {
+      return CompareNilICStub::kCompareAgainstNull;
+    } else {
+      return CompareNilICStub::kCompareAgainstUndefined;
+    }
+  } else {
+    if (object->IsNull()) {
+      types = static_cast<CompareNilICStub::Types>(
+          types | CompareNilICStub::kCompareAgainstNull);
+    } else if (object->IsUndefined()) {
+      types = static_cast<CompareNilICStub::Types>(
+          types | CompareNilICStub::kCompareAgainstUndefined);
+    } else if (object->IsUndetectableObject() ||
+               object->IsOddball() ||
+               !object->IsHeapObject()) {
+        types = CompareNilICStub::kFullCompare;
+    } else if ((types & CompareNilICStub::kCompareAgainstMonomorphicMap) != 0) {
+      types = CompareNilICStub::kFullCompare;
+    } else {
+      types = static_cast<CompareNilICStub::Types>(
+          types | CompareNilICStub::kCompareAgainstMonomorphicMap);
+    }
+  }
+  return types;
 }
 
 
@@ -557,7 +606,7 @@ bool ToBooleanStub::Types::Record(Handle<Object> object) {
     ASSERT(!object->IsUndetectableObject());
     Add(HEAP_NUMBER);
     double value = HeapNumber::cast(*object)->value();
-    return value != 0 && !isnan(value);
+    return value != 0 && !std::isnan(value);
   } else {
     // We should never see an internal object at runtime here!
     UNREACHABLE();
@@ -644,6 +693,47 @@ bool ProfileEntryHookStub::SetFunctionEntryHook(FunctionEntryHook entry_hook) {
 
   entry_hook_ = entry_hook;
   return true;
+}
+
+
+static void InstallDescriptor(Isolate* isolate, HydrogenCodeStub* stub) {
+  int major_key = stub->MajorKey();
+  CodeStubInterfaceDescriptor* descriptor =
+      isolate->code_stub_interface_descriptor(major_key);
+  if (!descriptor->initialized()) {
+    stub->InitializeInterfaceDescriptor(isolate, descriptor);
+  }
+}
+
+
+void ArrayConstructorStubBase::InstallDescriptors(Isolate* isolate) {
+  ArrayNoArgumentConstructorStub stub1(GetInitialFastElementsKind());
+  InstallDescriptor(isolate, &stub1);
+  ArraySingleArgumentConstructorStub stub2(GetInitialFastElementsKind());
+  InstallDescriptor(isolate, &stub2);
+  ArrayNArgumentsConstructorStub stub3(GetInitialFastElementsKind());
+  InstallDescriptor(isolate, &stub3);
+}
+
+
+ArrayConstructorStub::ArrayConstructorStub(Isolate* isolate)
+    : argument_count_(ANY) {
+  ArrayConstructorStubBase::GenerateStubsAheadOfTime(isolate);
+}
+
+
+ArrayConstructorStub::ArrayConstructorStub(Isolate* isolate,
+                                           int argument_count) {
+  if (argument_count == 0) {
+    argument_count_ = NONE;
+  } else if (argument_count == 1) {
+    argument_count_ = ONE;
+  } else if (argument_count >= 2) {
+    argument_count_ = MORE_THAN_ONE;
+  } else {
+    UNREACHABLE();
+  }
+  ArrayConstructorStubBase::GenerateStubsAheadOfTime(isolate);
 }
 
 

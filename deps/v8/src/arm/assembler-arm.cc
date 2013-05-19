@@ -305,16 +305,20 @@ void RelocInfo::PatchCodeWithCall(Address target, int guard_bytes) {
 // See assembler-arm-inl.h for inlined constructors
 
 Operand::Operand(Handle<Object> handle) {
+#ifdef DEBUG
+  Isolate* isolate = Isolate::Current();
+#endif
+  ALLOW_HANDLE_DEREF(isolate, "using and embedding raw address");
   rm_ = no_reg;
   // Verify all Objects referred by code are NOT in new space.
   Object* obj = *handle;
-  ASSERT(!HEAP->InNewSpace(obj));
+  ASSERT(!isolate->heap()->InNewSpace(obj));
   if (obj->IsHeapObject()) {
     imm32_ = reinterpret_cast<intptr_t>(handle.location());
     rmode_ = RelocInfo::EMBEDDED_OBJECT;
   } else {
     // no relocation needed
-    imm32_ =  reinterpret_cast<intptr_t>(obj);
+    imm32_ = reinterpret_cast<intptr_t>(obj);
     rmode_ = RelocInfo::NONE32;
   }
 }
@@ -1683,7 +1687,6 @@ void Assembler::stop(const char* msg, Condition cond, int32_t code) {
     emit(reinterpret_cast<Instr>(msg));
   }
 #else  // def __arm__
-#ifdef CAN_USE_ARMV5_INSTRUCTIONS
   if (cond != al) {
     Label skip;
     b(&skip, NegateCondition(cond));
@@ -1692,9 +1695,6 @@ void Assembler::stop(const char* msg, Condition cond, int32_t code) {
   } else {
     bkpt(0);
   }
-#else  // ndef CAN_USE_ARMV5_INSTRUCTIONS
-  svc(0x9f0001, cond);
-#endif  // ndef CAN_USE_ARMV5_INSTRUCTIONS
 #endif  // def __arm__
 }
 

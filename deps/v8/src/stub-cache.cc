@@ -110,15 +110,25 @@ Handle<JSObject> StubCache::StubHolder(Handle<JSObject> receiver,
 
 
 Handle<Code> StubCache::FindIC(Handle<Name> name,
+                               Handle<Map> stub_holder_map,
+                               Code::Kind kind,
+                               Code::StubType type,
+                               Code::ExtraICState extra_state) {
+  Code::Flags flags = Code::ComputeMonomorphicFlags(kind, extra_state, type);
+  Handle<Object> probe(stub_holder_map->FindInCodeCache(*name, flags),
+                       isolate_);
+  if (probe->IsCode()) return Handle<Code>::cast(probe);
+  return Handle<Code>::null();
+}
+
+
+Handle<Code> StubCache::FindIC(Handle<Name> name,
                                Handle<JSObject> stub_holder,
                                Code::Kind kind,
                                Code::StubType type,
                                Code::ExtraICState extra_ic_state) {
-  Code::Flags flags = Code::ComputeMonomorphicFlags(kind, extra_ic_state, type);
-  Handle<Object> probe(stub_holder->map()->FindInCodeCache(*name, flags),
-                       isolate_);
-  if (probe->IsCode()) return Handle<Code>::cast(probe);
-  return Handle<Code>::null();
+  return FindIC(name, Handle<Map>(stub_holder->map()), kind,
+                type, extra_ic_state);
 }
 
 
@@ -211,11 +221,12 @@ Handle<Code> StubCache::ComputeLoadNonexistent(Handle<Name> name,
 Handle<Code> StubCache::ComputeLoadField(Handle<Name> name,
                                          Handle<JSObject> receiver,
                                          Handle<JSObject> holder,
-                                         PropertyIndex field) {
+                                         PropertyIndex field,
+                                         Representation representation) {
   if (receiver.is_identical_to(holder)) {
-    LoadFieldStub stub(LoadStubCompiler::receiver(),
-                       field.is_inobject(holder),
-                       field.translate(holder));
+    LoadFieldStub stub(field.is_inobject(holder),
+                       field.translate(holder),
+                       representation);
     return stub.GetCode(isolate());
   }
 
@@ -226,7 +237,7 @@ Handle<Code> StubCache::ComputeLoadField(Handle<Name> name,
 
   LoadStubCompiler compiler(isolate_);
   Handle<Code> handler =
-      compiler.CompileLoadField(receiver, holder, name, field);
+      compiler.CompileLoadField(receiver, holder, name, field, representation);
   JSObject::UpdateMapCodeCache(stub_holder, name, handler);
   return handler;
 }
@@ -327,11 +338,12 @@ Handle<Code> StubCache::ComputeLoadGlobal(Handle<Name> name,
 Handle<Code> StubCache::ComputeKeyedLoadField(Handle<Name> name,
                                               Handle<JSObject> receiver,
                                               Handle<JSObject> holder,
-                                              PropertyIndex field) {
+                                              PropertyIndex field,
+                                              Representation representation) {
   if (receiver.is_identical_to(holder)) {
-    LoadFieldStub stub(KeyedLoadStubCompiler::receiver(),
-                       field.is_inobject(holder),
-                       field.translate(holder));
+    KeyedLoadFieldStub stub(field.is_inobject(holder),
+                            field.translate(holder),
+                            representation);
     return stub.GetCode(isolate());
   }
 
@@ -342,7 +354,7 @@ Handle<Code> StubCache::ComputeKeyedLoadField(Handle<Name> name,
 
   KeyedLoadStubCompiler compiler(isolate_);
   Handle<Code> handler =
-      compiler.CompileLoadField(receiver, holder, name, field);
+      compiler.CompileLoadField(receiver, holder, name, field, representation);
   JSObject::UpdateMapCodeCache(stub_holder, name, handler);
   return handler;
 }
@@ -487,7 +499,8 @@ Handle<Code> StubCache::ComputeStoreGlobal(Handle<Name> name,
                                            Handle<JSGlobalPropertyCell> cell,
                                            StrictModeFlag strict_mode) {
   Handle<Code> stub = FindIC(
-      name, receiver, Code::STORE_IC, Code::NORMAL, strict_mode);
+      name, Handle<JSObject>::cast(receiver),
+      Code::STORE_IC, Code::NORMAL, strict_mode);
   if (!stub.is_null()) return stub;
 
   StoreStubCompiler compiler(isolate_, strict_mode);
@@ -893,6 +906,32 @@ Handle<Code> StubCache::ComputeCallMiss(int argc,
 }
 
 
+Handle<Code> StubCache::ComputeCompareNil(Handle<Map> receiver_map,
+                                          NilValue nil,
+                                          CompareNilICStub::Types types) {
+  CompareNilICStub stub(kNonStrictEquality, nil, types);
+
+  Handle<String> name(isolate_->heap()->empty_string());
+  if (!receiver_map->is_shared()) {
+    Handle<Code> cached_ic = FindIC(name, receiver_map, Code::COMPARE_NIL_IC,
+                                    Code::NORMAL, stub.GetExtraICState());
+    if (!cached_ic.is_null()) return cached_ic;
+  }
+
+  Handle<Code> ic = stub.GetCode(isolate_);
+  // For monomorphic maps, use the code as a template, copying and replacing
+  // the monomorphic map that checks the object's type.
+  ic = isolate_->factory()->CopyCode(ic);
+  ic->ReplaceFirstMap(*receiver_map);
+
+  if (!receiver_map->is_shared()) {
+    Map::UpdateCodeCache(receiver_map, name, ic);
+  }
+
+  return ic;
+}
+
+
 Handle<Code> StubCache::ComputeLoadElementPolymorphic(
     MapHandleList* receiver_maps) {
   Code::Flags flags = Code::ComputeFlags(Code::KEYED_LOAD_IC, POLYMORPHIC);
@@ -917,10 +956,11 @@ Handle<Code> StubCache::ComputeLoadElementPolymorphic(
 
 Handle<Code> StubCache::ComputePolymorphicIC(MapHandleList* receiver_maps,
                                              CodeHandleList* handlers,
+                                             int number_of_valid_maps,
                                              Handle<Name> name) {
   LoadStubCompiler ic_compiler(isolate_);
-  Code::StubType type = handlers->length() == 1 ? handlers->at(0)->type()
-                                                : Code::NORMAL;
+  Code::StubType type = number_of_valid_maps == 1 ? handlers->at(0)->type()
+                                                  : Code::NORMAL;
   Handle<Code> ic = ic_compiler.CompilePolymorphicIC(
       receiver_maps, handlers, name, type, PROPERTY);
   return ic;
@@ -1005,45 +1045,40 @@ void StubCache::Clear() {
 
 
 void StubCache::CollectMatchingMaps(SmallMapList* types,
-                                    Name* name,
+                                    Handle<Name> name,
                                     Code::Flags flags,
                                     Handle<Context> native_context,
                                     Zone* zone) {
   for (int i = 0; i < kPrimaryTableSize; i++) {
-    if (primary_[i].key == name) {
+    if (primary_[i].key == *name) {
       Map* map = primary_[i].map;
       // Map can be NULL, if the stub is constant function call
       // with a primitive receiver.
       if (map == NULL) continue;
 
-      int offset = PrimaryOffset(name, flags, map);
+      int offset = PrimaryOffset(*name, flags, map);
       if (entry(primary_, offset) == &primary_[i] &&
           !TypeFeedbackOracle::CanRetainOtherContext(map, *native_context)) {
-        types->Add(Handle<Map>(map), zone);
+        types->AddMapIfMissing(Handle<Map>(map), zone);
       }
     }
   }
 
   for (int i = 0; i < kSecondaryTableSize; i++) {
-    if (secondary_[i].key == name) {
+    if (secondary_[i].key == *name) {
       Map* map = secondary_[i].map;
       // Map can be NULL, if the stub is constant function call
       // with a primitive receiver.
       if (map == NULL) continue;
 
       // Lookup in primary table and skip duplicates.
-      int primary_offset = PrimaryOffset(name, flags, map);
-      Entry* primary_entry = entry(primary_, primary_offset);
-      if (primary_entry->key == name) {
-        Map* primary_map = primary_entry->map;
-        if (map == primary_map) continue;
-      }
+      int primary_offset = PrimaryOffset(*name, flags, map);
 
       // Lookup in secondary table and add matches.
-      int offset = SecondaryOffset(name, flags, primary_offset);
+      int offset = SecondaryOffset(*name, flags, primary_offset);
       if (entry(secondary_, offset) == &secondary_[i] &&
           !TypeFeedbackOracle::CanRetainOtherContext(map, *native_context)) {
-        types->Add(Handle<Map>(map), zone);
+        types->AddMapIfMissing(Handle<Map>(map), zone);
       }
     }
   }
@@ -1074,7 +1109,7 @@ RUNTIME_FUNCTION(MaybeObject*, StoreCallbackProperty) {
   v8::AccessorInfo info(custom_args.end());
   {
     // Leaving JavaScript.
-    VMState state(isolate, EXTERNAL);
+    VMState<EXTERNAL> state(isolate);
     ExternalCallbackScope call_scope(isolate, setter_address);
     fun(v8::Utils::ToLocal(str), v8::Utils::ToLocal(value), info);
   }
@@ -1120,7 +1155,7 @@ RUNTIME_FUNCTION(MaybeObject*, LoadPropertyWithInterceptorOnly) {
     v8::Handle<v8::Value> r;
     {
       // Leaving JavaScript.
-      VMState state(isolate, EXTERNAL);
+      VMState<EXTERNAL> state(isolate);
       r = getter(v8::Utils::ToLocal(name), info);
     }
     RETURN_IF_SCHEDULED_EXCEPTION(isolate);
@@ -1183,7 +1218,7 @@ static MaybeObject* LoadWithInterceptor(Arguments* args,
     v8::Handle<v8::Value> r;
     {
       // Leaving JavaScript.
-      VMState state(isolate, EXTERNAL);
+      VMState<EXTERNAL> state(isolate);
       r = getter(v8::Utils::ToLocal(name), info);
     }
     RETURN_IF_SCHEDULED_EXCEPTION(isolate);
@@ -1463,35 +1498,23 @@ Register BaseLoadStubCompiler::HandlerFrontend(Handle<JSObject> object,
 }
 
 
-Handle<Code> BaseLoadStubCompiler::CompileLoadField(Handle<JSObject> object,
-                                                    Handle<JSObject> holder,
-                                                    Handle<Name> name,
-                                                    PropertyIndex field) {
+Handle<Code> BaseLoadStubCompiler::CompileLoadField(
+    Handle<JSObject> object,
+    Handle<JSObject> holder,
+    Handle<Name> name,
+    PropertyIndex field,
+    Representation representation) {
   Label miss;
 
   Register reg = HandlerFrontendHeader(object, receiver(), holder, name, &miss);
 
-  LoadFieldStub stub(reg, field.is_inobject(holder), field.translate(holder));
-  GenerateTailCall(masm(), stub.GetCode(isolate()));
+  GenerateLoadField(reg, holder, field, representation);
 
   __ bind(&miss);
   TailCallBuiltin(masm(), MissBuiltin(kind()));
 
   // Return the generated code.
   return GetCode(kind(), Code::FIELD, name);
-}
-
-
-// Load a fast property out of a holder object (src). In-object properties
-// are loaded directly otherwise the property is loaded from the properties
-// fixed array.
-void StubCompiler::GenerateFastPropertyLoad(MacroAssembler* masm,
-                                            Register dst,
-                                            Register src,
-                                            Handle<JSObject> holder,
-                                            PropertyIndex index) {
-  DoGenerateFastPropertyLoad(
-      masm, dst, src, index.is_inobject(holder), index.translate(holder));
 }
 
 
@@ -1557,17 +1580,16 @@ void BaseLoadStubCompiler::GenerateLoadPostInterceptor(
   if (lookup->IsField()) {
     PropertyIndex field = lookup->GetFieldIndex();
     if (interceptor_holder.is_identical_to(holder)) {
-      LoadFieldStub stub(interceptor_reg,
-                         field.is_inobject(holder),
-                         field.translate(holder));
-      GenerateTailCall(masm(), stub.GetCode(isolate()));
+      GenerateLoadField(
+          interceptor_reg, holder, field, lookup->representation());
     } else {
       // We found FIELD property in prototype chain of interceptor's holder.
       // Retrieve a field from field's holder.
       Register reg = HandlerFrontend(
           interceptor_holder, interceptor_reg, holder, name, &success);
       __ bind(&success);
-      GenerateLoadField(reg, holder, field);
+      GenerateLoadField(
+          reg, holder, field, lookup->representation());
     }
   } else {
     // We found CALLBACKS property in prototype chain of interceptor's
@@ -1619,7 +1641,7 @@ Handle<Code> BaseStoreStubCompiler::CompileStoreTransition(
     LookupResult* lookup,
     Handle<Map> transition,
     Handle<Name> name) {
-  Label miss, miss_restore_name;
+  Label miss, miss_restore_name, slow;
 
   GenerateNameCheck(name, this->name(), &miss);
 
@@ -1629,14 +1651,18 @@ Handle<Code> BaseStoreStubCompiler::CompileStoreTransition(
                           transition,
                           name,
                           receiver(), this->name(), value(),
-                          scratch1(), scratch2(),
+                          scratch1(), scratch2(), scratch3(),
                           &miss,
-                          &miss_restore_name);
+                          &miss_restore_name,
+                          &slow);
 
   // Handle store cache miss.
   GenerateRestoreName(masm(), &miss_restore_name, name);
   __ bind(&miss);
   TailCallBuiltin(masm(), MissBuiltin(kind()));
+
+  GenerateRestoreName(masm(), &slow, name);
+  TailCallBuiltin(masm(), SlowBuiltin(kind()));
 
   // Return the generated code.
   return GetICCode(kind(), Code::MAP_TRANSITION, name);

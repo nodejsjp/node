@@ -79,7 +79,7 @@ class CompilationInfo {
   Handle<JSFunction> closure() const { return closure_; }
   Handle<SharedFunctionInfo> shared_info() const { return shared_info_; }
   Handle<Script> script() const { return script_; }
-  HydrogenCodeStub* code_stub() {return code_stub_; }
+  HydrogenCodeStub* code_stub() const {return code_stub_; }
   v8::Extension* extension() const { return extension_; }
   ScriptDataImpl* pre_parse_data() const { return pre_parse_data_; }
   Handle<Context> context() const { return context_; }
@@ -141,6 +141,14 @@ class CompilationInfo {
 
   bool saves_caller_doubles() const {
     return SavesCallerDoubles::decode(flags_);
+  }
+
+  void MarkAsRequiresFrame() {
+    flags_ |= RequiresFrame::encode(true);
+  }
+
+  bool requires_frame() const {
+    return RequiresFrame::decode(flags_);
   }
 
   void SetParseRestriction(ParseRestriction restriction) {
@@ -300,6 +308,8 @@ class CompilationInfo {
   class SavesCallerDoubles: public BitField<bool, 12, 1> {};
   // If the set of valid statements is restricted.
   class ParseRestricitonField: public BitField<ParseRestriction, 13, 1> {};
+  // If the function requires a frame (for unspecified reasons)
+  class RequiresFrame: public BitField<bool, 14, 1> {};
 
   unsigned flags_;
 

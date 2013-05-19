@@ -522,7 +522,7 @@ BasicJsonStringifier::Result BasicJsonStringifier::SerializeSmi(Smi* object) {
 
 BasicJsonStringifier::Result BasicJsonStringifier::SerializeDouble(
     double number) {
-  if (isinf(number) || isnan(number)) {
+  if (std::isinf(number) || std::isnan(number)) {
     AppendAscii("null");
     return SUCCESS;
   }
@@ -644,7 +644,7 @@ BasicJsonStringifier::Result BasicJsonStringifier::SerializeJSObject(
       Handle<Object> property;
       if (details.type() == FIELD && *map == object->map()) {
         property = Handle<Object>(
-                       object->FastPropertyAt(
+                       object->RawFastPropertyAt(
                            map->instance_descriptors()->GetFieldIndex(i)),
                        isolate_);
       } else {

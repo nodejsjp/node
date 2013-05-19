@@ -125,11 +125,8 @@ CompilationInfo::~CompilationInfo() {
 
 
 int CompilationInfo::num_parameters() const {
-  if (IsStub()) {
-    return 0;
-  } else {
-    return scope()->num_parameters();
-  }
+  ASSERT(!IsStub());
+  return scope()->num_parameters();
 }
 
 
@@ -144,7 +141,11 @@ int CompilationInfo::num_heap_slots() const {
 
 Code::Flags CompilationInfo::flags() const {
   if (IsStub()) {
-    return Code::ComputeFlags(Code::COMPILED_STUB);
+    return Code::ComputeFlags(code_stub()->GetCodeKind(),
+                              code_stub()->GetICState(),
+                              code_stub()->GetExtraICState(),
+                              code_stub()->GetStubType(),
+                              code_stub()->GetStubFlags());
   } else {
     return Code::ComputeFlags(Code::OPTIMIZED_FUNCTION);
   }
@@ -299,14 +300,14 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
   //
   // The encoding is as a signed value, with parameters and receiver using
   // the negative indices and locals the non-negative ones.
-  const int parameter_limit = -LUnallocated::kMinFixedIndex;
+  const int parameter_limit = -LUnallocated::kMinFixedSlotIndex;
   Scope* scope = info()->scope();
   if ((scope->num_parameters() + 1) > parameter_limit) {
     info()->set_bailout_reason("too many parameters");
     return AbortOptimization();
   }
 
-  const int locals_limit = LUnallocated::kMaxFixedIndex;
+  const int locals_limit = LUnallocated::kMaxFixedSlotIndex;
   if (!info()->osr_ast_id().IsNone() &&
       scope->num_parameters() + 1 + scope->num_stack_slots() > locals_limit) {
     info()->set_bailout_reason("too many parameters/locals");
@@ -421,7 +422,13 @@ OptimizingCompiler::Status OptimizingCompiler::GenerateAndInstallCode() {
     Timer timer(this, &time_taken_to_codegen_);
     ASSERT(chunk_ != NULL);
     ASSERT(graph_ != NULL);
-    Handle<Code> optimized_code = chunk_->Codegen(Code::OPTIMIZED_FUNCTION);
+    // Deferred handles reference objects that were accessible during
+    // graph creation.  To make sure that we don't encounter inconsistencies
+    // between graph creation and code generation, we disallow accessing
+    // objects through deferred handles during the latter, with exceptions.
+    HandleDereferenceGuard no_deref_deferred(
+        isolate(), HandleDereferenceGuard::DISALLOW_DEFERRED);
+    Handle<Code> optimized_code = chunk_->Codegen();
     if (optimized_code.is_null()) {
       info()->set_bailout_reason("code generation failed");
       return AbortOptimization();
@@ -553,6 +560,7 @@ static Handle<SharedFunctionInfo> MakeFunctionInfo(CompilationInfo* info) {
       isolate->factory()->NewSharedFunctionInfo(
           lit->name(),
           lit->materialized_literal_count(),
+          lit->is_generator(),
           info->code(),
           ScopeInfo::Create(info->scope(), info->zone()));
 
@@ -617,7 +625,7 @@ Handle<SharedFunctionInfo> Compiler::Compile(Handle<String> source,
   isolate->counters()->total_compile_size()->Increment(source_length);
 
   // The VM is in the COMPILER state until exiting this function.
-  VMState state(isolate, COMPILER);
+  VMState<COMPILER> state(isolate);
 
   CompilationCache* compilation_cache = isolate->compilation_cache();
 
@@ -691,7 +699,7 @@ Handle<SharedFunctionInfo> Compiler::CompileEval(Handle<String> source,
   isolate->counters()->total_compile_size()->Increment(source_length);
 
   // The VM is in the COMPILER state until exiting this function.
-  VMState state(isolate, COMPILER);
+  VMState<COMPILER> state(isolate);
 
   // Do a lookup in the compilation cache; if the entry is not there, invoke
   // the compiler and add the result to the cache.
@@ -854,7 +862,7 @@ bool Compiler::CompileLazy(CompilationInfo* info) {
   ZoneScope zone_scope(info->zone(), DELETE_ON_EXIT);
 
   // The VM is in the COMPILER state until exiting this function.
-  VMState state(isolate, COMPILER);
+  VMState<COMPILER> state(isolate);
 
   PostponeInterruptsScope postpone(isolate);
 
@@ -918,7 +926,7 @@ void Compiler::RecompileParallel(Handle<JSFunction> closure) {
   }
 
   SmartPointer<CompilationInfo> info(new CompilationInfoWithZone(closure));
-  VMState state(isolate, PARALLEL_COMPILER);
+  VMState<COMPILER> state(isolate);
   PostponeInterruptsScope postpone(isolate);
 
   Handle<SharedFunctionInfo> shared = info->shared_info();
@@ -993,7 +1001,7 @@ void Compiler::InstallOptimizedCode(OptimizingCompiler* optimizing_compiler) {
   }
 
   Isolate* isolate = info->isolate();
-  VMState state(isolate, PARALLEL_COMPILER);
+  VMState<COMPILER> state(isolate);
   Logger::TimerEventScope timer(
       isolate, Logger::TimerEventScope::v8_recompile_synchronous);
   // If crankshaft succeeded, install the optimized code else install
@@ -1074,6 +1082,7 @@ Handle<SharedFunctionInfo> Compiler::BuildFunctionInfo(FunctionLiteral* literal,
   Handle<SharedFunctionInfo> result =
       FACTORY->NewSharedFunctionInfo(literal->name(),
                                      literal->materialized_literal_count(),
+                                     literal->is_generator(),
                                      info.code(),
                                      scope_info);
   SetFunctionInfo(result, literal, false, script);

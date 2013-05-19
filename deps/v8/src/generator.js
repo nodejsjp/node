@@ -39,19 +39,30 @@
 // http://wiki.ecmascript.org/lib/exe/fetch.php?cache=cache&media=harmony:es6_generator_object_model_3-29-13.png
 
 function GeneratorObjectNext() {
-  // TODO(wingo): Implement.
+  if (!IS_GENERATOR(this)) {
+    throw MakeTypeError('incompatible_method_receiver',
+                        ['[Generator].prototype.next', this]);
+  }
+
+  return %_GeneratorSend(this, void 0);
 }
 
 function GeneratorObjectSend(value) {
-  // TODO(wingo): Implement.
+  if (!IS_GENERATOR(this)) {
+    throw MakeTypeError('incompatible_method_receiver',
+                        ['[Generator].prototype.send', this]);
+  }
+
+  return %_GeneratorSend(this, value);
 }
 
 function GeneratorObjectThrow(exn) {
-  // TODO(wingo): Implement.
-}
+  if (!IS_GENERATOR(this)) {
+    throw MakeTypeError('incompatible_method_receiver',
+                        ['[Generator].prototype.throw', this]);
+  }
 
-function GeneratorObjectClose() {
-  // TODO(wingo): Implement.
+  return %_GeneratorThrow(this, exn);
 }
 
 function SetUpGenerators() {
@@ -61,8 +72,7 @@ function SetUpGenerators() {
                    DONT_ENUM | DONT_DELETE | READ_ONLY,
                    ["next", GeneratorObjectNext,
                     "send", GeneratorObjectSend,
-                    "throw", GeneratorObjectThrow,
-                    "close", GeneratorObjectClose]);
+                    "throw", GeneratorObjectThrow]);
   %SetProperty(GeneratorObjectPrototype, "constructor",
                GeneratorFunctionPrototype, DONT_ENUM | DONT_DELETE | READ_ONLY);
   %SetPrototype(GeneratorFunctionPrototype, $Function.prototype);
