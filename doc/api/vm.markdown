@@ -22,14 +22,14 @@ JavaScript コードは、コンパイルされてすぐに実行されるか、
 
 <!--
 The `vm` module has many known issues and edge cases. If you run into
-issues or unexpected behavior, please consult
-[the open issues on GitHub](https://github.com/joyent/node/issues/search?q=vm).
+issues or unexpected behavior, please consult [the open issues on
+GitHub](https://github.com/joyent/node/search?q=vm+state%3Aopen&type=Issues).
 Some of the biggest problems are described below.
 -->
 
 `vm` モジュールには既知の課題や特殊ケースがたくさんあります。
-もし問題や期待と異なる振る舞いを見つけた場合は、
-[the open issues on GitHub](https://github.com/joyent/node/issues/search?q=vm)
+もし問題や期待と異なる振る舞いを見つけた場合は、[GitHub
+の課題](https://github.com/joyent/node/search?q=vm+state%3Aopen&type=Issues)
 に相談してください。
 大きな問題のいくつかは以下に示されます。
 

@@ -110,7 +110,9 @@ value from this object, the next `require` will reload the module.
 
 ### require.extensions
 
-* {Array}
+    Stability: 0 - Deprecated
+
+* {Object}
 
 <!--
 Instruct `require` on how to handle certain file extensions.
@@ -123,6 +125,29 @@ Process files with the extension `.sjs` as `.js`:
 拡張子が `.sjs` であるファイルの処理を `.js` と同じにするには:
 
     require.extensions['.sjs'] = require.extensions['.js'];
+
+<!--
+**Deprecated**  In the past, this list has been used to load
+non-JavaScript modules into Node by compiling them on-demand.
+However, in practice, there are much better ways to do this, such as
+loading modules via some other Node program, or compiling them to
+JavaScript ahead of time.
+-->
+
+**廃止予定** かつて、このリストは非 JavaScript モジュールを必要に応じて
+コンパイルし、Node にロードするために使われていました。
+しかし実際には、他の Node プログラムを通じてロードしたり、
+事前に JavaScript にコンパイルするなど、よりよい方法があります。
+
+<!--
+Since the Module system is locked, this feature will probably never go
+away.  However, it may have subtle bugs and complexities that are best
+left untouched.
+-->
+
+モジュールシステムはロックされているので、この機能はおそらく
+無くならないでしょう。
+しかしながら、それは微妙なバグや複雑さがあってもそのまま放置されるでしょう。
 
 ## __filename
 
@@ -210,22 +235,30 @@ See the [module system documentation][] for more information.
 <!-- type=var -->
 
 <!--
-An object which is shared between all instances of the current module and
-made accessible through `require()`.
-`exports` is the same as the `module.exports` object.
+A reference to the `module.exports` object which is shared between all
+instances of the current module and made accessible through `require()`.
+See [module system documentation][] for details on when to use `exports` and
+when to use `module.exports`.
 `exports` isn't actually a global but rather local to each module.
+-->
 
+現在のモジュールの全てのインスタンスで共有され、
+`require()` を通じてアクセスされる、`module.exports` オブジェクトを参照します。
+いつ `exports` を使い、いつ `module.exports` を使うかの詳細は、
+[モジュールシステムのドキュメント][] を参照してください。
+`exports` は実際はグローバルではなく、各モジュール毎のローカルです。
+
+<!--
 See the [module system documentation][] for more information.
+-->
 
+より詳しくは [モジュールシステムのドキュメント][] を参照してください。
+
+<!--
 See the [module section][] for more information.
 -->
 
-現在のモジュールの全てのインスタンス間で共有されるオブジェクトで、
-`require` を通じてアクセス可能になります。
-`exports` は `module.exports` と同じオブジェクトです。
-`exports` は実際はグローバルではなく、各モジュール毎のローカルです。
-
-より詳しくは [モジュールシステムのドキュメント][] を参照してください。
+より詳しくは [モジュールセクション][] を参照してください。
 
 ## setTimeout(cb, ms)
 
