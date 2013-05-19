@@ -187,8 +187,10 @@ void HeapObject::HeapObjectPrint(FILE* out) {
       break;
     case JS_ARRAY_BUFFER_TYPE:
       JSArrayBuffer::cast(this)->JSArrayBufferPrint(out);
+      break;
     case JS_TYPED_ARRAY_TYPE:
       JSTypedArray::cast(this)->JSTypedArrayPrint(out);
+      break;
 #define MAKE_STRUCT_CASE(NAME, Name, name) \
   case NAME##_TYPE:                        \
     Name::cast(this)->Name##Print(out);    \
@@ -269,7 +271,7 @@ void JSObject::PrintProperties(FILE* out) {
       switch (descs->GetType(i)) {
         case FIELD: {
           int index = descs->GetFieldIndex(i);
-          FastPropertyAt(index)->ShortPrint(out);
+          RawFastPropertyAt(index)->ShortPrint(out);
           PrintF(out, " (field at offset %d)\n", index);
           break;
         }
@@ -493,11 +495,11 @@ static const char* TypeToString(InstanceType type) {
       return "CONS_STRING";
     case EXTERNAL_STRING_TYPE:
     case EXTERNAL_ASCII_STRING_TYPE:
-    case EXTERNAL_STRING_WITH_ASCII_DATA_TYPE:
+    case EXTERNAL_STRING_WITH_ONE_BYTE_DATA_TYPE:
       return "EXTERNAL_STRING";
     case SHORT_EXTERNAL_STRING_TYPE:
     case SHORT_EXTERNAL_ASCII_STRING_TYPE:
-    case SHORT_EXTERNAL_STRING_WITH_ASCII_DATA_TYPE:
+    case SHORT_EXTERNAL_STRING_WITH_ONE_BYTE_DATA_TYPE:
       return "SHORT_EXTERNAL_STRING";
     case INTERNALIZED_STRING_TYPE: return "INTERNALIZED_STRING";
     case ASCII_INTERNALIZED_STRING_TYPE: return "ASCII_INTERNALIZED_STRING";
@@ -506,11 +508,11 @@ static const char* TypeToString(InstanceType type) {
       return "CONS_ASCII_INTERNALIZED_STRING";
     case EXTERNAL_INTERNALIZED_STRING_TYPE:
     case EXTERNAL_ASCII_INTERNALIZED_STRING_TYPE:
-    case EXTERNAL_INTERNALIZED_STRING_WITH_ASCII_DATA_TYPE:
+    case EXTERNAL_INTERNALIZED_STRING_WITH_ONE_BYTE_DATA_TYPE:
       return "EXTERNAL_INTERNALIZED_STRING";
     case SHORT_EXTERNAL_INTERNALIZED_STRING_TYPE:
     case SHORT_EXTERNAL_ASCII_INTERNALIZED_STRING_TYPE:
-    case SHORT_EXTERNAL_INTERNALIZED_STRING_WITH_ASCII_DATA_TYPE:
+    case SHORT_EXTERNAL_INTERNALIZED_STRING_WITH_ONE_BYTE_DATA_TYPE:
       return "SHORT_EXTERNAL_INTERNALIZED_STRING";
     case FIXED_ARRAY_TYPE: return "FIXED_ARRAY";
     case BYTE_ARRAY_TYPE: return "BYTE_ARRAY";

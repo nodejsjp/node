@@ -145,6 +145,7 @@ namespace internal {
   F(NumberMod, 2, 1) \
   F(NumberUnaryMinus, 1, 1) \
   F(NumberAlloc, 0, 1) \
+  F(NumberImul, 2, 1) \
   \
   F(StringAdd, 2, 1) \
   F(StringBuilderConcat, 3, 1) \
@@ -230,6 +231,7 @@ namespace internal {
   F(FunctionSetName, 2, 1) \
   F(FunctionNameShouldPrintAsAnonymous, 1, 1) \
   F(FunctionMarkNameShouldPrintAsAnonymous, 1, 1) \
+  F(FunctionIsGenerator, 1, 1) \
   F(FunctionBindArguments, 4, 1) \
   F(BoundFunctionGetBindings, 1, 1) \
   F(FunctionRemovePrototype, 1, 1) \
@@ -298,6 +300,9 @@ namespace internal {
   \
   /* Harmony generators */ \
   F(CreateJSGeneratorObject, 0, 1) \
+  F(SuspendJSGeneratorObject, 1, 1) \
+  F(ResumeJSGeneratorObject, 3, 1) \
+  F(ThrowGeneratorStateError, 1, 1) \
   \
   /* Harmony modules */ \
   F(IsJSModule, 1, 1) \
@@ -356,6 +361,7 @@ namespace internal {
   F(TypedArrayGetByteLength, 1, 1) \
   F(TypedArrayGetByteOffset, 1, 1) \
   F(TypedArrayGetLength, 1, 1) \
+  F(TypedArraySetFastCases, 3, 1) \
   \
   /* Statements */ \
   F(NewClosure, 3, 1) \
@@ -559,7 +565,9 @@ namespace internal {
   F(IsRegExpEquivalent, 2, 1)                                                \
   F(HasCachedArrayIndex, 1, 1)                                               \
   F(GetCachedArrayIndex, 1, 1)                                               \
-  F(FastAsciiArrayJoin, 2, 1)
+  F(FastAsciiArrayJoin, 2, 1)                                                \
+  F(GeneratorSend, 2, 1)                                                     \
+  F(GeneratorThrow, 2, 1)
 
 
 // ----------------------------------------------------------------------------
@@ -694,7 +702,20 @@ class Runtime : public AllStatic {
                                                          Handle<Object> object,
                                                          uint32_t index);
 
+  MUST_USE_RESULT static MaybeObject* GetElementOrCharAtOrFail(
+      Isolate* isolate,
+      Handle<Object> object,
+      uint32_t index);
+
   MUST_USE_RESULT static MaybeObject* SetObjectProperty(
+      Isolate* isolate,
+      Handle<Object> object,
+      Handle<Object> key,
+      Handle<Object> value,
+      PropertyAttributes attr,
+      StrictModeFlag strict_mode);
+
+  MUST_USE_RESULT static MaybeObject* SetObjectPropertyOrFail(
       Isolate* isolate,
       Handle<Object> object,
       Handle<Object> key,
@@ -724,6 +745,21 @@ class Runtime : public AllStatic {
       Isolate* isolate,
       Handle<Object> object,
       Handle<Object> key);
+
+  MUST_USE_RESULT static MaybeObject* GetObjectPropertyOrFail(
+      Isolate* isolate,
+      Handle<Object> object,
+      Handle<Object> key);
+
+  static bool SetupArrayBuffer(Isolate* isolate,
+                               Handle<JSArrayBuffer> array_buffer,
+                               void* data,
+                               size_t allocated_length);
+
+  static bool SetupArrayBufferAllocatingData(
+      Isolate* isolate,
+      Handle<JSArrayBuffer> array_buffer,
+      size_t allocated_length);
 
   // Helper functions used stubs.
   static void PerformGC(Object* result);

@@ -86,26 +86,57 @@ handles back and forth.
 できます。
 
 <!--
-When you call `server.listen(...)` in a worker, it serializes the
-arguments and passes the request to the master process.  If the master
-process already has a listening server matching the worker's
-requirements, then it passes the handle to the worker.  If it does not
-already have a listening server matching that requirement, then it will
-create one, and pass the handle to the child.
+The cluster module supports two methods of distributing incoming
+connections.
 -->
 
-ワーカが `server.listen(...)` を呼び出すと、引数がシリアライズされて
-マスタプロセスにリクエストが渡されます。
-マスタプロセスは、ワーカのリクエストにマッチするリスニングサーバが既に
-存在すればそのハンドルをワーカに渡します。
-リクエストにマッチするリスニングサーバが存在しなければ、それが作成されて
-子プロセスに渡されます。
+クラスタモジュールは到着する接続を分散する方法を二種類提供します。
 
 <!--
-This causes potentially surprising behavior in three edge cases:
+The first one (and the default one on all platforms except Windows),
+is the round-robin approach, where the master process listens on a
+port, accepts new connections and distributes them across the workers
+in a round-robin fashion, with some built-in smarts to avoid
+overloading a worker process.
 -->
 
-これは三つの極端なケースで驚くような振る舞いを引き起こすかもしれません。
+一つ目 (Windows 以外の全てのプラットフォームでデフォルト)
+はラウンドロビン方式で、マスタプロセスがポートをリッスンし、
+新しい接続を受け付けるとラウンドロビン方式でワーカに分散します
+(ワーカの過負荷を避ける工夫が組み込まれています)。
+
+<!--
+The second approach is where the master process creates the listen
+socket and sends it to interested workers. The workers then accept
+incoming connections directly.
+-->
+
+二つ目の方法は、マスタプロセスがリスニングソケットを作成し、
+ワーカに送信します。ワーカは到着する接続を直接受け付けます。
+
+<!--
+The second approach should, in theory, give the best performance.
+In practice however, distribution tends to be very unbalanced due
+to operating system scheduler vagaries. Loads have been observed
+where over 70% of all connections ended up in just two processes,
+out of a total of eight.
+-->
+
+二つ目の方法は、原則的には、ベストなパフォーマンスであるべきです。
+しかし実際には、OS の予測不可能なスケジューラにより、
+非常に不均衡に分散される傾向があります。
+全 8 プロセス中の 2 プロセスに 70% 以上の接続が割り当てられたことも
+観測されました。
+
+<!--
+Because `server.listen()` hands off most of the work to the master
+process, there are three cases where the behavior between a normal
+node.js process and a cluster worker differs:
+-->
+
+`server.listen()` は仕事の大部分をマスタプロセスに渡すため、
+通常の node.js プロセスとクラスタのワーカプロセスの間には
+振る舞いが異なるケースが 3 つあります。
 
 <!--
 1. `server.listen({fd: 7})` Because the message is passed to the master,
@@ -140,16 +171,12 @@ This causes potentially surprising behavior in three edge cases:
    ポート番号を生成してください。
 
 <!--
-When multiple processes are all `accept()`ing on the same underlying
-resource, the operating system load-balances across them very
-efficiently.  There is no routing logic in Node.js, or in your program,
-and no shared state between the workers.  Therefore, it is important to
-design your program such that it does not rely too heavily on in-memory
-data objects for things like sessions and login.
+There is no routing logic in Node.js, or in your program, and no shared
+state between the workers.  Therefore, it is important to design your
+program such that it does not rely too heavily on in-memory data objects
+for things like sessions and login.
 -->
 
-複数のプロセスが同じリソースを `accept()` する時、オペレーティングシステムは
-とても効率的にそれら全体をロードバランスします。
 Node.js にもあなたのプログラムにも、ルーティングのためのロジックや
 ワーカ間で共有される状態はありません。
 したがって、あなたのプログラムがセッションやログインのためにメモリ内の
@@ -170,6 +197,40 @@ the worker pool for your application's needs.
 しかしながら、Node はワーカの数を自動的に管理することはありません。
 アプリケーションのニーズに応じてワーカのプールを管理することは、
 あなたの責務です。
+
+## cluster.schedulingPolicy
+
+<!--
+The scheduling policy, either `cluster.SCHED_RR` for round-robin or
+`cluster.SCHED_NONE` to leave it to the operating system. This is a
+global setting and effectively frozen once you spawn the first worker
+or call `cluster.setupMaster()`, whatever comes first.
+-->
+
+スケジューリングポリシーは、ラウンドロビンの `cluster.SCHED_RR` または、
+OS に任せる `cluster.SCHED_NONE` のどちらかです。
+これはグローバルな設定で、その効果は最初のワーカを起動する時か、
+`cluster.setupMaster()` を呼び出した時、どちらかが最初に行われた時点で
+凍結されます。
+
+<!--
+`SCHED_RR` is the default on all operating systems except Windows.
+Windows will change to `SCHED_RR` once libuv is able to effectively
+distribute IOCP handles without incurring a large performance hit.
+-->
+
+`SCHED_RR` は Windows 以外の全ての OS でデフォルトです。
+Windows では、libuv が大きなパフォーマンス低下を招くことなく
+IOCP ハンドルを分散することが可能であれば、`SCHED_RR` に切り替わります。
+
+<!--
+`cluster.schedulingPolicy` can also be set through the
+`NODE_CLUSTER_SCHED_POLICY` environment variable. Valid
+values are `"rr"` and `"none"`.
+-->
+
+`cluster.schedulingPolicy` は、`NODE_CLUSTER_SCHED_POLICY` 環境変数を
+通じて設定することもできます。適切な値は `"rr"` または `"none"` です。
 
 ## cluster.settings
 
@@ -713,7 +774,7 @@ that would normally not allow the worker to do any cleanup if needed.
 
       process.on('message', function(msg) {
         if (msg === 'force kill') {
-          server.destroy();
+          server.close();
         }
       });
     }

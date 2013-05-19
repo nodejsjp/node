@@ -267,6 +267,9 @@ class Factory {
   Handle<Object> NewNumberFromUint(uint32_t value,
                                   PretenureFlag pretenure = NOT_TENURED);
 
+  Handle<HeapNumber> NewHeapNumber(double value,
+                                   PretenureFlag pretenure = NOT_TENURED);
+
   // These objects are used by the api to create env-independent data
   // structures in the heap.
   Handle<JSObject> NewNeanderObject();
@@ -313,6 +316,10 @@ class Factory {
                                 uint32_t length,
                                 EnsureElementsMode mode);
 
+  Handle<JSArrayBuffer> NewJSArrayBuffer();
+
+  Handle<JSTypedArray> NewJSTypedArray(ExternalArrayType type);
+
   Handle<JSProxy> NewJSProxy(Handle<Object> handler, Handle<Object> prototype);
 
   // Change the type of the argument into a JS object/function and reinitialize.
@@ -347,7 +354,8 @@ class Factory {
   Handle<Code> NewCode(const CodeDesc& desc,
                        Code::Flags flags,
                        Handle<Object> self_reference,
-                       bool immovable = false);
+                       bool immovable = false,
+                       bool crankshafted = false);
 
   Handle<Code> CopyCode(Handle<Code> code);
 
@@ -454,6 +462,7 @@ class Factory {
   Handle<SharedFunctionInfo> NewSharedFunctionInfo(
       Handle<String> name,
       int number_of_literals,
+      bool is_generator,
       Handle<Code> code,
       Handle<ScopeInfo> scope_info);
   Handle<SharedFunctionInfo> NewSharedFunctionInfo(Handle<String> name);

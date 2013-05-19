@@ -27,6 +27,10 @@
 //
 // Tests of profiles generator and utilities.
 
+// TODO(dcarney): remove
+#define V8_ALLOW_ACCESS_TO_PERSISTENT_ARROW
+#define V8_ALLOW_ACCESS_TO_PERSISTENT_IMPLICIT
+
 #include "v8.h"
 #include "cpu-profiler-inl.h"
 #include "cctest.h"
@@ -48,7 +52,7 @@ using i::Vector;
 TEST(StartStop) {
   CpuProfilesCollection profiles;
   ProfileGenerator generator(&profiles);
-  ProfilerEventsProcessor processor(&generator);
+  ProfilerEventsProcessor processor(&generator, &profiles);
   processor.Start();
   processor.Stop();
   processor.Join();
@@ -64,6 +68,7 @@ static void EnqueueTickSampleEvent(ProfilerEventsProcessor* proc,
                                    i::Address frame3 = NULL) {
   i::TickSample* sample = proc->TickSampleEvent();
   sample->pc = frame1;
+  sample->tos = frame1;
   sample->frames_count = 0;
   if (frame2 != NULL) {
     sample->stack[0] = frame2;
@@ -103,7 +108,7 @@ TEST(CodeEvents) {
   CpuProfilesCollection profiles;
   profiles.StartProfiling("", 1, false);
   ProfileGenerator generator(&profiles);
-  ProfilerEventsProcessor processor(&generator);
+  ProfilerEventsProcessor processor(&generator, &profiles);
   processor.Start();
 
   // Enqueue code creation events.
@@ -164,7 +169,7 @@ TEST(TickEvents) {
   CpuProfilesCollection profiles;
   profiles.StartProfiling("", 1, false);
   ProfileGenerator generator(&profiles);
-  ProfilerEventsProcessor processor(&generator);
+  ProfilerEventsProcessor processor(&generator, &profiles);
   processor.Start();
 
   processor.CodeCreateEvent(i::Logger::BUILTIN_TAG,
@@ -228,7 +233,7 @@ TEST(Issue1398) {
   CpuProfilesCollection profiles;
   profiles.StartProfiling("", 1, false);
   ProfileGenerator generator(&profiles);
-  ProfilerEventsProcessor processor(&generator);
+  ProfilerEventsProcessor processor(&generator, &profiles);
   processor.Start();
 
   processor.CodeCreateEvent(i::Logger::BUILTIN_TAG,
@@ -238,6 +243,7 @@ TEST(Issue1398) {
 
   i::TickSample* sample = processor.TickSampleEvent();
   sample->pc = ToAddress(0x1200);
+  sample->tos = 0;
   sample->frames_count = i::TickSample::kMaxFramesCount;
   for (int i = 0; i < sample->frames_count; ++i) {
     sample->stack[i] = ToAddress(0x1200);

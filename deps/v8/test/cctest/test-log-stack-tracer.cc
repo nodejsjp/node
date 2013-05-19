@@ -29,6 +29,10 @@
 
 #include <stdlib.h>
 
+// TODO(dcarney): remove
+#define V8_ALLOW_ACCESS_TO_PERSISTENT_IMPLICIT
+#define V8_ALLOW_ACCESS_TO_PERSISTENT_ARROW
+
 #include "v8.h"
 
 #include "api.h"
@@ -286,7 +290,7 @@ TEST(CFromJSStackTrace) {
   //         DoTrace(EBP) [native]
   //           TickSample::Trace
 
-  CHECK(sample.external_callback);
+  CHECK(sample.has_external_callback);
   CHECK_EQ(FUNCTION_ADDR(TraceExtension::Trace), sample.external_callback);
 
   // Stack tracing will start from the first JS function, i.e. "JSFuncDoTrace"
@@ -336,7 +340,7 @@ TEST(PureJSStackTrace) {
   //             TickSample::Trace
   //
 
-  CHECK(sample.external_callback);
+  CHECK(sample.has_external_callback);
   CHECK_EQ(FUNCTION_ADDR(TraceExtension::JSTrace), sample.external_callback);
 
   // Stack sampling will start from the caller of JSFuncDoTrace, i.e. "JSTrace"

@@ -908,6 +908,30 @@ your own extension classes.
 しかしながら、あなたの拡張クラスではこのメソッドをオーバーライドすることが
 求められて**います**。
 
+### writable.\_writev(chunks, callback)
+
+<!--
+* `chunks` {Array} The chunks to be written.  Each chunk has following
+  format: `{ chunk: ..., encoding: ... }`.
+* `callback` {Function} Call this function (optionally with an error
+  argument) when you are done processing the supplied chunks.
+-->
+
+* `chunks` {Array} 書き込まれるチャンクの配列。
+  各チャンクは次のフォーマットになります:
+  `{ chunk: ..., encoding: ... }` 。
+* `callback` {Function} チャンクを提供する処理が終了した時に、
+  (任意のエラー引数と共に) この関数を呼び出してください。
+
+<!--
+This function is completely optional to implement. In the most cases
+it is unnecessary.  If implemented, it will be called with all the
+chunks that are buffered in the write queue.
+-->
+
+この関数の実装は完全に任意です。ほとんどのケースでは必要ありません。
+もし実装されるなら、書き込みキューにバッファリングされた全ての
+チャンクと共に呼び出されるでしょう。
 
 ### writable.write(chunk, [encoding], [callback])
 
@@ -948,6 +972,30 @@ the `highWaterMark` option provided to the constructor.
 `write()` がいつ `false` を返すかは、コンストラクタに与えられる
 `highWaterMark` オプションによって決定されます。
 
+### writable.cork()
+
+<!--
+Forces buffering of all writes.
+-->
+
+全ての書き込みを強制的にバッファリングします。
+
+<!--
+Buffered data will be flushed either at `.uncork()` or at `.end()` call.
+-->
+
+バッファリングされたデータは `.uncork()` または `.end()` のどちらかが
+呼び出されるとフラッシュされます。
+
+### writable.uncork()
+
+<!--
+Flush all data, buffered since `.cork()` call.
+-->
+
+`.cork()` の呼び出しによってバッファリングされた
+全てのデータをフラッシュします。
+
 ### writable.end([chunk], [encoding], [callback])
 
 <!--
@@ -983,6 +1031,14 @@ without buffering again. Listen for it when `stream.write()` returns
 ストリームの書き込みキューが空になり、バッファリングされることなく
 再び安全に書き込みができるようになった場合に生成されます。
 `stream.write()` が `false` を返した場合に監視してください。
+
+### Event: 'error'
+
+<!--
+Emitted if there was an error receiving data.
+-->
+
+データ送信でエラーがあった場合に生成されます。
 
 ### Event: 'close'
 

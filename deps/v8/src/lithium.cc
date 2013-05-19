@@ -58,24 +58,27 @@ void LOperand::PrintTo(StringStream* stream) {
     case UNALLOCATED:
       unalloc = LUnallocated::cast(this);
       stream->Add("v%d", unalloc->virtual_register());
-      switch (unalloc->policy()) {
+      if (unalloc->basic_policy() == LUnallocated::FIXED_SLOT) {
+        stream->Add("(=%dS)", unalloc->fixed_slot_index());
+        break;
+      }
+      switch (unalloc->extended_policy()) {
         case LUnallocated::NONE:
           break;
         case LUnallocated::FIXED_REGISTER: {
+          int reg_index = unalloc->fixed_register_index();
           const char* register_name =
-              Register::AllocationIndexToString(unalloc->fixed_index());
+              Register::AllocationIndexToString(reg_index);
           stream->Add("(=%s)", register_name);
           break;
         }
         case LUnallocated::FIXED_DOUBLE_REGISTER: {
+          int reg_index = unalloc->fixed_register_index();
           const char* double_register_name =
-              DoubleRegister::AllocationIndexToString(unalloc->fixed_index());
+              DoubleRegister::AllocationIndexToString(reg_index);
           stream->Add("(=%s)", double_register_name);
           break;
         }
-        case LUnallocated::FIXED_SLOT:
-          stream->Add("(=%dS)", unalloc->fixed_index());
-          break;
         case LUnallocated::MUST_HAVE_REGISTER:
           stream->Add("(R)");
           break;
@@ -177,8 +180,8 @@ void LEnvironment::PrintTo(StringStream* stream) {
   if (deoptimization_index() != Safepoint::kNoDeoptimizationIndex) {
     stream->Add("deopt_id=%d|", deoptimization_index());
   }
-  stream->Add("[parameters=%d|", parameter_count());
-  stream->Add("[arguments_stack_height=%d|", arguments_stack_height());
+  stream->Add("parameters=%d|", parameter_count());
+  stream->Add("arguments_stack_height=%d|", arguments_stack_height());
   for (int i = 0; i < values_.length(); ++i) {
     if (i != 0) stream->Add(";");
     if (values_[i] == NULL) {
@@ -329,7 +332,6 @@ void LChunk::MarkEmptyBlocks() {
             can_eliminate = false;
           }
         }
-
         if (can_eliminate) {
           label->set_replacement(GetLabel(goto_instr->block_id()));
         }
@@ -341,6 +343,7 @@ void LChunk::MarkEmptyBlocks() {
 
 void LChunk::AddInstruction(LInstruction* instr, HBasicBlock* block) {
   LInstructionGap* gap = new(graph_->zone()) LInstructionGap(block);
+  gap->set_hydrogen_value(instr->hydrogen_value());
   int index = -1;
   if (instr->IsControl()) {
     instructions_.Add(gap, zone());
@@ -442,7 +445,7 @@ LChunk* LChunk::NewChunk(HGraph* graph) {
 }
 
 
-Handle<Code> LChunk::Codegen(Code::Kind kind) {
+Handle<Code> LChunk::Codegen() {
   MacroAssembler assembler(info()->isolate(), NULL, 0);
   LOG_CODE_EVENT(info()->isolate(),
                  CodeStartLinePosInfoRecordEvent(
@@ -456,11 +459,11 @@ Handle<Code> LChunk::Codegen(Code::Kind kind) {
       PrintF("Crankshaft Compiler - ");
     }
     CodeGenerator::MakeCodePrologue(info());
-    Code::Flags flags = Code::ComputeFlags(kind);
+    Code::Flags flags = info()->flags();
     Handle<Code> code =
         CodeGenerator::MakeCodeEpilogue(&assembler, flags, info());
     generator.FinishCode(code);
-
+    code->set_is_crankshafted(true);
     if (!code.is_null()) {
       void* jit_handler_data =
           assembler.positions_recorder()->DetachJITHandlerData();

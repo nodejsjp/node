@@ -5,6 +5,7 @@ PYTHON ?= python
 NINJA ?= ninja
 DESTDIR ?=
 SIGN ?=
+PREFIX ?= /usr/local
 
 NODE ?= ./node
 
@@ -55,10 +56,10 @@ config.gypi: configure
 	$(PYTHON) ./configure
 
 install: all
-	$(PYTHON) tools/install.py $@ $(DESTDIR)
+	$(PYTHON) tools/install.py $@ '$(DESTDIR)' '$(PREFIX)'
 
 uninstall:
-	$(PYTHON) tools/install.py $@ $(DESTDIR)
+	$(PYTHON) tools/install.py $@ '$(DESTDIR)' '$(PREFIX)'
 
 clean:
 	-rm -rf out/Makefile node node_g out/$(BUILDTYPE)/node blog.html email.md
@@ -266,11 +267,11 @@ pkg: $(PKG)
 $(PKG): release-only
 	rm -rf $(PKGDIR)
 	rm -rf out/deps out/Release
-	$(PYTHON) ./configure --prefix=$(PKGDIR)/32/usr/local --without-snapshot --dest-cpu=ia32 --tag=$(TAG)
-	$(MAKE) install V=$(V)
+	$(PYTHON) ./configure --without-snapshot --dest-cpu=ia32 --tag=$(TAG)
+	$(MAKE) install V=$(V) DESTDIR=$(PKGDIR)/32
 	rm -rf out/deps out/Release
-	$(PYTHON) ./configure --prefix=$(PKGDIR)/usr/local --without-snapshot --dest-cpu=x64 --tag=$(TAG)
-	$(MAKE) install V=$(V)
+	$(PYTHON) ./configure --without-snapshot --dest-cpu=x64 --tag=$(TAG)
+	$(MAKE) install V=$(V) DESTDIR=$(PKGDIR)
 	SIGN="$(SIGN)" PKGDIR="$(PKGDIR)" bash tools/osx-codesign.sh
 	lipo $(PKGDIR)/32/usr/local/bin/node \
 		$(PKGDIR)/usr/local/bin/node \

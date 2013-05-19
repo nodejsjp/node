@@ -103,7 +103,7 @@ int OS::ActivationFrameAlignment() {
 
 
 const char* OS::LocalTimezone(double time) {
-  if (isnan(time)) return "";
+  if (std::isnan(time)) return "";
   time_t tv = static_cast<time_t>(floor(time/msPerSecond));
   struct tm* t = localtime(&tv);
   if (NULL == t) return "";
@@ -194,9 +194,7 @@ void OS::Abort() {
 
 void OS::DebugBreak() {
 #if (defined(__arm__) || defined(__thumb__))
-# if defined(CAN_USE_ARMV5_INSTRUCTIONS)
   asm("bkpt 0");
-# endif
 #else
   asm("int $3");
 #endif

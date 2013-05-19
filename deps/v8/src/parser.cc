@@ -662,7 +662,7 @@ FunctionLiteral* Parser::DoParseProgram(CompilationInfo* info,
           !body->at(0)->IsExpressionStatement() ||
           !body->at(0)->AsExpressionStatement()->
               expression()->IsFunctionLiteral()) {
-        ReportMessage("unable_to_parse", Vector<const char*>::empty());
+        ReportMessage("single_function_literal", Vector<const char*>::empty());
         ok = false;
       }
     }
@@ -1872,9 +1872,10 @@ Statement* Parser::ParseNativeDeclaration(bool* ok) {
   const int literals = fun->NumberOfLiterals();
   Handle<Code> code = Handle<Code>(fun->shared()->code());
   Handle<Code> construct_stub = Handle<Code>(fun->shared()->construct_stub());
+  bool is_generator = false;
   Handle<SharedFunctionInfo> shared =
-      isolate()->factory()->NewSharedFunctionInfo(name, literals, code,
-          Handle<ScopeInfo>(fun->shared()->scope_info()));
+      isolate()->factory()->NewSharedFunctionInfo(name, literals, is_generator,
+          code, Handle<ScopeInfo>(fun->shared()->scope_info()));
   shared->set_construct_stub(*construct_stub);
 
   // Copy the function data to the shared function info.
@@ -2510,16 +2511,24 @@ Statement* Parser::ParseReturnStatement(bool* ok) {
 
   Token::Value tok = peek();
   Statement* result;
+  Expression* return_value;
   if (scanner().HasAnyLineTerminatorBeforeNext() ||
       tok == Token::SEMICOLON ||
       tok == Token::RBRACE ||
       tok == Token::EOS) {
-    ExpectSemicolon(CHECK_OK);
-    result = factory()->NewReturnStatement(GetLiteralUndefined());
+    return_value = GetLiteralUndefined();
   } else {
-    Expression* expr = ParseExpression(true, CHECK_OK);
-    ExpectSemicolon(CHECK_OK);
-    result = factory()->NewReturnStatement(expr);
+    return_value = ParseExpression(true, CHECK_OK);
+  }
+  ExpectSemicolon(CHECK_OK);
+  if (is_generator()) {
+    Expression* generator = factory()->NewVariableProxy(
+        current_function_state_->generator_object_variable());
+    Expression* yield = factory()->NewYield(
+        generator, return_value, Yield::FINAL, RelocInfo::kNoPosition);
+    result = factory()->NewExpressionStatement(yield);
+  } else {
+    result = factory()->NewReturnStatement(return_value);
   }
 
   // An ECMAScript program is considered syntactically incorrect if it
@@ -2562,7 +2571,7 @@ Statement* Parser::ParseWithStatement(ZoneStringList* labels, bool* ok) {
     stmt = ParseStatement(labels, CHECK_OK);
     with_scope->set_end_position(scanner().location().end_pos);
   }
-  return factory()->NewWithStatement(expr, stmt);
+  return factory()->NewWithStatement(with_scope, expr, stmt);
 }
 
 
@@ -3099,12 +3108,12 @@ Expression* Parser::ParseYieldExpression(bool* ok) {
   //   'yield' '*'? AssignmentExpression
   int position = scanner().peek_location().beg_pos;
   Expect(Token::YIELD, CHECK_OK);
-  bool is_yield_star = Check(Token::MUL);
+  Yield::Kind kind =
+      Check(Token::MUL) ? Yield::DELEGATING : Yield::SUSPEND;
   Expression* generator_object = factory()->NewVariableProxy(
       current_function_state_->generator_object_variable());
   Expression* expression = ParseAssignmentExpression(false, CHECK_OK);
-  return factory()->NewYield(generator_object, expression, is_yield_star,
-                             position);
+  return factory()->NewYield(generator_object, expression, kind, position);
 }
 
 
@@ -3284,6 +3293,16 @@ Expression* Parser::ParseUnaryExpression(bool* ok) {
         *ok = false;
         return NULL;
       }
+    }
+
+    // Desugar '+foo' into 'foo*1', this enables the collection of type feedback
+    // without any special stub and the multiplication is removed later in
+    // Crankshaft's canonicalization pass.
+    if (op == Token::ADD) {
+      return factory()->NewBinaryOperation(Token::MUL,
+                                           expression,
+                                           factory()->NewNumberLiteral(1),
+                                           position);
     }
 
     return factory()->NewUnaryOperation(op, expression, position);
@@ -3719,33 +3738,6 @@ Expression* Parser::ParsePrimaryExpression(bool* ok) {
 }
 
 
-void Parser::BuildArrayLiteralBoilerplateLiterals(ZoneList<Expression*>* values,
-                                                  Handle<FixedArray> literals,
-                                                  bool* is_simple,
-                                                  int* depth) {
-  // Fill in the literals.
-  // Accumulate output values in local variables.
-  bool is_simple_acc = true;
-  int depth_acc = 1;
-  for (int i = 0; i < values->length(); i++) {
-    MaterializedLiteral* m_literal = values->at(i)->AsMaterializedLiteral();
-    if (m_literal != NULL && m_literal->depth() >= depth_acc) {
-      depth_acc = m_literal->depth() + 1;
-    }
-    Handle<Object> boilerplate_value = GetBoilerplateValue(values->at(i));
-    if (boilerplate_value->IsUndefined()) {
-      literals->set_the_hole(i);
-      is_simple_acc = false;
-    } else {
-      literals->set(i, *boilerplate_value);
-    }
-  }
-
-  *is_simple = is_simple_acc;
-  *depth = depth_acc;
-}
-
-
 Expression* Parser::ParseArrayLiteral(bool* ok) {
   // ArrayLiteral ::
   //   '[' Expression? (',' Expression?)* ']'
@@ -3972,7 +3964,8 @@ void Parser::BuildObjectLiteralConstantProperties(
     Handle<FixedArray> constant_properties,
     bool* is_simple,
     bool* fast_elements,
-    int* depth) {
+    int* depth,
+    bool* may_store_doubles) {
   int position = 0;
   // Accumulate the value in local variables and store it at the end.
   bool is_simple_acc = true;
@@ -3995,6 +3988,13 @@ void Parser::BuildObjectLiteralConstantProperties(
     // runtime. The enumeration order is maintained.
     Handle<Object> key = property->key()->handle();
     Handle<Object> value = GetBoilerplateValue(property->value());
+
+    // Ensure objects with doubles are always treated as nested objects.
+    // TODO(verwaest): Remove once we can store them inline.
+    if (FLAG_track_double_fields && value->IsNumber()) {
+      *may_store_doubles = true;
+    }
+
     is_simple_acc = is_simple_acc && !value->IsUndefined();
 
     // Keep track of the number of elements in the object literal and
@@ -4196,17 +4196,20 @@ Expression* Parser::ParseObjectLiteral(bool* ok) {
   bool is_simple = true;
   bool fast_elements = true;
   int depth = 1;
+  bool may_store_doubles = false;
   BuildObjectLiteralConstantProperties(properties,
                                        constant_properties,
                                        &is_simple,
                                        &fast_elements,
-                                       &depth);
+                                       &depth,
+                                       &may_store_doubles);
   return factory()->NewObjectLiteral(constant_properties,
                                      properties,
                                      literal_index,
                                      is_simple,
                                      fast_elements,
                                      depth,
+                                     may_store_doubles,
                                      has_function);
 }
 
@@ -4580,11 +4583,21 @@ FunctionLiteral* Parser::ParseFunctionLiteral(Handle<String> function_name,
         VariableProxy* get_proxy = factory()->NewVariableProxy(
             current_function_state_->generator_object_variable());
         Yield* yield = factory()->NewYield(
-            get_proxy, assignment, false, RelocInfo::kNoPosition);
+            get_proxy, assignment, Yield::INITIAL, RelocInfo::kNoPosition);
         body->Add(factory()->NewExpressionStatement(yield), zone());
       }
 
       ParseSourceElements(body, Token::RBRACE, false, false, CHECK_OK);
+
+      if (is_generator) {
+        VariableProxy* get_proxy = factory()->NewVariableProxy(
+            current_function_state_->generator_object_variable());
+        Expression *undefined = factory()->NewLiteral(
+            isolate()->factory()->undefined_value());
+        Yield* yield = factory()->NewYield(
+            get_proxy, undefined, Yield::FINAL, RelocInfo::kNoPosition);
+        body->Add(factory()->NewExpressionStatement(yield), zone());
+      }
 
       materialized_literal_count = function_state.materialized_literal_count();
       expected_property_count = function_state.expected_property_count();
@@ -4723,7 +4736,7 @@ Expression* Parser::ParseV8Intrinsic(bool* ok) {
     if (args->length() == 1 && args->at(0)->AsVariableProxy() != NULL) {
       return args->at(0);
     } else {
-      ReportMessage("unable_to_parse", Vector<const char*>::empty());
+      ReportMessage("not_isvar", Vector<const char*>::empty());
       *ok = false;
       return NULL;
     }

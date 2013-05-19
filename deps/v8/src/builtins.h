@@ -124,6 +124,8 @@ enum BuiltinExtraArguments {
                                     Code::kNoExtraICState)              \
   V(StoreIC_Miss,                   BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
+  V(StoreIC_Slow,                   BUILTIN, UNINITIALIZED,             \
+                                    Code::kNoExtraICState)              \
   V(KeyedStoreIC_Miss,              BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
   V(KeyedStoreIC_MissForceGeneric,  BUILTIN, UNINITIALIZED,             \
@@ -199,7 +201,7 @@ enum BuiltinExtraArguments {
                                     Code::kNoExtraICState)              \
   V(ArrayCode,                      BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
-  V(ArrayConstructCode,             BUILTIN, UNINITIALIZED,             \
+  V(CommonArrayConstructCode,       BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
                                                                         \
   V(StringConstructCode,            BUILTIN, UNINITIALIZED,             \
@@ -229,6 +231,8 @@ enum BuiltinExtraArguments {
   V(StoreIC_DebugBreak,                        STORE_IC, DEBUG_STUB,          \
                                                DEBUG_BREAK)                   \
   V(KeyedStoreIC_DebugBreak,                   KEYED_STORE_IC, DEBUG_STUB,    \
+                                               DEBUG_BREAK)                   \
+  V(CompareNilIC_DebugBreak,                   COMPARE_NIL_IC, DEBUG_STUB,    \
                                                DEBUG_BREAK)                   \
   V(Slot_DebugBreak,                           BUILTIN, DEBUG_STUB,           \
                                                DEBUG_BREAK)                   \
@@ -386,7 +390,7 @@ class Builtins {
 
   static void Generate_InternalArrayCode(MacroAssembler* masm);
   static void Generate_ArrayCode(MacroAssembler* masm);
-  static void Generate_ArrayConstructCode(MacroAssembler* masm);
+  static void Generate_CommonArrayConstructCode(MacroAssembler* masm);
 
   static void Generate_StringConstructCode(MacroAssembler* masm);
   static void Generate_OnStackReplacement(MacroAssembler* masm);
