@@ -235,22 +235,30 @@ See the [module system documentation][] for more information.
 <!-- type=var -->
 
 <!--
-An object which is shared between all instances of the current module and
-made accessible through `require()`.
-`exports` is the same as the `module.exports` object.
+A reference to the `module.exports` object which is shared between all
+instances of the current module and made accessible through `require()`.
+See [module system documentation][] for details on when to use `exports` and
+when to use `module.exports`.
 `exports` isn't actually a global but rather local to each module.
+-->
 
+現在のモジュールの全てのインスタンスで共有され、
+`require()` を通じてアクセスされる、`module.exports` オブジェクトを参照します。
+いつ `exports` を使い、いつ `module.exports` を使うかの詳細は、
+[モジュールシステムのドキュメント][] を参照してください。
+`exports` は実際はグローバルではなく、各モジュール毎のローカルです。
+
+<!--
 See the [module system documentation][] for more information.
+-->
 
+より詳しくは [モジュールシステムのドキュメント][] を参照してください。
+
+<!--
 See the [module section][] for more information.
 -->
 
-現在のモジュールの全てのインスタンス間で共有されるオブジェクトで、
-`require` を通じてアクセス可能になります。
-`exports` は `module.exports` と同じオブジェクトです。
-`exports` は実際はグローバルではなく、各モジュール毎のローカルです。
-
-より詳しくは [モジュールシステムのドキュメント][] を参照してください。
+より詳しくは [モジュールセクション][] を参照してください。
 
 ## setTimeout(cb, ms)
 
