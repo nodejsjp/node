@@ -78,6 +78,12 @@ Adds a listener to the end of the listeners array for the specified event.
       console.log('someone connected!');
     });
 
+<!--
+Returns emitter, so calls can be chained.
+-->
+
+EventEmitter 自身を返すので、呼び出しをチェーンすることができます。
+
 ### emitter.once(event, listener)
 
 <!--
@@ -92,6 +98,12 @@ it is removed.
     server.once('connection', function (stream) {
       console.log('Ah, we have our first user!');
     });
+
+<!--
+Returns emitter, so calls can be chained.
+-->
+
+EventEmitter 自身を返すので、呼び出しをチェーンすることができます。
 
 ### emitter.removeListener(event, listener)
 
@@ -110,6 +122,11 @@ Remove a listener from the listener array for the specified event.
     // ...
     server.removeListener('connection', callback);
 
+<!--
+Returns emitter, so calls can be chained.
+-->
+
+EventEmitter 自身を返すので、呼び出しをチェーンすることができます。
 
 ### emitter.removeAllListeners([event])
 
@@ -118,6 +135,12 @@ Removes all listeners, or those of the specified event.
 -->
 
 全てのリスナーまたは指定されたイベントに対するリスナーを削除します。
+
+<!--
+Returns emitter, so calls can be chained.
+-->
+
+EventEmitter 自身を返すので、呼び出しをチェーンすることができます。
 
 ### emitter.setMaxListeners(n)
 
@@ -155,6 +178,12 @@ Execute each of the listeners in order with the supplied arguments.
 -->
 
 提供された引数の並びでそれぞれのリスナーを実行します。
+
+<!--
+Returns `true` if event had listeners, `false` otherwise.
+-->
+
+イベントに対応するリスナがあった場合は `true`、それ以外は `false` を返します。
 
 
 ### Class Method: EventEmitter.listenerCount(emitter, event)

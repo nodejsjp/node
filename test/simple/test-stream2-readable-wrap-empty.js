@@ -19,59 +19,25 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-var repl = require('./helper-debugger-repl.js');
+var common = require('../common');
+var assert = require('assert');
 
-repl.startDebugger('breakpoints.js');
+var Readable = require('_stream_readable');
+var EE = require('events').EventEmitter;
 
-var addTest = repl.addTest;
+var oldStream = new EE();
+oldStream.pause = function(){};
+oldStream.resume = function(){};
 
-// Next
-addTest('n', [
-  /break in .*:11/,
-  /9/, /10/, /11/, /12/, /13/
-]);
+var newStream = new Readable().wrap(oldStream);
 
-// Watch
-addTest('watch("\'x\'")');
+var ended = false;
+newStream
+  .on('readable', function(){})
+  .on('end', function(){ ended = true; });
 
-// Continue
-addTest('c', [
-  /break in .*:5/,
-  /Watchers/,
-  /0:\s+'x' = "x"/,
-  /()/,
-  /3/, /4/, /5/, /6/, /7/
-]);
+oldStream.emit('end');
 
-// Show watchers
-addTest('watchers', [
-  /0:\s+'x' = "x"/
-]);
-
-// Unwatch
-addTest('unwatch("\'x\'")');
-
-// Step out
-addTest('o', [
-  /break in .*:12/,
-  /10/, /11/, /12/, /13/, /14/
-]);
-
-// Continue
-addTest('c', [
-  /break in .*:5/,
-  /3/, /4/, /5/, /6/, /7/
-]);
-
-// Set breakpoint by function name
-addTest('sb("setInterval()", "!(setInterval.flag++)")', [
-  /1/, /2/, /3/, /4/, /5/, /6/, /7/, /8/, /9/, /10/
-]);
-
-// Continue
-addTest('c', [
-  /break in node.js:\d+/,
-  /\d/, /\d/, /\d/, /\d/, /\d/
-]);
-
-addTest('quit', []);
+process.on('exit', function(){
+  assert.ok(ended);
+});
