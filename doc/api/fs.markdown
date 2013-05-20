@@ -1304,10 +1304,11 @@ An example to read the last 10 bytes of a file which is 100 bytes long:
 ## Class: fs.ReadStream
 
 <!--
-`ReadStream` is a [Readable Stream](stream.html#stream_readable_stream).
+`ReadStream` is a [Readable Stream](stream.html#stream_class_stream_readable).
 -->
 
-`ReadStream` は [Readable Stream](stream.html#stream_readable_stream) です。
+`ReadStream` は [Readable Stream](stream.html#stream_class_stream_readable)
+です。
 
 ### Event: 'open'
 
@@ -1352,13 +1353,14 @@ default mode `w`.
 ファイルを置換するのではなく変更する場合は、 `flags` にデフォルトの
 `w` ではなく `r+` が必要となります。
 
-## fs.WriteStream
+## Class: fs.WriteStream
 
 <!--
-`WriteStream` is a [Writable Stream](stream.html#stream_writable_stream).
+`WriteStream` is a [Writable Stream](stream.html#stream_class_stream_writable).
 -->
 
-`WriteStream` は [Writable Stream](stream.html#stream_writable_stream) です。
+`WriteStream` は [Writable Stream](stream.html#stream_class_stream_writable)
+です。
 
 ### Event: 'open'
 
