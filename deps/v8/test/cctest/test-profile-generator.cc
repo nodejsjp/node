@@ -27,6 +27,9 @@
 //
 // Tests of profiles generator and utilities.
 
+// TODO(dcarney): remove
+#define V8_ALLOW_ACCESS_TO_PERSISTENT_IMPLICIT
+
 #include "v8.h"
 #include "profile-generator-inl.h"
 #include "cctest.h"
@@ -611,9 +614,9 @@ TEST(RecordTickSample) {
   CpuProfilesCollection profiles;
   profiles.StartProfiling("", 1, false);
   ProfileGenerator generator(&profiles);
-  CodeEntry* entry1 = generator.NewCodeEntry(i::Logger::FUNCTION_TAG, "aaa");
-  CodeEntry* entry2 = generator.NewCodeEntry(i::Logger::FUNCTION_TAG, "bbb");
-  CodeEntry* entry3 = generator.NewCodeEntry(i::Logger::FUNCTION_TAG, "ccc");
+  CodeEntry* entry1 = profiles.NewCodeEntry(i::Logger::FUNCTION_TAG, "aaa");
+  CodeEntry* entry2 = profiles.NewCodeEntry(i::Logger::FUNCTION_TAG, "bbb");
+  CodeEntry* entry3 = profiles.NewCodeEntry(i::Logger::FUNCTION_TAG, "ccc");
   generator.code_map()->AddCode(ToAddress(0x1500), entry1, 0x200);
   generator.code_map()->AddCode(ToAddress(0x1700), entry2, 0x100);
   generator.code_map()->AddCode(ToAddress(0x1900), entry3, 0x50);
@@ -624,11 +627,13 @@ TEST(RecordTickSample) {
   //      -> ccc -> aaa  - sample3
   TickSample sample1;
   sample1.pc = ToAddress(0x1600);
+  sample1.tos = ToAddress(0x1500);
   sample1.stack[0] = ToAddress(0x1510);
   sample1.frames_count = 1;
   generator.RecordTickSample(sample1);
   TickSample sample2;
   sample2.pc = ToAddress(0x1925);
+  sample2.tos = ToAddress(0x1900);
   sample2.stack[0] = ToAddress(0x1780);
   sample2.stack[1] = ToAddress(0x10000);  // non-existent.
   sample2.stack[2] = ToAddress(0x1620);
@@ -636,6 +641,7 @@ TEST(RecordTickSample) {
   generator.RecordTickSample(sample2);
   TickSample sample3;
   sample3.pc = ToAddress(0x1510);
+  sample3.tos = ToAddress(0x1500);
   sample3.stack[0] = ToAddress(0x1910);
   sample3.stack[1] = ToAddress(0x1610);
   sample3.frames_count = 2;
@@ -724,9 +730,9 @@ TEST(SampleIds) {
   CpuProfilesCollection profiles;
   profiles.StartProfiling("", 1, true);
   ProfileGenerator generator(&profiles);
-  CodeEntry* entry1 = generator.NewCodeEntry(i::Logger::FUNCTION_TAG, "aaa");
-  CodeEntry* entry2 = generator.NewCodeEntry(i::Logger::FUNCTION_TAG, "bbb");
-  CodeEntry* entry3 = generator.NewCodeEntry(i::Logger::FUNCTION_TAG, "ccc");
+  CodeEntry* entry1 = profiles.NewCodeEntry(i::Logger::FUNCTION_TAG, "aaa");
+  CodeEntry* entry2 = profiles.NewCodeEntry(i::Logger::FUNCTION_TAG, "bbb");
+  CodeEntry* entry3 = profiles.NewCodeEntry(i::Logger::FUNCTION_TAG, "ccc");
   generator.code_map()->AddCode(ToAddress(0x1500), entry1, 0x200);
   generator.code_map()->AddCode(ToAddress(0x1700), entry2, 0x100);
   generator.code_map()->AddCode(ToAddress(0x1900), entry3, 0x50);
@@ -773,7 +779,7 @@ TEST(NoSamples) {
   CpuProfilesCollection profiles;
   profiles.StartProfiling("", 1, false);
   ProfileGenerator generator(&profiles);
-  CodeEntry* entry1 = generator.NewCodeEntry(i::Logger::FUNCTION_TAG, "aaa");
+  CodeEntry* entry1 = profiles.NewCodeEntry(i::Logger::FUNCTION_TAG, "aaa");
   generator.code_map()->AddCode(ToAddress(0x1500), entry1, 0x200);
 
   // We are building the following calls tree:
@@ -849,7 +855,6 @@ v8::Handle<v8::Value> ProfilerExtension::StopProfiling(
 
 static ProfilerExtension kProfilerExtension;
 v8::DeclareExtension kProfilerExtensionDeclaration(&kProfilerExtension);
-static v8::Persistent<v8::Context> env;
 
 static const ProfileNode* PickChild(const ProfileNode* parent,
                                     const char* name) {
@@ -866,14 +871,12 @@ TEST(RecordStackTraceAtStartProfiling) {
   // don't appear in the stack trace.
   i::FLAG_use_inlining = false;
 
-  if (env.IsEmpty()) {
-    v8::HandleScope scope(v8::Isolate::GetCurrent());
-    const char* extensions[] = { "v8/profiler" };
-    v8::ExtensionConfiguration config(1, extensions);
-    env = v8::Context::New(&config);
-  }
-  v8::HandleScope scope(v8::Isolate::GetCurrent());
-  env->Enter();
+  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+  v8::HandleScope scope(isolate);
+  const char* extensions[] = { "v8/profiler" };
+  v8::ExtensionConfiguration config(1, extensions);
+  v8::Local<v8::Context> context = v8::Context::New(isolate);
+  context->Enter();
 
   CpuProfiler* profiler = i::Isolate::Current()->cpu_profiler();
   CHECK_EQ(0, profiler->GetProfilesCount());

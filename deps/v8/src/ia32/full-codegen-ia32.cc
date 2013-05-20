@@ -1529,7 +1529,8 @@ void FullCodeGenerator::VisitObjectLiteral(ObjectLiteral* expr) {
       ? ObjectLiteral::kHasFunction
       : ObjectLiteral::kNoFlags;
   int properties_count = constant_properties->length() / 2;
-  if (expr->depth() > 1) {
+  if ((FLAG_track_double_fields && expr->may_store_doubles()) ||
+      expr->depth() > 1) {
     __ mov(edi, Operand(ebp, JavaScriptFrameConstants::kFunctionOffset));
     __ push(FieldOperand(edi, JSFunction::kLiteralsOffset));
     __ push(Immediate(Smi::FromInt(expr->literal_index())));
@@ -1880,6 +1881,194 @@ void FullCodeGenerator::VisitAssignment(Assignment* expr) {
       EmitKeyedPropertyAssignment(expr);
       break;
   }
+}
+
+
+void FullCodeGenerator::VisitYield(Yield* expr) {
+  Comment cmnt(masm_, "[ Yield");
+  // Evaluate yielded value first; the initial iterator definition depends on
+  // this.  It stays on the stack while we update the iterator.
+  VisitForStackValue(expr->expression());
+
+  switch (expr->yield_kind()) {
+    case Yield::INITIAL:
+    case Yield::SUSPEND: {
+      VisitForStackValue(expr->generator_object());
+      __ CallRuntime(Runtime::kSuspendJSGeneratorObject, 1);
+      __ mov(context_register(),
+             Operand(ebp, StandardFrameConstants::kContextOffset));
+
+      Label resume;
+      __ CompareRoot(result_register(), Heap::kTheHoleValueRootIndex);
+      __ j(not_equal, &resume);
+      if (expr->yield_kind() == Yield::SUSPEND) {
+        EmitReturnIteratorResult(false);
+      } else {
+        __ pop(result_register());
+        EmitReturnSequence();
+      }
+
+      __ bind(&resume);
+      context()->Plug(result_register());
+      break;
+    }
+
+    case Yield::FINAL: {
+      VisitForAccumulatorValue(expr->generator_object());
+      __ mov(FieldOperand(result_register(),
+                          JSGeneratorObject::kContinuationOffset),
+             Immediate(Smi::FromInt(JSGeneratorObject::kGeneratorClosed)));
+      EmitReturnIteratorResult(true);
+      break;
+    }
+
+    case Yield::DELEGATING:
+      UNIMPLEMENTED();
+  }
+}
+
+
+void FullCodeGenerator::EmitGeneratorResume(Expression *generator,
+    Expression *value,
+    JSGeneratorObject::ResumeMode resume_mode) {
+  // The value stays in eax, and is ultimately read by the resumed generator, as
+  // if the CallRuntime(Runtime::kSuspendJSGeneratorObject) returned it.  ebx
+  // will hold the generator object until the activation has been resumed.
+  VisitForStackValue(generator);
+  VisitForAccumulatorValue(value);
+  __ pop(ebx);
+
+  // Check generator state.
+  Label wrong_state, done;
+  STATIC_ASSERT(JSGeneratorObject::kGeneratorExecuting <= 0);
+  STATIC_ASSERT(JSGeneratorObject::kGeneratorClosed <= 0);
+  __ cmp(FieldOperand(ebx, JSGeneratorObject::kContinuationOffset),
+         Immediate(Smi::FromInt(0)));
+  __ j(less_equal, &wrong_state);
+
+  // Load suspended function and context.
+  __ mov(esi, FieldOperand(ebx, JSGeneratorObject::kContextOffset));
+  __ mov(edi, FieldOperand(ebx, JSGeneratorObject::kFunctionOffset));
+
+  // Push receiver.
+  __ push(FieldOperand(ebx, JSGeneratorObject::kReceiverOffset));
+
+  // Push holes for arguments to generator function.
+  __ mov(edx, FieldOperand(edi, JSFunction::kSharedFunctionInfoOffset));
+  __ mov(edx,
+         FieldOperand(edx, SharedFunctionInfo::kFormalParameterCountOffset));
+  __ mov(ecx, isolate()->factory()->the_hole_value());
+  Label push_argument_holes, push_frame;
+  __ bind(&push_argument_holes);
+  __ sub(edx, Immediate(1));
+  __ j(carry, &push_frame);
+  __ push(ecx);
+  __ jmp(&push_argument_holes);
+
+  // Enter a new JavaScript frame, and initialize its slots as they were when
+  // the generator was suspended.
+  Label resume_frame;
+  __ bind(&push_frame);
+  __ call(&resume_frame);
+  __ jmp(&done);
+  __ bind(&resume_frame);
+  __ push(ebp);  // Caller's frame pointer.
+  __ mov(ebp, esp);
+  __ push(esi);  // Callee's context.
+  __ push(edi);  // Callee's JS Function.
+
+  // Load the operand stack size.
+  __ mov(edx, FieldOperand(ebx, JSGeneratorObject::kOperandStackOffset));
+  __ mov(edx, FieldOperand(edx, FixedArray::kLengthOffset));
+  __ SmiUntag(edx);
+
+  // If we are sending a value and there is no operand stack, we can jump back
+  // in directly.
+  if (resume_mode == JSGeneratorObject::SEND) {
+    Label slow_resume;
+    __ cmp(edx, Immediate(0));
+    __ j(not_zero, &slow_resume);
+    __ mov(edx, FieldOperand(edi, JSFunction::kCodeEntryOffset));
+    __ mov(ecx, FieldOperand(ebx, JSGeneratorObject::kContinuationOffset));
+    __ SmiUntag(ecx);
+    __ add(edx, ecx);
+    __ mov(FieldOperand(ebx, JSGeneratorObject::kContinuationOffset),
+           Immediate(Smi::FromInt(JSGeneratorObject::kGeneratorExecuting)));
+    __ jmp(edx);
+    __ bind(&slow_resume);
+  }
+
+  // Otherwise, we push holes for the operand stack and call the runtime to fix
+  // up the stack and the handlers.
+  Label push_operand_holes, call_resume;
+  __ bind(&push_operand_holes);
+  __ sub(edx, Immediate(1));
+  __ j(carry, &call_resume);
+  __ push(ecx);
+  __ jmp(&push_operand_holes);
+  __ bind(&call_resume);
+  __ push(ebx);
+  __ push(result_register());
+  __ Push(Smi::FromInt(resume_mode));
+  __ CallRuntime(Runtime::kResumeJSGeneratorObject, 3);
+  // Not reached: the runtime call returns elsewhere.
+  __ Abort("Generator failed to resume.");
+
+  // Throw error if we attempt to operate on a running generator.
+  __ bind(&wrong_state);
+  __ push(ebx);
+  __ CallRuntime(Runtime::kThrowGeneratorStateError, 1);
+
+  __ bind(&done);
+  context()->Plug(result_register());
+}
+
+
+void FullCodeGenerator::EmitReturnIteratorResult(bool done) {
+  Label gc_required;
+  Label allocated;
+
+  Handle<Map> map(isolate()->native_context()->generator_result_map());
+
+  __ Allocate(map->instance_size(), eax, ecx, edx, &gc_required, TAG_OBJECT);
+
+  __ bind(&allocated);
+  __ mov(ebx, map);
+  __ pop(ecx);
+  __ mov(edx, isolate()->factory()->ToBoolean(done));
+  ASSERT_EQ(map->instance_size(), 5 * kPointerSize);
+  __ mov(FieldOperand(eax, HeapObject::kMapOffset), ebx);
+  __ mov(FieldOperand(eax, JSObject::kPropertiesOffset),
+         isolate()->factory()->empty_fixed_array());
+  __ mov(FieldOperand(eax, JSObject::kElementsOffset),
+         isolate()->factory()->empty_fixed_array());
+  __ mov(FieldOperand(eax, JSGeneratorObject::kResultValuePropertyOffset), ecx);
+  __ mov(FieldOperand(eax, JSGeneratorObject::kResultDonePropertyOffset), edx);
+
+  // Only the value field needs a write barrier, as the other values are in the
+  // root set.
+  __ RecordWriteField(eax, JSGeneratorObject::kResultValuePropertyOffset,
+                      ecx, edx, kDontSaveFPRegs);
+
+  if (done) {
+    // Exit all nested statements.
+    NestedStatement* current = nesting_stack_;
+    int stack_depth = 0;
+    int context_length = 0;
+    while (current != NULL) {
+      current = current->Exit(&stack_depth, &context_length);
+    }
+    __ Drop(stack_depth);
+  }
+
+  EmitReturnSequence();
+
+  __ bind(&gc_required);
+  __ Push(Smi::FromInt(map->instance_size()));
+  __ CallRuntime(Runtime::kAllocateInNewSpace, 1);
+  __ mov(context_register(),
+         Operand(ebp, StandardFrameConstants::kContextOffset));
+  __ jmp(&allocated);
 }
 
 
@@ -3967,18 +4156,6 @@ void FullCodeGenerator::VisitUnaryOperation(UnaryOperation* expr) {
       break;
     }
 
-    case Token::ADD: {
-      Comment cmt(masm_, "[ UnaryOperation (ADD)");
-      VisitForAccumulatorValue(expr->expression());
-      Label no_conversion;
-      __ JumpIfSmi(result_register(), &no_conversion);
-      ToNumberStub convert_stub;
-      __ CallStub(&convert_stub);
-      __ bind(&no_conversion);
-      context()->Plug(result_register());
-      break;
-    }
-
     case Token::SUB:
       EmitUnaryOperation(expr, "[ UnaryOperation (SUB)");
       break;
@@ -4396,24 +4573,21 @@ void FullCodeGenerator::EmitLiteralCompareNil(CompareOperation* expr,
 
   VisitForAccumulatorValue(sub_expr);
   PrepareForBailoutBeforeSplit(expr, true, if_true, if_false);
-  Handle<Object> nil_value = nil == kNullValue ?
-      isolate()->factory()->null_value() :
-      isolate()->factory()->undefined_value();
-  __ cmp(eax, nil_value);
-  if (expr->op() == Token::EQ_STRICT) {
+
+  EqualityKind kind = expr->op() == Token::EQ_STRICT
+      ? kStrictEquality : kNonStrictEquality;
+  Handle<Object> nil_value = nil == kNullValue
+      ? isolate()->factory()->null_value()
+      : isolate()->factory()->undefined_value();
+  if (kind == kStrictEquality) {
+    __ cmp(eax, nil_value);
     Split(equal, if_true, if_false, fall_through);
   } else {
-    Handle<Object> other_nil_value = nil == kNullValue ?
-        isolate()->factory()->undefined_value() :
-        isolate()->factory()->null_value();
-    __ j(equal, if_true);
-    __ cmp(eax, other_nil_value);
-    __ j(equal, if_true);
-    __ JumpIfSmi(eax, if_false);
-    // It can be an undetectable object.
-    __ mov(edx, FieldOperand(eax, HeapObject::kMapOffset));
-    __ movzx_b(edx, FieldOperand(edx, Map::kBitFieldOffset));
-    __ test(edx, Immediate(1 << Map::kIsUndetectable));
+    Handle<Code> ic = CompareNilICStub::GetUninitialized(isolate(),
+                                                         kNonStrictEquality,
+                                                         nil);
+    CallIC(ic, RelocInfo::CODE_TARGET, expr->CompareOperationFeedbackId());
+    __ test(eax, eax);
     Split(not_zero, if_true, if_false, fall_through);
   }
   context()->Plug(if_true, if_false);

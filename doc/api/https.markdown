@@ -20,6 +20,21 @@ This class is a subclass of `tls.Server` and emits events same as
 このクラスは `tls.Server` のサブクラスで、`http.Server` と同様のイベントを生成します。
 より詳しくは `http.Server` を参照してください。
 
+### server.setTimeout(msecs, callback)
+
+<!--
+See [http.Server#setTimeout()][].
+-->
+
+[http.Server#setTimeout()][] を参照してください。
+
+### server.timeout
+
+<!--
+See [http.Server#timeout][].
+
+[http.Server#timeout][] を参照してください。
+
 ## https.createServer(options, [requestListener])
 
 <!--
@@ -332,6 +347,8 @@ Global instance of [https.Agent][] for all HTTPS client requests.
 全ての HTTPS クライアントリクエストで使用される、デフォルトの
 [https.Agent][] のインスタンスです。
 
+[http.Server#setTimeout()]: http.html#http_server_settimeout_msecs_callback
+[http.Server#timeout]: http.html#http_server_timeout
 [Agent]: #https_class_https_agent
 [globalAgent]: #https_https_globalagent
 [http.listen()]: http.html#http_server_listen_port_hostname_backlog_callback

@@ -67,7 +67,7 @@ TypeFeedbackOracle::TypeFeedbackOracle(Handle<Code> code,
       isolate_(isolate),
       zone_(zone) {
   BuildDictionary(code);
-  ASSERT(reinterpret_cast<Address>(*dictionary_.location()) != kHandleZapValue);
+  ASSERT(dictionary_->IsDictionary());
 }
 
 
@@ -215,6 +215,17 @@ Handle<Map> TypeFeedbackOracle::StoreMonomorphicReceiverType(
         : Handle<Map>(first_map);
   }
   return Handle<Map>::cast(map_or_code);
+}
+
+
+Handle<Map> TypeFeedbackOracle::CompareNilMonomorphicReceiverType(
+    TypeFeedbackId id) {
+  Handle<Object> maybe_code = GetInfo(id);
+  if (maybe_code->IsCode()) {
+    Map* first_map = Handle<Code>::cast(maybe_code)->FindFirstMap();
+    if (first_map != NULL) return Handle<Map>(first_map);
+  }
+  return Handle<Map>();
 }
 
 
@@ -528,15 +539,6 @@ TypeInfo TypeFeedbackOracle::IncrementType(CountOperation* expr) {
 }
 
 
-static void AddMapIfMissing(Handle<Map> map, SmallMapList* list,
-                            Zone* zone) {
-  for (int i = 0; i < list->length(); ++i) {
-    if (list->at(i).is_identical_to(map)) return;
-  }
-  list->Add(map, zone);
-}
-
-
 void TypeFeedbackOracle::CollectPolymorphicMaps(Handle<Code> code,
                                                 SmallMapList* types) {
   MapHandleList maps;
@@ -545,7 +547,7 @@ void TypeFeedbackOracle::CollectPolymorphicMaps(Handle<Code> code,
   for (int i = 0; i < maps.length(); i++) {
     Handle<Map> map(maps.at(i));
     if (!CanRetainOtherContext(*map, *native_context_)) {
-      AddMapIfMissing(map, types, zone());
+      types->AddMapIfMissing(map, zone());
     }
   }
 }
@@ -563,7 +565,7 @@ void TypeFeedbackOracle::CollectReceiverTypes(TypeFeedbackId ast_id,
     // we need a generic store (or load) here.
     ASSERT(Handle<Code>::cast(object)->ic_state() == GENERIC);
   } else if (object->IsMap()) {
-    types->Add(Handle<Map>::cast(object), zone());
+    types->AddMapIfMissing(Handle<Map>::cast(object), zone());
   } else if (Handle<Code>::cast(object)->ic_state() == POLYMORPHIC) {
     CollectPolymorphicMaps(Handle<Code>::cast(object), types);
   } else if (FLAG_collect_megamorphic_maps_from_stub_cache &&
@@ -571,7 +573,7 @@ void TypeFeedbackOracle::CollectReceiverTypes(TypeFeedbackId ast_id,
     types->Reserve(4, zone());
     ASSERT(object->IsCode());
     isolate_->stub_cache()->CollectMatchingMaps(types,
-                                                *name,
+                                                name,
                                                 flags,
                                                 native_context_,
                                                 zone());
@@ -625,9 +627,20 @@ void TypeFeedbackOracle::CollectKeyedReceiverTypes(TypeFeedbackId ast_id,
 }
 
 
-byte TypeFeedbackOracle::ToBooleanTypes(TypeFeedbackId ast_id) {
-  Handle<Object> object = GetInfo(ast_id);
+byte TypeFeedbackOracle::ToBooleanTypes(TypeFeedbackId id) {
+  Handle<Object> object = GetInfo(id);
   return object->IsCode() ? Handle<Code>::cast(object)->to_boolean_state() : 0;
+}
+
+
+byte TypeFeedbackOracle::CompareNilTypes(TypeFeedbackId id) {
+  Handle<Object> object = GetInfo(id);
+  if (object->IsCode() &&
+      Handle<Code>::cast(object)->is_compare_nil_ic_stub()) {
+    return Handle<Code>::cast(object)->compare_nil_state();
+  } else {
+    return CompareNilICStub::kFullCompare;
+  }
 }
 
 
@@ -724,6 +737,7 @@ void TypeFeedbackOracle::ProcessRelocInfos(ZoneList<RelocInfo>* infos) {
       case Code::BINARY_OP_IC:
       case Code::COMPARE_IC:
       case Code::TO_BOOLEAN_IC:
+      case Code::COMPARE_NIL_IC:
         SetInfo(ast_id, target);
         break;
 

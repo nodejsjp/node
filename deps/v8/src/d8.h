@@ -273,7 +273,7 @@ class Shell : public i::AllStatic {
   static const char* ToCString(const v8::String::Utf8Value& value);
   static void ReportException(Isolate* isolate, TryCatch* try_catch);
   static Handle<String> ReadFile(Isolate* isolate, const char* name);
-  static Persistent<Context> CreateEvaluationContext(Isolate* isolate);
+  static Local<Context> CreateEvaluationContext(Isolate* isolate);
   static int RunMain(Isolate* isolate, int argc, char* argv[]);
   static int Main(int argc, char* argv[]);
   static void Exit(int exit_code);
@@ -292,11 +292,26 @@ class Shell : public i::AllStatic {
   static void MapCounters(const char* name);
 
 #ifdef ENABLE_DEBUGGER_SUPPORT
-  static Handle<Object> DebugMessageDetails(Handle<String> message);
-  static Handle<Value> DebugCommandToJSONRequest(Handle<String> command);
+  static Handle<Object> DebugMessageDetails(Isolate* isolate,
+                                            Handle<String> message);
+  static Handle<Value> DebugCommandToJSONRequest(Isolate* isolate,
+                                                 Handle<String> command);
   static void DispatchDebugMessages();
 #endif  // ENABLE_DEBUGGER_SUPPORT
 #endif  // V8_SHARED
+
+  static Handle<Value> RealmCurrent(const Arguments& args);
+  static Handle<Value> RealmOwner(const Arguments& args);
+  static Handle<Value> RealmGlobal(const Arguments& args);
+  static Handle<Value> RealmCreate(const Arguments& args);
+  static Handle<Value> RealmDispose(const Arguments& args);
+  static Handle<Value> RealmSwitch(const Arguments& args);
+  static Handle<Value> RealmEval(const Arguments& args);
+  static Handle<Value> RealmSharedGet(Local<String> property,
+                                      const AccessorInfo& info);
+  static void RealmSharedSet(Local<String> property,
+                             Local<Value> value,
+                             const AccessorInfo& info);
 
   static Handle<Value> Print(const Arguments& args);
   static Handle<Value> Write(const Arguments& args);
@@ -401,8 +416,8 @@ class Shell : public i::AllStatic {
                                            ExternalArrayType type,
                                            int32_t element_size);
   static void ExternalArrayWeakCallback(Isolate* isolate,
-                                        Persistent<Value> object,
-                                        void* data);
+                                        Persistent<Object>* object,
+                                        uint8_t* data);
 };
 
 

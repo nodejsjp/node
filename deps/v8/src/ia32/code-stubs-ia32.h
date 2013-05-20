@@ -36,6 +36,10 @@ namespace v8 {
 namespace internal {
 
 
+void ArrayNativeCode(MacroAssembler* masm,
+                     bool construct_call,
+                     Label* call_generic_code);
+
 // Compute a transcendental math function natively, or call the
 // TranscendentalCache runtime function.
 class TranscendentalCacheStub: public PlatformCodeStub {
@@ -144,7 +148,7 @@ class UnaryOpStub: public PlatformCodeStub {
   void GenerateGenericStubBitNot(MacroAssembler* masm);
   void GenerateGenericCodeFallback(MacroAssembler* masm);
 
-  virtual int GetCodeKind() { return Code::UNARY_OP_IC; }
+  virtual Code::Kind GetCodeKind() const { return Code::UNARY_OP_IC; }
 
   virtual InlineCacheState GetICState() {
     return UnaryOpIC::ToState(operand_type_);

@@ -123,7 +123,6 @@ class LCodeGen;
   V(Label)                                      \
   V(LazyBailout)                                \
   V(LoadContextSlot)                            \
-  V(LoadElements)                               \
   V(LoadExternalArrayPointer)                   \
   V(LoadFunctionPrototype)                      \
   V(LoadGlobalCell)                             \
@@ -280,6 +279,8 @@ class LInstruction: public ZoneObject {
   LOperand* FirstInput() { return InputAt(0); }
   LOperand* Output() { return HasResult() ? result() : NULL; }
 
+  virtual bool HasInterestingComment(LCodeGen* gen) const { return true; }
+
 #ifdef DEBUG
   void VerifyCall();
 #endif
@@ -381,6 +382,10 @@ class LInstructionGap: public LGap {
  public:
   explicit LInstructionGap(HBasicBlock* block) : LGap(block) { }
 
+  virtual bool HasInterestingComment(LCodeGen* gen) const {
+    return !IsRedundant();
+  }
+
   DECLARE_CONCRETE_INSTRUCTION(InstructionGap, "gap")
 };
 
@@ -389,6 +394,7 @@ class LGoto: public LTemplateInstruction<0, 0, 0> {
  public:
   explicit LGoto(int block_id) : block_id_(block_id) { }
 
+  virtual bool HasInterestingComment(LCodeGen* gen) const;
   DECLARE_CONCRETE_INSTRUCTION(Goto, "goto")
   virtual void PrintDataTo(StringStream* stream);
   virtual bool IsControl() const { return true; }
@@ -436,12 +442,14 @@ class LLabel: public LGap {
   explicit LLabel(HBasicBlock* block)
       : LGap(block), replacement_(NULL) { }
 
+  virtual bool HasInterestingComment(LCodeGen* gen) const { return false; }
   DECLARE_CONCRETE_INSTRUCTION(Label, "label")
 
   virtual void PrintDataTo(StringStream* stream);
 
   int block_id() const { return block()->block_id(); }
   bool is_loop_header() const { return block()->IsLoopHeader(); }
+  bool is_osr_entry() const { return block()->is_osr_entry(); }
   Label* label() { return &label_; }
   LLabel* replacement() const { return replacement_; }
   void set_replacement(LLabel* label) { replacement_ = label; }
@@ -455,6 +463,7 @@ class LLabel: public LGap {
 
 class LParameter: public LTemplateInstruction<1, 0, 0> {
  public:
+  virtual bool HasInterestingComment(LCodeGen* gen) const { return false; }
   DECLARE_CONCRETE_INSTRUCTION(Parameter, "parameter")
 };
 
@@ -472,6 +481,7 @@ class LCallStub: public LTemplateInstruction<1, 0, 0> {
 
 class LUnknownOSRValue: public LTemplateInstruction<1, 0, 0> {
  public:
+  virtual bool HasInterestingComment(LCodeGen* gen) const { return false; }
   DECLARE_CONCRETE_INSTRUCTION(UnknownOSRValue, "unknown-osr-value")
 };
 
@@ -1335,6 +1345,11 @@ class LAddI: public LTemplateInstruction<1, 2, 0> {
   LOperand* left() { return inputs_[0]; }
   LOperand* right() { return inputs_[1]; }
 
+  static bool UseLea(HAdd* add) {
+    return !add->CheckFlag(HValue::kCanOverflow) &&
+        add->BetterLeftOperand()->UseCount() > 1;
+  }
+
   DECLARE_CONCRETE_INSTRUCTION(AddI, "add-i")
   DECLARE_HYDROGEN_ACCESSOR(Add)
 };
@@ -1444,6 +1459,7 @@ class LReturn: public LTemplateInstruction<0, 2, 0> {
   LOperand* parameter_count() { return inputs_[1]; }
 
   DECLARE_CONCRETE_INSTRUCTION(Return, "return")
+  DECLARE_HYDROGEN_ACCESSOR(Return)
 };
 
 
@@ -1497,18 +1513,6 @@ class LLoadFunctionPrototype: public LTemplateInstruction<1, 1, 0> {
   DECLARE_HYDROGEN_ACCESSOR(LoadFunctionPrototype)
 
   LOperand* function() { return inputs_[0]; }
-};
-
-
-class LLoadElements: public LTemplateInstruction<1, 1, 0> {
- public:
-  explicit LLoadElements(LOperand* object) {
-    inputs_[0] = object;
-  }
-
-  LOperand* object() { return inputs_[0]; }
-
-  DECLARE_CONCRETE_INSTRUCTION(LoadElements, "load-elements")
 };
 
 
@@ -1774,7 +1778,6 @@ class LInvokeFunction: public LTemplateInstruction<1, 1, 0> {
   virtual void PrintDataTo(StringStream* stream);
 
   int arity() const { return hydrogen()->argument_count() - 1; }
-  Handle<JSFunction> known_function() { return hydrogen()->known_function(); }
 };
 
 
@@ -1840,7 +1843,6 @@ class LCallKnownGlobal: public LTemplateInstruction<1, 0, 0> {
 
   virtual void PrintDataTo(StringStream* stream);
 
-  Handle<JSFunction> target() const { return hydrogen()->target();  }
   int arity() const { return hydrogen()->argument_count() - 1;  }
 };
 
@@ -2053,6 +2055,9 @@ class LStoreNamedField: public LTemplateInstruction<0, 2, 1> {
   bool is_in_object() { return hydrogen()->is_in_object(); }
   int offset() { return hydrogen()->offset(); }
   Handle<Map> transition() const { return hydrogen()->transition(); }
+  Representation representation() const {
+    return hydrogen()->field_representation();
+  }
 };
 
 
@@ -2392,8 +2397,6 @@ class LFunctionLiteral: public LTemplateInstruction<1, 0, 0> {
  public:
   DECLARE_CONCRETE_INSTRUCTION(FunctionLiteral, "function-literal")
   DECLARE_HYDROGEN_ACCESSOR(FunctionLiteral)
-
-  Handle<SharedFunctionInfo> shared_info() { return hydrogen()->shared_info(); }
 };
 
 
@@ -2471,6 +2474,7 @@ class LOsrEntry: public LTemplateInstruction<0, 0, 0> {
  public:
   LOsrEntry();
 
+  virtual bool HasInterestingComment(LCodeGen* gen) const { return false; }
   DECLARE_CONCRETE_INSTRUCTION(OsrEntry, "osr-entry")
 
   LOperand** SpilledRegisterArray() { return register_spills_; }
@@ -2664,6 +2668,9 @@ class LChunkBuilder BASE_EMBEDDED {
   // An input operand in a register or a constant operand.
   MUST_USE_RESULT LOperand* UseRegisterOrConstant(HValue* value);
   MUST_USE_RESULT LOperand* UseRegisterOrConstantAtStart(HValue* value);
+
+  // An input operand in a constant operand.
+  MUST_USE_RESULT LOperand* UseConstant(HValue* value);
 
   // An input operand in register, stack slot or a constant operand.
   // Will not be moved to a register even if one is freely available.

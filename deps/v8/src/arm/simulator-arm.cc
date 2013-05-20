@@ -26,7 +26,7 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <stdlib.h>
-#include <math.h>
+#include <cmath>
 #include <cstdarg>
 #include "v8.h"
 
@@ -331,7 +331,7 @@ void ArmDebugger::Debug() {
                 PrintF("\n");
               }
             }
-            for (int i = 0; i < kNumVFPDoubleRegisters; i++) {
+            for (int i = 0; i < DwVfpRegister::NumRegisters(); i++) {
               dvalue = GetVFPDoubleRegisterValue(i);
               uint64_t as_words = BitCast<uint64_t>(dvalue);
               PrintF("%3s: %f 0x%08x %08x\n",
@@ -976,7 +976,7 @@ ReturnType Simulator::GetFromVFPRegister(int reg_index) {
 
 
 // Runtime FP routines take up to two double arguments and zero
-// or one integer arguments. All are constructed here,
+// or one integer arguments. All are consructed here.
 // from r0-r3 or d0 and d1.
 void Simulator::GetFpArgs(double* x, double* y, int32_t* z) {
   if (use_eabi_hardfloat()) {
@@ -990,12 +990,12 @@ void Simulator::GetFpArgs(double* x, double* y, int32_t* z) {
     // Registers 0 and 1 -> x.
     OS::MemCopy(buffer, registers_, sizeof(*x));
     OS::MemCopy(x, buffer, sizeof(*x));
-    // Registers 2 and 3 -> y.
+    // Register 2 and 3 -> y.
     OS::MemCopy(buffer, registers_ + 2, sizeof(*y));
     OS::MemCopy(y, buffer, sizeof(*y));
-    // Register 2 -> z.
-    OS::MemCopy(buffer, registers_ + 2, sizeof(*z));
-    OS::MemCopy(z, buffer, sizeof(*z));
+    // Register 2 -> z
+    memcpy(buffer, registers_ + 2, sizeof(*z));
+    memcpy(z, buffer, sizeof(*z));
   }
 }
 
@@ -1267,7 +1267,7 @@ bool Simulator::OverflowFrom(int32_t alu_out,
 
 // Support for VFP comparisons.
 void Simulator::Compute_FPSCR_Flags(double val1, double val2) {
-  if (isnan(val1) || isnan(val2)) {
+  if (std::isnan(val1) || std::isnan(val2)) {
     n_flag_FPSCR_ = false;
     z_flag_FPSCR_ = false;
     c_flag_FPSCR_ = true;
@@ -1870,7 +1870,7 @@ void Simulator::SoftwareInterrupt(Instruction* instr) {
 
 
 double Simulator::canonicalizeNaN(double value) {
-  return (FPSCR_default_NaN_mode_ && isnan(value)) ?
+  return (FPSCR_default_NaN_mode_ && std::isnan(value)) ?
     FixedDoubleArray::canonical_not_the_hole_nan_as_double() : value;
 }
 
@@ -2951,7 +2951,7 @@ void Simulator::DecodeVCMP(Instruction* instr) {
 
     // Raise exceptions for quiet NaNs if necessary.
     if (instr->Bit(7) == 1) {
-      if (isnan(dd_value)) {
+      if (std::isnan(dd_value)) {
         inv_op_vfp_flag_ = true;
       }
     }

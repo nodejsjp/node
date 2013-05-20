@@ -1,3 +1,71 @@
+2013-05-10: Version 3.19.0
+
+        Deprecated Context::New which returns Persistent.
+
+        Added Persistent<T>::Reset which disposes the handle and redirects it to
+        point to another object.
+
+        Deprecated WriteAscii and MayContainNonAscii.
+
+        Exposed AssertNoAllocation to API.
+
+        Performance and stability improvements on all platforms.
+
+
+2013-04-30: Version 3.18.5
+
+        Allowed setting debugger breakpoints on CompareNilICs (issue 2660)
+
+        Fixed beyond-heap load on x64 Crankshafted StringCharFromCode
+        (Chromium issue 235311)
+
+        Change 'Parse error' to three more informative messages.
+        (Chromium issue 2636)
+
+        Performance and stability improvements on all platforms.
+
+
+2013-04-26: Version 3.18.4
+
+        Added a preliminary API for ES6 ArrayBuffers
+
+        Replaced qsort with std::sort. (Chromium issue 2639)
+
+        Performance and stability improvements on all platforms.
+
+
+2013-04-24: Version 3.18.3
+
+        Exposed the GC under a name that is less collision prone than window.gc.
+        (issue 2641)
+
+        Do not emit double values at their use sites. (Chromium issue 234101)
+
+        Added methods to allow resuming execution after calling
+        TerminateExecution(). (issue 2361)
+
+        Performance and stability improvements on all platforms.
+
+
+2013-04-22: Version 3.18.2
+
+        OS::MemMove/OS::MemCopy: Don't call through to generated code when size
+        == 0 to avoid prefetching invalid memory (Chromium issue 233500)
+
+        Removed heap snapshot size limit. (Chromium issue 232305)
+
+        Performance and stability improvements on all platforms.
+
+
+2013-04-18: Version 3.18.1
+
+        Removed SCons related files and deprecated test suite configurations.
+
+        Improved handling of unary plus (issue 2527).
+
+        Performance and stability improvements on all platforms.
+
+
 2013-04-17: Version 3.18.0
 
         Enabled pretenuring of fast literals in high promotion mode.

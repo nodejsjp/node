@@ -166,6 +166,9 @@ DEFINE_bool(harmony_observation, false,
             "enable harmony object observation (implies harmony collections")
 DEFINE_bool(harmony_typed_arrays, false,
             "enable harmony typed arrays")
+DEFINE_bool(harmony_array_buffer, false,
+            "enable harmony array buffer")
+DEFINE_implication(harmony_typed_arrays, harmony_array_buffer)
 DEFINE_bool(harmony_generators, false, "enable harmony generators")
 DEFINE_bool(harmony, false, "enable all harmony features (except typeof)")
 DEFINE_implication(harmony, harmony_scoping)
@@ -177,7 +180,7 @@ DEFINE_implication(harmony, harmony_observation)
 DEFINE_implication(harmony, harmony_generators)
 DEFINE_implication(harmony_modules, harmony_scoping)
 DEFINE_implication(harmony_observation, harmony_collections)
-DEFINE_implication(harmony, harmony_typed_arrays)
+// TODO[dslomov] add harmony => harmony_typed_arrays
 
 // Flags for experimental implementation features.
 DEFINE_bool(packed_arrays, true, "optimizes arrays that have no holes")
@@ -190,6 +193,9 @@ DEFINE_bool(clever_optimizations,
             true,
             "Optimize object size, Array shift, DOM strings and string +")
 DEFINE_bool(pretenure_literals, true, "allocate literals in old space")
+DEFINE_bool(track_fields, false, "track fields with only smi values")
+DEFINE_bool(track_double_fields, false, "track fields with double values")
+DEFINE_implication(track_double_fields, track_fields)
 
 // Flags for data representation optimizations
 DEFINE_bool(unbox_double_arrays, true, "automatically unbox arrays of doubles")
@@ -225,11 +231,16 @@ DEFINE_bool(trace_gvn, false, "trace global value numbering")
 DEFINE_bool(trace_representation, false, "trace representation types")
 DEFINE_bool(trace_track_allocation_sites, false,
             "trace the tracking of allocation sites")
+DEFINE_bool(trace_migration, false, "trace object migration")
+DEFINE_bool(trace_generalization, false, "trace map generalization")
 DEFINE_bool(stress_pointer_maps, false, "pointer map for every instruction")
 DEFINE_bool(stress_environments, false, "environment for every instruction")
 DEFINE_int(deopt_every_n_times,
            0,
            "deoptimize every n times a deopt point is passed")
+DEFINE_int(deopt_every_n_garbage_collections,
+           0,
+           "deoptimize every n garbage collections")
 DEFINE_bool(trap_on_deopt, false, "put a break point before deoptimizing")
 DEFINE_bool(deoptimize_uncommon_cases, true, "deoptimize uncommon cases")
 DEFINE_bool(polymorphic_inlining, true, "polymorphic inlining")
@@ -344,6 +355,10 @@ DEFINE_bool(enable_vldr_imm, false,
 DEFINE_string(expose_natives_as, NULL, "expose natives in global object")
 DEFINE_string(expose_debug_as, NULL, "expose debug in global object")
 DEFINE_bool(expose_gc, false, "expose gc extension")
+DEFINE_string(expose_gc_as,
+              NULL,
+              "expose gc extension under the specified name")
+DEFINE_implication(expose_gc_as, expose_gc)
 DEFINE_bool(expose_externalize_string, false,
             "expose externalize string extension")
 DEFINE_int(stack_trace_limit, 10, "number of stack frames to capture")
@@ -666,9 +681,6 @@ DEFINE_bool(collect_heap_spill_statistics, false,
 
 DEFINE_bool(trace_isolates, false, "trace isolate state changes")
 
-// VM state
-DEFINE_bool(log_state_changes, false, "Log state changes.")
-
 // Regexp
 DEFINE_bool(regexp_possessive_quantifier,
             false,
@@ -716,6 +728,7 @@ DEFINE_bool(log_internal_timer_events, false, "Time internal events.")
 DEFINE_bool(log_timer_events, false,
             "Time events including external callbacks.")
 DEFINE_implication(log_timer_events, log_internal_timer_events)
+DEFINE_implication(log_internal_timer_events, prof)
 
 //
 // Disassembler only flags

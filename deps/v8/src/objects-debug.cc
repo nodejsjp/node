@@ -323,10 +323,6 @@ void Map::MapVerify() {
           instance_size() < HEAP->Capacity()));
   VerifyHeapPointer(prototype());
   VerifyHeapPointer(instance_descriptors());
-  DescriptorArray* descriptors = instance_descriptors();
-  for (int i = 0; i < NumberOfOwnDescriptors(); ++i) {
-    CHECK_EQ(i, descriptors->GetDetails(i).descriptor_index() - 1);
-  }
   SLOW_ASSERT(instance_descriptors()->IsSortedNoDuplicates());
   if (HasTransitionArray()) {
     SLOW_ASSERT(transitions()->IsSortedNoDuplicates());
@@ -401,7 +397,7 @@ void FixedDoubleArray::FixedDoubleArrayVerify() {
   for (int i = 0; i < length(); i++) {
     if (!is_the_hole(i)) {
       double value = get_scalar(i);
-      CHECK(!isnan(value) ||
+      CHECK(!std::isnan(value) ||
              (BitCast<uint64_t>(value) ==
               BitCast<uint64_t>(canonical_not_the_hole_nan_as_double())) ||
              ((BitCast<uint64_t>(value) & Double::kSignMask) != 0));
@@ -416,8 +412,10 @@ void JSGeneratorObject::JSGeneratorObjectVerify() {
   // initialized by the generator.  Hence these weak checks.
   VerifyObjectField(kFunctionOffset);
   VerifyObjectField(kContextOffset);
+  VerifyObjectField(kReceiverOffset);
   VerifyObjectField(kOperandStackOffset);
   VerifyObjectField(kContinuationOffset);
+  VerifyObjectField(kStackHandlerIndexOffset);
 }
 
 

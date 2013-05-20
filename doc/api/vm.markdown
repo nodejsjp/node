@@ -151,13 +151,15 @@ and throws an exception.
 例外をスローします。
 
 
-## vm.runInNewContext(code, [sandbox], [filename])
+## vm.runInNewContext(code, [sandbox], [filename], [timeout])
 
 <!--
 `vm.runInNewContext` compiles `code`, then runs it in `sandbox` and returns the
 result. Running code does not have access to local scope. The object `sandbox`
 will be used as the global object for `code`.
 `sandbox` and `filename` are optional, `filename` is only used in stack traces.
+`timeout` specifies an optional number of milliseconds to execute `code` before
+terminating execution. If execution is terminated, `null` will be thrown.
 -->
 
 `vm.runInNewContext` は `code` をコンパイルし、それを `sandbox` の中で実行して
@@ -166,6 +168,9 @@ will be used as the global object for `code`.
 `sandbox` が `code` にとってのグローバルオブジェクトとして使われます。
 `sandbox` および `filename` はオプションで、`filename` 
 スタックトレースでのみ使用されます。
+`timeout` はオプションで、`code` の実行が打ち切られるまでの時間を
+ミリ秒単位の数値で指定します。
+実行が打ち切られると、`null` がスローされます。
 
 <!--
 Example: compile and execute code that increments a global variable and sets a new one.
@@ -205,7 +210,7 @@ and throws an exception.
 `code` が文法エラーとなるケースでは、
 `vm.runInNewContext` は標準エラーに文法エラーを出力し、例外をスローします。
 
-## vm.runInContext(code, context, [filename])
+## vm.runInContext(code, context, [filename], [timeout])
 
 <!--
 `vm.runInContext` compiles `code`, then runs it in `context` and returns the
@@ -214,8 +219,8 @@ built-in objects and functions. Running code does not have access to local scope
 and the global object held within `context` will be used as the global object
 for `code`.
 `filename` is optional, it's used only in stack traces.
-
-Example: compile and execute code in a existing context.
+`timeout` specifies an optional number of milliseconds to execute `code` before
+terminating execution. If execution is terminated, `null` will be thrown.
 -->
 
 `vm.runInContext` は `code` をコンパイルして、
@@ -225,6 +230,13 @@ Example: compile and execute code in a existing context.
 実行されるコードはローカルスコープにアクセスせず、
 `context` が `code` にとってのグローバルオブジェクトとして使われます。
 `filename` はオプションで、スタックトレースでのみ使用されます。
+`timeout` はオプションで、`code` の実行が打ち切られるまでの時間を
+ミリ秒単位の数値で指定します。
+実行が打ち切られると、`null` がスローされます。
+
+<!--
+Example: compile and execute code in a existing context.
+-->
 
 例: コードをコンパイルして既存のコンテキストで実行します。
 
@@ -312,13 +324,15 @@ A class for running scripts.  Returned by vm.createScript.
 
 スクリプトを実行するクラスです。`vm.createScript()` によって返されます。
 
-### script.runInThisContext()
+### script.runInThisContext([timeout])
 
 <!--
 Similar to `vm.runInThisContext` but a method of a precompiled `Script` object.
 `script.runInThisContext` runs the code of `script` and returns the result.
 Running code does not have access to local scope, but does have access to the `global` object
 (v8: in actual context).
+`timeout` specifies an optional number of milliseconds to execute `code` before
+terminating execution. If execution is terminated, `null` will be thrown.
 -->
 
 `vm.runInThisContext` と同様ですが、
@@ -326,6 +340,9 @@ Running code does not have access to local scope, but does have access to the `g
 `script.runInThisContext` は `script` のコードを実行してその結果を返します。
 実行されるコードはローカルスコープにアクセスしませんが、
 `global` オブジェクト (v8: 実際のコンテキスト) にはアクセスします。
+`timeout` はオプションで、`code` の実行が打ち切られるまでの時間を
+ミリ秒単位の数値で指定します。
+実行が打ち切られると、`null` がスローされます。
 
 <!--
 Example of using `script.runInThisContext` to compile code once and run it multiple times:
@@ -348,12 +365,14 @@ Example of using `script.runInThisContext` to compile code once and run it multi
     // 1000
 
 
-### script.runInNewContext([sandbox])
+### script.runInNewContext([sandbox], [timeout])
 
 <!--
 Similar to `vm.runInNewContext` a method of a precompiled `Script` object.
 `script.runInNewContext` runs the code of `script` with `sandbox` as the global object and returns the result.
 Running code does not have access to local scope. `sandbox` is optional.
+`timeout` specifies an optional number of milliseconds to execute `code` before
+terminating execution. If execution is terminated, `null` will be thrown.
 -->
 
 `vm.runInNewContext` と同様ですが、
@@ -362,6 +381,9 @@ Running code does not have access to local scope. `sandbox` is optional.
 `script` のコードを実行してその結果を返します。
 実行されるコードはローカルスコープにアクセスしません。
 `sandbox` はオプションです。
+`timeout` はオプションで、`code` の実行が打ち切られるまでの時間を
+ミリ秒単位の数値で指定します。
+実行が打ち切られると、`null` がスローされます。
 
 <!--
 Example: compile code that increments a global variable and sets one, then execute this code multiple times.

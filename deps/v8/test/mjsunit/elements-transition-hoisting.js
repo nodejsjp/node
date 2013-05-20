@@ -26,6 +26,10 @@
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Flags: --allow-natives-syntax --smi-only-arrays --noparallel-recompilation
+// Flags: --notrack-allocation-sites
+
+// No tracking of allocation sites because it interfers with the semantics
+// the test is trying to ensure.
 
 // Ensure that ElementsKind transitions in various situations are hoisted (or
 // not hoisted) correctly, don't change the semantics programs and don't trigger
@@ -67,7 +71,7 @@ if (support_smi_only_arrays) {
   // deopt in simple cases.
   function testExactMapHoisting(a) {
     var object = new Object();
-    a.foo = 0;
+    a.foo = {};
     a[0] = 0;
     a[1] = 1;
     var count = 3;

@@ -200,6 +200,19 @@ const Register r14 = { kRegister_r14_Code };
 const Register r15 = { kRegister_r15_Code };
 const Register no_reg = { kRegister_no_reg_Code };
 
+#ifdef _WIN64
+  // Windows calling convention
+  const Register arg_reg_1 = { kRegister_rcx_Code };
+  const Register arg_reg_2 = { kRegister_rdx_Code };
+  const Register arg_reg_3 = { kRegister_r8_Code };
+  const Register arg_reg_4 = { kRegister_r9_Code };
+#else
+  // AMD64 calling convention
+  const Register arg_reg_1 = { kRegister_rdi_Code };
+  const Register arg_reg_2 = { kRegister_rsi_Code };
+  const Register arg_reg_3 = { kRegister_rdx_Code };
+  const Register arg_reg_4 = { kRegister_rcx_Code };
+#endif  // _WIN64
 
 struct XMMRegister {
   static const int kMaxNumRegisters = 16;

@@ -148,6 +148,39 @@ Examples:
     // if currently in /home/myself/node, it returns
     '/home/myself/node/wwwroot/static_files/gif/image.gif'
 
+## path.isAbsolute(path)
+
+<!--
+Determines whether `path` is an absolute path. An absolute path will always
+resolve to the same location, regardless of the working directory.
+-->
+
+`path` が絶対パスかどうかを判定します。
+絶対パスは現在の作業ディレクトリに関係なく、
+常に同じ場所に解決されます。
+
+<!--
+Posix examples:
+-->
+
+Posix の例:
+
+    path.isAbsolute('/foo/bar') // true
+    path.isAbsolute('/baz/..')  // true
+    path.isAbsolute('qux/')     // false
+    path.isAbsolute('.')        // false
+
+<!--
+Windows examples:
+-->
+
+Windows の例:
+
+    path.isAbsolute('//server')  // true
+    path.isAbsolute('C:/foo/..') // true
+    path.isAbsolute('bar\\baz')   // false
+    path.isAbsolute('.')         // false
+
 ## path.relative(from, to)
 
 <!--

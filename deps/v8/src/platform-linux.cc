@@ -322,7 +322,7 @@ void OS::ReleaseStore(volatile AtomicWord* ptr, AtomicWord value) {
 
 
 const char* OS::LocalTimezone(double time) {
-  if (isnan(time)) return "";
+  if (std::isnan(time)) return "";
   time_t tv = static_cast<time_t>(floor(time/msPerSecond));
   struct tm* t = localtime(&tv);
   if (NULL == t) return "";
@@ -419,9 +419,7 @@ void OS::DebugBreak() {
 // TODO(lrn): Introduce processor define for runtime system (!= V8_ARCH_x,
 //  which is the architecture of generated code).
 #if (defined(__arm__) || defined(__thumb__))
-# if defined(CAN_USE_ARMV5_INSTRUCTIONS)
   asm("bkpt 0");
-# endif
 #elif defined(__mips__)
   asm("break");
 #elif defined(__native_client__)
