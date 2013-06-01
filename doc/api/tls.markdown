@@ -473,6 +473,10 @@ Creates a new client connection to the given `port` and `host` (old API) or
     usually be much simpler: `['hello', 'world']`.)
 
   - `servername`: Servername for SNI (Server Name Indication) TLS extension.
+
+  - `secureProtocol`: The SSL method to use, e.g. `SSLv3_method` to force
+    SSL version 3. The possible values depend on your installation of
+    OpenSSL and are defined in the constant [SSL_METHODS][].
 -->
 
   - `host`: クライアントが接続するホスト。
@@ -510,6 +514,10 @@ Creates a new client connection to the given `port` and `host` (old API) or
     (通常、配列を渡す方がシンプルです: `['hello', 'world']`)。
 
   - `servername`: TLS 拡張である SNI (Server Name Indication) のサーバ名です。
+
+  - `secureProtocol`: 使用する SSL 方式、たとえば `SSLv3_method` は
+    SSL バージョン 3 を強制します。可能な値はインストールされている OpenSSL
+    と、その定数 [SSL_METHODS][] の定義に依存します。
 
 <!--
 The `callback` parameter will be added as a listener for the
@@ -1019,6 +1027,7 @@ The numeric representation of the remote port. For example, `443`.
 ['secureConnect']: #tls_event_secureconnect
 [secureConnection]: #tls_event_secureconnection
 [Stream]: stream.html#stream_stream
+[SSL_METHODS]: http://www.openssl.org/docs/ssl/ssl.html#DEALING_WITH_PROTOCOL_METHODS
 [tls.Server]: #tls_class_tls_server
 -->
 
@@ -1029,4 +1038,5 @@ The numeric representation of the remote port. For example, `443`.
 ['secureConnect']: #tls_event_secureconnect
 [secureConnection]: #tls_event_secureconnection
 [Stream]: stream.html#stream_stream
+[SSL_METHODS]: http://www.openssl.org/docs/ssl/ssl.html#DEALING_WITH_PROTOCOL_METHODS
 [tls.Server]: #tls_class_tls_server
