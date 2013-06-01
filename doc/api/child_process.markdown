@@ -437,12 +437,13 @@ that some connections will be handled by the parent and some by the child.
 <!--
 For `dgram` servers the workflow is exactly the same.  Here you listen on
 a `message` event instead of `connection` and use `server.bind` instead of
-`server.listen`.
+`server.listen`.  (Currently only supported on UNIX platforms.)
 -->
 
 `dgram` サーバのワークフローも同じです。
 `connection` イベントの代わりに `message` イベントを監視し、
-`server.listen` の代わりに `server.bind` を使用してください。
+`server.listen` の代わりに `server.bind` を使用してください
+(現時点では UNIX プラットフォームでのみサポートされています)。
 
 #### Example: sending socket object
 
