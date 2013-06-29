@@ -60,6 +60,7 @@ static void uv__stream_connect(uv_stream_t*);
 static void uv__write(uv_stream_t* stream);
 static void uv__read(uv_stream_t* stream);
 static void uv__stream_io(uv_loop_t* loop, uv__io_t* w, unsigned int events);
+static size_t uv__write_req_size(uv_write_t* req);
 
 
 /* Used by the accept() EMFILE party trick. */
@@ -399,6 +400,7 @@ void uv__stream_destroy(uv_stream_t* stream) {
 
     if (req->bufs != req->bufsml)
       free(req->bufs);
+    req->bufs = NULL;
 
     if (req->cb) {
       uv__set_artificial_error(req->handle->loop, UV_ECANCELED);
@@ -413,6 +415,13 @@ void uv__stream_destroy(uv_stream_t* stream) {
     req = QUEUE_DATA(q, uv_write_t, queue);
     uv__req_unregister(stream->loop, req);
 
+    if (req->bufs != NULL) {
+      stream->write_queue_size -= uv__write_req_size(req);
+      if (req->bufs != req->bufsml)
+        free(req->bufs);
+      req->bufs = NULL;
+    }
+
     if (req->cb) {
       uv__set_sys_error(stream->loop, req->error);
       req->cb(req, req->error ? -1 : 0);
@@ -420,6 +429,11 @@ void uv__stream_destroy(uv_stream_t* stream) {
   }
 
   if (stream->shutdown_req) {
+    /* The UV_ECANCELED error code is a lie, the shutdown(2) syscall is a
+     * fait accompli at this point. Maybe we should revisit this in v0.11.
+     * A possible reason for leaving it unchanged is that it informs the
+     * callee that the handle has been destroyed.
+     */
     uv__req_unregister(stream->loop, stream->shutdown_req);
     uv__set_artificial_error(stream->loop, UV_ECANCELED);
     stream->shutdown_req->cb(stream->shutdown_req, -1);
@@ -536,42 +550,30 @@ void uv__server_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
 
 
 int uv_accept(uv_stream_t* server, uv_stream_t* client) {
-  uv_stream_t* streamServer;
-  uv_stream_t* streamClient;
-  int saved_errno;
-  int status;
-
   /* TODO document this */
   assert(server->loop == client->loop);
 
-  saved_errno = errno;
-  status = -1;
+  if (server->accepted_fd == -1)
+    return uv__set_sys_error(server->loop, EAGAIN);
 
-  streamServer = (uv_stream_t*)server;
-  streamClient = (uv_stream_t*)client;
-
-  if (streamServer->accepted_fd < 0) {
-    uv__set_sys_error(server->loop, EAGAIN);
-    goto out;
-  }
-
-  switch (streamClient->type) {
+  switch (client->type) {
     case UV_NAMED_PIPE:
     case UV_TCP:
-      if (uv__stream_open(streamClient, streamServer->accepted_fd,
-            UV_STREAM_READABLE | UV_STREAM_WRITABLE)) {
+      if (uv__stream_open(client,
+                          server->accepted_fd,
+                          UV_STREAM_READABLE | UV_STREAM_WRITABLE)) {
         /* TODO handle error */
-        close(streamServer->accepted_fd);
-        streamServer->accepted_fd = -1;
-        goto out;
+        close(server->accepted_fd);
+        server->accepted_fd = -1;
+        return -1;
       }
       break;
 
     case UV_UDP:
-      if (uv_udp_open((uv_udp_t*) client, streamServer->accepted_fd)) {
-        close(streamServer->accepted_fd);
-        streamServer->accepted_fd = -1;
-        goto out;
+      if (uv_udp_open((uv_udp_t*) client, server->accepted_fd)) {
+        close(server->accepted_fd);
+        server->accepted_fd = -1;
+        return -1;
       }
       break;
 
@@ -579,13 +581,9 @@ int uv_accept(uv_stream_t* server, uv_stream_t* client) {
       assert(0);
   }
 
-  uv__io_start(streamServer->loop, &streamServer->io_watcher, UV__POLLIN);
-  streamServer->accepted_fd = -1;
-  status = 0;
-
-out:
-  errno = saved_errno;
-  return status;
+  uv__io_start(server->loop, &server->io_watcher, UV__POLLIN);
+  server->accepted_fd = -1;
+  return 0;
 }
 
 
@@ -615,10 +613,9 @@ int uv_listen(uv_stream_t* stream, int backlog, uv_connection_cb cb) {
 
 static void uv__drain(uv_stream_t* stream) {
   uv_shutdown_t* req;
+  int status;
 
   assert(QUEUE_EMPTY(&stream->write_queue));
-  assert(stream->write_queue_size == 0);
-
   uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLOUT);
 
   /* Shutdown? */
@@ -629,21 +626,17 @@ static void uv__drain(uv_stream_t* stream) {
 
     req = stream->shutdown_req;
     stream->shutdown_req = NULL;
+    stream->flags &= ~UV_STREAM_SHUTTING;
     uv__req_unregister(stream->loop, req);
 
-    if (shutdown(uv__stream_fd(stream), SHUT_WR)) {
-      /* Error. Report it. User should call uv_close(). */
+    status = shutdown(uv__stream_fd(stream), SHUT_WR);
+    if (status)
       uv__set_sys_error(stream->loop, errno);
-      if (req->cb) {
-        req->cb(req, -1);
-      }
-    } else {
-      uv__set_sys_error(stream->loop, 0);
-      ((uv_handle_t*) stream)->flags |= UV_STREAM_SHUT;
-      if (req->cb) {
-        req->cb(req, 0);
-      }
-    }
+    else
+      stream->flags |= UV_STREAM_SHUT;
+
+    if (req->cb != NULL)
+      req->cb(req, status);
   }
 }
 
@@ -651,6 +644,7 @@ static void uv__drain(uv_stream_t* stream) {
 static size_t uv__write_req_size(uv_write_t* req) {
   size_t size;
 
+  assert(req->bufs != NULL);
   size = uv__buf_count(req->bufs + req->write_index,
                        req->bufcnt - req->write_index);
   assert(req->handle->write_queue_size >= size);
@@ -664,10 +658,18 @@ static void uv__write_req_finish(uv_write_t* req) {
 
   /* Pop the req off tcp->write_queue. */
   QUEUE_REMOVE(&req->queue);
-  if (req->bufs != req->bufsml) {
-    free(req->bufs);
+
+  /* Only free when there was no error. On error, we touch up write_queue_size
+   * right before making the callback. The reason we don't do that right away
+   * is that a write_queue_size > 0 is our only way to signal to the user that
+   * he should stop writing - which he should if we got an error. Something to
+   * revisit in future revisions of the libuv API.
+   */
+  if (req->error == 0) {
+    if (req->bufs != req->bufsml)
+      free(req->bufs);
+    req->bufs = NULL;
   }
-  req->bufs = NULL;
 
   /* Add it to the write_completed_queue where it will have its
    * callback called in the near future.
@@ -691,11 +693,24 @@ static int uv__handle_fd(uv_handle_t* handle) {
   }
 }
 
+static int uv__getiovmax() {
+#if defined(IOV_MAX)
+  return IOV_MAX;
+#elif defined(_SC_IOV_MAX)
+  static int iovmax = -1;
+  if (iovmax == -1)
+    iovmax = sysconf(_SC_IOV_MAX);
+  return iovmax;
+#else
+  return 1024;
+#endif
+}
 
 static void uv__write(uv_stream_t* stream) {
   struct iovec* iov;
   QUEUE* q;
   uv_write_t* req;
+  int iovmax;
   int iovcnt;
   ssize_t n;
 
@@ -703,10 +718,8 @@ start:
 
   assert(uv__stream_fd(stream) >= 0);
 
-  if (QUEUE_EMPTY(&stream->write_queue)) {
-    assert(stream->write_queue_size == 0);
+  if (QUEUE_EMPTY(&stream->write_queue))
     return;
-  }
 
   q = QUEUE_HEAD(&stream->write_queue);
   req = QUEUE_DATA(q, uv_write_t, queue);
@@ -720,9 +733,11 @@ start:
   iov = (struct iovec*) &(req->bufs[req->write_index]);
   iovcnt = req->bufcnt - req->write_index;
 
+  iovmax = uv__getiovmax();
+
   /* Limit iov count to avoid EINVALs from writev() */
-  if (iovcnt > IOV_MAX)
-    iovcnt = IOV_MAX;
+  if (iovcnt > iovmax)
+    iovcnt = iovmax;
 
   /*
    * Now do the actual writev. Note that we've been updating the pointers
@@ -777,8 +792,10 @@ start:
     if (errno != EAGAIN && errno != EWOULDBLOCK) {
       /* Error */
       req->error = errno;
-      stream->write_queue_size -= uv__write_req_size(req);
       uv__write_req_finish(req);
+      uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLOUT);
+      if (!uv__io_active(&stream->io_watcher, UV__POLLIN))
+        uv__handle_stop(stream);
       return;
     } else if (stream->flags & UV_STREAM_BLOCKING) {
       /* If this is a blocking stream, try again. */
@@ -854,6 +871,13 @@ static void uv__write_callbacks(uv_stream_t* stream) {
     QUEUE_REMOVE(q);
     uv__req_unregister(stream->loop, req);
 
+    if (req->bufs != NULL) {
+      stream->write_queue_size -= uv__write_req_size(req);
+      if (req->bufs != req->bufsml)
+        free(req->bufs);
+      req->bufs = NULL;
+    }
+
     /* NOTE: call callback AFTER freeing the request data. */
     if (req->cb) {
       uv__set_sys_error(stream->loop, req->error);
@@ -903,6 +927,27 @@ static uv_handle_type uv__handle_type(int fd) {
 }
 
 
+static void uv__stream_read_cb(uv_stream_t* stream,
+                               int status,
+                               uv_buf_t buf,
+                               uv_handle_type type) {
+  if (stream->read_cb != NULL)
+    stream->read_cb(stream, status, buf);
+  else
+    stream->read2_cb((uv_pipe_t*) stream, status, buf, type);
+}
+
+
+static void uv__stream_eof(uv_stream_t* stream, uv_buf_t buf) {
+  stream->flags |= UV_STREAM_READ_EOF;
+  uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLIN);
+  if (!uv__io_active(&stream->io_watcher, UV__POLLOUT))
+    uv__handle_stop(stream);
+  uv__set_artificial_error(stream->loop, UV_EOF);
+  uv__stream_read_cb(stream, -1, buf, UV_UNKNOWN_HANDLE);
+}
+
+
 static void uv__read(uv_stream_t* stream) {
   uv_buf_t buf;
   ssize_t nread;
@@ -910,6 +955,8 @@ static void uv__read(uv_stream_t* stream) {
   struct cmsghdr* cmsg;
   char cmsg_space[64];
   int count;
+
+  stream->flags &= ~UV_STREAM_READ_PARTIAL;
 
   /* Prevent loop starvation when the data comes in as fast as (or faster than)
    * we can read it. XXX Need to rearm fd if we switch to edge-triggered I/O.
@@ -952,15 +999,6 @@ static void uv__read(uv_stream_t* stream) {
       while (nread < 0 && errno == EINTR);
     }
 
-#define INVOKE_READ_CB(stream, status, buf, type)                             \
-    do {                                                                      \
-      if ((stream)->read_cb != NULL)                                          \
-        (stream)->read_cb((stream), (status), (buf));                         \
-      else                                                                    \
-        (stream)->read2_cb((uv_pipe_t*) (stream), (status), (buf), (type));   \
-    }                                                                         \
-    while (0)
-
     if (nread < 0) {
       /* Error */
       if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -969,22 +1007,17 @@ static void uv__read(uv_stream_t* stream) {
           uv__io_start(stream->loop, &stream->io_watcher, UV__POLLIN);
         }
         uv__set_sys_error(stream->loop, EAGAIN);
-        INVOKE_READ_CB(stream, 0, buf, UV_UNKNOWN_HANDLE);
+        uv__stream_read_cb(stream, 0, buf, UV_UNKNOWN_HANDLE);
       } else {
         /* Error. User should call uv_close(). */
         uv__set_sys_error(stream->loop, errno);
-        INVOKE_READ_CB(stream, -1, buf, UV_UNKNOWN_HANDLE);
+        uv__stream_read_cb(stream, -1, buf, UV_UNKNOWN_HANDLE);
         assert(!uv__io_active(&stream->io_watcher, UV__POLLIN) &&
                "stream->read_cb(status=-1) did not call uv_close()");
       }
       return;
     } else if (nread == 0) {
-      /* EOF */
-      uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLIN);
-      if (!uv__io_active(&stream->io_watcher, UV__POLLOUT))
-        uv__handle_stop(stream);
-      uv__set_artificial_error(stream->loop, UV_EOF);
-      INVOKE_READ_CB(stream, -1, buf, UV_UNKNOWN_HANDLE);
+      uv__stream_eof(stream, buf);
       return;
     } else {
       /* Successful read */
@@ -1035,6 +1068,7 @@ static void uv__read(uv_stream_t* stream) {
 
       /* Return if we didn't fill the buffer, there is no more data to read. */
       if (nread < buflen) {
+        stream->flags |= UV_STREAM_READ_PARTIAL;
         return;
       }
     }
@@ -1083,17 +1117,33 @@ static void uv__stream_io(uv_loop_t* loop, uv__io_t* w, unsigned int events) {
     return;
   }
 
-  if (events & (UV__POLLIN | UV__POLLERR | UV__POLLHUP)) {
-    assert(uv__stream_fd(stream) >= 0);
+  assert(uv__stream_fd(stream) >= 0);
 
+  /* Ignore POLLHUP here. Even it it's set, there may still be data to read. */
+  if (events & (UV__POLLIN | UV__POLLERR))
     uv__read(stream);
 
-    if (uv__stream_fd(stream) == -1)
-      return; /* read_cb closed stream. */
+  if (uv__stream_fd(stream) == -1)
+    return;  /* read_cb closed stream. */
+
+  /* Short-circuit iff POLLHUP is set, the user is still interested in read
+   * events and uv__read() reported a partial read but not EOF. If the EOF
+   * flag is set, uv__read() called read_cb with err=UV_EOF and we don't
+   * have to do anything. If the partial read flag is not set, we can't
+   * report the EOF yet because there is still data to read.
+   */
+  if ((events & UV__POLLHUP) &&
+      (stream->flags & UV_STREAM_READING) &&
+      (stream->flags & UV_STREAM_READ_PARTIAL) &&
+      !(stream->flags & UV_STREAM_READ_EOF)) {
+    uv_buf_t buf = { NULL, 0 };
+    uv__stream_eof(stream, buf);
   }
 
-  if (events & UV__POLLOUT) {
-    assert(uv__stream_fd(stream) >= 0);
+  if (uv__stream_fd(stream) == -1)
+    return;  /* read_cb closed stream. */
+
+  if (events & (UV__POLLOUT | UV__POLLERR | UV__POLLHUP)) {
     uv__write(stream);
     uv__write_callbacks(stream);
   }
@@ -1135,6 +1185,7 @@ static void uv__stream_connect(uv_stream_t* stream) {
 
   stream->connect_req = NULL;
   uv__req_unregister(stream->loop, req);
+  uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLOUT);
 
   if (req->cb) {
     uv__set_sys_error(stream->loop, error);
@@ -1174,6 +1225,12 @@ int uv_write2(uv_write_t* req,
       return uv__set_artificial_error(stream->loop, UV_EBADF);
   }
 
+  /* It's legal for write_queue_size > 0 even when the write_queue is empty;
+   * it means there are error-state requests in the write_completed_queue that
+   * will touch up write_queue_size later, see also uv__write_req_finish().
+   * We chould check that write_queue is empty instead but that implies making
+   * a write() syscall when we know that the handle is in error mode.
+   */
   empty_queue = (stream->write_queue_size == 0);
 
   /* Initialize the req */
@@ -1282,9 +1339,20 @@ int uv_read2_start(uv_stream_t* stream, uv_alloc_cb alloc_cb,
 
 
 int uv_read_stop(uv_stream_t* stream) {
-  uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLIN);
-  uv__handle_stop(stream);
+  /* Sanity check. We're going to stop the handle unless it's primed for
+   * writing but that means there should be some kind of write action in
+   * progress.
+   */
+  assert(!uv__io_active(&stream->io_watcher, UV__POLLOUT) ||
+         !QUEUE_EMPTY(&stream->write_completed_queue) ||
+         !QUEUE_EMPTY(&stream->write_queue) ||
+         stream->shutdown_req != NULL ||
+         stream->connect_req != NULL);
+
   stream->flags &= ~UV_STREAM_READING;
+  uv__io_stop(stream->loop, &stream->io_watcher, UV__POLLIN);
+  if (!uv__io_active(&stream->io_watcher, UV__POLLOUT))
+    uv__handle_stop(stream);
 
 #if defined(__APPLE__)
   /* Notify select() thread about state change */
@@ -1348,8 +1416,9 @@ void uv__stream_close(uv_stream_t* handle) {
   }
 #endif /* defined(__APPLE__) */
 
-  uv_read_stop(handle);
   uv__io_close(handle->loop, &handle->io_watcher);
+  uv_read_stop(handle);
+  uv__handle_stop(handle);
 
   close(handle->io_watcher.fd);
   handle->io_watcher.fd = -1;
@@ -1360,4 +1429,9 @@ void uv__stream_close(uv_stream_t* handle) {
   }
 
   assert(!uv__io_active(&handle->io_watcher, UV__POLLIN | UV__POLLOUT));
+}
+
+
+int uv_stream_set_blocking(uv_stream_t* handle, int blocking) {
+  assert(0 && "implement me");
 }

@@ -58,7 +58,10 @@ PropertyDetails::PropertyDetails(Smi* smi) {
 
 
 Smi* PropertyDetails::AsSmi() {
-  return Smi::FromInt(value_);
+  // Ensure the upper 2 bits have the same value by sign extending it. This is
+  // necessary to be able to use the 31st bit of the property details.
+  int value = value_ << 1;
+  return Smi::FromInt(value >> 1);
 }
 
 
@@ -289,6 +292,9 @@ MaybeObject* Object::AllocateNewStorageFor(Heap* heap,
                                            PretenureFlag tenure) {
   if (!FLAG_track_double_fields) return this;
   if (!representation.IsDouble()) return this;
+  if (IsUninitialized()) {
+    return heap->AllocateHeapNumber(0, tenure);
+  }
   return heap->AllocateHeapNumber(Number(), tenure);
 }
 
@@ -524,6 +530,11 @@ bool MaybeObject::IsException() {
 
 bool MaybeObject::IsTheHole() {
   return !IsFailure() && ToObjectUnchecked()->IsTheHole();
+}
+
+
+bool MaybeObject::IsUninitialized() {
+  return !IsFailure() && ToObjectUnchecked()->IsUninitialized();
 }
 
 
@@ -842,6 +853,11 @@ bool Object::IsTheHole() {
 }
 
 
+bool Object::IsUninitialized() {
+  return IsOddball() && Oddball::cast(this)->kind() == Oddball::kUninitialized;
+}
+
+
 bool Object::IsTrue() {
   return IsOddball() && Oddball::cast(this)->kind() == Oddball::kTrue;
 }
@@ -892,7 +908,7 @@ MaybeObject* Object::GetElement(uint32_t index) {
   // GetElement can trigger a getter which can cause allocation.
   // This was not always the case. This ASSERT is here to catch
   // leftover incorrect uses.
-  ASSERT(HEAP->IsAllocationAllowed());
+  ASSERT(AllowHeapAllocation::IsAllowed());
   return GetElementWithReceiver(this, index);
 }
 
@@ -1030,10 +1046,7 @@ int Smi::value() {
 
 Smi* Smi::FromInt(int value) {
   ASSERT(Smi::IsValid(value));
-  int smi_shift_bits = kSmiTagSize + kSmiShiftSize;
-  intptr_t tagged_value =
-      (static_cast<intptr_t>(value) << smi_shift_bits) | kSmiTag;
-  return reinterpret_cast<Smi*>(tagged_value);
+  return reinterpret_cast<Smi*>(Internals::IntToSmi(value));
 }
 
 
@@ -1111,28 +1124,8 @@ Failure* Failure::Construct(Type type, intptr_t value) {
 
 
 bool Smi::IsValid(intptr_t value) {
-#ifdef DEBUG
-  bool in_range = (value >= kMinValue) && (value <= kMaxValue);
-#endif
-
-#ifdef V8_TARGET_ARCH_X64
-  // To be representable as a long smi, the value must be a 32-bit integer.
-  bool result = (value == static_cast<int32_t>(value));
-#else
-  // To be representable as an tagged small integer, the two
-  // most-significant bits of 'value' must be either 00 or 11 due to
-  // sign-extension. To check this we add 01 to the two
-  // most-significant bits, and check if the most-significant bit is 0
-  //
-  // CAUTION: The original code below:
-  // bool result = ((value + 0x40000000) & 0x80000000) == 0;
-  // may lead to incorrect results according to the C language spec, and
-  // in fact doesn't work correctly with gcc4.1.1 in some cases: The
-  // compiler may produce undefined results in case of signed integer
-  // overflow. The computation must be done w/ unsigned ints.
-  bool result = (static_cast<uintptr_t>(value + 0x40000000U) < 0x80000000U);
-#endif
-  ASSERT(result == in_range);
+  bool result = Internals::IsValidSmi(value);
+  ASSERT_EQ(result, value >= kMinValue && value <= kMaxValue);
   return result;
 }
 
@@ -1484,10 +1477,17 @@ void JSObject::initialize_properties() {
 
 
 void JSObject::initialize_elements() {
-  ASSERT(map()->has_fast_smi_or_object_elements() ||
-         map()->has_fast_double_elements());
-  ASSERT(!GetHeap()->InNewSpace(GetHeap()->empty_fixed_array()));
-  WRITE_FIELD(this, kElementsOffset, GetHeap()->empty_fixed_array());
+  if (map()->has_fast_smi_or_object_elements() ||
+      map()->has_fast_double_elements()) {
+    ASSERT(!GetHeap()->InNewSpace(GetHeap()->empty_fixed_array()));
+    WRITE_FIELD(this, kElementsOffset, GetHeap()->empty_fixed_array());
+  } else if (map()->has_external_array_elements()) {
+    ExternalArray* empty_array = GetHeap()->EmptyExternalArrayForMap(map());
+    ASSERT(!GetHeap()->InNewSpace(empty_array));
+    WRITE_FIELD(this, kElementsOffset, empty_array);
+  } else {
+    UNREACHABLE();
+  }
 }
 
 
@@ -1521,9 +1521,19 @@ MaybeObject* JSObject::ResetElements() {
 
 MaybeObject* JSObject::AllocateStorageForMap(Map* map) {
   ASSERT(this->map()->inobject_properties() == map->inobject_properties());
-  ElementsKind expected_kind = this->map()->elements_kind();
-  if (map->elements_kind() != expected_kind) {
-    MaybeObject* maybe_map = map->AsElementsKind(expected_kind);
+  ElementsKind obj_kind = this->map()->elements_kind();
+  ElementsKind map_kind = map->elements_kind();
+  if (map_kind != obj_kind) {
+    ElementsKind to_kind = map_kind;
+    if (IsMoreGeneralElementsKindTransition(map_kind, obj_kind) ||
+        IsDictionaryElementsKind(obj_kind)) {
+      to_kind = obj_kind;
+    }
+    MaybeObject* maybe_obj =
+        IsDictionaryElementsKind(to_kind) ? NormalizeElements()
+                                          : TransitionElementsKind(to_kind);
+    if (maybe_obj->IsFailure()) return maybe_obj;
+    MaybeObject* maybe_map = map->AsElementsKind(to_kind);
     if (!maybe_map->To(&map)) return maybe_map;
   }
   int total_size =
@@ -1544,12 +1554,19 @@ MaybeObject* JSObject::MigrateInstance() {
   // Converting any field to the most specific type will cause the
   // GeneralizeFieldRepresentation algorithm to create the most general existing
   // transition that matches the object. This achieves what is needed.
-  return GeneralizeFieldRepresentation(0, Representation::Smi());
+  return GeneralizeFieldRepresentation(0, Representation::None());
+}
+
+
+MaybeObject* JSObject::TryMigrateInstance() {
+  Map* new_map = map()->CurrentMapForDeprecated();
+  if (new_map == NULL) return Smi::FromInt(0);
+  return MigrateToMap(new_map);
 }
 
 
 Handle<String> JSObject::ExpectedTransitionKey(Handle<Map> map) {
-  AssertNoAllocation no_gc;
+  DisallowHeapAllocation no_gc;
   if (!map->HasTransitionArray()) return Handle<String>::null();
   TransitionArray* transitions = map->transitions();
   if (!transitions->IsSimpleTransition()) return Handle<String>::null();
@@ -1571,7 +1588,7 @@ Handle<Map> JSObject::ExpectedTransitionTarget(Handle<Map> map) {
 
 
 Handle<Map> JSObject::FindTransitionToField(Handle<Map> map, Handle<Name> key) {
-  AssertNoAllocation no_allocation;
+  DisallowHeapAllocation no_allocation;
   if (!map->HasTransitionArray()) return Handle<Map>::null();
   TransitionArray* transitions = map->transitions();
   int transition = transitions->Search(*key);
@@ -1983,7 +2000,8 @@ bool FixedDoubleArray::is_the_hole(int index) {
 }
 
 
-WriteBarrierMode HeapObject::GetWriteBarrierMode(const AssertNoAllocation&) {
+WriteBarrierMode HeapObject::GetWriteBarrierMode(
+    const DisallowHeapAllocation& promise) {
   Heap* heap = GetHeap();
   if (heap->incremental_marking()->IsMarking()) return UPDATE_WRITE_BARRIER;
   if (heap->InNewSpace(this)) return SKIP_WRITE_BARRIER;
@@ -2326,7 +2344,7 @@ PropertyType DescriptorArray::GetType(int descriptor_number) {
 
 
 int DescriptorArray::GetFieldIndex(int descriptor_number) {
-  return Descriptor::IndexFromValue(GetValue(descriptor_number));
+  return GetDetails(descriptor_number).field_index();
 }
 
 
@@ -2361,7 +2379,6 @@ void DescriptorArray::Set(int descriptor_number,
   // Range check.
   ASSERT(descriptor_number < number_of_descriptors());
 
-  ASSERT(!desc->GetDetails().representation().IsNone());
   NoIncrementalWriteBarrierSet(this,
                                ToKeyIndex(descriptor_number),
                                desc->GetKey());
@@ -2377,7 +2394,6 @@ void DescriptorArray::Set(int descriptor_number,
 void DescriptorArray::Set(int descriptor_number, Descriptor* desc) {
   // Range check.
   ASSERT(descriptor_number < number_of_descriptors());
-  ASSERT(!desc->GetDetails().representation().IsNone());
 
   set(ToKeyIndex(descriptor_number), desc->GetKey());
   set(ToValueIndex(descriptor_number), desc->GetValue());
@@ -3598,24 +3614,35 @@ bool Map::is_deprecated() {
 }
 
 
+void Map::freeze() {
+  set_bit_field3(IsFrozen::update(bit_field3(), true));
+}
+
+
+bool Map::is_frozen() {
+  return IsFrozen::decode(bit_field3());
+}
+
+
 bool Map::CanBeDeprecated() {
   int descriptor = LastAdded();
   for (int i = 0; i <= descriptor; i++) {
     PropertyDetails details = instance_descriptors()->GetDetails(i);
+    if (FLAG_track_fields && details.representation().IsNone()) {
+      return true;
+    }
     if (FLAG_track_fields && details.representation().IsSmi()) {
       return true;
     }
     if (FLAG_track_double_fields && details.representation().IsDouble()) {
       return true;
     }
+    if (FLAG_track_heap_object_fields &&
+        details.representation().IsHeapObject()) {
+      return true;
+    }
   }
   return false;
-}
-
-
-Handle<Map> Map::CurrentMapForDeprecated(Handle<Map> map) {
-  if (!map->is_deprecated()) return map;
-  return GeneralizeRepresentation(map, 0, Representation::Smi());
 }
 
 
@@ -3720,6 +3747,7 @@ Code::ExtraICState Code::extra_ic_state() {
 
 Code::ExtraICState Code::extended_extra_ic_state() {
   ASSERT(is_inline_cache_stub() || ic_state() == DEBUG_STUB);
+  ASSERT(needs_extended_extra_ic_state(kind()));
   return ExtractExtendedExtraICStateFromFlags(flags());
 }
 
@@ -3970,17 +3998,7 @@ void Code::set_unary_op_type(byte value) {
 
 
 byte Code::to_boolean_state() {
-  ASSERT(is_to_boolean_ic_stub());
-  return ToBooleanStateField::decode(
-      READ_UINT32_FIELD(this, kKindSpecificFlags1Offset));
-}
-
-
-void Code::set_to_boolean_state(byte value) {
-  ASSERT(is_to_boolean_ic_stub());
-  int previous = READ_UINT32_FIELD(this, kKindSpecificFlags1Offset);
-  int updated = ToBooleanStateField::update(previous, value);
-  WRITE_UINT32_FIELD(this, kKindSpecificFlags1Offset, updated);
+  return extended_extra_ic_state();
 }
 
 
@@ -4043,10 +4061,7 @@ Code::Flags Code::ComputeFlags(Kind kind,
       | TypeField::encode(type)
       | ExtendedExtraICStateField::encode(extra_ic_state)
       | CacheHolderField::encode(holder);
-  // TODO(danno): This is a bit of a hack right now since there are still
-  // clients of this API that pass "extra" values in for argc. These clients
-  // should be retrofitted to used ExtendedExtraICState.
-  if (kind != Code::COMPARE_NIL_IC) {
+  if (!Code::needs_extended_extra_ic_state(kind)) {
     bits |= (argc << kArgumentsCountShift);
   }
   return static_cast<Flags>(bits);
@@ -4368,6 +4383,8 @@ ACCESSORS(ExecutableAccessorInfo, getter, Object, kGetterOffset)
 ACCESSORS(ExecutableAccessorInfo, setter, Object, kSetterOffset)
 ACCESSORS(ExecutableAccessorInfo, data, Object, kDataOffset)
 
+ACCESSORS(Box, value, Object, kValueOffset)
+
 ACCESSORS(AccessorPair, getter, Object, kGetterOffset)
 ACCESSORS(AccessorPair, setter, Object, kSetterOffset)
 
@@ -4459,8 +4476,6 @@ ACCESSORS(SharedFunctionInfo, function_data, Object, kFunctionDataOffset)
 ACCESSORS(SharedFunctionInfo, script, Object, kScriptOffset)
 ACCESSORS(SharedFunctionInfo, debug_info, Object, kDebugInfoOffset)
 ACCESSORS(SharedFunctionInfo, inferred_name, String, kInferredNameOffset)
-ACCESSORS(SharedFunctionInfo, this_property_assignments, Object,
-          kThisPropertyAssignmentsOffset)
 SMI_ACCESSORS(SharedFunctionInfo, ast_node_count, kAstNodeCountOffset)
 
 
@@ -4477,10 +4492,6 @@ BOOL_ACCESSORS(SharedFunctionInfo, start_position_and_type, is_expression,
 BOOL_ACCESSORS(SharedFunctionInfo, start_position_and_type, is_toplevel,
                kIsTopLevelBit)
 
-BOOL_GETTER(SharedFunctionInfo,
-            compiler_hints,
-            has_only_simple_this_property_assignments,
-            kHasOnlySimpleThisPropertyAssignments)
 BOOL_ACCESSORS(SharedFunctionInfo,
                compiler_hints,
                allows_lazy_compilation,
@@ -4513,8 +4524,6 @@ SMI_ACCESSORS(SharedFunctionInfo, function_token_position,
               kFunctionTokenPositionOffset)
 SMI_ACCESSORS(SharedFunctionInfo, compiler_hints,
               kCompilerHintsOffset)
-SMI_ACCESSORS(SharedFunctionInfo, this_property_assignments_count,
-              kThisPropertyAssignmentsCountOffset)
 SMI_ACCESSORS(SharedFunctionInfo, opt_count, kOptCountOffset)
 SMI_ACCESSORS(SharedFunctionInfo, counters, kCountersOffset)
 SMI_ACCESSORS(SharedFunctionInfo,
@@ -4566,13 +4575,10 @@ PSEUDO_SMI_ACCESSORS_HI(SharedFunctionInfo,
                         compiler_hints,
                         kCompilerHintsOffset)
 
-PSEUDO_SMI_ACCESSORS_LO(SharedFunctionInfo,
-                        this_property_assignments_count,
-                        kThisPropertyAssignmentsCountOffset)
-PSEUDO_SMI_ACCESSORS_HI(SharedFunctionInfo, opt_count, kOptCountOffset)
+PSEUDO_SMI_ACCESSORS_LO(SharedFunctionInfo, opt_count, kOptCountOffset)
 
-PSEUDO_SMI_ACCESSORS_LO(SharedFunctionInfo, counters, kCountersOffset)
-PSEUDO_SMI_ACCESSORS_HI(SharedFunctionInfo,
+PSEUDO_SMI_ACCESSORS_HI(SharedFunctionInfo, counters, kCountersOffset)
+PSEUDO_SMI_ACCESSORS_LO(SharedFunctionInfo,
                         stress_deopt_counter,
                         kStressDeoptCounterOffset)
 #endif
@@ -4668,15 +4674,11 @@ BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, dont_optimize,
                kDontOptimize)
 BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, dont_inline, kDontInline)
 BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, dont_cache, kDontCache)
+BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, dont_flush, kDontFlush)
 BOOL_ACCESSORS(SharedFunctionInfo, compiler_hints, is_generator, kIsGenerator)
 
 void SharedFunctionInfo::BeforeVisitingPointers() {
   if (IsInobjectSlackTrackingInProgress()) DetachInitialMap();
-}
-
-
-void SharedFunctionInfo::ClearOptimizedCodeMap() {
-  set_optimized_code_map(Smi::FromInt(0));
 }
 
 
@@ -5315,13 +5317,28 @@ void JSArrayBuffer::set_backing_store(void* value, WriteBarrierMode mode) {
 
 
 ACCESSORS(JSArrayBuffer, byte_length, Object, kByteLengthOffset)
+ACCESSORS_TO_SMI(JSArrayBuffer, flag, kFlagOffset)
+
+
+bool JSArrayBuffer::is_external() {
+  return BooleanBit::get(flag(), kIsExternalBit);
+}
+
+
+void JSArrayBuffer::set_is_external(bool value) {
+  set_flag(BooleanBit::set(flag(), kIsExternalBit, value));
+}
+
+
+ACCESSORS(JSArrayBuffer, weak_next, Object, kWeakNextOffset)
+ACCESSORS(JSArrayBuffer, weak_first_array, Object, kWeakFirstArrayOffset)
 
 
 ACCESSORS(JSTypedArray, buffer, Object, kBufferOffset)
 ACCESSORS(JSTypedArray, byte_offset, Object, kByteOffsetOffset)
 ACCESSORS(JSTypedArray, byte_length, Object, kByteLengthOffset)
 ACCESSORS(JSTypedArray, length, Object, kLengthOffset)
-
+ACCESSORS(JSTypedArray, weak_next, Object, kWeakNextOffset)
 
 ACCESSORS(JSRegExp, data, Object, kDataOffset)
 
@@ -5823,7 +5840,7 @@ void Dictionary<Shape, Key>::SetEntry(int entry,
          details.IsDeleted() ||
          details.dictionary_index() > 0);
   int index = HashTable<Shape, Key>::EntryToIndex(entry);
-  AssertNoAllocation no_gc;
+  DisallowHeapAllocation no_gc;
   WriteBarrierMode mode = FixedArray::GetWriteBarrierMode(no_gc);
   FixedArray::set(index, key, mode);
   FixedArray::set(index+1, value, mode);

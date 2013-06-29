@@ -26,6 +26,7 @@
 
 #include "node.h"
 #include "node_buffer.h"
+#include "string_bytes.h"
 #include "node_root_certs.h"
 
 #include <string.h>
@@ -42,10 +43,19 @@
 # define OPENSSL_CONST
 #endif
 
-#define ASSERT_IS_BUFFER(val) \
-  if (!Buffer::HasInstance(val)) { \
-    return ThrowException(Exception::TypeError(String::New("Not a buffer"))); \
-  }
+#define ASSERT_IS_STRING_OR_BUFFER(val) do {                  \
+    if (!Buffer::HasInstance(val) && !val->IsString()) {      \
+      return ThrowException(Exception::TypeError(String::New( \
+              "Not a string or buffer")));                    \
+    }                                                         \
+  } while (0)
+
+#define ASSERT_IS_BUFFER(val) do {                            \
+    if (!Buffer::HasInstance(val)) {                          \
+      return ThrowException(Exception::TypeError(String::New( \
+              "Not a buffer")));                              \
+    }                                                         \
+  } while (0)
 
 static const char PUBLIC_KEY_PFX[] =  "-----BEGIN PUBLIC KEY-----";
 static const int PUBLIC_KEY_PFX_LEN = sizeof(PUBLIC_KEY_PFX) - 1;
@@ -60,6 +70,14 @@ namespace node {
 namespace crypto {
 
 using namespace v8;
+
+// Forcibly clear OpenSSL's error stack on return. This stops stale errors
+// from popping up later in the lifecycle of crypto operations where they
+// would cause spurious failures. It's a rather blunt method, though.
+// ERR_clear_error() isn't necessarily cheap either.
+struct ClearErrorOnReturn {
+  ~ClearErrorOnReturn() { ERR_clear_error(); }
+};
 
 static Persistent<String> errno_symbol;
 static Persistent<String> syscall_symbol;
@@ -257,11 +275,6 @@ SSL_SESSION* SecureContext::GetSessionCallback(SSL* s,
 }
 
 
-void SessionDataFree(char* data, void* hint) {
-  delete[] data;
-}
-
-
 int SecureContext::NewSessionCallback(SSL* s, SSL_SESSION* sess) {
   HandleScope scope(node_isolate);
 
@@ -279,8 +292,8 @@ int SecureContext::NewSessionCallback(SSL* s, SSL_SESSION* sess) {
 
   Handle<Value> argv[2] = {
     Buffer::New(reinterpret_cast<char*>(sess->session_id),
-                sess->session_id_length)->handle_,
-    Buffer::New(serialized, size, SessionDataFree, NULL)->handle_
+                sess->session_id_length),
+    Buffer::Use(serialized, size)
   };
 
   if (onnewsession_sym.IsEmpty()) {
@@ -514,6 +527,9 @@ Handle<Value> SecureContext::AddCRL(const Arguments& args) {
     return ThrowException(Exception::TypeError(String::New("Bad parameter")));
   }
 
+  ClearErrorOnReturn clear_error_on_return;
+  (void) &clear_error_on_return;  // Silence compiler warning.
+
   BIO *bio = LoadBIO(args[0]);
   if (!bio) return False(node_isolate);
 
@@ -649,7 +665,7 @@ Handle<Value> SecureContext::SetSessionTimeout(const Arguments& args) {
   int32_t sessionTimeout = args[0]->Int32Value();
   SSL_CTX_set_timeout(sc->ctx_, sessionTimeout);
 
-  return True();
+  return True(node_isolate);
 }
 
 Handle<Value> SecureContext::Close(const Arguments& args) {
@@ -856,7 +872,7 @@ size_t ClientHelloParser::Write(const uint8_t* data, size_t len) {
     hello = Object::New();
     hello->Set(sessionid_sym,
                Buffer::New(reinterpret_cast<char*>(session_id),
-                           session_size)->handle_);
+                           session_size));
 
     argv[0] = hello;
     MakeCallback(conn_->handle_, onclienthello_sym, 1, argv);
@@ -919,14 +935,10 @@ int Connection::HandleBIOError(BIO *bio, const char* func, int rv) {
 }
 
 
-int Connection::HandleSSLError(const char* func, int rv, ZeroStatus zs) {
-  // Forcibly clear OpenSSL's error stack on return. This stops stale errors
-  // from popping up later in the lifecycle of the SSL connection where they
-  // would cause spurious failures. It's a rather blunt method, though.
-  // ERR_clear_error() isn't necessarily cheap either.
-  struct ClearErrorOnReturn {
-    ~ClearErrorOnReturn() { ERR_clear_error(); }
-  };
+int Connection::HandleSSLError(const char* func,
+                               int rv,
+                               ZeroStatus zs,
+                               SyscallStatus ss) {
   ClearErrorOnReturn clear_error_on_return;
   (void) &clear_error_on_return;  // Silence unused variable warning.
 
@@ -950,6 +962,9 @@ int Connection::HandleSSLError(const char* func, int rv, ZeroStatus zs) {
     handle_->Set(String::New("error"),
                  Exception::Error(String::New("ZERO_RETURN")));
     return rv;
+
+  } else if ((err == SSL_ERROR_SYSCALL) && (ss == kIgnoreSyscall)) {
+    return 0;
 
   } else {
     HandleScope scope(node_isolate);
@@ -1388,17 +1403,26 @@ Handle<Value> Connection::ClearOut(const Arguments& args) {
 
     if (ss->is_server_) {
       rv = SSL_accept(ss->ssl_);
-      ss->HandleSSLError("SSL_accept:ClearOut", rv, kZeroIsAnError);
+      ss->HandleSSLError("SSL_accept:ClearOut",
+                         rv,
+                         kZeroIsAnError,
+                         kSyscallError);
     } else {
       rv = SSL_connect(ss->ssl_);
-      ss->HandleSSLError("SSL_connect:ClearOut", rv, kZeroIsAnError);
+      ss->HandleSSLError("SSL_connect:ClearOut",
+                         rv,
+                         kZeroIsAnError,
+                         kSyscallError);
     }
 
     if (rv < 0) return scope.Close(Integer::New(rv, node_isolate));
   }
 
   int bytes_read = SSL_read(ss->ssl_, buffer_data + off, len);
-  ss->HandleSSLError("SSL_read:ClearOut", bytes_read, kZeroIsNotAnError);
+  ss->HandleSSLError("SSL_read:ClearOut",
+                     bytes_read,
+                     kZeroIsNotAnError,
+                     kSyscallError);
   ss->SetShutdownFlags();
 
   return scope.Close(Integer::New(bytes_read, node_isolate));
@@ -1488,10 +1512,16 @@ Handle<Value> Connection::ClearIn(const Arguments& args) {
     int rv;
     if (ss->is_server_) {
       rv = SSL_accept(ss->ssl_);
-      ss->HandleSSLError("SSL_accept:ClearIn", rv, kZeroIsAnError);
+      ss->HandleSSLError("SSL_accept:ClearIn",
+                         rv,
+                         kZeroIsAnError,
+                         kSyscallError);
     } else {
       rv = SSL_connect(ss->ssl_);
-      ss->HandleSSLError("SSL_connect:ClearIn", rv, kZeroIsAnError);
+      ss->HandleSSLError("SSL_connect:ClearIn",
+                         rv,
+                         kZeroIsAnError,
+                         kSyscallError);
     }
 
     if (rv < 0) return scope.Close(Integer::New(rv, node_isolate));
@@ -1501,7 +1531,8 @@ Handle<Value> Connection::ClearIn(const Arguments& args) {
 
   ss->HandleSSLError("SSL_write:ClearIn",
                      bytes_written,
-                     len == 0 ? kZeroIsNotAnError : kZeroIsAnError);
+                     len == 0 ? kZeroIsNotAnError : kZeroIsAnError,
+                     kSyscallError);
   ss->SetShutdownFlags();
 
   return scope.Close(Integer::New(bytes_written, node_isolate));
@@ -1590,7 +1621,7 @@ Handle<Value> Connection::GetPeerCertificate(const Arguments& args) {
       const char hex[] = "0123456789ABCDEF";
       char fingerprint[EVP_MAX_MD_SIZE * 3];
 
-      for (i=0; i<md_size; i++) {
+      for (i = 0; i<md_size; i++) {
         fingerprint[3*i] = hex[(md[i] & 0xf0) >> 4];
         fingerprint[(3*i)+1] = hex[(md[i] & 0x0f)];
         fingerprint[(3*i)+2] = ':';
@@ -1741,10 +1772,13 @@ Handle<Value> Connection::Start(const Arguments& args) {
     int rv;
     if (ss->is_server_) {
       rv = SSL_accept(ss->ssl_);
-      ss->HandleSSLError("SSL_accept:Start", rv, kZeroIsAnError);
+      ss->HandleSSLError("SSL_accept:Start", rv, kZeroIsAnError, kSyscallError);
     } else {
       rv = SSL_connect(ss->ssl_);
-      ss->HandleSSLError("SSL_connect:Start", rv, kZeroIsAnError);
+      ss->HandleSSLError("SSL_connect:Start",
+                         rv,
+                         kZeroIsAnError,
+                         kSyscallError);
     }
 
     return scope.Close(Integer::New(rv, node_isolate));
@@ -1761,7 +1795,7 @@ Handle<Value> Connection::Shutdown(const Arguments& args) {
 
   if (ss->ssl_ == NULL) return False(node_isolate);
   int rv = SSL_shutdown(ss->ssl_);
-  ss->HandleSSLError("SSL_shutdown", rv, kZeroIsNotAnError);
+  ss->HandleSSLError("SSL_shutdown", rv, kZeroIsNotAnError, kIgnoreSyscall);
   ss->SetShutdownFlags();
 
   return scope.Close(Integer::New(rv, node_isolate));
@@ -2073,7 +2107,6 @@ Handle<Value> CipherBase::New(const Arguments& args) {
   return args.This();
 }
 
-
 Handle<Value> CipherBase::Init(char* cipher_type,
                                char* key_buf,
                                int key_buf_len) {
@@ -2229,24 +2262,36 @@ Handle<Value> CipherBase::Update(const Arguments& args) {
 
   CipherBase* cipher = ObjectWrap::Unwrap<CipherBase>(args.This());
 
-  ASSERT_IS_BUFFER(args[0]);
+  ASSERT_IS_STRING_OR_BUFFER(args[0]);
 
   unsigned char* out = NULL;
   bool r;
   int out_len = 0;
-  char* buffer_data = Buffer::Data(args[0]);
-  size_t buffer_length = Buffer::Length(args[0]);
 
-  r = cipher->Update(buffer_data, buffer_length, &out, &out_len);
+  // Only copy the data if we have to, because it's a string
+  if (args[0]->IsString()) {
+    enum encoding encoding = ParseEncoding(args[1], BINARY);
+    size_t buflen = StringBytes::StorageSize(args[0], encoding);
+    char* buf = new char[buflen];
+    size_t written = StringBytes::Write(buf, buflen, args[0], encoding);
+    r = cipher->Update(buf, written, &out, &out_len);
+    delete[] buf;
+  } else {
+    char* buf = Buffer::Data(args[0]);
+    size_t buflen = Buffer::Length(args[0]);
+    r = cipher->Update(buf, buflen, &out, &out_len);
+  }
 
   if (!r) {
     delete[] out;
     return ThrowCryptoTypeError(ERR_get_error());
   }
 
-  Buffer* buf = Buffer::New(reinterpret_cast<char*>(out), out_len);
+  Local<Object> buf = Buffer::New(reinterpret_cast<char*>(out), out_len);
 
-  return scope.Close(buf->handle_);
+  if (out) delete[] out;
+
+  return scope.Close(buf);
 }
 
 
@@ -2297,9 +2342,7 @@ Handle<Value> CipherBase::Final(const Arguments& args) {
     if (!r) return ThrowCryptoTypeError(ERR_get_error());
   }
 
-  Buffer* buf = Buffer::New(reinterpret_cast<char*>(out_value), out_len);
-
-  return scope.Close(buf->handle_);
+  return scope.Close(Buffer::New(reinterpret_cast<char*>(out_value), out_len));
 }
 
 
@@ -2356,6 +2399,7 @@ Handle<Value> Hmac::HmacInit(const Arguments& args) {
     return ThrowError("Must give hashtype string, key as arguments");
   }
 
+
   ASSERT_IS_BUFFER(args[1]);
 
   String::Utf8Value hashType(args[0]);
@@ -2386,14 +2430,22 @@ Handle<Value> Hmac::HmacUpdate(const Arguments& args) {
 
   Hmac* hmac = ObjectWrap::Unwrap<Hmac>(args.This());
 
-  ASSERT_IS_BUFFER(args[0]);
+  ASSERT_IS_STRING_OR_BUFFER(args[0]);
 
+  // Only copy the data if we have to, because it's a string
   bool r;
-
-  char* buffer_data = Buffer::Data(args[0]);
-  size_t buffer_length = Buffer::Length(args[0]);
-
-  r = hmac->HmacUpdate(buffer_data, buffer_length);
+  if (args[0]->IsString()) {
+    enum encoding encoding = ParseEncoding(args[1], BINARY);
+    size_t buflen = StringBytes::StorageSize(args[0], encoding);
+    char* buf = new char[buflen];
+    size_t written = StringBytes::Write(buf, buflen, args[0], encoding);
+    r = hmac->HmacUpdate(buf, written);
+    delete[] buf;
+  } else {
+    char* buf = Buffer::Data(args[0]);
+    size_t buflen = Buffer::Length(args[0]);
+    r = hmac->HmacUpdate(buf, buflen);
+  }
 
   if (!r) {
     return ThrowTypeError("HmacUpdate fail");
@@ -2418,6 +2470,11 @@ Handle<Value> Hmac::HmacDigest(const Arguments& args) {
 
   Hmac* hmac = ObjectWrap::Unwrap<Hmac>(args.This());
 
+  enum encoding encoding = BUFFER;
+  if (args.Length() >= 1) {
+    encoding = ParseEncoding(args[0]->ToString(), BUFFER);
+  }
+
   unsigned char* md_value = NULL;
   unsigned int md_len = 0;
   Local<Value> outString;
@@ -2428,9 +2485,11 @@ Handle<Value> Hmac::HmacDigest(const Arguments& args) {
     md_len = 0;
   }
 
-  Buffer* buf = Buffer::New(reinterpret_cast<char*>(md_value), md_len);
+  outString = StringBytes::Encode(
+        reinterpret_cast<const char*>(md_value), md_len, encoding);
 
-  return scope.Close(buf->handle_);
+  delete[] md_value;
+  return scope.Close(outString);
 }
 
 
@@ -2491,13 +2550,22 @@ Handle<Value> Hash::HashUpdate(const Arguments& args) {
 
   Hash* hash = ObjectWrap::Unwrap<Hash>(args.This());
 
-  ASSERT_IS_BUFFER(args[0]);
+  ASSERT_IS_STRING_OR_BUFFER(args[0]);
 
+  // Only copy the data if we have to, because it's a string
   bool r;
-
-  char* buffer_data = Buffer::Data(args[0]);
-  size_t buffer_length = Buffer::Length(args[0]);
-  r = hash->HashUpdate(buffer_data, buffer_length);
+  if (args[0]->IsString()) {
+    enum encoding encoding = ParseEncoding(args[1], BINARY);
+    size_t buflen = StringBytes::StorageSize(args[0], encoding);
+    char* buf = new char[buflen];
+    size_t written = StringBytes::Write(buf, buflen, args[0], encoding);
+    r = hash->HashUpdate(buf, written);
+    delete[] buf;
+  } else {
+    char* buf = Buffer::Data(args[0]);
+    size_t buflen = Buffer::Length(args[0]);
+    r = hash->HashUpdate(buf, buflen);
+  }
 
   if (!r) {
     return ThrowTypeError("HashUpdate fail");
@@ -2516,6 +2584,11 @@ Handle<Value> Hash::HashDigest(const Arguments& args) {
     return ThrowError("Not initialized");
   }
 
+  enum encoding encoding = BUFFER;
+  if (args.Length() >= 1) {
+    encoding = ParseEncoding(args[0]->ToString(), BUFFER);
+  }
+
   unsigned char md_value[EVP_MAX_MD_SIZE];
   unsigned int md_len;
 
@@ -2523,9 +2596,8 @@ Handle<Value> Hash::HashDigest(const Arguments& args) {
   EVP_MD_CTX_cleanup(&hash->mdctx_);
   hash->initialised_ = false;
 
-  Buffer* buf = Buffer::New(reinterpret_cast<char*>(md_value), md_len);
-
-  return scope.Close(buf->handle_);
+  return scope.Close(StringBytes::Encode(
+        reinterpret_cast<const char*>(md_value), md_len, encoding));
 }
 
 
@@ -2552,7 +2624,6 @@ Handle<Value> Sign::New(const Arguments& args) {
 
   return args.This();
 }
-
 
 Handle<Value> Sign::SignInit(const char* sign_type) {
   HandleScope scope(node_isolate);
@@ -2603,14 +2674,22 @@ Handle<Value> Sign::SignUpdate(const Arguments& args) {
 
   Sign* sign = ObjectWrap::Unwrap<Sign>(args.This());
 
-  ASSERT_IS_BUFFER(args[0]);
+  ASSERT_IS_STRING_OR_BUFFER(args[0]);
 
-  bool r;
-
-  char* buffer_data = Buffer::Data(args[0]);
-  size_t buffer_length = Buffer::Length(args[0]);
-
-  r = sign->SignUpdate(buffer_data, buffer_length);
+  // Only copy the data if we have to, because it's a string
+  int r;
+  if (args[0]->IsString()) {
+    enum encoding encoding = ParseEncoding(args[1], BINARY);
+    size_t buflen = StringBytes::StorageSize(args[0], encoding);
+    char* buf = new char[buflen];
+    size_t written = StringBytes::Write(buf, buflen, args[0], encoding);
+    r = sign->SignUpdate(buf, written);
+    delete[] buf;
+  } else {
+    char* buf = Buffer::Data(args[0]);
+    size_t buflen = Buffer::Length(args[0]);
+    r = sign->SignUpdate(buf, buflen);
+  }
 
   if (!r) {
     return ThrowTypeError("SignUpdate fail");
@@ -2652,6 +2731,11 @@ Handle<Value> Sign::SignFinal(const Arguments& args) {
   unsigned int md_len;
   Local<Value> outString;
 
+  enum encoding encoding = BUFFER;
+  if (args.Length() >= 2) {
+    encoding = ParseEncoding(args[1]->ToString(), BUFFER);
+  }
+
   ASSERT_IS_BUFFER(args[0]);
   ssize_t len = Buffer::Length(args[0]);
   char* buf = Buffer::Data(args[0]);
@@ -2666,10 +2750,11 @@ Handle<Value> Sign::SignFinal(const Arguments& args) {
     md_len = 0;
   }
 
-  Buffer* ret = Buffer::New(reinterpret_cast<char*>(md_value), md_len);
-  delete[] md_value;
+  outString = StringBytes::Encode(
+      reinterpret_cast<const char*>(md_value), md_len, encoding);
 
-  return scope.Close(ret->handle_);
+  delete[] md_value;
+  return scope.Close(outString);
 }
 
 
@@ -2749,14 +2834,22 @@ Handle<Value> Verify::VerifyUpdate(const Arguments& args) {
 
   Verify* verify = ObjectWrap::Unwrap<Verify>(args.This());
 
-  ASSERT_IS_BUFFER(args[0]);
+  ASSERT_IS_STRING_OR_BUFFER(args[0]);
 
+  // Only copy the data if we have to, because it's a string
   bool r;
-
-  char* buffer_data = Buffer::Data(args[0]);
-  size_t buffer_length = Buffer::Length(args[0]);
-
-  r = verify->VerifyUpdate(buffer_data, buffer_length);
+  if (args[0]->IsString()) {
+    enum encoding encoding = ParseEncoding(args[1], BINARY);
+    size_t buflen = StringBytes::StorageSize(args[0], encoding);
+    char* buf = new char[buflen];
+    size_t written = StringBytes::Write(buf, buflen, args[0], encoding);
+    r = verify->VerifyUpdate(buf, written);
+    delete[] buf;
+  } else {
+    char* buf = Buffer::Data(args[0]);
+    size_t buflen = Buffer::Length(args[0]);
+    r = verify->VerifyUpdate(buf, buflen);
+  }
 
   if (!r) {
     return ThrowTypeError("VerifyUpdate fail");
@@ -2835,7 +2928,7 @@ exit:
     return ThrowCryptoError(err);
   }
 
-  return scope.Close(r ? True() : False(node_isolate));
+  return scope.Close(r ? True(node_isolate) : False(node_isolate));
 }
 
 
@@ -2848,11 +2941,32 @@ Handle<Value> Verify::VerifyFinal(const Arguments& args) {
   char* kbuf = Buffer::Data(args[0]);
   ssize_t klen = Buffer::Length(args[0]);
 
-  ASSERT_IS_BUFFER(args[1]);
-  unsigned char* hbuf = reinterpret_cast<unsigned char*>(Buffer::Data(args[1]));
-  ssize_t hlen = Buffer::Length(args[1]);
+  ASSERT_IS_STRING_OR_BUFFER(args[1]);
+  // BINARY works for both buffers and binary strings.
+  enum encoding encoding = BINARY;
+  if (args.Length() >= 3) {
+    encoding = ParseEncoding(args[2]->ToString(), BINARY);
+  }
 
-  return scope.Close(verify->VerifyFinal(kbuf, klen, hbuf, hlen));
+  ssize_t hlen = StringBytes::Size(args[1], encoding);
+
+
+  // only copy if we need to, because it's a string.
+  unsigned char* hbuf;
+  if (args[1]->IsString()) {
+    hbuf = new unsigned char[hlen];
+    ssize_t hwritten = StringBytes::Write(
+        reinterpret_cast<char*>(hbuf), hlen, args[1], encoding);
+    assert(hwritten == hlen);
+  } else {
+    hbuf = reinterpret_cast<unsigned char*>(Buffer::Data(args[1]));
+  }
+
+  Local<Value> retval = Local<Value>::New(verify->VerifyFinal(kbuf, klen, hbuf, hlen));
+  if (args[1]->IsString()) {
+    delete[] hbuf;
+  }
+  return scope.Close(retval);
 }
 
 
@@ -3126,6 +3240,8 @@ Handle<Value> DiffieHellman::ComputeSecret(const Arguments& args) {
     return ThrowError("Not initialized");
   }
 
+  ClearErrorOnReturn clear_error_on_return;
+  (void) &clear_error_on_return;  // Silence compiler warning.
   BIGNUM* key = NULL;
 
   if (args.Length() == 0) {
@@ -3424,11 +3540,6 @@ RandomBytesRequest::~RandomBytesRequest() {
 }
 
 
-void RandomBytesFree(char* data, void* hint) {
-  delete[] data;
-}
-
-
 template <bool pseudoRandom>
 void RandomBytesWork(uv_work_t* work_req) {
   RandomBytesRequest* req = container_of(work_req,
@@ -3465,10 +3576,8 @@ void RandomBytesCheck(RandomBytesRequest* req, Local<Value> argv[2]) {
     argv[1] = Local<Value>::New(node_isolate, Null(node_isolate));
   }
   else {
-    // avoids the malloc + memcpy
-    Buffer* buffer = Buffer::New(req->data_, req->size_, RandomBytesFree, NULL);
     argv[0] = Local<Value>::New(node_isolate, Null(node_isolate));
-    argv[1] = Local<Object>::New(node_isolate, buffer->handle_);
+    argv[1] = Buffer::Use(req->data_, req->size_);
   }
 }
 

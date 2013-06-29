@@ -44,19 +44,43 @@ The contents of `circle.js`:
 The module `circle.js` has exported the functions `area()` and
 `circumference()`.  To export an object, add to the special `exports`
 object.
+-->
 
+`circle.js` モジュールは `area()` と `circumference()` を公開しています。
+オブジェクトを公開するには、 `exports` という特別なオブジェクトに加えます。
+
+<!--
+Note that `exports` is a reference to `module.exports` making it suitable
+for augmentation only. If you are exporting a single item such as a
+constructor you will want to use `module.exports` directly instead.
+-->
+
+`exports` は `module.exports` を参照しているに過ぎないことに注意してください。
+もしコンストラクタなど単一の項目を公開する場合は、`module.exports` を直接
+使いたくなるでしょう。
+
+    function MyConstructor (opts) {
+      //...
+    }
+
+    // BROKEN: Does not modify exports
+    exports = MyConstructor;
+
+    // exports the constructor properly
+    module.exports = MyConstructor;
+
+<!--
 Variables
 local to the module will be private. In this example the variable `PI` is
 private to `circle.js`.
-
-The module system is implemented in the `require("module")` module.
 -->
-
-`circle.js` モジュールは `area()` と `circumference()` をエクスポートしています。
-オブジェクトをエクスポートするには、 `exports` という特別なオブジェクトに加えます。
 
 モジュールのローカル変数はプライベートです。
 この例の場合、変数 `PI` は `circle.js` のプライベート変数です。
+
+<!--
+The module system is implemented in the `require("module")` module.
+-->
 
 モジュールシステムは `require("module")` モジュールによって実装されます。
 
@@ -105,7 +129,7 @@ Consider this situation:
 When `main.js` loads `a.js`, then `a.js` in turn loads `b.js`.  At that
 point, `b.js` tries to load `a.js`.  In order to prevent an infinite
 loop an **unfinished copy** of the `a.js` exports object is returned to the
-`b.js` module.  `b.js` then finishes loading, and its exports object is
+`b.js` module.  `b.js` then finishes loading, and its `exports` object is
 provided to the `a.js` module.
 
 By the time `main.js` has loaded both modules, they're both finished.
@@ -116,8 +140,8 @@ The output of this program would thus be:
 ポイントは、`b.js` は `a.js` のロードを試みることです。
 無限ループを避けるため、`a.js` がエクスポートしたオブジェクトの
 **未完了のコピー** が `b.js` モジュールに返されます。
-`b.js` のロードが完了すると、エクスポートされたオブジェクトが `a.js`
-モジュールに提供されます。
+`b.js` のロードが完了すると、`exports` オブジェクトが `a.js` モジュールに
+提供されます。
 
 `main.js` が両方のモジュールをロードするまでには、どちらも完了します。
 このプログラムの出力はこのようになります:
@@ -356,26 +380,28 @@ would resolve to different files.
 <!--
 In each module, the `module` free variable is a reference to the object
 representing the current module.  In particular
-`module.exports` is the same as the `exports` object.
+`module.exports` is accessible via the `exports` module-global.
 `module` isn't actually a global but rather local to each module.
 -->
 
 どのモジュールでも、`module` 自由変数は現在のモジュールを表現するオブジェクトを
-参照します。特に、`module.exports` は `exports` オブジェクトと同じです。
+参照します。
+特に `module.exports` は `exports` オブジェクトを通じて参照することもできます。
 `module` は実際はグローバルではなく、各モジュールにローカルです。
 
 ### module.exports
 
 * {Object}
 
-The `exports` object is created by the Module system. Sometimes this is not
+The `module.exports` object is created by the Module system. Sometimes this is not
 acceptable, many want their module to be an instance of some class. To do this
 assign the desired export object to `module.exports`. For example suppose we
 were making a module called `a.js`
 -->
 
-`exports` オブジェクトはモジュールシステムによって作成されます。
-時々これは受け入れられず、多くのモジュールは何らかのクラスのインスタンスであることを望みます。
+`module.exports` オブジェクトはモジュールシステムによって作成されます。
+時々これは受け入れられず、多くのモジュールは何らかのクラスの
+インスタンスであることを望みます。
 それには公開したいオブジェクトを `module.exports` に割り当てます。
 例えば `a.js` と呼ばれるモジュールを作るとしたら
 
@@ -426,11 +452,11 @@ y.js:
 
 <!--
 * `id` {String}
-* Return: {Object} `exports` from the resolved module
+* Return: {Object} `module.exports` from the resolved module
 -->
 
 * `id` {String}
-* Return: {Object} 解決されたモジュールの `exports`
+* Return: {Object} 解決されたモジュールの `module.exports`
 
 <!--
 The `module.require` method provides a way to load a module as if
@@ -442,13 +468,13 @@ The `module.require` method provides a way to load a module as if
 
 <!--
 Note that in order to do this, you must get a reference to the `module`
-object.  Since `require()` returns the `exports`, and the `module` is
+object.  Since `require()` returns the `module.exports`, and the `module` is
 typically *only* available within a specific module's code, it must be
 explicitly exported in order to be used.
 -->
 
 それには `module` オブジェクトの参照が必要なことに注意してください。
-`require()` が `exports` を返した後、一般的に `module` 
+`require()` が `module.exports` を返した後、一般的に `module` 
 はそのモジュールのコードで *のみ* 利用可能です。
 それが使われるようにするには、明示的にエクスポートする必要があります。
 

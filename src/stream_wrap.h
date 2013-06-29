@@ -25,25 +25,82 @@
 #include "v8.h"
 #include "node.h"
 #include "handle_wrap.h"
+#include "req_wrap.h"
+#include "string_bytes.h"
 
 namespace node {
 
-
 // Forward declaration
-class WriteWrap;
+class StreamWrap;
 
+typedef class ReqWrap<uv_shutdown_t> ShutdownWrap;
 
-// Important: this should have the same values as in lib/net.js
-enum WriteEncoding {
-  kUtf8 = 0x1,
-  kAscii = 0x2,
-  kUcs2 = 0x3
+class WriteWrap: public ReqWrap<uv_write_t> {
+ public:
+  explicit WriteWrap(StreamWrap* wrap) {
+    wrap_ = wrap;
+  }
+
+  void* operator new(size_t size, char* storage) { return storage; }
+
+  // This is just to keep the compiler happy. It should never be called, since
+  // we don't use exceptions in node.
+  void operator delete(void* ptr, char* storage) { assert(0); }
+
+  StreamWrap* wrap_;
+
+ protected:
+  // People should not be using the non-placement new and delete operator on a
+  // WriteWrap. Ensure this never happens.
+  void* operator new(size_t size) { assert(0); };
+  void operator delete(void* ptr) { assert(0); };
 };
 
+// Overridable callbacks' types
+class StreamWrapCallbacks {
+ public:
+  explicit StreamWrapCallbacks(StreamWrap* wrap) : wrap_(wrap) {
+  }
+
+  explicit StreamWrapCallbacks(StreamWrapCallbacks* old) : wrap_(old->wrap_) {
+  }
+
+  virtual ~StreamWrapCallbacks() {
+  }
+
+  virtual int DoWrite(WriteWrap* w,
+                      uv_buf_t* bufs,
+                      size_t count,
+                      uv_stream_t* send_handle,
+                      uv_write_cb cb);
+  virtual void AfterWrite(WriteWrap* w);
+  virtual uv_buf_t DoAlloc(uv_handle_t* handle, size_t suggested_size);
+  virtual void DoRead(uv_stream_t* handle,
+                      ssize_t nread,
+                      uv_buf_t buf,
+                      uv_handle_type pending);
+  virtual int DoShutdown(ShutdownWrap* req_wrap, uv_shutdown_cb cb);
+
+  v8::Handle<v8::Object> Self();
+
+ protected:
+  StreamWrap* wrap_;
+};
 
 class StreamWrap : public HandleWrap {
  public:
   uv_stream_t* GetStream() { return stream_; }
+
+  void OverrideCallbacks(StreamWrapCallbacks* callbacks) {
+    StreamWrapCallbacks* old = callbacks_;
+    callbacks_ = callbacks;
+    if (old != &default_callbacks_)
+      delete old;
+  }
+
+  StreamWrapCallbacks* GetCallbacks() {
+    return callbacks_;
+  }
 
   static void Initialize(v8::Handle<v8::Object> target);
 
@@ -61,18 +118,19 @@ class StreamWrap : public HandleWrap {
   static v8::Handle<v8::Value> WriteUtf8String(const v8::Arguments& args);
   static v8::Handle<v8::Value> WriteUcs2String(const v8::Arguments& args);
 
+  // Overridable callbacks
+  StreamWrapCallbacks* callbacks_;
+
  protected:
   static size_t WriteBuffer(v8::Handle<v8::Value> val, uv_buf_t* buf);
-  template <enum WriteEncoding encoding>
-  static size_t WriteStringImpl(char* storage,
-                                size_t storage_size,
-                                v8::Handle<v8::Value> val,
-                                uv_buf_t* buf);
-  template <enum WriteEncoding encoding>
-  static size_t GetStringSizeImpl(v8::Handle<v8::Value> val);
 
   StreamWrap(v8::Handle<v8::Object> object, uv_stream_t* stream);
-  virtual void SetHandle(uv_handle_t* h);
+  ~StreamWrap() {
+    if (callbacks_ != &default_callbacks_) {
+      delete callbacks_;
+      callbacks_ = NULL;
+    }
+  }
   void StateChange() { }
   void UpdateWriteQueueSize();
 
@@ -90,11 +148,14 @@ class StreamWrap : public HandleWrap {
   static void OnReadCommon(uv_stream_t* handle, ssize_t nread,
       uv_buf_t buf, uv_handle_type pending);
 
-  template <enum WriteEncoding encoding>
+  template <enum encoding encoding>
   static v8::Handle<v8::Value> WriteStringImpl(const v8::Arguments& args);
 
   size_t slab_offset_;
   uv_stream_t* stream_;
+
+  StreamWrapCallbacks default_callbacks_;
+  friend class StreamWrapCallbacks;
 };
 
 

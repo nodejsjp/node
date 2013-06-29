@@ -19,8 +19,7 @@
 # IN THE SOFTWARE.
 
 E=
-CSTDFLAG=--std=c89 -pedantic -Wall -Wextra -Wno-unused-parameter
-CFLAGS += -g
+CFLAGS += -g -Wall -Wextra -Wno-unused-parameter
 CPPFLAGS += -I$(SRCDIR)/src
 LDFLAGS=-lm
 
@@ -29,9 +28,8 @@ CPPFLAGS += -D_FILE_OFFSET_BITS=64
 
 RUNNER_SRC=test/runner-unix.c
 RUNNER_CFLAGS=$(CFLAGS) -I$(SRCDIR)/test
-RUNNER_LDFLAGS=-L"$(CURDIR)" -luv -Xlinker -rpath -Xlinker "$(CURDIR)"
+RUNNER_LDFLAGS=-L"$(CURDIR)" -luv
 
-HAVE_DTRACE=
 DTRACE_OBJS=
 DTRACE_HEADER=
 
@@ -60,14 +58,15 @@ OBJS += src/inet.o
 OBJS += src/version.o
 
 ifeq (sunos,$(PLATFORM))
-HAVE_DTRACE=1
+HAVE_DTRACE ?= 1
 CPPFLAGS += -D__EXTENSIONS__ -D_XOPEN_SOURCE=500
 LDFLAGS+=-lkstat -lnsl -lsendfile -lsocket
 # Library dependencies are not transitive.
-RUNNER_LDFLAGS += $(LDFLAGS)
 OBJS += src/unix/sunos.o
+ifeq (1, $(HAVE_DTRACE))
 OBJS += src/unix/dtrace.o
 DTRACE_OBJS += src/unix/core.o
+endif
 endif
 
 ifeq (aix,$(PLATFORM))
@@ -77,7 +76,7 @@ OBJS += src/unix/aix.o
 endif
 
 ifeq (darwin,$(PLATFORM))
-HAVE_DTRACE=1
+HAVE_DTRACE ?= 1
 # dtrace(1) probes contain dollar signs on OS X. Mute the warnings they
 # generate but only when CC=clang, -Wno-dollar-in-identifier-extension
 # is a clang extension.
@@ -87,8 +86,7 @@ endif
 CPPFLAGS += -D_DARWIN_USE_64_BIT_INODE=1
 LDFLAGS += -framework Foundation \
            -framework CoreServices \
-           -framework ApplicationServices \
-           -dynamiclib -install_name "@rpath/libuv.dylib"
+           -framework ApplicationServices
 SOEXT = dylib
 OBJS += src/unix/darwin.o
 OBJS += src/unix/kqueue.o
@@ -98,7 +96,7 @@ OBJS += src/unix/darwin-proctitle.o
 endif
 
 ifeq (linux,$(PLATFORM))
-CSTDFLAG += -D_GNU_SOURCE
+CFLAGS += -D_GNU_SOURCE
 LDFLAGS+=-ldl -lrt
 RUNNER_CFLAGS += -D_GNU_SOURCE
 OBJS += src/unix/linux-core.o \
@@ -107,8 +105,22 @@ OBJS += src/unix/linux-core.o \
         src/unix/proctitle.o
 endif
 
+ifeq (android,$(PLATFORM))
+CFLAGS += -D_GNU_SOURCE
+LDFLAGS+=-ldl -lrt
+RUNNER_CFLAGS += -D_GNU_SOURCE
+OBJS += src/unix/linux-core.o \
+        src/unix/linux-inotify.o \
+        src/unix/linux-syscalls.o \
+        src/unix/proctitle.o
+else
+CFLAGS += -std=c89
+endif
+
 ifeq (freebsd,$(PLATFORM))
-HAVE_DTRACE=1
+ifeq ($(shell dtrace -l 1>&2 2>/dev/null; echo $$?),0)
+HAVE_DTRACE ?= 1
+endif
 LDFLAGS+=-lkvm
 OBJS += src/unix/freebsd.o
 OBJS += src/unix/kqueue.o
@@ -135,7 +147,9 @@ endif
 ifeq (sunos,$(PLATFORM))
 RUNNER_LDFLAGS += -pthreads
 else
+ifneq (android, $(PLATFORM))
 RUNNER_LDFLAGS += -pthread
+endif
 endif
 
 ifeq ($(HAVE_DTRACE), 1)
@@ -144,12 +158,19 @@ CPPFLAGS += -Isrc/unix
 CFLAGS += -DHAVE_DTRACE
 endif
 
+ifneq (darwin,$(PLATFORM))
+# Must correspond with UV_VERSION_MAJOR and UV_VERSION_MINOR in src/version.c
+SO_LDFLAGS = -Wl,-soname,libuv.so.0.11
+endif
+
+RUNNER_LDFLAGS += $(LDFLAGS)
+
 libuv.a: $(OBJS)
 	$(AR) rcs $@ $^
 
 libuv.$(SOEXT):	override CFLAGS += -fPIC
 libuv.$(SOEXT):	$(OBJS:%.o=%.pic.o)
-	$(CC) -shared -o $@ $^ $(LDFLAGS)
+	$(CC) -shared -o $@ $^ $(LDFLAGS) $(SO_LDFLAGS)
 
 include/uv-private/uv-unix.h: \
 	include/uv-private/uv-bsd.h \
@@ -165,13 +186,13 @@ src/.buildstamp src/unix/.buildstamp test/.buildstamp:
 	touch $@
 
 src/unix/%.o src/unix/%.pic.o: src/unix/%.c include/uv.h include/uv-private/uv-unix.h src/unix/internal.h src/unix/.buildstamp $(DTRACE_HEADER)
-	$(CC) $(CSTDFLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 src/%.o src/%.pic.o: src/%.c include/uv.h include/uv-private/uv-unix.h src/.buildstamp
-	$(CC) $(CSTDFLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 test/%.o: test/%.c include/uv.h test/.buildstamp
-	$(CC) $(CSTDFLAG) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 clean-platform:
 	$(RM) test/run-{tests,benchmarks}.dSYM $(OBJS) $(OBJS:%.o=%.pic.o) src/unix/uv-dtrace.h

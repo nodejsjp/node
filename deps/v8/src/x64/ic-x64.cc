@@ -1380,6 +1380,23 @@ void LoadIC::GenerateMiss(MacroAssembler* masm) {
 }
 
 
+void LoadIC::GenerateRuntimeGetProperty(MacroAssembler* masm) {
+  // ----------- S t a t e -------------
+  //  -- rax    : receiver
+  //  -- rcx    : name
+  //  -- rsp[0]  : return address
+  // -----------------------------------
+
+  __ pop(rbx);
+  __ push(rax);  // receiver
+  __ push(rcx);  // name
+  __ push(rbx);  // return address
+
+  // Perform tail call to the entry.
+  __ TailCallRuntime(Runtime::kGetProperty, 2, 1);
+}
+
+
 void KeyedLoadIC::GenerateMiss(MacroAssembler* masm, ICMissMode miss_mode) {
   // ----------- S t a t e -------------
   //  -- rax    : key
@@ -1543,7 +1560,7 @@ void StoreIC::GenerateSlow(MacroAssembler* masm) {
   __ push(rbx);  // return address
 
   // Do tail-call to runtime routine.
-  ExternalReference ref(IC_Utility(kKeyedStoreIC_Slow), masm->isolate());
+  ExternalReference ref(IC_Utility(kStoreIC_Slow), masm->isolate());
   __ TailCallExternalReference(ref, 3, 1);
 }
 

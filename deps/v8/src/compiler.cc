@@ -36,6 +36,7 @@
 #include "deoptimizer.h"
 #include "full-codegen.h"
 #include "gdb-jit.h"
+#include "typing.h"
 #include "hydrogen.h"
 #include "isolate-inl.h"
 #include "lithium.h"
@@ -103,6 +104,8 @@ void CompilationInfo::Initialize(Isolate* isolate, Mode mode, Zone* zone) {
   code_stub_ = NULL;
   prologue_offset_ = kPrologueOffsetNotSet;
   opt_count_ = shared_info().is_null() ? 0 : shared_info()->opt_count();
+  no_frame_ranges_ = isolate->cpu_profiler()->is_profiling()
+                   ? new List<OffsetRange>(2) : NULL;
   if (mode == STUB) {
     mode_ = STUB;
     return;
@@ -121,6 +124,7 @@ void CompilationInfo::Initialize(Isolate* isolate, Mode mode, Zone* zone) {
 
 CompilationInfo::~CompilationInfo() {
   delete deferred_handles_;
+  delete no_frame_ranges_;
 }
 
 
@@ -216,9 +220,8 @@ void OptimizingCompiler::RecordOptimizationStats() {
   double ms_optimize = static_cast<double>(time_taken_to_optimize_) / 1000;
   double ms_codegen = static_cast<double>(time_taken_to_codegen_) / 1000;
   if (FLAG_trace_opt) {
-    PrintF("[optimizing: ");
-    function->PrintName();
-    PrintF(" / %" V8PRIxPTR, reinterpret_cast<intptr_t>(*function));
+    PrintF("[optimizing ");
+    function->ShortPrint();
     PrintF(" - took %0.3f, %0.3f, %0.3f ms]\n", ms_creategraph, ms_optimize,
            ms_codegen);
   }
@@ -315,15 +318,9 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
   }
 
   // Take --hydrogen-filter into account.
-  Handle<String> name = info()->function()->debug_name();
-  if (*FLAG_hydrogen_filter != '\0') {
-    Vector<const char> filter = CStrVector(FLAG_hydrogen_filter);
-    if ((filter[0] == '-'
-         && name->IsUtf8EqualTo(filter.SubVector(1, filter.length())))
-        || (filter[0] != '-' && !name->IsUtf8EqualTo(filter))) {
+  if (!info()->closure()->PassesHydrogenFilter()) {
       info()->SetCode(code);
       return SetLastStatus(BAILED_OUT);
-    }
   }
 
   // Recompile the unoptimized version of the code if the current version
@@ -360,15 +357,16 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
   ASSERT(info()->shared_info()->has_deoptimization_support());
 
   if (FLAG_trace_hydrogen) {
+    Handle<String> name = info()->function()->debug_name();
     PrintF("-----------------------------------------------------------\n");
     PrintF("Compiling method %s using hydrogen\n", *name->ToCString());
     isolate()->GetHTracer()->TraceCompilation(info());
   }
-  Handle<Context> native_context(
-      info()->closure()->context()->native_context());
-  oracle_ = new(info()->zone()) TypeFeedbackOracle(
-      code, native_context, isolate(), info()->zone());
-  graph_builder_ = new(info()->zone()) HOptimizedGraphBuilder(info(), oracle_);
+
+  // Type-check the function.
+  AstTyper::Type(info());
+
+  graph_builder_ = new(info()->zone()) HOptimizedGraphBuilder(info());
 
   Timer t(this, &time_taken_to_create_graph_);
   graph_ = graph_builder_->CreateGraph();
@@ -395,9 +393,9 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
 }
 
 OptimizingCompiler::Status OptimizingCompiler::OptimizeGraph() {
-  AssertNoAllocation no_gc;
-  NoHandleAllocation no_handles(isolate());
-  HandleDereferenceGuard no_deref(isolate(), HandleDereferenceGuard::DISALLOW);
+  DisallowHeapAllocation no_allocation;
+  DisallowHandleAllocation no_handles;
+  DisallowHandleDereference no_deref;
 
   ASSERT(last_status() == SUCCEEDED);
   Timer t(this, &time_taken_to_optimize_);
@@ -426,8 +424,7 @@ OptimizingCompiler::Status OptimizingCompiler::GenerateAndInstallCode() {
     // graph creation.  To make sure that we don't encounter inconsistencies
     // between graph creation and code generation, we disallow accessing
     // objects through deferred handles during the latter, with exceptions.
-    HandleDereferenceGuard no_deref_deferred(
-        isolate(), HandleDereferenceGuard::DISALLOW_DEFERRED);
+    DisallowDeferredHandleDereference no_deferred_handle_deref;
     Handle<Code> optimized_code = chunk_->Codegen();
     if (optimized_code.is_null()) {
       info()->set_bailout_reason("code generation failed");
@@ -574,6 +571,7 @@ static Handle<SharedFunctionInfo> MakeFunctionInfo(CompilationInfo* info) {
             : Logger::ToNativeByScript(Logger::SCRIPT_TAG, *script),
         *info->code(),
         *result,
+        info,
         String::cast(script->name())));
     GDBJIT(AddCode(Handle<String>(String::cast(script->name())),
                    script,
@@ -586,6 +584,7 @@ static Handle<SharedFunctionInfo> MakeFunctionInfo(CompilationInfo* info) {
             : Logger::ToNativeByScript(Logger::SCRIPT_TAG, *script),
         *info->code(),
         *result,
+        info,
         isolate->heap()->empty_string()));
     GDBJIT(AddCode(Handle<String>(), script, info->code(), info));
   }
@@ -650,7 +649,7 @@ Handle<SharedFunctionInfo> Compiler::Compile(Handle<String> source,
     // in that case too.
 
     // Create a script object describing the script to be compiled.
-    Handle<Script> script = FACTORY->NewScript(source);
+    Handle<Script> script = isolate->factory()->NewScript(source);
     if (natives == NATIVES_CODE) {
       script->set_type(Smi::FromInt(Script::TYPE_NATIVE));
     }
@@ -772,13 +771,6 @@ static bool InstallFullCode(CompilationInfo* info) {
   int expected = lit->expected_property_count();
   SetExpectedNofPropertiesFromEstimate(shared, expected);
 
-  // Set the optimization hints after performing lazy compilation, as
-  // these are not set when the function is set up as a lazily
-  // compiled function.
-  shared->SetThisPropertyAssignmentsInfo(
-      lit->has_only_simple_this_property_assignments(),
-      *lit->this_property_assignments());
-
   // Check the function has compiled code.
   ASSERT(shared->is_compiled());
   shared->set_code_age(0);
@@ -813,6 +805,10 @@ static void InstallCodeCommon(CompilationInfo* info) {
   // reset this bit when lazy compiling the code again.
   if (shared->optimization_disabled()) code->set_optimizable(false);
 
+  if (shared->code() == *code) {
+    // Do not send compilation event for the same code twice.
+    return;
+  }
   Compiler::RecordFunctionCompilation(Logger::LAZY_COMPILE_TAG, info, shared);
 }
 
@@ -843,9 +839,9 @@ static bool InstallCodeFromOptimizedCodeMap(CompilationInfo* info) {
     int index = shared->SearchOptimizedCodeMap(*native_context);
     if (index > 0) {
       if (FLAG_trace_opt) {
-        PrintF("[found optimized code for: ");
-        function->PrintName();
-        PrintF(" / %" V8PRIxPTR "]\n", reinterpret_cast<intptr_t>(*function));
+        PrintF("[found optimized code for ");
+        function->ShortPrint();
+        PrintF("]\n");
       }
       // Caching of optimized code enabled and optimized code found.
       shared->InstallFromOptimizedCodeMap(*function, index);
@@ -954,9 +950,6 @@ void Compiler::RecompileParallel(Handle<JSFunction> closure) {
         if (status == OptimizingCompiler::SUCCEEDED) {
           info.Detach();
           shared->code()->set_profiler_ticks(0);
-          // Do a scavenge to put off the next scavenge as far as possible.
-          // This may ease the issue that GVN blocks the next scavenge.
-          isolate->heap()->CollectGarbage(NEW_SPACE, "parallel recompile");
           isolate->optimizing_compiler_thread()->QueueForOptimization(compiler);
         } else if (status == OptimizingCompiler::BAILED_OUT) {
           isolate->clear_pending_exception();
@@ -1051,6 +1044,7 @@ Handle<SharedFunctionInfo> Compiler::BuildFunctionInfo(FunctionLiteral* literal,
   info.SetLanguageMode(literal->scope()->language_mode());
 
   Isolate* isolate = info.isolate();
+  Factory* factory = isolate->factory();
   LiveEditFunctionTracker live_edit_tracker(isolate, literal);
   // Determine if the function can be lazily compiled. This is necessary to
   // allow some of our builtin JS files to be lazily compiled. These
@@ -1080,7 +1074,7 @@ Handle<SharedFunctionInfo> Compiler::BuildFunctionInfo(FunctionLiteral* literal,
 
   // Create a shared function info object.
   Handle<SharedFunctionInfo> result =
-      FACTORY->NewSharedFunctionInfo(literal->name(),
+      factory->NewSharedFunctionInfo(literal->name(),
                                      literal->materialized_literal_count(),
                                      literal->is_generator(),
                                      info.code(),
@@ -1117,9 +1111,6 @@ void Compiler::SetFunctionInfo(Handle<SharedFunctionInfo> function_info,
   function_info->set_is_anonymous(lit->is_anonymous());
   function_info->set_is_toplevel(is_toplevel);
   function_info->set_inferred_name(*lit->inferred_name());
-  function_info->SetThisPropertyAssignmentsInfo(
-      lit->has_only_simple_this_property_assignments(),
-      *lit->this_property_assignments());
   function_info->set_allows_lazy_compilation(lit->AllowsLazyCompilation());
   function_info->set_allows_lazy_compilation_without_context(
       lit->AllowsLazyCompilationWithoutContext());
@@ -1157,6 +1148,7 @@ void Compiler::RecordFunctionCompilation(Logger::LogEventsAndTags tag,
               CodeCreateEvent(Logger::ToNativeByScript(tag, *script),
                               *code,
                               *shared,
+                              info,
                               String::cast(script->name()),
                               line_num));
     } else {
@@ -1164,6 +1156,7 @@ void Compiler::RecordFunctionCompilation(Logger::LogEventsAndTags tag,
               CodeCreateEvent(Logger::ToNativeByScript(tag, *script),
                               *code,
                               *shared,
+                              info,
                               shared->DebugName()));
     }
   }

@@ -59,6 +59,8 @@
       'lib/sys.js',
       'lib/timers.js',
       'lib/tls.js',
+      'lib/_tls_legacy.js',
+      'lib/_tls_wrap.js',
       'lib/tty.js',
       'lib/url.js',
       'lib/util.js',
@@ -103,6 +105,8 @@
         'src/node_zlib.cc',
         'src/pipe_wrap.cc',
         'src/signal_wrap.cc',
+        'src/smalloc.cc',
+        'src/string_bytes.cc',
         'src/stream_wrap.cc',
         'src/slab_allocator.cc',
         'src/tcp_wrap.cc',
@@ -128,13 +132,16 @@
         'src/node_string.h',
         'src/node_version.h',
         'src/node_watchdog.h',
-        'src/ngx-queue.h',
+        'src/node_wrap.h',
         'src/pipe_wrap.h',
+        'src/queue.h',
+        'src/smalloc.h',
         'src/tty_wrap.h',
         'src/tcp_wrap.h',
         'src/udp_wrap.h',
         'src/req_wrap.h',
         'src/slab_allocator.h',
+        'src/string_bytes.h',
         'src/stream_wrap.h',
         'src/tree.h',
         'src/v8_typed_array.h',
@@ -156,7 +163,12 @@
       'conditions': [
         [ 'node_use_openssl=="true"', {
           'defines': [ 'HAVE_OPENSSL=1' ],
-          'sources': [ 'src/node_crypto.cc', 'src/node_crypto_bio.cc' ],
+          'sources': [
+            'src/node_crypto.cc',
+            'src/node_crypto_bio.cc',
+            'src/tls_wrap.cc',
+            'src/tls_wrap.h'
+          ],
           'conditions': [
             [ 'node_shared_openssl=="false"', {
               'dependencies': [ './deps/openssl/openssl.gyp:openssl' ],
@@ -199,11 +211,8 @@
         } ],
         [ 'node_use_systemtap=="true"', {
           'defines': [ 'HAVE_SYSTEMTAP=1', 'STAP_SDT_V1=1' ],
-          'dependencies': [ 'node_systemtap_header' ],
-          'include_dirs': [ '<(SHARED_INTERMEDIATE_DIR)' ],
           'sources': [
             'src/node_dtrace.cc',
-            '<(SHARED_INTERMEDIATE_DIR)/node_systemtap.h',
           ],
         } ],
         [ 'node_use_etw=="true"', {
@@ -391,30 +400,13 @@
       'target_name': 'node_dtrace_header',
       'type': 'none',
       'conditions': [
-        [ 'node_use_dtrace=="true"', {
+        [ 'node_use_dtrace=="true" or node_use_systemtap=="true"', {
           'actions': [
             {
               'action_name': 'node_dtrace_header',
               'inputs': [ 'src/node_provider.d' ],
               'outputs': [ '<(SHARED_INTERMEDIATE_DIR)/node_provider.h' ],
               'action': [ 'dtrace', '-h', '-xnolibs', '-s', '<@(_inputs)',
-                '-o', '<@(_outputs)' ]
-            }
-          ]
-        } ]
-      ]
-    },
-    {
-      'target_name': 'node_systemtap_header',
-      'type': 'none',
-      'conditions': [
-        [ 'node_use_systemtap=="true"', {
-          'actions': [
-            {
-              'action_name': 'node_systemtap_header',
-              'inputs': [ 'src/node_systemtap.d' ],
-              'outputs': [ '<(SHARED_INTERMEDIATE_DIR)/node_systemtap.h' ],
-              'action': [ 'dtrace', '-h', '-C', '-s', '<@(_inputs)',
                 '-o', '<@(_outputs)' ]
             }
           ]
@@ -430,13 +422,14 @@
             {
               'action_name': 'node_dtrace_provider_o',
               'inputs': [
-                'src/node_provider.d',
-                '<(PRODUCT_DIR)/obj.target/node/src/node_dtrace.o'
+                '<(PRODUCT_DIR)/obj.target/libuv/deps/uv/src/unix/core.o',
+                '<(PRODUCT_DIR)/obj.target/node/src/node_dtrace.o',
               ],
               'outputs': [
                 '<(PRODUCT_DIR)/obj.target/node/src/node_dtrace_provider.o'
               ],
-              'action': [ 'dtrace', '-G', '-xnolibs', '-s', '<@(_inputs)',
+              'action': [ 'dtrace', '-G', '-xnolibs', '-s', 'src/node_provider.d',
+                '-s', 'deps/uv/src/unix/uv-dtrace.d', '<@(_inputs)',
                 '-o', '<@(_outputs)' ]
             }
           ]

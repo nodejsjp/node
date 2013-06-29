@@ -93,13 +93,11 @@ First we create a file `hello.cc`:
 
 
     #include <node.h>
-    #include <v8.h>
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
     Handle<Value> Method(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
       return scope.Close(String::New("world"));
     }
@@ -122,7 +120,8 @@ Note that all Node addons must export an initialization function:
     NODE_MODULE(module_name, Initialize)
 
 <!--
-There is no semi-colon after `NODE_MODULE` as it's not a function (see `node.h`).
+There is no semi-colon after `NODE_MODULE` as it's not a function (see
+`node.h`).
 
 The `module_name` needs to match the filename of the final binary (minus the
 .node suffix).
@@ -182,8 +181,8 @@ in `build/Release/`.
 コンパイルされたバインディングファイルは `build/Release/` にあります。
 
 <!--
-You can now use the binary addon in a Node project `hello.js` by pointing `require` to
-the recently built `hello.node` module:
+You can now use the binary addon in a Node project `hello.js` by pointing
+`require` to the recently built `hello.node` module:
 -->
 
 ビルドされた `hello.node` モジュールを `require` で指定することにより、
@@ -239,8 +238,8 @@ Create the following `binding.gyp` file:
     }
 
 <!--
-In cases where there is more than one `.cc` file, simply add the file name to the
-`sources` array, e.g.:
+In cases where there is more than one `.cc` file, simply add the file name to
+the `sources` array, e.g.:
 -->
 
 一つ以上の `.cc` ファイルがある場合は、単純に `sources` 配列にファイル名を
@@ -270,18 +269,17 @@ function calls and return a result. This is the main and only needed source
 以下のパターンは JavaScript から呼び出された関数で引数を読み出したり、
 結果を返す方法を示します。これは `addon.cc` でのみ必要となります。
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
     Handle<Value> Add(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       if (args.Length() < 2) {
-        ThrowException(Exception::TypeError(String::New("Wrong number of arguments")));
+        ThrowException(Exception::TypeError(
+            String::New("Wrong number of arguments")));
         return scope.Close(Undefined(isolate));
       }
 
@@ -323,19 +321,17 @@ there. Here's `addon.cc`:
 JavaScript の関数を C++ の関数に渡してそこから呼び出すことができます。
 これは `addon.cc` です:
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
     Handle<Value> RunCallback(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       Local<Function> cb = Local<Function>::Cast(args[0]);
       const unsigned argc = 1;
-      Local<Value> argv[argc] = { Local<Value>::New(String::New("hello world")) };
+      Local<Value> argv[argc] = { String::New("hello world") };
       cb->Call(Context::GetCurrent()->Global(), argc, argv);
 
       return scope.Close(Undefined(isolate));
@@ -385,14 +381,12 @@ C++ 関数の中から新しいオブジェクトを作成して返すことが�
 以下の `addon.cc` のパターンでは、`createObject()` に渡された文字列を
 反映する `msg` プロパティを持ったオブジェクトを返します。
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
     Handle<Value> CreateObject(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       Local<Object> obj = Object::New();
@@ -431,24 +425,25 @@ wraps a C++ function:
 このパターンは C++ 関数をラップした JavaScript 関数を作成して返す方法を
 示します。
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
     Handle<Value> MyFunction(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
       return scope.Close(String::New("hello world"));
     }
 
     Handle<Value> CreateFunction(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       Local<FunctionTemplate> tpl = FunctionTemplate::New(MyFunction);
       Local<Function> fn = tpl->GetFunction();
-      fn->SetName(String::NewSymbol("theFunction")); // omit this to make it anonymous
+
+      // omit this to make it anonymous
+      fn->SetName(String::NewSymbol("theFunction"));
 
       return scope.Close(fn);
     }
@@ -459,7 +454,6 @@ wraps a C++ function:
     }
 
     NODE_MODULE(addon, Init)
-
 
 <!--
 To test:
@@ -486,7 +480,6 @@ C++ オブジェクト／クラスをラップし、JavaScript から new 演算
 インスタンス化できる `MyObject` を作成します。
 最初にメインモジュール `addon.cc` を準備します:
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
     #include "myobject.h"
 
@@ -533,11 +526,8 @@ prototype:
 公開したい様々なメソッドを `myobject.cc` に実装します。
 ここでは、コンストラクタに渡された値に加算する `plusOne` を公開しています:
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
     #include "myobject.h"
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
@@ -545,19 +535,25 @@ prototype:
     MyObject::~MyObject() {};
 
     void MyObject::Init(Handle<Object> exports) {
+      Isolate* isolate = Isolate::GetCurrent();
+
       // Prepare constructor template
       Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
       tpl->SetClassName(String::NewSymbol("MyObject"));
       tpl->InstanceTemplate()->SetInternalFieldCount(1);
+
       // Prototype
       tpl->PrototypeTemplate()->Set(String::NewSymbol("plusOne"),
           FunctionTemplate::New(PlusOne)->GetFunction());
 
-      Persistent<Function> constructor = Persistent<Function>::New(isolate, tpl->GetFunction());
+      Persistent<Function> constructor
+          = Persistent<Function>::New(isolate, tpl->GetFunction());
+
       exports->Set(String::NewSymbol("MyObject"), constructor);
     }
 
     Handle<Value> MyObject::New(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       MyObject* obj = new MyObject();
@@ -568,6 +564,7 @@ prototype:
     }
 
     Handle<Value> MyObject::PlusOne(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       MyObject* obj = ObjectWrap::Unwrap<MyObject>(args.This());
@@ -589,7 +586,6 @@ Test it with:
     console.log( obj.plusOne() ); // 12
     console.log( obj.plusOne() ); // 13
 
-
 ### Factory of wrapped objects
 
 <!--
@@ -610,15 +606,13 @@ Let's register our `createObject` method in `addon.cc`:
 
 createObject` を `addon.cc` に登録しましょう:
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
     #include "myobject.h"
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
     Handle<Value> CreateObject(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
       return scope.Close(MyObject::NewInstance(args));
     }
@@ -640,7 +634,6 @@ care of instantiating the object (i.e. it does the job of `new` in JavaScript):
 `myobject.h` にオブジェクトを生成する static メソッド `NewInstance` を
 導入しましょう (すなわち，それが JavaScript 内の `new` の働きをします)。
 
-    #define BUILDING_NODE_EXTENSION
     #ifndef MYOBJECT_H
     #define MYOBJECT_H
 
@@ -669,11 +662,8 @@ The implementation is similar to the above in `myobject.cc`:
 
 実装は前述の `myobject.cc` と同様です:
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
     #include "myobject.h"
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
@@ -683,10 +673,12 @@ The implementation is similar to the above in `myobject.cc`:
     Persistent<Function> MyObject::constructor;
 
     void MyObject::Init() {
+      Isolate* isolate = Isolate::GetCurrent();
       // Prepare constructor template
       Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
       tpl->SetClassName(String::NewSymbol("MyObject"));
       tpl->InstanceTemplate()->SetInternalFieldCount(1);
+
       // Prototype
       tpl->PrototypeTemplate()->Set(String::NewSymbol("plusOne"),
           FunctionTemplate::New(PlusOne)->GetFunction());
@@ -695,6 +687,7 @@ The implementation is similar to the above in `myobject.cc`:
     }
 
     Handle<Value> MyObject::New(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       MyObject* obj = new MyObject();
@@ -705,6 +698,7 @@ The implementation is similar to the above in `myobject.cc`:
     }
 
     Handle<Value> MyObject::NewInstance(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       const unsigned argc = 1;
@@ -715,6 +709,7 @@ The implementation is similar to the above in `myobject.cc`:
     }
 
     Handle<Value> MyObject::PlusOne(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       MyObject* obj = ObjectWrap::Unwrap<MyObject>(args.This());
@@ -756,20 +751,19 @@ C++ オブジェクトをラップして返すことに加えて、Node が提�
 以下の `addon.cc` では、二つの `MyObject` オブジェクトを受け取る `add()`
 関数を導入します:
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
     #include "myobject.h"
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
     Handle<Value> CreateObject(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
       return scope.Close(MyObject::NewInstance(args));
     }
 
     Handle<Value> Add(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       MyObject* obj1 = node::ObjectWrap::Unwrap<MyObject>(
@@ -802,7 +796,6 @@ can probe private values after unwrapping the object:
 したがって、アンラップされたオブジェクトのプライベート変数を調べることが
 できます。
 
-    #define BUILDING_NODE_EXTENSION
     #ifndef MYOBJECT_H
     #define MYOBJECT_H
 
@@ -831,11 +824,8 @@ The implementation of `myobject.cc` is similar as before:
 
 `myobject.cc` の実装はこれまでと同様です:
 
-    #define BUILDING_NODE_EXTENSION
     #include <node.h>
     #include "myobject.h"
-
-    Isolate* isolate = Isolate::GetCurrent();
 
     using namespace v8;
 
@@ -845,15 +835,18 @@ The implementation of `myobject.cc` is similar as before:
     Persistent<Function> MyObject::constructor;
 
     void MyObject::Init() {
+      Isolate* isolate = Isolate::GetCurrent();
+
       // Prepare constructor template
       Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
       tpl->SetClassName(String::NewSymbol("MyObject"));
       tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
-      constructor = Persistent<Function>::New(tpl->GetFunction());
+      constructor = Persistent<Function>::New(isolate, tpl->GetFunction());
     }
 
     Handle<Value> MyObject::New(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       MyObject* obj = new MyObject();
@@ -864,6 +857,7 @@ The implementation of `myobject.cc` is similar as before:
     }
 
     Handle<Value> MyObject::NewInstance(const Arguments& args) {
+      Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       const unsigned argc = 1;

@@ -31,7 +31,10 @@
 #include "tree.h"
 #include "uv.h"
 
-#if defined(__OpenBSD__) || defined(__MINGW32__) || defined(_MSC_VER)
+#if defined(__ANDROID__) || \
+    defined(__MINGW32__) || \
+    defined(__OpenBSD__) || \
+    defined(_MSC_VER)
 # include <nameser.h>
 #else
 # include <arpa/nameser.h>
@@ -44,7 +47,6 @@ namespace cares_wrap {
 
 using v8::Arguments;
 using v8::Array;
-using v8::Context;
 using v8::Function;
 using v8::Handle;
 using v8::HandleScope;
@@ -120,7 +122,7 @@ static void ares_poll_close_cb(uv_handle_t* watcher) {
 
 /* Allocates and returns a new ares_task_t */
 static ares_task_t* ares_task_create(uv_loop_t* loop, ares_socket_t sock) {
-  ares_task_t* task = (ares_task_t*) malloc(sizeof *task);
+  ares_task_t* task = static_cast<ares_task_t*>(malloc(sizeof(*task)));
 
   if (task == NULL) {
     /* Out of memory. */
@@ -141,9 +143,11 @@ static ares_task_t* ares_task_create(uv_loop_t* loop, ares_socket_t sock) {
 
 
 /* Callback from ares when socket operation is started */
-static void ares_sockstate_cb(void* data, ares_socket_t sock,
-    int read, int write) {
-  uv_loop_t* loop = (uv_loop_t*) data;
+static void ares_sockstate_cb(void* data,
+                              ares_socket_t sock,
+                              int read,
+                              int write) {
+  uv_loop_t* loop = static_cast<uv_loop_t*>(data);
   ares_task_t* task;
 
   ares_task_t lookup_task;
@@ -155,7 +159,7 @@ static void ares_sockstate_cb(void* data, ares_socket_t sock,
       /* New socket */
 
       /* If this is the first socket then start the timer. */
-      if (!uv_is_active((uv_handle_t*) &ares_timer)) {
+      if (!uv_is_active(reinterpret_cast<uv_handle_t*>(&ares_timer))) {
         assert(RB_EMPTY(&ares_tasks));
         uv_timer_start(&ares_timer, ares_timeout, 1000, 1000);
       }
@@ -185,7 +189,8 @@ static void ares_sockstate_cb(void* data, ares_socket_t sock,
            "When an ares socket is closed we should have a handle for it");
 
     RB_REMOVE(ares_task_list, &ares_tasks, task);
-    uv_close((uv_handle_t*) &task->poll_watcher, ares_poll_close_cb);
+    uv_close(reinterpret_cast<uv_handle_t*>(&task->poll_watcher),
+             ares_poll_close_cb);
 
     if (RB_EMPTY(&ares_tasks)) {
       uv_timer_stop(&ares_timer);
@@ -939,6 +944,114 @@ static Handle<Value> GetAddrInfo(const Arguments& args) {
 }
 
 
+static Handle<Value> GetServers(const Arguments& args) {
+  HandleScope scope(node_isolate);
+
+  Local<Array> server_array = Array::New();
+
+  ares_addr_node* servers;
+
+  int r = ares_get_servers(ares_channel, &servers);
+  assert(r == ARES_SUCCESS);
+
+  ares_addr_node* cur = servers;
+
+  for (int i = 0; cur != NULL; ++i, cur = cur->next) {
+    char ip[INET6_ADDRSTRLEN];
+
+    const void* caddr = static_cast<const void*>(&cur->addr);
+    uv_err_t err = uv_inet_ntop(cur->family, caddr, ip, sizeof(ip));
+    assert(err.code == UV_OK);
+
+    Local<String> addr = String::New(ip);
+    server_array->Set(i, addr);
+  }
+
+  ares_free_data(servers);
+
+  return scope.Close(server_array);
+}
+
+
+static Handle<Value> SetServers(const Arguments& args) {
+  HandleScope scope(node_isolate);
+
+  assert(args[0]->IsArray());
+
+  Local<Array> arr = Local<Array>::Cast(args[0]);
+
+  uint32_t len = arr->Length();
+
+  if (len == 0) {
+    int rv = ares_set_servers(ares_channel, NULL);
+    return scope.Close(Integer::New(rv));
+  }
+
+  ares_addr_node* servers = new ares_addr_node[len];
+  ares_addr_node* last = NULL;
+
+  uv_err_t uv_ret;
+
+  for (uint32_t i = 0; i < len; i++) {
+    assert(arr->Get(i)->IsArray());
+
+    Local<Array> elm = Local<Array>::Cast(arr->Get(i));
+
+    assert(elm->Get(0)->Int32Value());
+    assert(elm->Get(1)->IsString());
+
+    int fam = elm->Get(0)->Int32Value();
+    String::Utf8Value ip(elm->Get(1));
+
+    ares_addr_node* cur = &servers[i];
+
+    switch (fam) {
+      case 4:
+        cur->family = AF_INET;
+        uv_ret = uv_inet_pton(AF_INET, *ip, &cur->addr);
+        break;
+      case 6:
+        cur->family = AF_INET6;
+        uv_ret = uv_inet_pton(AF_INET6, *ip, &cur->addr);
+        break;
+      default:
+        assert(0 && "Bad address family.");
+        abort();
+    }
+
+    if (uv_ret.code != UV_OK)
+      break;
+
+    cur->next = NULL;
+
+    if (last != NULL)
+      last->next = cur;
+
+    last = cur;
+  }
+
+  int r;
+
+  if (uv_ret.code == UV_OK)
+    r = ares_set_servers(ares_channel, &servers[0]);
+  else
+    r = ARES_EBADSTR;
+
+  delete[] servers;
+
+  return scope.Close(Integer::New(r));
+}
+
+
+static Handle<Value> StrError(const Arguments& args) {
+  HandleScope scope;
+
+  int r = args[0]->Int32Value();
+
+  return scope.Close(String::New(ares_strerror(r)));
+}
+
+
 static void Initialize(Handle<Object> target) {
   HandleScope scope(node_isolate);
   int r;
@@ -975,6 +1088,10 @@ static void Initialize(Handle<Object> target) {
 
   NODE_SET_METHOD(target, "getaddrinfo", GetAddrInfo);
   NODE_SET_METHOD(target, "isIP", IsIP);
+
+  NODE_SET_METHOD(target, "strerror", StrError);
+  NODE_SET_METHOD(target, "getServers", GetServers);
+  NODE_SET_METHOD(target, "setServers", SetServers);
 
   target->Set(String::NewSymbol("AF_INET"),
               Integer::New(AF_INET, node_isolate));

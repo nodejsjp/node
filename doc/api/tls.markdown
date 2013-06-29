@@ -89,7 +89,7 @@ server-side resources, which makes it a potential vector for denial-of-service
 attacks.
 
 To mitigate this, renegotiations are limited to three times every 10 minutes. An
-error is emitted on the [CleartextStream][] instance when the threshold is
+error is emitted on the [tls.TLSSocket][] instance when the threshold is
 exceeded. The limits are configurable:
 
   - `tls.CLIENT_RENEG_LIMIT`: renegotiation limit, default is 3.
@@ -111,7 +111,7 @@ TLS プロトコルでは、クライアントに TLS セッションの再ネ�
 要求するため、それは潜在的なサーバ強制停止攻撃となります。
 
 これを軽減するために、再ネゴシエーションは 10 分当たり 3 回までに
-制限されています。この制限を超えると、[CleartextStream][]
+制限されています。この制限を超えると、[tls.TLSSocket][]
 のインスタンス上でエラーが生成されます。この制限は変更可能です:
 
   - `tls.CLIENT_RENEG_LIMIT`: 再ネゴシエーションの上限、デフォルトは 3 です。
@@ -366,12 +366,12 @@ Here is a simple example echo server:
       ca: [ fs.readFileSync('client-cert.pem') ]
     };
 
-    var server = tls.createServer(options, function(cleartextStream) {
+    var server = tls.createServer(options, function(socket) {
       console.log('server connected',
-                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
-      cleartextStream.write("welcome!\n");
-      cleartextStream.setEncoding('utf8');
-      cleartextStream.pipe(cleartextStream);
+                  socket.authorized ? 'authorized' : 'unauthorized');
+      socket.write("welcome!\n");
+      socket.setEncoding('utf8');
+      socket.pipe(socket);
     });
     server.listen(8000, function() {
       console.log('server bound');
@@ -394,12 +394,12 @@ Or
 
     };
 
-    var server = tls.createServer(options, function(cleartextStream) {
+    var server = tls.createServer(options, function(socket) {
       console.log('server connected',
-                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
-      cleartextStream.write("welcome!\n");
-      cleartextStream.setEncoding('utf8');
-      cleartextStream.pipe(cleartextStream);
+                  socket.authorized ? 'authorized' : 'unauthorized');
+      socket.write("welcome!\n");
+      socket.setEncoding('utf8');
+      socket.pipe(socket);
     });
     server.listen(8000, function() {
       console.log('server bound');
@@ -412,25 +412,6 @@ You can test this server by connecting to it with `openssl s_client`:
 `openssl s_client` を使用してこのサーバに接続するテストを行うことができます。
 
     openssl s_client -connect 127.0.0.1:8000
-
-
-## tls.SLAB_BUFFER_SIZE
-
-<!--
-Size of slab buffer used by all tls servers and clients.
-Default: `10 * 1024 * 1024`.
--->
-
-全ての TLS サーバ及びクライアントで使用されるスラブバッファのサイズ。
-デフォルトは: `10 * 1024 * 1024`。
-
-
-<!--
-Don't change the defaults unless you know what you are doing.
--->
-
-あなたがしようとしていることを理解していない限り、
-デフォルトを変更しないでください。
 
 
 ## tls.connect(options, [callback])
@@ -501,6 +482,10 @@ Creates a new client connection to the given `port` and `host` (old API) or
 
   - `cert`: PEM フォーマットによる証明書の鍵を持つ文字列または `Buffer` です。
 
+  - `secureProtocol`: The SSL method to use, e.g. `SSLv3_method` to force
+    SSL version 3. The possible values depend on your installation of
+    OpenSSL and are defined in the constant [SSL_METHODS][].
+
   - `ca`: 信頼できる証明書の文字列または `Buffer` の配列です。
     省略された場合、ベリサインなどのよく知られた「ルート」認証局が使われます。
     これらはコネクションの認証に使われます。
@@ -519,11 +504,15 @@ Creates a new client connection to the given `port` and `host` (old API) or
 
   - `servername`: TLS 拡張である SNI (Server Name Indication) のサーバ名です。
 
+  - `secureProtocol`: 使用する SSL メソッド、たとえば `SSLv3_method` は
+    SSL version 3 の使用を強制します。可能な値は使用する OpenSSL によって
+    定義される [SSL_METHODS][] 定数に依存します。
+
 <!--
 The `callback` parameter will be added as a listener for the
 ['secureConnect'][] event.
 
-`tls.connect()` returns a [CleartextStream][] object.
+`tls.connect()` returns a [tls.TLSSocket][] object.
 
 Here is an example of a client of echo server as described previously:
 -->
@@ -531,7 +520,7 @@ Here is an example of a client of echo server as described previously:
 `callback` 引数は ['secureConnect'][] イベントのリスナとして
 加えられます。
 
-`tls.connect()` は [CleartextStream][] オブジェクトを返します。
+`tls.connect()` は [tls.TLSSocket][] オブジェクトを返します。
 
 これは前述のエコーサーバに接続するクライアントの例です:
 
@@ -547,17 +536,17 @@ Here is an example of a client of echo server as described previously:
       ca: [ fs.readFileSync('server-cert.pem') ]
     };
 
-    var cleartextStream = tls.connect(8000, options, function() {
+    var socket = tls.connect(8000, options, function() {
       console.log('client connected',
-                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
-      process.stdin.pipe(cleartextStream);
+                  socket.authorized ? 'authorized' : 'unauthorized');
+      process.stdin.pipe(socket);
       process.stdin.resume();
     });
-    cleartextStream.setEncoding('utf8');
-    cleartextStream.on('data', function(data) {
+    socket.setEncoding('utf8');
+    socket.on('data', function(data) {
       console.log(data);
     });
-    cleartextStream.on('end', function() {
+    socket.on('end', function() {
       server.close();
     });
 
@@ -574,27 +563,37 @@ Or
       pfx: fs.readFileSync('client.pfx')
     };
 
-    var cleartextStream = tls.connect(8000, options, function() {
+    var socket = tls.connect(8000, options, function() {
       console.log('client connected',
-                  cleartextStream.authorized ? 'authorized' : 'unauthorized');
-      process.stdin.pipe(cleartextStream);
+                  socket.authorized ? 'authorized' : 'unauthorized');
+      process.stdin.pipe(socket);
       process.stdin.resume();
     });
-    cleartextStream.setEncoding('utf8');
-    cleartextStream.on('data', function(data) {
+    socket.setEncoding('utf8');
+    socket.on('data', function(data) {
       console.log(data);
     });
-    cleartextStream.on('end', function() {
+    socket.on('end', function() {
       server.close();
     });
 
 ## tls.createSecurePair([credentials], [isServer], [requestCert], [rejectUnauthorized])
+
+    Stability: 0 - Deprecated. Use tls.TLSSocket instead.
 
 <!--
 Creates a new secure pair object with two streams, one of which reads/writes
 encrypted data, and one reads/writes cleartext data.
 Generally the encrypted one is piped to/from an incoming encrypted data stream,
 and the cleartext one is used as a replacement for the initial encrypted stream.
+-->
+
+二つのストリームを持つセキュアペアオブジェクトを作成します。
+一つは暗号化されたデータを読み書きし、もう一つは平文のデータを読み書きします。
+通常、暗号化されたストリームに外部からの暗号化されたデータが連結され、
+暗号化されたストリームの代わりに平文のストリームが使われます。
+
+<!--
  - `credentials`: A credentials object from crypto.createCredentials( ... )
 
  - `isServer`: A boolean indicating whether this tls connection should be
@@ -606,15 +605,7 @@ and the cleartext one is used as a replacement for the initial encrypted stream.
  - `rejectUnauthorized`: A boolean indicating whether a server should
    automatically reject clients with invalid certificates. Only applies to
    servers with `requestCert` enabled.
-
-`tls.createSecurePair()` returns a SecurePair object with [cleartext][] and
-`encrypted` stream properties.
 -->
-
-二つのストリームを持つセキュアペアオブジェクトを作成します。
-一つは暗号化されたデータを読み書きし、もう一つは平文のデータを読み書きします。
-通常、暗号化されたストリームに外部からの暗号化されたデータが連結され、
-暗号化されたストリームの代わりに平文のストリームが使われます。
 
  - `credentials`: `crypto.createCredentials( ... )` で作成された
    証明書オブジェクト。
@@ -630,8 +621,19 @@ and the cleartext one is used as a replacement for the initial encrypted stream.
    自動的にクライアントを破棄するかどうかを示すブーリアン値。
    `requestCert` が有効なサーバにのみ適用されます。
 
-`tls.createSequrePair()` は、[cleartext][] と `encrypted`
-をプロパティとして持つ `SecurePair` オブジェクトを返します。
+<!--
+`tls.createSecurePair()` returns a SecurePair object with `cleartext` and
+`encrypted` stream properties.
+-->
+
+`tls.createSequrePair()` は、`cleartext` と `encrypted` ストリームを
+プロパティとして持つ `SecurePair` オブジェクトを返します。
+
+<!--
+NOTE: `cleartext` has the same APIs as [tls.TLSSocket][]
+-->
+
+注意: `cleartext` は [tls.TLSSocket][] API と同じです。
 
 ## Class: SecurePair
 
@@ -672,43 +674,42 @@ TLS または SSL を使った暗号化されたコネクションを受け付�
 
 ### Event: 'secureConnection'
 
-`function (cleartextStream) {}`
+`function (tlsSocket) {}`
 
 <!--
 This event is emitted after a new connection has been successfully
-handshaked. The argument is a instance of [CleartextStream][]. It has all the
+handshaked. The argument is a instance of [tls.TLSSocket][]. It has all the
 common stream methods and events.
 -->
 
 このイベントは、新しい接続のハンドシェークが成功した場合に生成されます。
-引数は [CleartextStream][] のインスタンスです。
+引数は [tls.TLSSocket][] のインスタンスです。
 これはストリームに共通する全てのメソッドとイベントを持っています。
 
 <!--
-`cleartextStream.authorized` is a boolean value which indicates if the
+`socket.authorized` is a boolean value which indicates if the
 client has verified by one of the supplied certificate authorities for the
-server. If `cleartextStream.authorized` is false, then
-`cleartextStream.authorizationError` is set to describe how authorization
+server. If `socket.authorized` is false, then
+`socket.authorizationError` is set to describe how authorization
 failed. Implied but worth mentioning: depending on the settings of the TLS
 server, you unauthorized connections may be accepted.
-`cleartextStream.npnProtocol` is a string containing selected NPN protocol.
-`cleartextStream.servername` is a string containing servername requested with
+`socket.npnProtocol` is a string containing selected NPN protocol.
+`socket.servername` is a string containing servername requested with
 SNI.
 -->
 
-`cleartextStream.authorized` は提供された認証局のいずれかによって
+`socket.authorized` は提供された認証局のいずれかによって
 認証されたかを示す boolean 値です。
-`cleartextStream.authorized` が false の場合、
-`cleartextStream.authorizationError` にはどのように認証が失敗したのかが設定されます。
-暗黙的ですが言及する価値のあること:
-TLS サーバの設定に依存しますが、認証されていないコネクションも受け入れられることがあります。
-`cleartextStream.npnProtocol` は、選択された NPN プロトコルを持つ文字列です。
-`cleartextStream.servername` は、SNI でリクエストされたサーバ名を持つ
-文字列です。
+`socket.authorized` が false の場合、`socket.authorizationError` には
+どのように認証が失敗したのかが設定されます。
+暗黙的ですが言及する価値のあること: TLS サーバの設定に依存しますが、
+認証されていないコネクションも受け入れられることがあります。
+`socket.npnProtocol` は、選択された NPN プロトコルを持つ文字列です。
+`socket.servername` は、SNI でリクエストされたサーバ名を持つ文字列です。
 
 ### Event: 'clientError'
 
-`function (exception, securePair) { }`
+`function (exception, tlsSocket) { }`
 
 <!--
 When a client connection emits an 'error' event before secure connection is
@@ -719,10 +720,10 @@ established - it will be forwarded here.
 `'error'` イベントを発した場合 － ここに転送されます。
 
 <!--
-`securePair` is the `tls.SecurePair` that the error originated from.
+`tlsSocket` is the [tls.TLSSocket][] that the error originated from.
 -->
 
-`securePair` はエラーが発生した `tls.SecurePair` です。
+`tlsSocket` はエラーが発生した [tls.TLSSocket][] です。
 
 
 ### Event: 'newSession'
@@ -736,6 +737,14 @@ storage.
 
 TLS セッションが作成された場合に生成されます。
 セッションを外部ストレージに保存する場合に使えるでしょう。
+
+<!--
+NOTE: adding this event listener will have an effect only on connections
+established after addition of event listener.
+-->
+
+注意: このイベントリスナの追加は、イベントリスナが追加された後に確立される
+接続に対してのみ効果があります。
 
 
 ### Event: 'resumeSession'
@@ -757,6 +766,9 @@ perform lookup in external storage using given `sessionId`, and invoke
 セッションを再開できない場合 (すなわち、ストレージに存在しない場合)、
 `callback(null, null)` を呼ぶことができます。
 `callback(err)` を呼び出すと接続を終了し、ソケットを破棄します。
+
+NOTE: adding this event listener will have an effect only on connections
+established after addition of event listener.
 
 
 ### server.listen(port, [host], [callback])
@@ -838,6 +850,8 @@ The number of concurrent connections on the server.
 
 ## Class: CryptoStream
 
+    Stability: 0 - Deprecated. Use tls.TLSSocket instead.
+
 <!--
 This is an encrypted stream.
 -->
@@ -855,46 +869,44 @@ the total bytes written to the socket, *including the TLS overhead*.
 *TLS のオーバーヘッドを含めて* ソケットに書き込まれたトータルのバイト数を
 返します。
 
-## Class: tls.CleartextStream
+## Class: tls.TLSSocket
 
 <!--
-This is a stream on top of the *Encrypted* stream that makes it possible to
-read/write an encrypted data as a cleartext data.
+This is a wrapped version of [net.Socket][] that does transparent encryption
+of written data and all required TLS negotiation.
 
 This instance implements a duplex [Stream][] interfaces.  It has all the
 common stream methods and events.
 -->
 
-暗号化されたストリーム上で、暗号化されたデータを平文のデータとして
-読み書きすることができるストリームです。
+これは暗号化されたデータの透過的な書き込みなど、 TLS ネゴシエーションによって
+要求される全てを行う [net.Socket][] のラップされたバージョンです。
 
 このインスタンスは双方向の [Stream][] インタフェースを実装します。
 ストリームに共通な全てのメソッドとイベントを持ちます。
 
-A ClearTextStream is the `clear` member of a SecurePair object.
-
 ### Event: 'secureConnect'
 
 <!--
-This event is emitted after a new connection has been successfully handshaked. 
+This event is emitted after a new connection has been successfully handshaked.
 The listener will be called no matter if the server's certificate was
-authorized or not. It is up to the user to test `cleartextStream.authorized`
+authorized or not. It is up to the user to test `tlsSocket.authorized`
 to see if the server certificate was signed by one of the specified CAs.
-If `cleartextStream.authorized === false` then the error can be found in
-`cleartextStream.authorizationError`. Also if NPN was used - you can check
-`cleartextStream.npnProtocol` for negotiated protocol.
+If `tlsSocket.authorized === false` then the error can be found in
+`tlsSocket.authorizationError`. Also if NPN was used - you can check
+`tlsSocket.npnProtocol` for negotiated protocol.
 -->
 
 新しいコネクションの TLS/SSL ハンドシェークが成功すると生成されます。
 リスナはサーバの証明書が認証されたかどうかに関わらず呼び出されます。
 サーバ証明書が指定した認証局に承認されたかチェックするために
-`cleartextStream.authorized` を確認するかはユーザ次第です。
-`cleartextStream.authorized === false`の場合、
-`cleartextStream.authorizationError` からエラーを見つけることができます。
-同様に NPN が使われている場合は `cleartextStream.npnProtocol`
+`tlsSocket.authorized` を確認するかはユーザ次第です。
+`tlsSocket.authorized === false`の場合、
+`tlsSocket.authorizationError` からエラーを見つけることができます。
+同様に NPN が使われている場合は `tlsSocket.npnProtocol`
 から合意されたプロトコルをチェックすることが出来ます。
 
-### cleartextStream.authorized
+### tlsSocket.authorized
 
 <!--
 A boolean that is `true` if the peer certificate was signed by one of the
@@ -904,18 +916,18 @@ specified CAs, otherwise `false`
 接続相手の証明書が CA の一つによって署名されていれば `true`、
 そうでなければ `false` です。
 
-### cleartextStream.authorizationError
+### tlsSocket.authorizationError
 
 <!--
 The reason why the peer's certificate has not been verified. This property
-becomes available only when `cleartextStream.authorized === false`.
+becomes available only when `tlsSocket.authorized === false`.
 -->
 
 接続相手の証明書が認証されなかった理由です。
-このプロパティは `cleartextStream.authorized === false`
+このプロパティは `tlsSocket.authorized === false`
 の場合だけ利用可能になります。
 
-### cleartextStream.getPeerCertificate()
+### tlsSocket.getPeerCertificate()
 
 <!--
 Returns an object representing the peer's certificate. The returned object has
@@ -957,7 +969,7 @@ object.
 接続相手が証明書を提供しなかった場合は、
 `null` または空のオブジェクトを返します。
 
-### cleartextStream.getCipher()
+### tlsSocket.getCipher()
 
 <!--
 Returns an object representing the cipher name and the SSL/TLS
@@ -986,7 +998,7 @@ http://www.openssl.org/docs/ssl/ssl.html#DEALING_WITH_CIPHERS
 で `SSL_CIPHER_get_name()` および `SSL_CIPHER_get_version()` を
 参照してください。
 
-### cleartextStream.address()
+### tlsSocket.address()
 
 <!--
 Returns the bound address, the address family name and port of the
@@ -1000,7 +1012,7 @@ object with three properties, e.g.
 返されるオブジェクトは二つのプロパティを持ちます。例:
 `{ port: 12346, family: 'IPv4', address: '127.0.0.1' }`
 
-### cleartextStream.remoteAddress
+### tlsSocket.remoteAddress
 
 <!--
 The string representation of the remote IP address. For example,
@@ -1010,7 +1022,7 @@ The string representation of the remote IP address. For example,
 リモートの IP アドレスを表現する文字列です。
 例えば、`'74.125.127.100'` あるいは `'2001:4860:a005::68'`。
 
-### cleartextStream.remotePort
+### tlsSocket.remotePort
 
 <!--
 The numeric representation of the remote port. For example, `443`.
@@ -1019,23 +1031,43 @@ The numeric representation of the remote port. For example, `443`.
 リモートポートの数値表現です。
 例えば、`443`。
 
+### tlsSocket.localAddress
+
+<!--
+The string representation of the local IP address.
+-->
+
+文字列表現によるローカル IP アドレスです。
+
+### tlsSocket.localPort
+
+<!--
+The numeric representation of the local port.
+-->
+
+数値表現によるローカルポートです。
+
 <!--
 [OpenSSL cipher list format documentation]: http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT
 [BEAST attacks]: http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html
-[CleartextStream]: #tls_class_tls_cleartextstream
+[tls.TLSSocket]: #tls_class_tls_tlssocket
 [net.Server.address()]: net.html#net_server_address
 ['secureConnect']: #tls_event_secureconnect
 [secureConnection]: #tls_event_secureconnection
 [Stream]: stream.html#stream_stream
+[SSL_METHODS]: http://www.openssl.org/docs/ssl/ssl.html#DEALING_WITH_PROTOCOL_METHODS
 [tls.Server]: #tls_class_tls_server
+[SSL_CTX_set_timeout]: http://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html
 -->
 
 [OpenSSL 暗号リストフォーマットのドキュメント]: http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT
 [BEAST 攻撃]: http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html
-[CleartextStream]: #tls_class_tls_cleartextstream
+[tls.TLSSocket]: #tls_class_tls_tlssocket
 [net.Server.address()]: net.html#net_server_address
+[net.Socket]: net.html#net_class_net_socket
 ['secureConnect']: #tls_event_secureconnect
 [secureConnection]: #tls_event_secureconnection
 [Stream]: stream.html#stream_stream
+[SSL_METHODS]: http://www.openssl.org/docs/ssl/ssl.html#DEALING_WITH_PROTOCOL_METHODS
 [tls.Server]: #tls_class_tls_server
 [SSL_CTX_set_timeout]: http://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html
