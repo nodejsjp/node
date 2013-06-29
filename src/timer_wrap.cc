@@ -24,19 +24,17 @@
 
 namespace node {
 
-using v8::Object;
-using v8::Handle;
-using v8::Local;
-using v8::Persistent;
-using v8::Value;
-using v8::HandleScope;
-using v8::FunctionTemplate;
-using v8::String;
-using v8::Function;
-using v8::TryCatch;
-using v8::Context;
 using v8::Arguments;
+using v8::Function;
+using v8::FunctionTemplate;
+using v8::Handle;
+using v8::HandleScope;
 using v8::Integer;
+using v8::Local;
+using v8::Object;
+using v8::Persistent;
+using v8::String;
+using v8::Value;
 
 static Persistent<String> ontimeout_sym;
 
@@ -50,6 +48,8 @@ class TimerWrap : public HandleWrap {
     Local<FunctionTemplate> constructor = FunctionTemplate::New(New);
     constructor->InstanceTemplate()->SetInternalFieldCount(1);
     constructor->SetClassName(String::NewSymbol("Timer"));
+
+    NODE_SET_METHOD(constructor, "now", Now);
 
     NODE_SET_PROTOTYPE_METHOD(constructor, "close", HandleWrap::Close);
     NODE_SET_PROTOTYPE_METHOD(constructor, "ref", HandleWrap::Ref);
@@ -81,10 +81,9 @@ class TimerWrap : public HandleWrap {
   }
 
   TimerWrap(Handle<Object> object)
-      : HandleWrap(object, (uv_handle_t*) &handle_) {
+      : HandleWrap(object, reinterpret_cast<uv_handle_t*>(&handle_)) {
     int r = uv_timer_init(uv_default_loop(), &handle_);
     assert(r == 0);
-    handle_.data = this;
   }
 
   ~TimerWrap() {
@@ -161,6 +160,13 @@ class TimerWrap : public HandleWrap {
 
     Local<Value> argv[1] = { Integer::New(status, node_isolate) };
     MakeCallback(wrap->object_, ontimeout_sym, ARRAY_SIZE(argv), argv);
+  }
+
+  static Handle<Value> Now(const Arguments& args) {
+    HandleScope scope(node_isolate);
+
+    double now = static_cast<double>(uv_now(uv_default_loop()));
+    return scope.Close(v8::Number::New(now));
   }
 
   uv_timer_t handle_;

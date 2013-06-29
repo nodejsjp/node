@@ -3,13 +3,91 @@
     Stability: 5 - Locked
 
 <!--
-These functions are in the module `'util'`. Use `require('util')` to access
-them.
+These functions are in the module `'util'`. Use `require('util')` to
+access them.
 -->
 
 これらの関数はモジュール `'util'` 内にあります。
 `require('util')` を使うことでこれらにアクセスします。
 
+<!--
+The `util` module is primarily designed to support the needs of Node's
+internal APIs.  Many of these utilities are useful for your own
+programs.  If you find that these functions are lacking for your
+purposes, however, you are encouraged to write your own utilities.  We
+are not interested in any future additions to the `util` module that
+are unnecessary for Node's internal functionality.
+-->
+
+`util` モジュールは、主に Node 自身の内部 API によるニーズを満たすために
+設計されています。
+これらのユーティリティの多くはあなたのプログラムでも役に立つでしょう。
+しかしながら、もしこれらの機能にあなたの目的とするものが欠けているとしたら、
+その時はあなた自身のユーティリティを作成する時です。
+私たちは Node 内部の機能のために不必要などんな特性も
+`util` モジュールに加えることに関心がありません。
+
+## util.debuglog(section)
+
+<!--
+* `section` {String} The section of the program to be debugged
+* Returns: {Function} The logging function
+-->
+
+* `section` {String} デバッグするプログラムのセクション
+* Returns: {Function} ロギング関数
+
+<!--
+This is used to create a function which conditionally writes to stderr
+based on the existence of a `NODE_DEBUG` environment variable.  If the
+`section` name appears in that environment variable, then the returned
+function will be similar to `console.error()`.  If not, then the
+returned function is a no-op.
+-->
+
+これは、`NDOE_DEBUG` 環境変数の有無に基づいて標準エラー出力に
+条件付きで出力する関数を作成して返します。
+もし `section` 名が環境変数に出現するなら、返される関数は
+`console.error()` と同じです。そうでなければ、何もしない関数が返されます。
+
+<!--
+For example:
+-->
+
+例:
+
+```javascript
+var debuglog = util.debuglog('foo');
+
+var bar = 123;
+debuglog('hello from foo [%d]', bar);
+```
+
+<!--
+If this program is run with `NODE_DEBUG=foo` in the environment, then
+it will output something like:
+-->
+
+もしプログラムが環境 `NODE_DEBUG=foo` で実行されると、
+これは次のように出力します。
+
+    FOO 3245: hello from foo [123]
+
+<!--
+where `3245` is the process id.  If it is not run with that
+environment variable set, then it will not print anything.
+-->
+
+`3245` はプロセス ID です。
+環境を設定することなく実行すると、これは出力されません。
+
+<!--
+You may separate multiple `NODE_DEBUG` environment variables with a
+comma.  For example, `NODE_DEBUG=fs,net,tls`.
+-->
+
+`NODE_DEBUG` 環境変数はカンマ区切りで複数の値を設定することができます。
+たとえば、`NODE_DEBUG=fs,net,tls` 。
 
 ## util.format(format, [...])
 
@@ -75,49 +153,6 @@ Each argument is converted to a string with `util.inspect()`.
     util.format(1, 2, 3); // '1 2 3'
 
 
-## util.debug(string)
-
-<!--
-A synchronous output function. Will block the process and
-output `string` immediately to `stderr`.
--->
-
-同期的な出力関数です。
-プロセスをブロックして即座に `string` を `stderr` に出力します。
-
-    require('util').debug('message on stderr');
-
-## util.error([...])
-
-<!--
-Same as `util.debug()` except this will output all arguments immediately to
-`stderr`.
--->
-
-全ての引数をすぐに `stderr` に出力することを除いて `util.debug()` と同じです。
-
-## util.puts([...])
-
-<!--
-A synchronous output function. Will block the process and output all arguments
-to `stdout` with newlines after each argument.
--->
-
-同期的な出力関数です。
-プロセスをブロックして即座に `stdout` に出力します。
-各引数は改行が付加されます。
-
-## util.print([...])
-
-<!--
-A synchronous output function. Will block the process, cast each argument to a
-string then output to `stdout`. Does not place newlines after each argument.
--->
-
-同期的な出力関数です。
-プロセスをブロックして、引数を文字列に変換して `stdout` に出力します。
-各引数に改行は付加されません。
-
 ## util.log(string)
 
 <!--
@@ -127,7 +162,6 @@ Output with timestamp on `stdout`.
 タイムスタンプとともに `stdout` へ出力します。
 
     require('util').log('Timestamped message.');
-
 
 ## util.inspect(object, [options])
 
@@ -195,6 +229,8 @@ Example of inspecting all properties of the `util` object:
 
 ### Customizing `util.inspect` colors
 
+<!-- type=misc -->
+
 <!--
 Color output (if enabled) of `util.inspect` is customizable globally
 via `util.inspect.styles` and `util.inspect.colors` objects.
@@ -245,6 +281,8 @@ There are also `bold`, `italic`, `underline` and `inverse` codes.
 事前に定義された色は: `white`、`grey`、`black`、`blue`、`cyan`、
 `green`、`magenta`、`red`、および `yellow` です。
 `bold`、`italic`、`underline`、および `inverse` コードを使うこともできます。
+
+<!-- type=misc -->
 
 <!--
 Objects also may define their own `inspect(depth)` function which `util.inspect()`
@@ -355,29 +393,6 @@ Returns `true` if the given "object" is an `Error`. `false` otherwise.
       // false
 
 
-## util.pump(readableStream, writableStream, [callback])
-
-<!--
-    Stability: 0 - Deprecated: Use readableStream.pipe(writableStream)
--->
-
-    Stability: 0 - Deprecated: `readableStream.pipe(writableStream)` を使ってください。
-
-<!--
-Read the data from `readableStream` and send it to the `writableStream`.
-When `writableStream.write(data)` returns `false` `readableStream` will be
-paused until the `drain` event occurs on the `writableStream`. `callback` gets
-an error as its only argument and is called when `writableStream` is closed or
-when an error occurs.
--->
-
-`readableStream` からデータを読み、それ を`writableStream` に送ります。
-`writableStream.write(data)` が `false` を返す場合、
-`writableStream` が `drain` イベントを生成するまで、
-`readableStream` は中断します。
-`writableStream` がクローズされるかエラーが発生すると、`callback` は error を唯一の引数として呼び出されます。
-
-
 ## util.inherits(constructor, superConstructor)
 
 <!--
@@ -422,3 +437,55 @@ through the `constructor.super_` property.
         console.log('Received data: "' + data + '"');
     })
     stream.write("It works!"); // Received data: "It works!"
+
+
+## util.debug(string)
+
+    Stability: 0 - Deprecated: use console.error() instead.
+
+<!--
+Deprecated predecessor of `console.error`.
+-->
+
+`console.error()` に置き換えられて廃止予定です。
+
+## util.error([...])
+
+    Stability: 0 - Deprecated: Use console.error() instead.
+
+<!--
+Deprecated predecessor of `console.error`.
+-->
+
+`console.error()` に置き換えられて廃止予定です。
+
+## util.puts([...])
+
+    Stability: 0 - Deprecated: Use console.log() instead.
+
+<!--
+Deprecated predecessor of `console.log`.
+-->
+
+`console.log()` に置き換えられて廃止予定です。
+
+## util.print([...])
+
+    Stability: 0 - Deprecated: Use `console.log` instead.
+
+<!--
+Deprecated predecessor of `console.log`.
+-->
+
+`console.log()` に置き換えられて廃止予定です。
+
+
+## util.pump(readableStream, writableStream, [callback])
+
+    Stability: 0 - Deprecated: Use readableStream.pipe(writableStream)
+
+<!--
+Deprecated predecessor of `stream.pipe()`.
+-->
+
+`stream.pipe()` に置き換えられて廃止予定です。

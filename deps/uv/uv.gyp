@@ -20,7 +20,8 @@
         'conditions': [
           ['OS=="solaris"', {
             'cflags': [ '-pthreads' ],
-          }, {
+          }],
+          ['OS not in "solaris android"', {
             'cflags': [ '-pthread' ],
           }],
         ],
@@ -159,18 +160,26 @@
             'conditions': [
               ['OS=="solaris"', {
                 'ldflags': [ '-pthreads' ],
-              }, {
+              }],
+              ['OS != "solaris" and OS != "android"', {
                 'ldflags': [ '-pthread' ],
               }],
             ],
           },
           'conditions': [
-            ['"<(library)" == "shared_library"', {
+            ['library=="shared_library"', {
               'cflags': [ '-fPIC' ],
+            }],
+            ['library=="shared_library" and OS!="mac"', {
+              'link_settings': {
+                # Must correspond with UV_VERSION_MAJOR and UV_VERSION_MINOR
+                # in src/version.c
+                'libraries': [ '-Wl,-soname,libuv.so.0.11' ],
+              },
             }],
           ],
         }],
-        [ 'OS=="linux" or OS=="mac"', {
+        [ 'OS in "linux mac android"', {
           'sources': [ 'src/unix/proctitle.c' ],
         }],
         [ 'OS=="mac"', {
@@ -204,6 +213,18 @@
           ],
           'link_settings': {
             'libraries': [ '-ldl', '-lrt' ],
+          },
+        }],
+        [ 'OS=="android"', {
+          'sources': [
+            'src/unix/linux-core.c',
+            'src/unix/linux-inotify.c',
+            'src/unix/linux-syscalls.c',
+            'src/unix/linux-syscalls.h',
+            'src/unix/pthread-fixes.c',
+          ],
+          'link_settings': {
+            'libraries': [ '-ldl' ],
           },
         }],
         [ 'OS=="solaris"', {

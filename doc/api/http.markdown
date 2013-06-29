@@ -840,7 +840,9 @@ Options:
 - `socketPath`: Unix Domain Socket (use one of host:port or socketPath)
 - `method`: A string specifying the HTTP request method. Defaults to `'GET'`.
 - `path`: Request path. Defaults to `'/'`. Should include query string if any.
-  E.G. `'/index.html?page=12'`
+  E.G. `'/index.html?page=12'`. An exception is thrown when the request path
+  contains illegal characters. Currently, only spaces are rejected but that
+  may change in the future.
 - `headers`: An object containing request headers.
 - `auth`: Basic authentication i.e. `'user:password'` to compute an
   Authorization header.
@@ -860,7 +862,9 @@ Options:
 - `method`: HTTP リクエストのメソッドの文字列。デフォルトは `'GET'` です。
 - `path`: リクエストのパス。デフォルトは `'/'` です。
   必要なら問い合わせ文字列を含めるべきです．
-  例 `'/index.html?page=12'`
+  例 `'/index.html?page=12'` 。リクエストパスが不正な文字を含んでいる場合は、
+  例外がスローされます。現在はスペースだけが拒否されますが、
+  それは将来変更されるかもしれません。
 - `headers`: リクエストヘッダを含むオブジェクト。
 - `auth`: ベーシック認証すなわち Authorization ヘッダのための
   `'user:password'`。

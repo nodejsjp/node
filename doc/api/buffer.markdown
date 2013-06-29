@@ -174,6 +174,189 @@ otherwise.
 
 `encoding` が正しければ `true`、それ以外は `false` を返します。
 
+### Class Method: Buffer.isBuffer(obj)
+
+* `obj` Object
+* Return: Boolean
+
+<!--
+Tests if `obj` is a `Buffer`.
+-->
+
+`obj` が `Buffer` かどうかテストします。
+
+### Class Method: Buffer.byteLength(string, [encoding])
+
+<!--
+* `string` String
+* `encoding` String, Optional, Default: 'utf8'
+* Return: Number
+-->
+
+* `string` String
+* `encoding` String, 任意, デフォルト: 'utf8'
+* Return: Number
+
+<!--
+Gives the actual byte length of a string. `encoding` defaults to `'utf8'`.
+This is not the same as `String.prototype.length` since that returns the
+number of *characters* in a string.
+-->
+
+文字列の実際のバイト数を返します。`encoding` のデフォルトは `'utf8'` です。
+これは文字列の*文字*数を返す `String.prototype.length` と同じではありません。
+
+<!--
+Example:
+-->
+
+例:
+
+    str = '\u00bd + \u00bc = \u00be';
+
+    console.log(str + ": " + str.length + " characters, " +
+      Buffer.byteLength(str, 'utf8') + " bytes");
+
+    // ½ + ¼ = ¾: 9 characters, 12 bytes
+
+### Class Method: Buffer.concat(list, [totalLength])
+
+<!--
+* `list` {Array} List of Buffer objects to concat
+* `totalLength` {Number} Total length of the buffers when concatenated
+-->
+
+* `list` {Array} 結合するバッファのリスト
+* `totalLength` {Number} 結合されるバッファ全体の長さ
+
+<!--
+Returns a buffer which is the result of concatenating all the buffers in
+the list together.
+-->
+
+リストに含まれるバッファ全体を結合した結果のバッファを返します。
+
+<!--
+If the list has no items, or if the totalLength is 0, then it returns a
+zero-length buffer.
+-->
+
+リストが空の場合、または `totalLength` が 0 の場合は長さが
+0 のバッファを返します。
+
+<!--
+If the list has exactly one item, then the first item of the list is
+returned.
+-->
+
+リストが一つだけの要素を持つ場合、リストの先頭要素が返されます。
+
+<!--
+If the list has more than one item, then a new Buffer is created.
+-->
+
+リストが複数の要素を持つ場合、新しいバッファが作成されます。
+
+<!--
+If totalLength is not provided, it is read from the buffers in the list.
+However, this adds an additional loop to the function, so it is faster
+to provide the length explicitly.
+-->
+
+`totalLength` が与えられない場合はリスト中のバッファから求められます。
+しかし、これは余計なループが必要になるため、明示的に長さを指定する方が
+高速です。
+
+### Class Method: Buffer.alloc(length, [receiver])
+
+<!--
+* `length` Number
+* `receiver` Object, Optional, Default: `new Object`
+-->
+
+* `length` Number
+* `receiver` Object, 任意, デフォルト: `new Object`
+
+
+<!--
+**(EXPERIMENTAL)** Returns object with allocated external array data.
+-->
+
+**(実験的)** オブジェクトを外部配列のデータに割り当てて返します。
+
+<!--
+Buffers are backed by a simple allocator that only handles the assignation of
+external raw memory. This exposes that functionality.
+-->
+
+Buffer は外部にある生のメモリを割り当てるだけの単純なアロケータによって
+扱われます。これはその機能を公開します。
+
+<!--
+No pooling is performed for these allocations. So there's no form of memory
+leak.
+-->
+
+これらの割り当てにプーリングは適用されません。
+そのため、メモリリークする形式はありません。
+
+<!--
+This can be used to create your own Buffer-like classes.
+-->
+
+これは Buffer に似た独自のクラスを作成するために使用することができます。
+
+    function SimpleData(n) {
+      this.length = n;
+      Buffer.alloc(this.length, this);
+    }
+
+    SimpleData.prototype = { /* ... */ };
+
+### Class Method: Buffer.dispose(obj)
+
+* `obj` Object
+
+
+<!--
+**(EXPERIMENTAL)** Free memory that has been allocated to an object via
+`Buffer.alloc`.
+-->
+
+**(実験的)** `Buffer.alloc()` によって割り当てられたオブジェクトを解放します。
+
+    var a = {};
+    Buffer.alloc(3, a);
+
+    // { '0': 0, '1': 0, '2': 0 }
+
+    Buffer.dispose(a);
+
+    // {}
+
+### buf.length
+
+* Number
+
+<!--
+The size of the buffer in bytes.  Note that this is not necessarily the size
+of the contents. `length` refers to the amount of memory allocated for the
+buffer object.  It does not change when the contents of the buffer are changed.
+-->
+
+バイト数によるバッファのサイズ。
+これは実際の内容のサイズではないことに注意してください。
+`length` はバッファオブジェクトに割り当てられたメモリ全体を参照します。
+
+    buf = new Buffer(1234);
+
+    console.log(buf.length);
+    buf.write("some string", 0, "ascii");
+    console.log(buf.length);
+
+    // 1234
+    // 1234
+
 ### buf.write(string, [offset], [length], [encoding])
 
 <!--
@@ -301,116 +484,6 @@ Example: copy an ASCII string into a buffer, one byte at a time:
     console.log(buf);
 
     // node.js
-
-### Class Method: Buffer.isBuffer(obj)
-
-* `obj` Object
-* Return: Boolean
-
-<!--
-Tests if `obj` is a `Buffer`.
--->
-
-`obj` が `Buffer` かどうかテストします。
-
-### Class Method: Buffer.byteLength(string, [encoding])
-
-* `string` String
-* `encoding` String, Optional, Default: 'utf8'
-* Return: Number
-
-<!--
-Gives the actual byte length of a string. `encoding` defaults to `'utf8'`.
-This is not the same as `String.prototype.length` since that returns the
-number of *characters* in a string.
--->
-
-文字列の実際のバイト数を返します。`encoding` のデフォルトは `'utf8'` です。
-これは文字列の*文字*数を返す `String.prototype.length` と同じではありません。
-
-<!--
-Example:
--->
-
-例:
-
-    str = '\u00bd + \u00bc = \u00be';
-
-    console.log(str + ": " + str.length + " characters, " +
-      Buffer.byteLength(str, 'utf8') + " bytes");
-
-    // ½ + ¼ = ¾: 9 characters, 12 bytes
-
-### Class Method: Buffer.concat(list, [totalLength])
-
-<!--
-* `list` {Array} List of Buffer objects to concat
-* `totalLength` {Number} Total length of the buffers when concatenated
--->
-
-* `list` {Array} 結合するバッファのリスト
-* `totalLength` {Number} 結合されるバッファ全体の長さ
-
-<!--
-Returns a buffer which is the result of concatenating all the buffers in
-the list together.
--->
-
-リストに含まれるバッファ全体を結合した結果のバッファを返します。
-
-<!--
-If the list has no items, or if the totalLength is 0, then it returns a
-zero-length buffer.
--->
-
-リストが空の場合、または `totalLength` が 0 の場合は長さが
-0 のバッファを返します。
-
-<!--
-If the list has exactly one item, then the first item of the list is
-returned.
--->
-
-リストが一つだけの要素を持つ場合、リストの先頭要素が返されます。
-
-<!--
-If the list has more than one item, then a new Buffer is created.
--->
-
-リストが複数の要素を持つ場合、新しいバッファが作成されます。
-
-<!--
-If totalLength is not provided, it is read from the buffers in the list.
-However, this adds an additional loop to the function, so it is faster
-to provide the length explicitly.
--->
-
-`totalLength` が与えられない場合はリスト中のバッファから求められます。
-しかし、これは余計なループが必要になるため、明示的に長さを指定する方が
-高速です。
-
-### buf.length
-
-* Number
-
-<!--
-The size of the buffer in bytes.  Note that this is not necessarily the size
-of the contents. `length` refers to the amount of memory allocated for the
-buffer object.  It does not change when the contents of the buffer are changed.
--->
-
-バイト数によるバッファのサイズ。
-これは実際の内容のサイズではないことに注意してください。
-`length` はバッファオブジェクトに割り当てられたメモリ全体を参照します。
-
-    buf = new Buffer(1234);
-
-    console.log(buf.length);
-    buf.write("some string", 0, "ascii");
-    console.log(buf.length);
-
-    // 1234
-    // 1234
 
 ### buf.copy(targetBuffer, [targetStart], [sourceStart], [sourceEnd])
 
@@ -1163,21 +1236,51 @@ Note that this is a property on the buffer module returned by
 ## Class: SlowBuffer
 
 <!--
-This class is primarily for internal use.  JavaScript programs should
-use Buffer instead of using SlowBuffer.
-
-In order to avoid the overhead of allocating many C++ Buffer objects for
-small blocks of memory in the lifetime of a server, Node allocates memory
-in 8Kb (8192 byte) chunks.  If a buffer is smaller than this size, then it
-will be backed by a parent SlowBuffer object.  If it is larger than this,
-then Node will allocate a SlowBuffer slab for it directly.
+Returns an un-pooled `Buffer`.
 -->
 
-このクラスは主に内部利用のためのものです。JavaScsript プログラムは SlowBuffer
-よりも Buffer を使用すべきです。
+プールされていない `Buffer` オブジェクトを返します。
 
-サーバの動作中に、小さなメモリブロックのために多くの C++ バッファオブジェクトが
-割り当てられるオーバーヘッドを避けるため、Node はメモリを 8Kb (8192 バイト) の
-チャンク内に割り当てます。もしバッファがこのサイズより小さければ、それは
-親の SlowBuffer に支えられます。それより大きければ、Node は SlowBuffer を
-直接割り当てます。
+<!--
+In order to avoid the garbage collection overhead of creating many individually
+allocated Buffers, by default allocations under 4KB are sliced from a single
+larger allocated object. This approach improves both performance and memory
+usage since v8 does not need to track and cleanup as many `Persistent` objects.
+-->
+
+多くの独立したバッファを割り当てることによるガーベッジコレクションの
+オーバーヘッドを避けるため、デフォルトでは 4KB 以下のバッファは大きな
+単一のバッファから切り出されて割り当てられます。
+このアプローチは、v8 が多くの「永続的な」オブジェクトを追跡して
+クリーンアップする必要を無くすため、パフォーマンスとメモリ使用量の両方を
+改善します。
+
+<!--
+In the case where a developer may need to retain a small chunk of memory from a
+pool for an indeterminate amount of time it may be appropriate to create an
+un-pooled Buffer instance using SlowBuffer and copy out the relevant bits.
+-->
+
+プールから得た小さなメモリ片を不確定の時間保持する必要がある場合は、
+`SlowBuffer` を使ってプールされていない `Buffer` のインスタンスを作成し、
+関連したビットを全てコピーすることが適切な場合があります。
+
+    // need to keep around a few small chunks of memory
+    var store = [];
+
+    socket.on('readable', function() {
+      var data = socket.read();
+      // allocate for retained data
+      var sb = new SlowBuffer(10);
+      // copy the data into the new allocation
+      data.copy(sb, 0, 0, 10);
+      store.push(sb);
+    });
+
+<!--
+Though this should used sparingly and only be a last resort *after* a developer
+has actively observed undue memory retention in their applications.
+-->
+
+しかし、これはアプリケーションで不適切なメモリの保持が盛大に観測された *後で*、
+最後の手段として控えめに使用されるべきです。

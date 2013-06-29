@@ -107,6 +107,8 @@ enum BuiltinExtraArguments {
                                     Code::kNoExtraICState)              \
   V(NotifyDeoptimized,              BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
+  V(NotifySoftDeoptimized,          BUILTIN, UNINITIALIZED,             \
+                                    Code::kNoExtraICState)              \
   V(NotifyLazyDeoptimized,          BUILTIN, UNINITIALIZED,             \
                                     Code::kNoExtraICState)              \
   V(NotifyStubFailure,              BUILTIN, UNINITIALIZED,             \
@@ -141,6 +143,8 @@ enum BuiltinExtraArguments {
   V(LoadIC_Megamorphic,             LOAD_IC, MEGAMORPHIC,               \
                                     Code::kNoExtraICState)              \
   V(LoadIC_Getter_ForDeopt,         LOAD_IC, MONOMORPHIC,               \
+                                    Code::kNoExtraICState)              \
+  V(LoadIC_Slow,                    LOAD_IC, GENERIC,                   \
                                     Code::kNoExtraICState)              \
                                                                         \
   V(KeyedLoadIC_Initialize,         KEYED_LOAD_IC, UNINITIALIZED,       \
@@ -380,6 +384,7 @@ class Builtins {
   static void Generate_LazyCompile(MacroAssembler* masm);
   static void Generate_LazyRecompile(MacroAssembler* masm);
   static void Generate_NotifyDeoptimized(MacroAssembler* masm);
+  static void Generate_NotifySoftDeoptimized(MacroAssembler* masm);
   static void Generate_NotifyLazyDeoptimized(MacroAssembler* masm);
   static void Generate_NotifyOSR(MacroAssembler* masm);
   static void Generate_NotifyStubFailure(MacroAssembler* masm);

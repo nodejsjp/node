@@ -908,6 +908,26 @@ The amount of bytes sent.
 
 `net.Socket` のインスタンスは以下のイベントを持つ [EventEmitter][] です:
 
+### Event: 'lookup'
+
+<!--
+Emitted after resolving the hostname but before connecting.
+Not applicable to UNIX sockets.
+-->
+
+ホスト名を解決した後、ただし接続の前に生成されます。
+UNIX ソケットには適用されません。
+
+<!--
+* `err` {Error | Null} The error object.  See [dns.lookup()][].
+* `address` {String} The IP address.
+* `family` {String | Null} The address type.  See [dns.lookup()][].
+-->
+
+* `err` {Error | Null} エラーオブジェクト。  [dns.lookup()][] 参照。
+* `address` {String} IP アドレス。
+* `family` {String | Null} アドレスファミリ。 [dns.lookup()][] 参照。
+
 ### Event: 'connect'
 
 <!--
@@ -1046,6 +1066,7 @@ Returns true if input is a version 6 IP address, otherwise returns false.
 
 ['connect']: #net_event_connect
 ['connection']: #net_event_connection
+[dns.lookup()]: dns.html#dns_dns_lookup_domain_family_callback
 ['end']: #net_event_end
 [EventEmitter]: events.html#events_class_events_eventemitter
 ['listening']: #net_event_listening

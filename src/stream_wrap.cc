@@ -41,10 +41,6 @@ namespace node {
 using v8::AccessorInfo;
 using v8::Arguments;
 using v8::Array;
-using v8::Context;
-using v8::Exception;
-using v8::Function;
-using v8::FunctionTemplate;
 using v8::Handle;
 using v8::HandleScope;
 using v8::Integer;
@@ -53,25 +49,7 @@ using v8::Number;
 using v8::Object;
 using v8::Persistent;
 using v8::String;
-using v8::TryCatch;
 using v8::Value;
-
-typedef class ReqWrap<uv_shutdown_t> ShutdownWrap;
-
-class WriteWrap: public ReqWrap<uv_write_t> {
- public:
-  void* operator new(size_t size, char* storage) { return storage; }
-
-  // This is just to keep the compiler happy. It should never be called, since
-  // we don't use exceptions in node.
-  void operator delete(void* ptr, char* storage) { assert(0); }
-
- protected:
-  // People should not be using the non-placement new and delete operator on a
-  // WriteWrap. Ensure this never happens.
-  void* operator new (size_t size) { assert(0); };
-  void operator delete(void* ptr) { assert(0); };
-};
 
 
 static Persistent<String> buffer_sym;
@@ -110,11 +88,10 @@ void StreamWrap::Initialize(Handle<Object> target) {
 
 
 StreamWrap::StreamWrap(Handle<Object> object, uv_stream_t* stream)
-    : HandleWrap(object, (uv_handle_t*)stream) {
+    : HandleWrap(object, reinterpret_cast<uv_handle_t*>(stream)),
+      default_callbacks_(this) {
   stream_ = stream;
-  if (stream) {
-    stream->data = this;
-  }
+  callbacks_ = &default_callbacks_;
 }
 
 
@@ -131,13 +108,6 @@ Handle<Value> StreamWrap::GetFD(Local<String>, const AccessorInfo& args) {
 }
 
 
-void StreamWrap::SetHandle(uv_handle_t* h) {
-  HandleWrap::SetHandle(h);
-  stream_ = reinterpret_cast<uv_stream_t*>(h);
-  stream_->data = this;
-}
-
-
 void StreamWrap::UpdateWriteQueueSize() {
   HandleScope scope(node_isolate);
   object_->Set(write_queue_size_sym,
@@ -151,7 +121,7 @@ Handle<Value> StreamWrap::ReadStart(const Arguments& args) {
   UNWRAP(StreamWrap)
 
   bool ipc_pipe = wrap->stream_->type == UV_NAMED_PIPE &&
-                  ((uv_pipe_t*)wrap->stream_)->ipc;
+                  reinterpret_cast<uv_pipe_t*>(wrap->stream_)->ipc;
   int r;
   if (ipc_pipe) {
     r = uv_read2_start(wrap->stream_, OnAlloc, OnRead2);
@@ -183,8 +153,8 @@ Handle<Value> StreamWrap::ReadStop(const Arguments& args) {
 uv_buf_t StreamWrap::OnAlloc(uv_handle_t* handle, size_t suggested_size) {
   StreamWrap* wrap = static_cast<StreamWrap*>(handle->data);
   assert(wrap->stream_ == reinterpret_cast<uv_stream_t*>(handle));
-  char* buf = slab_allocator->Allocate(wrap->object_, suggested_size);
-  return uv_buf_init(buf, suggested_size);
+
+  return wrap->callbacks_->DoAlloc(handle, suggested_size);
 }
 
 
@@ -210,8 +180,10 @@ static Local<Object> AcceptHandle(uv_stream_t* pipe) {
 }
 
 
-void StreamWrap::OnReadCommon(uv_stream_t* handle, ssize_t nread,
-    uv_buf_t buf, uv_handle_type pending) {
+void StreamWrap::OnReadCommon(uv_stream_t* handle,
+                              ssize_t nread,
+                              uv_buf_t buf,
+                              uv_handle_type pending) {
   HandleScope scope(node_isolate);
 
   StreamWrap* wrap = static_cast<StreamWrap*>(handle->data);
@@ -220,56 +192,15 @@ void StreamWrap::OnReadCommon(uv_stream_t* handle, ssize_t nread,
   // uv_close() on the handle.
   assert(wrap->object_.IsEmpty() == false);
 
-  if (nread < 0)  {
-    // If libuv reports an error or EOF it *may* give us a buffer back. In that
-    // case, return the space to the slab.
-    if (buf.base != NULL) {
-      slab_allocator->Shrink(wrap->object_, buf.base, 0);
+  if (nread > 0) {
+    if (wrap->stream_->type == UV_TCP) {
+      NODE_COUNT_NET_BYTES_RECV(nread);
+    } else if (wrap->stream_->type == UV_NAMED_PIPE) {
+      NODE_COUNT_PIPE_BYTES_RECV(nread);
     }
-
-    SetErrno(uv_last_error(uv_default_loop()));
-    MakeCallback(wrap->object_, onread_sym, 0, NULL);
-    return;
   }
 
-  assert(buf.base != NULL);
-  Local<Object> slab = slab_allocator->Shrink(wrap->object_,
-                                              buf.base,
-                                              nread);
-
-  if (nread == 0) return;
-  assert(static_cast<size_t>(nread) <= buf.len);
-
-  int argc = 3;
-  Local<Value> argv[4] = {
-    slab,
-    Integer::NewFromUnsigned(buf.base - Buffer::Data(slab), node_isolate),
-    Integer::NewFromUnsigned(nread, node_isolate)
-  };
-
-  Local<Object> pending_obj;
-  if (pending == UV_TCP) {
-    pending_obj = AcceptHandle<TCPWrap, uv_tcp_t>(handle);
-  } else if (pending == UV_NAMED_PIPE) {
-    pending_obj = AcceptHandle<PipeWrap, uv_pipe_t>(handle);
-  } else if (pending == UV_UDP) {
-    pending_obj = AcceptHandle<UDPWrap, uv_udp_t>(handle);
-  } else {
-    assert(pending == UV_UNKNOWN_HANDLE);
-  }
-
-  if (!pending_obj.IsEmpty()) {
-    argv[3] = pending_obj;
-    argc++;
-  }
-
-  if (wrap->stream_->type == UV_TCP) {
-    NODE_COUNT_NET_BYTES_RECV(nread);
-  } else if (wrap->stream_->type == UV_NAMED_PIPE) {
-    NODE_COUNT_PIPE_BYTES_RECV(nread);
-  }
-
-  MakeCallback(wrap->object_, onread_sym, argc, argv);
+  wrap->callbacks_->DoRead(handle, nread, buf, pending);
 }
 
 
@@ -295,92 +226,6 @@ size_t StreamWrap::WriteBuffer(Handle<Value> val, uv_buf_t* buf) {
 }
 
 
-template <WriteEncoding encoding>
-size_t StreamWrap::WriteStringImpl(char* storage,
-                                   size_t storage_size,
-                                   Handle<Value> val,
-                                   uv_buf_t* buf) {
-  assert(val->IsString());
-  Handle<String> string = val.As<String>();
-
-  size_t data_size;
-  switch (encoding) {
-   case kAscii:
-    data_size = string->WriteOneByte(
-        reinterpret_cast<uint8_t*>(storage),
-        0,
-        -1,
-        String::NO_NULL_TERMINATION | String::HINT_MANY_WRITES_EXPECTED);
-    break;
-
-   case kUtf8:
-    data_size = string->WriteUtf8(
-        storage,
-        -1,
-        NULL,
-        String::NO_NULL_TERMINATION | String::HINT_MANY_WRITES_EXPECTED);
-    break;
-
-   case kUcs2: {
-    int chars_copied = string->Write(
-        reinterpret_cast<uint16_t*>(storage),
-        0,
-        -1,
-        String::NO_NULL_TERMINATION | String::HINT_MANY_WRITES_EXPECTED);
-    data_size = chars_copied * sizeof(uint16_t);
-    break;
-   }
-
-   default:
-    // Unreachable
-    assert(0);
-  }
-  assert(data_size <= storage_size);
-
-  buf->base = storage;
-  buf->len = data_size;
-
-  return data_size;
-}
-
-
-template <WriteEncoding encoding>
-size_t StreamWrap::GetStringSizeImpl(Handle<Value> val) {
-  assert(val->IsString());
-  Handle<String> string = val.As<String>();
-
-  switch (encoding) {
-    case kAscii:
-      return string->Length();
-      break;
-
-    case kUtf8:
-      if (string->Length() < 65536) {
-        // A single UCS2 codepoint never takes up more than 3 utf8 bytes.
-        // Unless the string is really long we just allocate so much space that
-        // we're certain the string fits in there entirely.
-        // TODO: maybe check handle->write_queue_size instead of string length?
-        return 3 * string->Length();
-      } else {
-        // The string is really long. Compute the allocation size that we
-        // actually need.
-        return string->Utf8Length();
-      }
-      break;
-
-    case kUcs2:
-      return string->Length() * sizeof(uint16_t);
-      break;
-
-    default:
-      // Unreachable.
-      assert(0);
-  }
-
-  return 0;
-}
-
-
 Handle<Value> StreamWrap::WriteBuffer(const Arguments& args) {
   HandleScope scope(node_isolate);
 
@@ -390,24 +235,22 @@ Handle<Value> StreamWrap::WriteBuffer(const Arguments& args) {
   assert(args.Length() >= 1 && Buffer::HasInstance(args[0]));
   size_t length = Buffer::Length(args[0]);
   char* storage = new char[sizeof(WriteWrap)];
-  WriteWrap* req_wrap = new (storage) WriteWrap();
+  WriteWrap* req_wrap = new (storage) WriteWrap(wrap);
 
   req_wrap->object_->SetHiddenValue(buffer_sym, args[0]);
 
   uv_buf_t buf;
   WriteBuffer(args[0], &buf);
 
-  int r = uv_write(&req_wrap->req_,
-                   wrap->stream_,
-                   &buf,
-                   1,
-                   StreamWrap::AfterWrite);
+  int r = wrap->callbacks_->DoWrite(req_wrap,
+                                    &buf,
+                                    1,
+                                    NULL,
+                                    StreamWrap::AfterWrite);
 
   req_wrap->Dispatched();
   req_wrap->object_->Set(bytes_sym,
                          Integer::NewFromUnsigned(length, node_isolate));
-
-  wrap->UpdateWriteQueueSize();
 
   if (r) {
     SetErrno(uv_last_error(uv_default_loop()));
@@ -415,18 +258,12 @@ Handle<Value> StreamWrap::WriteBuffer(const Arguments& args) {
     delete[] storage;
     return scope.Close(v8::Null(node_isolate));
   } else {
-    if (wrap->stream_->type == UV_TCP) {
-      NODE_COUNT_NET_BYTES_SENT(length);
-    } else if (wrap->stream_->type == UV_NAMED_PIPE) {
-      NODE_COUNT_PIPE_BYTES_SENT(length);
-    }
-
     return scope.Close(req_wrap->object_);
   }
 }
 
 
-template <WriteEncoding encoding>
+template <enum encoding encoding>
 Handle<Value> StreamWrap::WriteStringImpl(const Arguments& args) {
   HandleScope scope(node_isolate);
   int r;
@@ -439,7 +276,13 @@ Handle<Value> StreamWrap::WriteStringImpl(const Arguments& args) {
   Local<String> string = args[0]->ToString();
 
   // Compute the size of the storage that the string will be flattened into.
-  size_t storage_size = GetStringSizeImpl<encoding>(string);
+  // For UTF8 strings that are very long, go ahead and take the hit for
+  // computing their actual size, rather than tripling the storage.
+  size_t storage_size;
+  if (encoding == UTF8 && string->Length() > 65535)
+    storage_size = StringBytes::Size(string, encoding);
+  else
+    storage_size = StringBytes::StorageSize(string, encoding);
 
   if (storage_size > INT_MAX) {
     uv_err_t err;
@@ -449,25 +292,30 @@ Handle<Value> StreamWrap::WriteStringImpl(const Arguments& args) {
   }
 
   char* storage = new char[sizeof(WriteWrap) + storage_size + 15];
-  WriteWrap* req_wrap = new (storage) WriteWrap();
+  WriteWrap* req_wrap = new (storage) WriteWrap(wrap);
 
   char* data = reinterpret_cast<char*>(ROUND_UP(
       reinterpret_cast<uintptr_t>(storage) + sizeof(WriteWrap), 16));
 
+  size_t data_size;
+  data_size = StringBytes::Write(data, storage_size, string, encoding);
+
+  assert(data_size <= storage_size);
+
   uv_buf_t buf;
-  size_t data_size =
-      WriteStringImpl<encoding>(data, storage_size, string, &buf);
+
+  buf.base = data;
+  buf.len = data_size;
 
   bool ipc_pipe = wrap->stream_->type == UV_NAMED_PIPE &&
-                  ((uv_pipe_t*)wrap->stream_)->ipc;
+                  reinterpret_cast<uv_pipe_t*>(wrap->stream_)->ipc;
 
   if (!ipc_pipe) {
-    r = uv_write(&req_wrap->req_,
-                 wrap->stream_,
-                 &buf,
-                 1,
-                 StreamWrap::AfterWrite);
-
+    r = wrap->callbacks_->DoWrite(req_wrap,
+                                  &buf,
+                                  1,
+                                  NULL,
+                                  StreamWrap::AfterWrite);
   } else {
     uv_handle_t* send_handle = NULL;
 
@@ -487,18 +335,15 @@ Handle<Value> StreamWrap::WriteStringImpl(const Arguments& args) {
       req_wrap->object_->Set(handle_sym, send_handle_obj);
     }
 
-    r = uv_write2(&req_wrap->req_,
-                  wrap->stream_,
-                  &buf,
-                  1,
-                  reinterpret_cast<uv_stream_t*>(send_handle),
-                  StreamWrap::AfterWrite);
+    r = wrap->callbacks_->DoWrite(req_wrap,
+                                  &buf,
+                                  1,
+                                  reinterpret_cast<uv_stream_t*>(send_handle),
+                                  StreamWrap::AfterWrite);
   }
 
   req_wrap->Dispatched();
   req_wrap->object_->Set(bytes_sym, Number::New((uint32_t) data_size));
-
-  wrap->UpdateWriteQueueSize();
 
   if (r) {
     SetErrno(uv_last_error(uv_default_loop()));
@@ -506,12 +351,6 @@ Handle<Value> StreamWrap::WriteStringImpl(const Arguments& args) {
     delete[] storage;
     return scope.Close(v8::Null(node_isolate));
   } else {
-    if (wrap->stream_->type == UV_TCP) {
-      NODE_COUNT_NET_BYTES_SENT(buf.len);
-    } else if (wrap->stream_->type == UV_NAMED_PIPE) {
-      NODE_COUNT_PIPE_BYTES_SENT(buf.len);
-    }
-
     return scope.Close(req_wrap->object_);
   }
 }
@@ -544,24 +383,15 @@ Handle<Value> StreamWrap::Writev(const Arguments& args) {
       // Buffer chunk, no additional storage required
 
     // String chunk
-    Handle<Value> string = chunk->ToString();
-    switch (static_cast<WriteEncoding>(chunks->Get(i * 2 + 1)->Int32Value())) {
-     case kAscii:
-      storage_size += GetStringSizeImpl<kAscii>(string);
-      break;
+    Handle<String> string = chunk->ToString();
+    enum encoding encoding = ParseEncoding(chunks->Get(i * 2 + 1));
+    size_t chunk_size;
+    if (encoding == UTF8 && string->Length() > 65535)
+      chunk_size = StringBytes::Size(string, encoding);
+    else
+      chunk_size = StringBytes::StorageSize(string, encoding);
 
-     case kUtf8:
-      storage_size += GetStringSizeImpl<kUtf8>(string);
-      break;
-
-     case kUcs2:
-      storage_size += GetStringSizeImpl<kUcs2>(string);
-      break;
-
-     default:
-      assert(0); // Unreachable
-    }
-    storage_size += 15;
+    storage_size += chunk_size + 15;
   }
 
   if (storage_size > INT_MAX) {
@@ -576,7 +406,7 @@ Handle<Value> StreamWrap::Writev(const Arguments& args) {
 
   storage_size += sizeof(WriteWrap);
   char* storage = new char[storage_size];
-  WriteWrap* req_wrap = new (storage) WriteWrap();
+  WriteWrap* req_wrap = new (storage) WriteWrap(wrap);
 
   uint32_t bytes = 0;
   size_t offset = sizeof(WriteWrap);
@@ -585,7 +415,9 @@ Handle<Value> StreamWrap::Writev(const Arguments& args) {
 
     // Write buffer
     if (Buffer::HasInstance(chunk)) {
-      bytes += WriteBuffer(chunk, &bufs[i]);
+      bufs[i].base = Buffer::Data(chunk);
+      bufs[i].len = Buffer::Length(chunk);
+      bytes += bufs[i].len;
       continue;
     }
 
@@ -596,37 +428,19 @@ Handle<Value> StreamWrap::Writev(const Arguments& args) {
     size_t str_size = storage_size - offset;
 
     Handle<String> string = chunk->ToString();
-    switch (static_cast<WriteEncoding>(chunks->Get(i * 2 + 1)->Int32Value())) {
-     case kAscii:
-      str_size =  WriteStringImpl<kAscii>(str_storage,
-                                          str_size,
-                                          string,
-                                          &bufs[i]);
-      break;
-     case kUtf8:
-      str_size =  WriteStringImpl<kUtf8>(str_storage,
-                                         str_size,
-                                         string,
-                                         &bufs[i]);
-      break;
-     case kUcs2:
-      str_size =  WriteStringImpl<kUcs2>(str_storage,
-                                         str_size,
-                                         string,
-                                         &bufs[i]);
-      break;
-     default:
-      assert(0);
-    }
+    enum encoding encoding = ParseEncoding(chunks->Get(i * 2 + 1));
+    str_size = StringBytes::Write(str_storage, str_size, string, encoding);
+    bufs[i].base = str_storage;
+    bufs[i].len = str_size;
     offset += str_size;
     bytes += str_size;
   }
 
-  int r = uv_write(&req_wrap->req_,
-                   wrap->stream_,
-                   bufs,
-                   count,
-                   StreamWrap::AfterWrite);
+  int r = wrap->callbacks_->DoWrite(req_wrap,
+                                    bufs,
+                                    count,
+                                    NULL,
+                                    StreamWrap::AfterWrite);
 
   // Deallocate space
   if (bufs != bufs_)
@@ -635,43 +449,35 @@ Handle<Value> StreamWrap::Writev(const Arguments& args) {
   req_wrap->Dispatched();
   req_wrap->object_->Set(bytes_sym, Number::New(bytes));
 
-  wrap->UpdateWriteQueueSize();
-
   if (r) {
     SetErrno(uv_last_error(uv_default_loop()));
     req_wrap->~WriteWrap();
     delete[] storage;
     return scope.Close(v8::Null(node_isolate));
   } else {
-    if (wrap->stream_->type == UV_TCP) {
-      NODE_COUNT_NET_BYTES_SENT(bytes);
-    } else if (wrap->stream_->type == UV_NAMED_PIPE) {
-      NODE_COUNT_PIPE_BYTES_SENT(bytes);
-    }
-
     return scope.Close(req_wrap->object_);
   }
 }
 
 
 Handle<Value> StreamWrap::WriteAsciiString(const Arguments& args) {
-  return WriteStringImpl<kAscii>(args);
+  return WriteStringImpl<ASCII>(args);
 }
 
 
 Handle<Value> StreamWrap::WriteUtf8String(const Arguments& args) {
-  return WriteStringImpl<kUtf8>(args);
+  return WriteStringImpl<UTF8>(args);
 }
 
 
 Handle<Value> StreamWrap::WriteUcs2String(const Arguments& args) {
-  return WriteStringImpl<kUcs2>(args);
+  return WriteStringImpl<UCS2>(args);
 }
 
 
 void StreamWrap::AfterWrite(uv_write_t* req, int status) {
-  WriteWrap* req_wrap = (WriteWrap*) req->data;
-  StreamWrap* wrap = (StreamWrap*) req->handle->data;
+  WriteWrap* req_wrap = container_of(req, WriteWrap, req_);
+  StreamWrap* wrap = req_wrap->wrap_;
 
   HandleScope scope(node_isolate);
 
@@ -688,7 +494,7 @@ void StreamWrap::AfterWrite(uv_write_t* req, int status) {
     SetErrno(uv_last_error(uv_default_loop()));
   }
 
-  wrap->UpdateWriteQueueSize();
+  wrap->callbacks_->AfterWrite(req_wrap);
 
   Local<Value> argv[] = {
     Integer::New(status, node_isolate),
@@ -710,7 +516,7 @@ Handle<Value> StreamWrap::Shutdown(const Arguments& args) {
 
   ShutdownWrap* req_wrap = new ShutdownWrap();
 
-  int r = uv_shutdown(&req_wrap->req_, wrap->stream_, AfterShutdown);
+  int r = wrap->callbacks_->DoShutdown(req_wrap, AfterShutdown);
 
   req_wrap->Dispatched();
 
@@ -749,5 +555,104 @@ void StreamWrap::AfterShutdown(uv_shutdown_t* req, int status) {
   delete req_wrap;
 }
 
+
+int StreamWrapCallbacks::DoWrite(WriteWrap* w,
+                                 uv_buf_t* bufs,
+                                 size_t count,
+                                 uv_stream_t* send_handle,
+                                 uv_write_cb cb) {
+  int r;
+  if (send_handle == NULL) {
+    r = uv_write(&w->req_, wrap_->stream_, bufs, count, cb);
+  } else {
+    r = uv_write2(&w->req_, wrap_->stream_, bufs, count, send_handle, cb);
+  }
+
+  if (!r) {
+    size_t bytes = 0;
+    for (size_t i = 0; i < count; i++)
+      bytes += bufs[i].len;
+    if (wrap_->stream_->type == UV_TCP) {
+      NODE_COUNT_NET_BYTES_SENT(bytes);
+    } else if (wrap_->stream_->type == UV_NAMED_PIPE) {
+      NODE_COUNT_PIPE_BYTES_SENT(bytes);
+    }
+  }
+
+  wrap_->UpdateWriteQueueSize();
+
+  return r;
+}
+
+
+void StreamWrapCallbacks::AfterWrite(WriteWrap* w) {
+  wrap_->UpdateWriteQueueSize();
+}
+
+
+uv_buf_t StreamWrapCallbacks::DoAlloc(uv_handle_t* handle,
+                                      size_t suggested_size) {
+  char* buf = slab_allocator->Allocate(wrap_->object_, suggested_size);
+  return uv_buf_init(buf, suggested_size);
+}
+
+
+void StreamWrapCallbacks::DoRead(uv_stream_t* handle,
+                                 ssize_t nread,
+                                 uv_buf_t buf,
+                                 uv_handle_type pending) {
+  HandleScope scope(node_isolate);
+
+  if (nread < 0)  {
+    // If libuv reports an error or EOF it *may* give us a buffer back. In that
+    // case, return the space to the slab.
+    if (buf.base != NULL)
+      slab_allocator->Shrink(Self(), buf.base, 0);
+
+    SetErrno(uv_last_error(uv_default_loop()));
+    MakeCallback(Self(), onread_sym, 0, NULL);
+    return;
+  }
+
+  Local<Object> slab = slab_allocator->Shrink(wrap_->object_, buf.base, nread);
+
+  if (nread == 0) return;
+  assert(static_cast<size_t>(nread) <= buf.len);
+
+  int argc = 3;
+  Local<Value> argv[4] = {
+    slab,
+    Integer::NewFromUnsigned(buf.base - Buffer::Data(slab), node_isolate),
+    Integer::NewFromUnsigned(nread, node_isolate)
+  };
+
+  Local<Object> pending_obj;
+  if (pending == UV_TCP) {
+    pending_obj = AcceptHandle<TCPWrap, uv_tcp_t>(handle);
+  } else if (pending == UV_NAMED_PIPE) {
+    pending_obj = AcceptHandle<PipeWrap, uv_pipe_t>(handle);
+  } else if (pending == UV_UDP) {
+    pending_obj = AcceptHandle<UDPWrap, uv_udp_t>(handle);
+  } else {
+    assert(pending == UV_UNKNOWN_HANDLE);
+  }
+
+  if (!pending_obj.IsEmpty()) {
+    argv[3] = pending_obj;
+    argc++;
+  }
+
+  MakeCallback(wrap_->object_, onread_sym, argc, argv);
+}
+
+
+int StreamWrapCallbacks::DoShutdown(ShutdownWrap* req_wrap, uv_shutdown_cb cb) {
+  return uv_shutdown(&req_wrap->req_, wrap_->stream_, cb);
+}
+
+
+Handle<Object> StreamWrapCallbacks::Self() {
+  return wrap_->object_;
+}
 
 }

@@ -233,6 +233,38 @@ one of the error codes listed below.
 エラー時、`err` は `Error` オブジェクトで、
 `err.errno` は後述するエラーコードのいずれかです。
 
+## dns.getServers()
+
+<!--
+Returns an array of IP addresses as strings that are currently being used for
+resolution
+-->
+
+現在解決に使用されているサーバの IP アドレスを文字列の配列で返します。
+
+## dns.setServers(servers)
+
+<!--
+Given an array of IP addresses as strings, set them as the servers to use for
+resolving
+-->
+
+解決に使用されるサーバーの IP アドレスを文字列の配列で与えます。
+
+<!--
+If you specify a port with the address it will be stripped, as the underlying
+library doesn't support that.
+-->
+
+もしアドレスと共にポートを指定しても、下層のライブラリがサポートしないため
+それらは取り除かれます。
+
+<!--
+This will throw if you pass invalid input.
+-->
+
+不正なパラメータを与えると例外をスローします。
+
 ## Error codes
 
 <!--

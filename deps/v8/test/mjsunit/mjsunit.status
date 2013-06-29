@@ -40,8 +40,15 @@ regress/regress-524: SKIP
 # Skip long running test in debug and allow it to timeout in release mode.
 # regress/regress-524: (PASS || TIMEOUT), SKIP if $mode == debug
 
+# This test non-deterministically runs out of memory on Windows ia32.
+regress/regress-crbug-160010: SKIP
+
 # Deferred stack trace formatting is temporarily disabled.
 stack-traces-gc: PASS || FAIL
+
+##############################################################################
+# TODO(wingo): Re-enable when GC bug from r15060 is solved.
+harmony/generators-iteration: SKIP
 
 ##############################################################################
 # Too slow in debug mode with --stress-opt mode.
@@ -74,8 +81,7 @@ unicode-case-overoptimization: PASS, TIMEOUT if ($arch == arm || $arch == androi
 json-recursive: PASS, (PASS || FAIL) if $mode == debug
 
 ##############################################################################
-# Skip long running test that times out in debug mode or goes OOM on android.
-regress/regress-crbug-160010: PASS, SKIP if ($mode == debug || $arch == android_arm)
+# Skip long running tests that time out in debug mode.
 generated-transition-stub: PASS, SKIP if $mode == debug
 
 ##############################################################################

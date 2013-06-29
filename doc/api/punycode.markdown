@@ -17,12 +17,10 @@ use npm to install the `punycode` module first.)
 ## punycode.decode(string)
 
 <!--
-Converts a Punycode string of ASCII code points to a string of Unicode code
-points.
--->
+Converts a Punycode string of ASCII-only symbols to a string of Unicode symbols.-->
 
-ASCII コードポイントによる Punycode 文字列を Unicode コードポイントに
-変換します。
+ASCII 文字のみによる Punycode 文字列を Unicode 文字による文字列に変換します。
+
 
     // decode domain name parts
     punycode.decode('maana-pta'); // 'mañana'
@@ -31,12 +29,10 @@ ASCII コードポイントによる Punycode 文字列を Unicode コードポ�
 ## punycode.encode(string)
 
 <!--
-Converts a string of Unicode code points to a Punycode string of ASCII code
-points.
--->
+Converts a string of Unicode symbols to a Punycode string of ASCII-only symbols.-->
 
-Unicode コードポイントを ASCII コードポイントによる Punycode 文字列に
-変換します。
+Unicode 文字による文字列を ASCII 文字による Punycode 文字列に変換します。
+
 
     // encode domain name parts
     punycode.encode('mañana'); // 'maana-pta'
@@ -79,8 +75,8 @@ Unicode 文字列で表現されたドメイン名を Punycode に変換しま�
 ### punycode.ucs2.decode(string)
 
 <!--
-Creates an array containing the decimal code points of each Unicode character
-in the string. While [JavaScript uses UCS-2
+Creates an array containing the numeric code point values of each Unicode
+symbol in the string. While [JavaScript uses UCS-2
 internally](http://mathiasbynens.be/notes/javascript-encoding), this function
 will convert a pair of surrogate halves (each of which UCS-2 exposes as
 separate characters) into a single code point, matching UTF-16.
@@ -88,22 +84,22 @@ separate characters) into a single code point, matching UTF-16.
 
 文字列中の Unicode 文字のコードポイントに対応する数値を含む配列を作成します。
 [JavaScript uses UCS-2 internally](http://mathiasbynens.be/notes/javascript-encoding)
-のように、この関数はサロゲートペア (それぞれは UCS-2 の独立した文字) を
-UTF-16 にマッチする一つのコードポイントに変換します。
+のように、この関数はサロゲートペア (それぞれは 16bit の独立した文字) を
+対応する Unicode の一つのコードポイントに変換します。
 
-    punycode.ucs2.decode('abc'); // [97, 98, 99]
+    punycode.ucs2.decode('abc'); // [0x61, 0x62, 0x63]
     // surrogate pair for U+1D306 tetragram for centre:
     punycode.ucs2.decode('\uD834\uDF06'); // [0x1D306]
 
 ### punycode.ucs2.encode(codePoints)
 
 <!--
-Creates a string based on an array of decimal code points.
+Creates a string based on an array of numeric code point values.
 -->
 
 コードポイントの数値を含む配列を元に文字列を作成します。
 
-    punycode.ucs2.encode([97, 98, 99]); // 'abc'
+    punycode.ucs2.encode([0x61, 0x62, 0x63]); // 'abc'
     punycode.ucs2.encode([0x1D306]); // '\uD834\uDF06'
 
 ## punycode.version

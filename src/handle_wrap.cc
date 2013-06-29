@@ -20,30 +20,24 @@
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 #include "node.h"
-#include "ngx-queue.h"
+#include "queue.h"
 #include "handle_wrap.h"
 
 namespace node {
 
 using v8::Arguments;
-using v8::Array;
-using v8::Context;
 using v8::Function;
-using v8::FunctionTemplate;
 using v8::Handle;
 using v8::HandleScope;
-using v8::Integer;
-using v8::Local;
 using v8::Object;
 using v8::Persistent;
 using v8::String;
-using v8::TryCatch;
 using v8::Undefined;
 using v8::Value;
 
 
 // defined in node.cc
-extern ngx_queue_t handle_wrap_queue;
+extern QUEUE handle_wrap_queue;
 static Persistent<String> close_sym;
 
 
@@ -108,28 +102,20 @@ Handle<Value> HandleWrap::Close(const Arguments& args) {
 HandleWrap::HandleWrap(Handle<Object> object, uv_handle_t* h) {
   flags_ = 0;
   handle__ = h;
-  if (h) {
-    h->data = this;
-  }
+  handle__->data = this;
 
   HandleScope scope(node_isolate);
   assert(object_.IsEmpty());
   assert(object->InternalFieldCount() > 0);
   object_ = v8::Persistent<v8::Object>::New(node_isolate, object);
   object_->SetAlignedPointerInInternalField(0, this);
-  ngx_queue_insert_tail(&handle_wrap_queue, &handle_wrap_queue_);
-}
-
-
-void HandleWrap::SetHandle(uv_handle_t* h) {
-  handle__ = h;
-  h->data = this;
+  QUEUE_INSERT_TAIL(&handle_wrap_queue, &handle_wrap_queue_);
 }
 
 
 HandleWrap::~HandleWrap() {
   assert(object_.IsEmpty());
-  ngx_queue_remove(&handle_wrap_queue_);
+  QUEUE_REMOVE(&handle_wrap_queue_);
 }
 
 
