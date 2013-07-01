@@ -263,27 +263,31 @@ TCPやTLSなど、それに関連しない実装ではこの引数は無視さ�
 利用可能になったデータをシンプルに提供するかもしれません。
 たとえば `size` バイトが利用可能になるまで「待つ」必要はありません。
 
-### readable.push(chunk)
+### readable.push(chunk, [encoding])
 
 <!--
 * `chunk` {Buffer | null | String} Chunk of data to push into the read queue
+* `encoding` {String} Encoding of String chunks.  Must be a valid
+  Buffer encoding, such as `'utf8'` or `'ascii'`
 * return {Boolean} Whether or not more pushes should be performed
 -->
 
 * `chunk` {Buffer | null | String} 読み込みキューにプッシュされる、
   データのチャンク
+* `encoding` {String} 文字列チャンクのエンコーディング。
+  `'utf8'` や `'ascii'` など、バッファの正しいエンコーディングであること。
 * return {Boolean} まだプッシュしてもいいかどうか
 
 <!--
 Note: **This function should be called by Readable implementors, NOT
-by consumers of Readable subclasses.**  The `_read()` function will not
+by consumers of Readable streams.**  The `_read()` function will not
 be called again until at least one `push(chunk)` call is made.  If no
 data is available, then you MAY call `push('')` (an empty string) to
 allow a future `_read` call, without adding any data to the queue.
 -->
 
 注意: **この関数は Readable の実装から呼び出されるべきものであり、
-Readable のサブクラスの利用者が呼び出すべきではありません。**
+Readable ストリームの利用者が呼び出すべきではありません。**
 少なくとも一回は `push(chunk)` が呼び出されないと、`_read()` 関数が
 再び呼び出されることはありません。もし利用可能なデータがない場合は、
 将来 `_read` が呼び出されるように `push(''`)` (空文字列)

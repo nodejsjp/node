@@ -25,11 +25,11 @@
 #include "handle_wrap.h"
 #include "stream_wrap.h"
 #include "tty_wrap.h"
+#include "node_wrap.h"
 
 namespace node {
 
 using v8::Arguments;
-using v8::Context;
 using v8::Function;
 using v8::FunctionTemplate;
 using v8::Handle;
@@ -40,7 +40,6 @@ using v8::Object;
 using v8::Persistent;
 using v8::PropertyAttribute;
 using v8::String;
-using v8::TryCatch;
 using v8::Undefined;
 using v8::Value;
 
@@ -80,6 +79,8 @@ void TTYWrap::Initialize(Handle<Object> target) {
 
   NODE_SET_METHOD(target, "isTTY", IsTTY);
   NODE_SET_METHOD(target, "guessHandleType", GuessHandleType);
+
+  ttyConstructorTmpl = Persistent<FunctionTemplate>::New(node_isolate, t);
 
   target->Set(String::NewSymbol("TTY"), t->GetFunction());
 }
@@ -199,7 +200,7 @@ Handle<Value> TTYWrap::New(const Arguments& args) {
 
 
 TTYWrap::TTYWrap(Handle<Object> object, int fd, bool readable)
-    : StreamWrap(object, (uv_stream_t*)&handle_) {
+    : StreamWrap(object, reinterpret_cast<uv_stream_t*>(&handle_)) {
   uv_tty_init(uv_default_loop(), &handle_, fd, readable);
 }
 

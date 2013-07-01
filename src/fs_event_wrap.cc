@@ -28,7 +28,9 @@ using namespace v8;
 
 namespace node {
 
+static Persistent<String> change_sym;
 static Persistent<String> onchange_sym;
+static Persistent<String> rename_sym;
 
 class FSEventWrap: public HandleWrap {
 public:
@@ -49,9 +51,8 @@ private:
 };
 
 
-FSEventWrap::FSEventWrap(Handle<Object> object): HandleWrap(object,
-                                                    (uv_handle_t*)&handle_) {
-  handle_.data = static_cast<void*>(this);
+FSEventWrap::FSEventWrap(Handle<Object> object)
+    : HandleWrap(object, reinterpret_cast<uv_handle_t*>(&handle_)) {
   initialized_ = false;
 }
 
@@ -76,6 +77,10 @@ void FSEventWrap::Initialize(Handle<Object> target) {
   target->Set(String::NewSymbol("FSEvent"),
               Persistent<FunctionTemplate>::New(node_isolate,
                                                 t)->GetFunction());
+
+  change_sym = NODE_PSYMBOL("change");
+  onchange_sym = NODE_PSYMBOL("onchange");
+  rename_sym = NODE_PSYMBOL("rename");
 }
 
 
@@ -118,7 +123,7 @@ Handle<Value> FSEventWrap::Start(const Arguments& args) {
 void FSEventWrap::OnEvent(uv_fs_event_t* handle, const char* filename,
     int events, int status) {
   HandleScope scope(node_isolate);
-  Local<String> eventStr;
+  Handle<String> eventStr;
 
   FSEventWrap* wrap = static_cast<FSEventWrap*>(handle->data);
 
@@ -140,26 +145,21 @@ void FSEventWrap::OnEvent(uv_fs_event_t* handle, const char* filename,
     eventStr = String::Empty(node_isolate);
   }
   else if (events & UV_RENAME) {
-    eventStr = String::New("rename");
+    eventStr = rename_sym;
   }
   else if (events & UV_CHANGE) {
-    eventStr = String::New("change");
+    eventStr = change_sym;
   }
   else {
     assert(0 && "bad fs events flag");
     abort();
   }
 
-  Local<Value> argv[3] = {
+  Handle<Value> argv[3] = {
     Integer::New(status, node_isolate),
     eventStr,
-    filename ? static_cast<Local<Value> >(String::New(filename))
-             : Local<Value>::New(node_isolate, v8::Null(node_isolate))
+    filename ? String::New(filename) : v8::Null(node_isolate)
   };
-
-  if (onchange_sym.IsEmpty()) {
-    onchange_sym = NODE_PSYMBOL("onchange");
-  }
 
   MakeCallback(wrap->object_, onchange_sym, ARRAY_SIZE(argv), argv);
 }

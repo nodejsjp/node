@@ -377,10 +377,11 @@ node を実行したシェルで終了コードが 1 であることを見るこ
 ## process.getgid()
 
 <!--
-Note: this function is only available on POSIX platforms (i.e. not Windows)
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 -->
 
-注意: この関数は POSIX プラットフォーム (すなわち、非 Windows)
+注意: この関数は POSIX プラットフォーム (すなわち、Windows と Android 以外)
 でのみ利用可能です。
 
 <!--
@@ -399,10 +400,11 @@ This is the numerical group id, not the group name.
 ## process.setgid(id)
 
 <!--
-Note: this function is only available on POSIX platforms (i.e. not Windows)
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 -->
 
-注意: この関数は POSIX プラットフォーム (すなわち、非 Windows)
+注意: この関数は POSIX プラットフォーム (すなわち、Windows と Android 以外)
 でのみ利用可能です。
 
 <!--
@@ -430,10 +432,11 @@ blocks while resolving it to a numerical ID.
 ## process.getuid()
 
 <!--
-Note: this function is only available on POSIX platforms (i.e. not Windows)
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 -->
 
-注意: この関数は POSIX プラットフォーム (すなわち、非 Windows)
+注意: この関数は POSIX プラットフォーム (すなわち、Windows と Android 以外)
 でのみ利用可能です。
 
 <!--
@@ -452,10 +455,11 @@ This is the numerical userid, not the username.
 ## process.setuid(id)
 
 <!--
-Note: this function is only available on POSIX platforms (i.e. not Windows)
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 -->
 
-注意: この関数は POSIX プラットフォーム (すなわち、非 Windows)
+注意: この関数は POSIX プラットフォーム (すなわち、Windows と Android 以外)
 でのみ利用可能です。
 
 <!--
@@ -483,10 +487,11 @@ blocks while resolving it to a numerical ID.
 ## process.getgroups()
 
 <!--
-Note: this function is only available on POSIX platforms (i.e. not Windows)
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 -->
 
-注意: この関数は POSIC プラットフォーム (つまり Windows 以外)
+注意: この関数は POSIX プラットフォーム (すなわち、Windows と Android 以外)
 でのみ利用可能です。
 
 <!--
@@ -502,10 +507,11 @@ Node.js では常にそれが含まれることを保証します。
 ## process.setgroups(groups)
 
 <!--
-Note: this function is only available on POSIX platforms (i.e. not Windows)
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 -->
 
-注意: この関数は POSIC プラットフォーム (つまり Windows 以外)
+注意: この関数は POSIX プラットフォーム (すなわち、Windows と Android 以外)
 でのみ利用可能です。
 
 <!--
@@ -526,10 +532,11 @@ The list can contain group IDs, group names or both.
 ## process.initgroups(user, extra_group)
 
 <!--
-Note: this function is only available on POSIX platforms (i.e. not Windows)
+Note: this function is only available on POSIX platforms (i.e. not Windows,
+Android)
 -->
 
-注意: この関数は POSIC プラットフォーム (つまり Windows 以外)
+注意: この関数は POSIX プラットフォーム (すなわち、Windows と Android 以外)
 でのみ利用可能です。
 
 <!--

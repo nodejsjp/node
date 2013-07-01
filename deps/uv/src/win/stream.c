@@ -56,7 +56,7 @@ int uv_accept(uv_stream_t* server, uv_stream_t* client) {
 int uv_read_start(uv_stream_t* handle, uv_alloc_cb alloc_cb,
     uv_read_cb read_cb) {
   if (handle->flags & UV_HANDLE_READING) {
-    uv__set_sys_error(handle->loop, UV_EALREADY);
+    uv__set_artificial_error(handle->loop, UV_EALREADY);
     return -1;
   }
 
@@ -82,7 +82,7 @@ int uv_read_start(uv_stream_t* handle, uv_alloc_cb alloc_cb,
 int uv_read2_start(uv_stream_t* handle, uv_alloc_cb alloc_cb,
     uv_read2_cb read_cb) {
   if (handle->flags & UV_HANDLE_READING) {
-    uv__set_sys_error(handle->loop, UV_EALREADY);
+    uv__set_artificial_error(handle->loop, UV_EALREADY);
     return -1;
   }
 
@@ -195,4 +195,14 @@ int uv_is_readable(const uv_stream_t* handle) {
 
 int uv_is_writable(const uv_stream_t* handle) {
   return !!(handle->flags & UV_HANDLE_WRITABLE);
+}
+
+
+int uv_stream_set_blocking(uv_stream_t* handle, int blocking) {
+  if (blocking != 0)
+    handle->flags |= UV_HANDLE_BLOCKING_WRITES;
+  else
+    handle->flags &= ~UV_HANDLE_BLOCKING_WRITES;
+
+  return 0;
 }

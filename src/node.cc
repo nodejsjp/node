@@ -22,6 +22,7 @@
 #include "node.h"
 #include "req_wrap.h"
 #include "handle_wrap.h"
+#include "string_bytes.h"
 
 #include "ares.h"
 #include "uv.h"
@@ -60,7 +61,7 @@ typedef int mode_t;
 #include <sys/types.h>
 #include "zlib.h"
 
-#ifdef __POSIX__
+#if defined(__POSIX__) && !defined(__ANDROID__)
 # include <pwd.h> /* getpwnam() */
 # include <grp.h> /* getgrnam() */
 #endif
@@ -76,7 +77,7 @@ typedef int mode_t;
 # include "node_crypto.h"
 #endif
 #if HAVE_SYSTEMTAP
-#include "node_systemtap.h"
+#include "node_provider.h"
 #endif
 #include "node_script.h"
 #include "v8_typed_array.h"
@@ -92,8 +93,8 @@ extern char **environ;
 
 namespace node {
 
-ngx_queue_t handle_wrap_queue = { &handle_wrap_queue, &handle_wrap_queue };
-ngx_queue_t req_wrap_queue = { &req_wrap_queue, &req_wrap_queue };
+QUEUE handle_wrap_queue = { &handle_wrap_queue, &handle_wrap_queue };
+QUEUE req_wrap_queue = { &req_wrap_queue, &req_wrap_queue };
 
 // declared in req_wrap.h
 Persistent<String> process_symbol;
@@ -122,6 +123,11 @@ static Persistent<String> enter_symbol;
 static Persistent<String> exit_symbol;
 static Persistent<String> disposed_symbol;
 
+// Essential for node_wrap.h
+Persistent<FunctionTemplate> pipeConstructorTmpl;
+Persistent<FunctionTemplate> ttyConstructorTmpl;
+Persistent<FunctionTemplate> tcpConstructorTmpl;
+Persistent<FunctionTemplate> udpConstructorTmpl;
 
 static bool print_eval = false;
 static bool force_repl = false;
@@ -139,8 +145,6 @@ bool using_domains = false;
 bool no_deprecation = false;
 
 static uv_idle_t tick_spinner;
-static bool need_tick_cb;
-static Persistent<String> tick_callback_sym;
 
 static uv_check_t check_immediate_watcher;
 static uv_idle_t idle_immediate_dummy;
@@ -151,7 +155,6 @@ static Persistent<String> immediate_callback_sym;
 static struct {
   uint32_t length;
   uint32_t index;
-  uint32_t depth;
 } tick_infobox;
 
 #ifdef OPENSSL_NPN_NEGOTIATED
@@ -175,45 +178,6 @@ static uv_async_t emit_debug_enabled_async;
 
 // Declared in node_internals.h
 Isolate* node_isolate = NULL;
-
-
-static void Spin(uv_idle_t* handle, int status) {
-  assert((uv_idle_t*) handle == &tick_spinner);
-  assert(status == 0);
-
-  // Avoid entering a V8 scope.
-  if (!need_tick_cb) return;
-  need_tick_cb = false;
-
-  uv_idle_stop(&tick_spinner);
-
-  HandleScope scope(node_isolate);
-
-  if (process_tickFromSpinner.IsEmpty()) {
-    Local<Value> cb_v = process->Get(String::New("_tickFromSpinner"));
-    if (!cb_v->IsFunction()) {
-      fprintf(stderr, "process._tickFromSpinner assigned to non-function\n");
-      abort();
-    }
-    Local<Function> cb = cb_v.As<Function>();
-    process_tickFromSpinner = Persistent<Function>::New(node_isolate, cb);
-  }
-
-  TryCatch try_catch;
-
-  process_tickFromSpinner->Call(process, 0, NULL);
-
-  if (try_catch.HasCaught()) {
-    FatalException(try_catch);
-  }
-}
-
-
-static Handle<Value> NeedTickCallback(const Arguments& args) {
-  need_tick_cb = true;
-  uv_idle_start(&tick_spinner, Spin);
-  return Undefined(node_isolate);
-}
 
 
 static void CheckImmediate(uv_check_t* handle, int status) {
@@ -903,7 +867,7 @@ Handle<Value> FromConstructorTemplate(Persistent<FunctionTemplate> t,
 Handle<Value> SetupDomainUse(const Arguments& args) {
   HandleScope scope(node_isolate);
   if (using_domains)
-    return Undefined();
+    return Undefined(node_isolate);
   using_domains = true;
   Local<Value> tdc_v = process->Get(String::New("_tickDomainCallback"));
   Local<Value> ndt_v = process->Get(String::New("_nextDomainTick"));
@@ -920,7 +884,7 @@ Handle<Value> SetupDomainUse(const Arguments& args) {
   process->Set(String::New("_tickCallback"), tdc);
   process->Set(String::New("nextTick"), ndt);
   process_tickCallback = Persistent<Function>::New(node_isolate, tdc);
-  return Undefined();
+  return Undefined(node_isolate);
 }
 
 
@@ -944,6 +908,7 @@ MakeDomainCallback(const Handle<Object> object,
   Local<Function> exit;
 
   TryCatch try_catch;
+  try_catch.SetVerbose(true);
 
   bool has_domain = domain_v->IsObject();
   if (has_domain) {
@@ -958,7 +923,6 @@ MakeDomainCallback(const Handle<Object> object,
     enter->Call(domain, 0, NULL);
 
     if (try_catch.HasCaught()) {
-      FatalException(try_catch);
       return Undefined(node_isolate);
     }
   }
@@ -966,7 +930,6 @@ MakeDomainCallback(const Handle<Object> object,
   Local<Value> ret = callback->Call(object, argc, argv);
 
   if (try_catch.HasCaught()) {
-    FatalException(try_catch);
     return Undefined(node_isolate);
   }
 
@@ -976,14 +939,12 @@ MakeDomainCallback(const Handle<Object> object,
     exit->Call(domain, 0, NULL);
 
     if (try_catch.HasCaught()) {
-      FatalException(try_catch);
       return Undefined(node_isolate);
     }
   }
 
   if (tick_infobox.length == 0) {
     tick_infobox.index = 0;
-    tick_infobox.depth = 0;
     return ret;
   }
 
@@ -991,7 +952,6 @@ MakeDomainCallback(const Handle<Object> object,
   process_tickCallback->Call(process, 0, NULL);
 
   if (try_catch.HasCaught()) {
-    FatalException(try_catch);
     return Undefined(node_isolate);
   }
 
@@ -1018,17 +978,16 @@ MakeCallback(const Handle<Object> object,
   }
 
   TryCatch try_catch;
+  try_catch.SetVerbose(true);
 
   Local<Value> ret = callback->Call(object, argc, argv);
 
   if (try_catch.HasCaught()) {
-    FatalException(try_catch);
     return Undefined(node_isolate);
   }
 
   if (tick_infobox.length == 0) {
     tick_infobox.index = 0;
-    tick_infobox.depth = 0;
     return ret;
   }
 
@@ -1036,7 +995,6 @@ MakeCallback(const Handle<Object> object,
   process_tickCallback->Call(process, 0, NULL);
 
   if (try_catch.HasCaught()) {
-    FatalException(try_catch);
     return Undefined(node_isolate);
   }
 
@@ -1138,30 +1096,9 @@ enum encoding ParseEncoding(Handle<Value> encoding_v, enum encoding _default) {
 }
 
 Local<Value> Encode(const void *buf, size_t len, enum encoding encoding) {
-  HandleScope scope(node_isolate);
-
-  if (encoding == BUFFER) {
-    return scope.Close(
-        Buffer::New(static_cast<const char*>(buf), len)->handle_);
-  }
-
-  if (!len) return scope.Close(String::Empty(node_isolate));
-
-  if (encoding == BINARY) {
-    const unsigned char *cbuf = static_cast<const unsigned char*>(buf);
-    uint16_t * twobytebuf = new uint16_t[len];
-    for (size_t i = 0; i < len; i++) {
-      // XXX is the following line platform independent?
-      twobytebuf[i] = cbuf[i];
-    }
-    Local<String> chunk = String::New(twobytebuf, len);
-    delete [] twobytebuf; // TODO use ExternalTwoByteString?
-    return scope.Close(chunk);
-  }
-
-  // utf8 or ascii encoding
-  Local<String> chunk = String::New((const char*)buf, len);
-  return scope.Close(chunk);
+  return StringBytes::Encode(static_cast<const char*>(buf),
+                             len,
+                             encoding);
 }
 
 // Returns -1 if the handle was not valid for decoding
@@ -1175,17 +1112,7 @@ ssize_t DecodeBytes(v8::Handle<v8::Value> val, enum encoding encoding) {
     return -1;
   }
 
-  if ((encoding == BUFFER || encoding == BINARY) && Buffer::HasInstance(val)) {
-    return Buffer::Length(val->ToObject());
-  }
-
-  Local<String> str = val->ToString();
-
-  if (encoding == UTF8) return str->Utf8Length();
-  else if (encoding == UCS2) return str->Length() * 2;
-  else if (encoding == HEX) return str->Length() / 2;
-
-  return str->Length();
+  return StringBytes::Size(val, encoding);
 }
 
 #ifndef MIN
@@ -1197,74 +1124,10 @@ ssize_t DecodeWrite(char *buf,
                     size_t buflen,
                     v8::Handle<v8::Value> val,
                     enum encoding encoding) {
-  HandleScope scope(node_isolate);
-
-  // XXX
-  // A lot of improvement can be made here. See:
-  // http://code.google.com/p/v8/issues/detail?id=270
-  // http://groups.google.com/group/v8-dev/browse_thread/thread/dba28a81d9215291/ece2b50a3b4022c
-  // http://groups.google.com/group/v8-users/browse_thread/thread/1f83b0ba1f0a611
-
-  if (val->IsArray()) {
-    fprintf(stderr, "'raw' encoding (array of integers) has been removed. "
-                    "Use 'binary'.\n");
-    assert(0);
-    return -1;
-  }
-
-  bool is_buffer = Buffer::HasInstance(val);
-
-  if (is_buffer && (encoding == BINARY || encoding == BUFFER)) {
-    // fast path, copy buffer data
-    const char* data = Buffer::Data(val.As<Object>());
-    size_t size = Buffer::Length(val.As<Object>());
-    size_t len = size < buflen ? size : buflen;
-    memcpy(buf, data, len);
-    return len;
-  }
-
-  Local<String> str;
-
-  if (is_buffer) { // slow path, convert to binary string
-    Local<Value> arg = String::New("binary");
-    str = MakeCallback(val.As<Object>(), "toString", 1, &arg)->ToString();
-  }
-  else {
-    str = val->ToString();
-  }
-
-  if (encoding == UTF8) {
-    str->WriteUtf8(buf, buflen, NULL, String::HINT_MANY_WRITES_EXPECTED);
-    return buflen;
-  }
-
-  if (encoding == ASCII) {
-    str->WriteOneByte(reinterpret_cast<uint8_t*>(buf),
-                      0,
-                      buflen,
-                      String::HINT_MANY_WRITES_EXPECTED);
-    return buflen;
-  }
-
-  // THIS IS AWFUL!!! FIXME
-
-  assert(encoding == BINARY);
-
-  uint16_t * twobytebuf = new uint16_t[buflen];
-
-  str->Write(twobytebuf, 0, buflen, String::HINT_MANY_WRITES_EXPECTED);
-
-  for (size_t i = 0; i < buflen; i++) {
-    unsigned char *b = reinterpret_cast<unsigned char*>(&twobytebuf[i]);
-    buf[i] = b[0];
-  }
-
-  delete [] twobytebuf;
-
-  return buflen;
+  return StringBytes::Write(buf, buflen, val, encoding, NULL);
 }
 
-void DisplayExceptionLine (TryCatch &try_catch) {
+void DisplayExceptionLine(Handle<Message> message) {
   // Prevent re-entry into this function.  For example, if there is
   // a throw from a program in vm.runInThisContext(code, filename, true),
   // then we want to show the original failure, not the secondary one.
@@ -1272,10 +1135,6 @@ void DisplayExceptionLine (TryCatch &try_catch) {
 
   if (displayed_error) return;
   displayed_error = true;
-
-  HandleScope scope(node_isolate);
-
-  Handle<Message> message = try_catch.Message();
 
   uv_tty_reset_mode();
 
@@ -1330,21 +1189,21 @@ void DisplayExceptionLine (TryCatch &try_catch) {
 }
 
 
-static void ReportException(TryCatch &try_catch, bool show_line) {
+static void ReportException(Handle<Value> er, Handle<Message> message) {
   HandleScope scope(node_isolate);
 
-  if (show_line) DisplayExceptionLine(try_catch);
+  DisplayExceptionLine(message);
 
-  String::Utf8Value trace(try_catch.StackTrace());
+  Local<Value> trace_value(er->ToObject()->Get(String::New("stack")));
+  String::Utf8Value trace(trace_value);
 
   // range errors have a trace member set to undefined
-  if (trace.length() > 0 && !try_catch.StackTrace()->IsUndefined()) {
+  if (trace.length() > 0 && !trace_value->IsUndefined()) {
     fprintf(stderr, "%s\n", *trace);
   } else {
     // this really only happens for RangeErrors, since they're the only
     // kind that won't have all this info in the trace, or when non-Error
     // objects are thrown manually.
-    Local<Value> er = try_catch.Exception();
     bool isErrorObject = er->IsObject() &&
       !(er->ToObject()->Get(String::New("message"))->IsUndefined()) &&
       !(er->ToObject()->Get(String::New("name"))->IsUndefined());
@@ -1362,20 +1221,30 @@ static void ReportException(TryCatch &try_catch, bool show_line) {
   fflush(stderr);
 }
 
+
+static void ReportException(TryCatch& try_catch) {
+  ReportException(try_catch.Exception(), try_catch.Message());
+}
+
+
 // Executes a str within the current v8 context.
 Local<Value> ExecuteString(Handle<String> source, Handle<Value> filename) {
   HandleScope scope(node_isolate);
   TryCatch try_catch;
 
+  // try_catch must be nonverbose to disable FatalException() handler,
+  // we will handle exceptions ourself.
+  try_catch.SetVerbose(false);
+
   Local<v8::Script> script = v8::Script::Compile(source, filename);
   if (script.IsEmpty()) {
-    ReportException(try_catch, true);
+    ReportException(try_catch);
     exit(3);
   }
 
   Local<Value> result = script->Run();
   if (result.IsEmpty()) {
-    ReportException(try_catch, true);
+    ReportException(try_catch);
     exit(4);
   }
 
@@ -1387,10 +1256,10 @@ static Handle<Value> GetActiveRequests(const Arguments& args) {
   HandleScope scope(node_isolate);
 
   Local<Array> ary = Array::New();
-  ngx_queue_t* q = NULL;
+  QUEUE* q = NULL;
   int i = 0;
 
-  ngx_queue_foreach(q, &req_wrap_queue) {
+  QUEUE_FOREACH(q, &req_wrap_queue) {
     ReqWrap<uv_req_t>* w = container_of(q, ReqWrap<uv_req_t>, req_wrap_queue_);
     if (w->object_.IsEmpty()) continue;
     ary->Set(i++, w->object_);
@@ -1406,12 +1275,12 @@ Handle<Value> GetActiveHandles(const Arguments& args) {
   HandleScope scope(node_isolate);
 
   Local<Array> ary = Array::New();
-  ngx_queue_t* q = NULL;
+  QUEUE* q = NULL;
   int i = 0;
 
   Local<String> owner_sym = String::New("owner");
 
-  ngx_queue_foreach(q, &handle_wrap_queue) {
+  QUEUE_FOREACH(q, &handle_wrap_queue) {
     HandleWrap* w = container_of(q, HandleWrap, handle_wrap_queue_);
     if (w->object_.IsEmpty() || (w->flags_ & HandleWrap::kUnref)) continue;
     Local<Value> obj = w->object_->Get(owner_sym);
@@ -1507,7 +1376,7 @@ static Handle<Value> Umask(const Arguments& args) {
 }
 
 
-#ifdef __POSIX__
+#if defined(__POSIX__) && !defined(__ANDROID__)
 
 static const uid_t uid_not_found = static_cast<uid_t>(-1);
 static const gid_t gid_not_found = static_cast<gid_t>(-1);
@@ -1783,7 +1652,7 @@ static Handle<Value> InitGroups(const Arguments& args) {
   return Undefined(node_isolate);
 }
 
-#endif // __POSIX__
+#endif // __POSIX__ && !defined(__ANDROID__)
 
 
 v8::Handle<v8::Value> Exit(const v8::Arguments& args) {
@@ -2002,7 +1871,8 @@ static void OnFatalError(const char* location, const char* message) {
   exit(5);
 }
 
-void FatalException(TryCatch &try_catch) {
+
+void FatalException(Handle<Value> error, Handle<Message> message) {
   HandleScope scope(node_isolate);
 
   if (fatal_exception_symbol.IsEmpty())
@@ -2013,30 +1883,45 @@ void FatalException(TryCatch &try_catch) {
   if (!fatal_v->IsFunction()) {
     // failed before the process._fatalException function was added!
     // this is probably pretty bad.  Nothing to do but report and exit.
-    ReportException(try_catch, true);
+    ReportException(error, message);
     exit(6);
   }
 
   Local<Function> fatal_f = Local<Function>::Cast(fatal_v);
 
-  Local<Value> error = try_catch.Exception();
-  Local<Value> argv[] = { error };
-
   TryCatch fatal_try_catch;
 
+  // Do not call FatalException when _fatalException handler throws
+  fatal_try_catch.SetVerbose(false);
+
   // this will return true if the JS layer handled it, false otherwise
-  Local<Value> caught = fatal_f->Call(process, ARRAY_SIZE(argv), argv);
+  Local<Value> caught = fatal_f->Call(process, 1, &error);
 
   if (fatal_try_catch.HasCaught()) {
     // the fatal exception function threw, so we must exit
-    ReportException(fatal_try_catch, true);
+    ReportException(fatal_try_catch);
     exit(7);
   }
 
   if (false == caught->BooleanValue()) {
-    ReportException(try_catch, true);
+    ReportException(error, message);
     exit(8);
   }
+}
+
+
+void FatalException(TryCatch& try_catch) {
+  HandleScope scope(node_isolate);
+  // TODO do not call FatalException if try_catch is verbose
+  // (requires V8 API to expose getter for try_catch.is_verbose_)
+  FatalException(try_catch.Exception(), try_catch.Message());
+}
+
+
+void OnMessage(Handle<Message> message, Handle<Value> error) {
+  // The current version of V8 sends messages for errors only
+  // (thus `error` is always set).
+  FatalException(error, message);
 }
 
 
@@ -2449,7 +2334,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 
   // --throw-deprecation
   if (throw_deprecation) {
-    process->Set(String::NewSymbol("throwDeprecation"), True());
+    process->Set(String::NewSymbol("throwDeprecation"), True(node_isolate));
   }
 
   // --trace-deprecation
@@ -2475,7 +2360,6 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   // define various internal methods
   NODE_SET_METHOD(process, "_getActiveRequests", GetActiveRequests);
   NODE_SET_METHOD(process, "_getActiveHandles", GetActiveHandles);
-  NODE_SET_METHOD(process, "_needTickCallback", NeedTickCallback);
   NODE_SET_METHOD(process, "reallyExit", Exit);
   NODE_SET_METHOD(process, "abort", Abort);
   NODE_SET_METHOD(process, "chdir", Chdir);
@@ -2483,7 +2367,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
 
   NODE_SET_METHOD(process, "umask", Umask);
 
-#ifdef __POSIX__
+#if defined(__POSIX__) && !defined(__ANDROID__)
   NODE_SET_METHOD(process, "getuid", GetUid);
   NODE_SET_METHOD(process, "setuid", SetUid);
 
@@ -2493,7 +2377,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   NODE_SET_METHOD(process, "getgroups", GetGroups);
   NODE_SET_METHOD(process, "setgroups", SetGroups);
   NODE_SET_METHOD(process, "initgroups", InitGroups);
-#endif // __POSIX__
+#endif // __POSIX__ && !defined(__ANDROID__)
 
   NODE_SET_METHOD(process, "_kill", Kill);
 
@@ -2516,7 +2400,7 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
   Local<Object> info_box = Object::New();
   info_box->SetIndexedPropertiesToExternalArrayData(&tick_infobox,
                                                     kExternalUnsignedIntArray,
-                                                    3);
+                                                    2);
   process->Set(String::NewSymbol("_tickInfoBox"), info_box);
 
   // pre-set _events object for faster emit checks
@@ -2550,10 +2434,15 @@ void Load(Handle<Object> process_l) {
 
   TryCatch try_catch;
 
+  // Disable verbose mode to stop FatalException() handler from trying
+  // to handle the exception. Errors this early in the start-up phase
+  // are not safe to ignore.
+  try_catch.SetVerbose(false);
+
   Local<Value> f_value = ExecuteString(MainSource(),
                                        IMMUTABLE_STRING("node.js"));
   if (try_catch.HasCaught())  {
-    ReportException(try_catch, true);
+    ReportException(try_catch);
     exit(10);
   }
   assert(f_value->IsFunction());
@@ -2579,11 +2468,15 @@ void Load(Handle<Object> process_l) {
   InitPerfCounters(global);
 #endif
 
-  f->Call(global, 1, args);
+  // Enable handling of uncaught exceptions
+  // (FatalException(), break on uncaught exception in debugger)
+  //
+  // This is not strictly necessary since it's almost impossible
+  // to attach the debugger fast enought to break on exception
+  // thrown during process startup.
+  try_catch.SetVerbose(true);
 
-  if (try_catch.HasCaught())  {
-    FatalException(try_catch);
-  }
+  f->Call(global, 1, args);
 }
 
 static void PrintHelp();
@@ -3066,10 +2959,11 @@ char** Init(int argc, char *argv[]) {
   uv_idle_init(uv_default_loop(), &tick_spinner);
 
   uv_check_init(uv_default_loop(), &check_immediate_watcher);
-  uv_unref((uv_handle_t*) &check_immediate_watcher);
+  uv_unref(reinterpret_cast<uv_handle_t*>(&check_immediate_watcher));
   uv_idle_init(uv_default_loop(), &idle_immediate_dummy);
 
   V8::SetFatalErrorHandler(node::OnFatalError);
+  V8::AddMessageListener(OnMessage);
 
   // If the --debug flag was specified then initialize the debug thread.
   if (use_debug_agent) {
@@ -3081,7 +2975,7 @@ char** Init(int argc, char *argv[]) {
     static uv_signal_t signal_watcher;
     uv_signal_init(uv_default_loop(), &signal_watcher);
     uv_signal_start(&signal_watcher, EnableDebugSignalHandler, SIGUSR1);
-    uv_unref((uv_handle_t*)&signal_watcher);
+    uv_unref(reinterpret_cast<uv_handle_t*>(&signal_watcher));
 #endif // __POSIX__
   }
 
@@ -3176,7 +3070,7 @@ int Start(int argc, char *argv[]) {
     HandleScope handle_scope(node_isolate);
 
     // Create the one and only Context.
-    Persistent<Context> context = Context::New();
+    Local<Context> context = Context::New(node_isolate);
     Context::Scope context_scope(context);
 
     // Use original argv, as we're just copying values out of it.
@@ -3196,10 +3090,6 @@ int Start(int argc, char *argv[]) {
 
     EmitExit(process_l);
     RunAtExit();
-
-#ifndef NDEBUG
-    context.Dispose(node_isolate);
-#endif
   }
 
 #ifndef NDEBUG

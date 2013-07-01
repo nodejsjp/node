@@ -29,11 +29,13 @@ NODE_EXT_LIST_ITEM(node_evals)
 NODE_EXT_LIST_ITEM(node_fs)
 NODE_EXT_LIST_ITEM(node_http_parser)
 NODE_EXT_LIST_ITEM(node_os)
+NODE_EXT_LIST_ITEM(node_smalloc)
 NODE_EXT_LIST_ITEM(node_zlib)
 
 // libuv rewrite
 NODE_EXT_LIST_ITEM(node_timer_wrap)
 NODE_EXT_LIST_ITEM(node_tcp_wrap)
+NODE_EXT_LIST_ITEM(node_tls_wrap)
 NODE_EXT_LIST_ITEM(node_udp_wrap)
 NODE_EXT_LIST_ITEM(node_pipe_wrap)
 NODE_EXT_LIST_ITEM(node_cares_wrap)

@@ -26,24 +26,23 @@
 
 namespace node {
 
-using v8::Context;
-using v8::Script;
-using v8::Value;
-using v8::Handle;
-using v8::HandleScope;
-using v8::Object;
 using v8::Arguments;
-using v8::ThrowException;
-using v8::TryCatch;
-using v8::String;
-using v8::Exception;
-using v8::Local;
 using v8::Array;
-using v8::Persistent;
-using v8::Integer;
+using v8::Context;
+using v8::Exception;
 using v8::Function;
 using v8::FunctionTemplate;
+using v8::Handle;
+using v8::HandleScope;
+using v8::Local;
+using v8::Object;
+using v8::Persistent;
+using v8::Script;
+using v8::String;
+using v8::ThrowException;
+using v8::TryCatch;
 using v8::V8;
+using v8::Value;
 
 
 class WrappedContext : ObjectWrap {
@@ -165,7 +164,7 @@ Handle<Value> WrappedContext::New(const Arguments& args) {
 
 
 WrappedContext::WrappedContext() : ObjectWrap() {
-  context_ = Context::New();
+  context_ = Persistent<Context>::New(node_isolate, Context::New(node_isolate));
 }
 
 
@@ -382,13 +381,7 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
   Local<Array> keys;
   if (context_flag == newContext) {
     // Create the new context
-    // Context::New returns a Persistent<Context>, but we only need it for this
-    // function. Here we grab a temporary handle to the new context, assign it
-    // to a local handle, and then dispose the persistent handle. This ensures
-    // that when this function exits the context will be disposed.
-    Persistent<Context> tmp = Context::New();
-    context = Local<Context>::New(node_isolate, tmp);
-    tmp.Dispose(node_isolate);
+    context = Context::New(node_isolate);
 
   } else if (context_flag == userContext) {
     // Use the passed in context
@@ -408,6 +401,10 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
   // Catch errors
   TryCatch try_catch;
 
+  // TryCatch must not be verbose to prevent duplicate logging
+  // of uncaught exceptions (we are rethrowing them)
+  try_catch.SetVerbose(false);
+
   Handle<Value> result;
   Handle<Script> script;
 
@@ -418,7 +415,7 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
                                          : Script::New(code, filename);
     if (script.IsEmpty()) {
       // FIXME UGLY HACK TO DISPLAY SYNTAX ERRORS.
-      if (display_error) DisplayExceptionLine(try_catch);
+      if (display_error) DisplayExceptionLine(try_catch.Message());
 
       // Hack because I can't get a proper stacktrace on SyntaxError
       return try_catch.ReThrow();
@@ -451,7 +448,7 @@ Handle<Value> WrappedScript::EvalMachine(const Arguments& args) {
             String::New("Script execution timed out.")));
     }
     if (result.IsEmpty()) {
-      if (display_error) DisplayExceptionLine(try_catch);
+      if (display_error) DisplayExceptionLine(try_catch.Message());
       return try_catch.ReThrow();
     }
   } else {

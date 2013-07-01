@@ -281,8 +281,7 @@ class StubCache {
   // ---
 
   Handle<Code> ComputeCompareNil(Handle<Map> receiver_map,
-                                 NilValue nil,
-                                 CompareNilICStub::Types types);
+                                 CompareNilICStub& stub);
 
   // ---
 
@@ -1065,17 +1064,6 @@ class CallStubCompiler: public StubCompiler {
   const Code::Kind kind_;
   const Code::ExtraICState extra_state_;
   const InlineCacheHolderFlag cache_holder_;
-};
-
-
-class ConstructStubCompiler: public StubCompiler {
- public:
-  explicit ConstructStubCompiler(Isolate* isolate) : StubCompiler(isolate) { }
-
-  Handle<Code> CompileConstructStub(Handle<JSFunction> function);
-
- private:
-  Handle<Code> GetCode();
 };
 
 
