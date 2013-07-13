@@ -52,11 +52,11 @@ The process object. See the [process object][] section.
 * {Object}
 
 <!--
-Used to print to stdout and stderr. See the [stdio][] section.
+Used to print to stdout and stderr. See the [console][] section.
 -->
 
 標準出力および標準エラー出力へのプリントに使われます。
-[標準入出力][] を参照してください。
+[コンソール][] を参照してください。
 
 ## Class: Buffer
 
@@ -242,23 +242,19 @@ when to use `module.exports`.
 `exports` isn't actually a global but rather local to each module.
 -->
 
-現在のモジュールの全てのインスタンスで共有され、
-`require()` を通じてアクセスされる、`module.exports` オブジェクトを参照します。
-いつ `exports` を使い、いつ `module.exports` を使うかの詳細は、
+現在のモジュールの全てのインスタンス間で共有される `module.exports`
+を参照するオブジェクトで、`require()` を通じてアクセス可能になります。
+いつ `exports` を使い、いつ `module.exports` を使うかの詳細は
 [モジュールシステムのドキュメント][] を参照してください。
 `exports` は実際はグローバルではなく、各モジュール毎のローカルです。
 
 <!--
 See the [module system documentation][] for more information.
--->
 
-より詳しくは [モジュールシステムのドキュメント][] を参照してください。
-
-<!--
 See the [module section][] for more information.
 -->
 
-より詳しくは [モジュールセクション][] を参照してください。
+より詳しくは [モジュール][] を参照してください。
 
 ## setTimeout(cb, ms)
 
@@ -349,7 +345,7 @@ The timer functions are global variables. See the [timers][] section.
 [module system documentation]: modules.html
 [Modules]: modules.html#modules_modules
 [process object]: process.html#process_process
-[stdio]: stdio.html
+[console]: console.html
 [timers]: timers.html
 -->
 
@@ -358,5 +354,5 @@ The timer functions are global variables. See the [timers][] section.
 [モジュールシステムのドキュメント]: modules.html
 [モジュール]: modules.html#modules_modules
 [process オブジェクト]: process.html#process_process
-[標準入出力]: stdio.html
+[コンソール]: console.html
 [タイマー]: timers.html
