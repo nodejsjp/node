@@ -95,7 +95,7 @@ exceeded. The limits are configurable:
   - `tls.CLIENT_RENEG_LIMIT`: renegotiation limit, default is 3.
 
   - `tls.CLIENT_RENEG_WINDOW`: renegotiation window in seconds, default is
-                               10 minutes.
+    10 minutes.
 
 Don't change the defaults unless you know what you are doing.
 
@@ -117,7 +117,7 @@ TLS プロトコルでは、クライアントに TLS セッションの再ネ�
   - `tls.CLIENT_RENEG_LIMIT`: 再ネゴシエーションの上限、デフォルトは 3 です。
 
   - `tls.CLIENT_RENEG_WINDOW`: 秒単位の再ネゴシエーションウィンドウ、
-                               デフォルトは 10 分です。
+    デフォルトは 10 分です。
 
 あなたが何をしようとしているか十分に理解していない限り、
 デフォルトを変更しないでください。
@@ -205,14 +205,13 @@ automatically set as a listener for the [secureConnection][] event.  The
     conjunction with the `honorCipherOrder` option described below to
     prioritize the non-CBC cipher.
 
-    Defaults to
-    `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`.
+    Defaults to `AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`.
     Consult the [OpenSSL cipher list format documentation] for details on the
-    format.
+    format. ECDH (Elliptic Curve Diffie-Hellman) ciphers are not yet supported.
 
-    `ECDHE-RSA-AES128-SHA256` and `AES128-GCM-SHA256` are used when node.js is
-    linked against OpenSSL 1.0.1 or newer and the client speaks TLS 1.2, RC4 is
-    used as a secure fallback.
+
+    `AES128-GCM-SHA256` is used when node.js is linked against OpenSSL 1.0.1
+    or newer and the client speaks TLS 1.2, RC4 is used as a secure fallback.
 
     **NOTE**: Previous revisions of this section suggested `AES256-SHA` as an
     acceptable cipher. Unfortunately, `AES256-SHA` is a CBC cipher and therefore
@@ -286,14 +285,12 @@ automatically set as a listener for the [secureConnection][] event.  The
     [BEAST 攻撃]を抑制するために、このオプションと以下に示す `honorCipherOrder`
     を共に使って、非 CBC 暗号を優先することを推奨します。
 
-    デフォルトは
-    `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`
-    です。
+    デフォルトは `AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH` です。
     詳細は [OpenSSL 暗号リストフォーマットのドキュメント] を参照してください。
+    ECDH (Elliptic Curve Diffie-Hellman) 暗号はまだサポートされていません。
 
-    `ECDHE-RSA-AES128-SHA256` と `AES128-GCM-SHA256` は、Node.js が
-    OpenSSL 1.0.1 以降とリンクされていて、クライアントが TLS 1.2 を
-    サポートしている場合に使われます。
+    `AES128-GCM-SHA256` は、Node.js が OpenSSL 1.0.1 以降とリンクされていて、
+    クライアントが TLS 1.2 をサポートしている場合に使われます。
     RC4 は安全なフォールバックとして使われます。
 
     **注意**: 以前のバージョンのこのセクションは `AES256-SHA` を
@@ -576,6 +573,70 @@ Or
     socket.on('end', function() {
       server.close();
     });
+
+## Class: tls.TLSSocket
+
+<!--
+Wrapper for instance of [net.Socket][], replaces internal socket read/write
+routines to perform transparent encryption/decryption of incoming/outgoing data.
+-->
+
+
+[net.Socket][] のラッパーです。内部的なソケットの read/write 処理を、
+入出力データを透過的に暗号化／復号化するように置き換えます。
+
+
+## new tls.TLSSocket(socket, options)
+
+<!--
+Construct a new TLSSocket object from existing TCP socket.
+-->
+
+既存の TCP ソケットから新しい TLSSocket オブジェクトを構築します。
+
+<!--
+`socket` is an instance of [net.Socket][]
+-->
+
+`socket` は [net.Socket][] のインスタンスです。
+
+<!--
+`options` is an object that might contain following properties:
+-->
+
+`options` は以下のプロパティを持つことができるオブジェクトです。
+
+<!--
+  - `credentials`: An optional credentials object from
+     `crypto.createCredentials( ... )`
+
+  - `isServer`: If true - TLS socket will be instantiated in server-mode
+
+  - `server`: An optional [net.Server][] instance
+
+  - `requestCert`: Optional, see [tls.createSecurePair][]
+
+  - `rejectUnauthorized`: Optional, see [tls.createSecurePair][]
+
+  - `NPNProtocols`: Optional, see [tls.createServer][]
+
+  - `SNICallback`: Optional, see [tls.createServer][]
+-->
+
+  - `credentials`: `crypto.createCredentials( ... )` から得られる
+    オプションの認証情報
+
+  - `isServer`: もし `true` なら、TLS ソケットはサーバも土で作成されます
+
+  - `server`: オプションの [net.Server][] インスタンス
+
+  - `requestCert`: オプション、[tls.createSecurePair][] を参照
+
+  - `rejectUnauthorized`: オプション、[tls.createSecurePair][] を参照
+
+  - `NPNProtocols`: オプション、[tls.createServer][] を参照
+
+  - `SNICallback`: オプション、[tls.createServer][] を参照
 
 ## tls.createSecurePair([credentials], [isServer], [requestCert], [rejectUnauthorized])
 
@@ -1050,7 +1111,11 @@ The numeric representation of the local port.
 <!--
 [OpenSSL cipher list format documentation]: http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT
 [BEAST attacks]: http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html
+[tls.createServer]: #tls_tls_createserver_options_secureconnectionlistener
+[tls.createSecurePair]: #tls_tls_createsecurepair_credentials_isserver_requestcert_rejectunauthorized
 [tls.TLSSocket]: #tls_class_tls_tlssocket
+[net.Server]: net.html#net_class_net_server
+[net.Socket]: net.html#net_class_net_socket
 [net.Server.address()]: net.html#net_server_address
 ['secureConnect']: #tls_event_secureconnect
 [secureConnection]: #tls_event_secureconnection
@@ -1062,7 +1127,11 @@ The numeric representation of the local port.
 
 [OpenSSL 暗号リストフォーマットのドキュメント]: http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT
 [BEAST 攻撃]: http://blog.ivanristic.com/2011/10/mitigating-the-beast-attack-on-tls.html
+[tls.createServer]: #tls_tls_createserver_options_secureconnectionlistener
+[tls.createSecurePair]: #tls_tls_createsecurepair_credentials_isserver_requestcert_rejectunauthorized
 [tls.TLSSocket]: #tls_class_tls_tlssocket
+[net.Server]: net.html#net_class_net_server
+[net.Socket]: net.html#net_class_net_socket
 [net.Server.address()]: net.html#net_server_address
 [net.Socket]: net.html#net_class_net_socket
 ['secureConnect']: #tls_event_secureconnect

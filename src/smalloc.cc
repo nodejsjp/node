@@ -32,11 +32,10 @@
 #define ALLOC_ID (0xA10C)
 
 namespace node {
-
 namespace smalloc {
 
-using v8::Arguments;
-using v8::FunctionTemplate;
+using v8::External;
+using v8::FunctionCallbackInfo;
 using v8::Handle;
 using v8::HandleScope;
 using v8::HeapProfiler;
@@ -54,22 +53,25 @@ using v8::kExternalUnsignedByteArray;
 struct CallbackInfo {
   void* hint;
   FreeCallback cb;
+  Persistent<Object> p_obj;
 };
 
-typedef v8::WeakReferenceCallbacks<Object, char>::Revivable Callback;
-typedef v8::WeakReferenceCallbacks<Object, void>::Revivable CallbackFree;
-
-Callback target_cb;
-CallbackFree target_free_cb;
-
-void TargetCallback(Isolate* isolate, Persistent<Object>* target, char* arg);
+void TargetCallback(Isolate* isolate,
+                    Persistent<Object>* target,
+                    char* arg);
 void TargetFreeCallback(Isolate* isolate,
                         Persistent<Object>* target,
-                        void* arg);
+                        CallbackInfo* arg);
+void TargetFreeCallback(Isolate* isolate,
+                        Local<Object> target,
+                        CallbackInfo* cb_info);
+
+Cached<String> smalloc_sym;
+static bool using_alloc_cb;
 
 
 // for internal use: copyOnto(source, source_start, dest, dest_start, length)
-Handle<Value> CopyOnto(const Arguments& args) {
+void CopyOnto(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   Local<Object> source = args[0]->ToObject();
@@ -96,19 +98,17 @@ Handle<Value> CopyOnto(const Arguments& args) {
   assert(dest_start + length <= dest_length);
 
   memmove(dest_data + dest_start, source_data + source_start, length);
-
-  return Undefined(node_isolate);
 }
 
 
 // for internal use: dest._data = sliceOnto(source, dest, start, end);
-Handle<Value> SliceOnto(const Arguments& args) {
+void SliceOnto(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   Local<Object> source = args[0]->ToObject();
   Local<Object> dest = args[1]->ToObject();
-  char* source_data = static_cast<char*>(source->
-                                  GetIndexedPropertiesExternalArrayData());
+  char* source_data = static_cast<char*>(
+      source->GetIndexedPropertiesExternalArrayData());
   size_t source_len = source->GetIndexedPropertiesExternalArrayDataLength();
   size_t start = args[2]->Uint32Value();
   size_t end = args[3]->Uint32Value();
@@ -121,76 +121,89 @@ Handle<Value> SliceOnto(const Arguments& args) {
   dest->SetIndexedPropertiesToExternalArrayData(source_data + start,
                                                 kExternalUnsignedByteArray,
                                                 end - start);
-
-  return scope.Close(source);
+  args.GetReturnValue().Set(source);
 }
 
 
 // for internal use: alloc(obj, n);
-Handle<Value> Alloc(const Arguments& args) {
+void Alloc(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   Local<Object> obj = args[0]->ToObject();
   size_t length = args[1]->Uint32Value();
 
   Alloc(obj, length);
-
-  return scope.Close(obj);
+  args.GetReturnValue().Set(obj);
 }
 
 
 void Alloc(Handle<Object> obj, size_t length) {
   assert(length <= kMaxLength);
 
-  char* data = new char[length];
+  if (length == 0)
+    return Alloc(obj, NULL, length);
+
+  char* data = static_cast<char*>(malloc(length));
+  if (data == NULL)
+    FatalError("node::smalloc::Alloc(Handle<Object>, size_t)", "Out Of Memory");
   Alloc(obj, data, length);
 }
 
 
 void Alloc(Handle<Object> obj, char* data, size_t length) {
-  assert(data != NULL);
-
   Persistent<Object> p_obj(node_isolate, obj);
-
   node_isolate->AdjustAmountOfExternalAllocatedMemory(length);
-  p_obj.MakeWeak(node_isolate, data, target_cb);
-  p_obj.MarkIndependent(node_isolate);
-  p_obj.SetWrapperClassId(node_isolate, ALLOC_ID);
-  p_obj->SetIndexedPropertiesToExternalArrayData(data,
-                                                 kExternalUnsignedByteArray,
-                                                 length);
+  p_obj.MakeWeak(data, TargetCallback);
+  p_obj.MarkIndependent();
+  p_obj.SetWrapperClassId(ALLOC_ID);
+  obj->SetIndexedPropertiesToExternalArrayData(data,
+                                               kExternalUnsignedByteArray,
+                                               length);
 }
 
 
-void TargetCallback(Isolate* isolate, Persistent<Object>* target, char* data) {
-  int len = (*target)->GetIndexedPropertiesExternalArrayDataLength();
+void TargetCallback(Isolate* isolate,
+                    Persistent<Object>* target,
+                    char* data) {
+  HandleScope handle_scope(isolate);
+  Local<Object> obj = PersistentToLocal(isolate, *target);
+  int len = obj->GetIndexedPropertiesExternalArrayDataLength();
   if (data != NULL && len > 0) {
     isolate->AdjustAmountOfExternalAllocatedMemory(-len);
-    delete[] data;
+    free(data);
   }
   (*target).Dispose();
-  (*target).Clear();
 }
 
 
-Handle<Value> AllocDispose(const Arguments& args) {
+void AllocDispose(const FunctionCallbackInfo<Value>& args) {
   AllocDispose(args[0]->ToObject());
-  return Undefined(node_isolate);
 }
 
 
 void AllocDispose(Handle<Object> obj) {
+  HandleScope scope(node_isolate);
+
+  if (using_alloc_cb && obj->Has(smalloc_sym)) {
+    Local<External> ext = obj->Get(smalloc_sym).As<External>();
+    CallbackInfo* cb_info = static_cast<CallbackInfo*>(ext->Value());
+    Local<Object> obj = PersistentToLocal(cb_info->p_obj);
+    TargetFreeCallback(node_isolate, obj, cb_info);
+    return;
+  }
+
   char* data = static_cast<char*>(obj->GetIndexedPropertiesExternalArrayData());
   size_t length = obj->GetIndexedPropertiesExternalArrayDataLength();
 
-  if (data == NULL || length == 0)
-    return;
-
-  obj->SetIndexedPropertiesToExternalArrayData(NULL,
-                                               kExternalUnsignedByteArray,
-                                               0);
-  delete[] data;
-  node_isolate->AdjustAmountOfExternalAllocatedMemory(-length);
+  if (data != NULL) {
+    obj->SetIndexedPropertiesToExternalArrayData(NULL,
+                                                 kExternalUnsignedByteArray,
+                                                 0);
+    free(data);
+  }
+  if (length != 0) {
+    node_isolate->AdjustAmountOfExternalAllocatedMemory(-length);
+  }
 }
 
 
@@ -209,49 +222,60 @@ void Alloc(Handle<Object> obj,
            void* hint) {
   assert(data != NULL);
 
+  if (smalloc_sym.IsEmpty()) {
+    smalloc_sym = String::New("_smalloc_p");
+    using_alloc_cb = true;
+  }
+
   CallbackInfo* cb_info = new CallbackInfo;
   cb_info->cb = fn;
   cb_info->hint = hint;
-  Persistent<Object> p_obj(node_isolate, obj);
+  cb_info->p_obj.Reset(node_isolate, obj);
 
   node_isolate->AdjustAmountOfExternalAllocatedMemory(length +
                                                       sizeof(*cb_info));
-  p_obj.MakeWeak(node_isolate, static_cast<void*>(cb_info), target_free_cb);
-  p_obj.MarkIndependent(node_isolate);
-  p_obj.SetWrapperClassId(node_isolate, ALLOC_ID);
-  p_obj->SetIndexedPropertiesToExternalArrayData(data,
-                                                 kExternalUnsignedByteArray,
-                                                 length);
+  cb_info->p_obj.MakeWeak(cb_info, TargetFreeCallback);
+  cb_info->p_obj.MarkIndependent();
+  cb_info->p_obj.SetWrapperClassId(ALLOC_ID);
+  obj->SetIndexedPropertiesToExternalArrayData(data,
+                                               kExternalUnsignedByteArray,
+                                               length);
 }
 
 
-// TODO(trevnorris): running AllocDispose will cause data == NULL, which is
-// then passed to cb_info->cb, which the user will need to check for.
 void TargetFreeCallback(Isolate* isolate,
                         Persistent<Object>* target,
-                        void* arg) {
-  Local<Object> obj = **target;
-  int len = obj->GetIndexedPropertiesExternalArrayDataLength();
+                        CallbackInfo* cb_info) {
+  HandleScope handle_scope(isolate);
+  Local<Object> obj = PersistentToLocal(isolate, *target);
+  TargetFreeCallback(isolate, obj, cb_info);
+}
+
+
+void TargetFreeCallback(Isolate* isolate,
+                        Local<Object> obj,
+                        CallbackInfo* cb_info) {
+  HandleScope handle_scope(isolate);
   char* data = static_cast<char*>(obj->GetIndexedPropertiesExternalArrayData());
-  CallbackInfo* cb_info = static_cast<CallbackInfo*>(arg);
+  int len = obj->GetIndexedPropertiesExternalArrayDataLength();
   isolate->AdjustAmountOfExternalAllocatedMemory(-(len + sizeof(*cb_info)));
-  (*target).Dispose();
-  (*target).Clear();
+  cb_info->p_obj.Dispose();
   cb_info->cb(data, cb_info->hint);
   delete cb_info;
 }
 
 
 class RetainedAllocInfo: public RetainedObjectInfo {
-public:
-  RetainedAllocInfo(Handle<Value> wrapper);
+ public:
+  explicit RetainedAllocInfo(Handle<Value> wrapper);
+
   virtual void Dispose();
   virtual bool IsEquivalent(RetainedObjectInfo* other);
   virtual intptr_t GetHash();
   virtual const char* GetLabel();
   virtual intptr_t GetSizeInBytes();
 
-private:
+ private:
   static const char label_[];
   char* data_;
   int length_;
@@ -300,21 +324,18 @@ RetainedObjectInfo* WrapperInfo(uint16_t class_id, Handle<Value> wrapper) {
 
 
 void Initialize(Handle<Object> exports) {
-  exports->Set(String::New("copyOnto"),
-               FunctionTemplate::New(CopyOnto)->GetFunction());
-  exports->Set(String::New("sliceOnto"),
-               FunctionTemplate::New(SliceOnto)->GetFunction());
+  NODE_SET_METHOD(exports, "copyOnto", CopyOnto);
+  NODE_SET_METHOD(exports, "sliceOnto", SliceOnto);
 
-  exports->Set(String::New("alloc"),
-               FunctionTemplate::New(Alloc)->GetFunction());
-  exports->Set(String::New("dispose"),
-               FunctionTemplate::New(AllocDispose)->GetFunction());
+  NODE_SET_METHOD(exports, "alloc", Alloc);
+  NODE_SET_METHOD(exports, "dispose", AllocDispose);
 
   exports->Set(String::New("kMaxLength"),
                Uint32::New(kMaxLength, node_isolate));
 
-  target_cb = TargetCallback;
-  target_free_cb = TargetFreeCallback;
+  // for performance, begin checking if allocation object may contain
+  // callbacks if at least one has been set.
+  using_alloc_cb = false;
 
   HeapProfiler* heap_profiler = node_isolate->GetHeapProfiler();
   heap_profiler->SetWrapperClassInfoProvider(ALLOC_ID, WrapperInfo);
@@ -322,7 +343,6 @@ void Initialize(Handle<Object> exports) {
 
 
 }  // namespace smalloc
-
 }  // namespace node
 
 NODE_MODULE(node_smalloc, node::smalloc::Initialize)

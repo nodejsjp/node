@@ -792,7 +792,7 @@ This will generate:
 On the next loop around the event loop call this callback.
 This is *not* a simple alias to `setTimeout(fn, 0)`, it's much more
 efficient.  It typically runs before any other I/O events fire, but there
-are some exceptions.  See `process.maxTickDepth` below.
+are some exceptions.
 -->
 
 イベントループの次以降のループでコールバックを呼び出します。
@@ -800,7 +800,6 @@ are some exceptions.  See `process.maxTickDepth` below.
 はるかに効率的です。
 これは通常他の I/O イベントが発生するよりも前に実行されますが、
 いくつかの例外があります。
-後述の `process.maxTickDepth` を参照してください。
 
     process.nextTick(function() {
       console.log('nextTick callback');
@@ -878,49 +877,6 @@ This approach is much better:
 
       fs.stat('file', cb);
     }
-
-## process.maxTickDepth
-
-* {Number} Default = 1000
-
-<!--
-Callbacks passed to `process.nextTick` will *usually* be called at the
-end of the current flow of execution, and are thus approximately as fast
-as calling a function synchronously.  Left unchecked, this would starve
-the event loop, preventing any I/O from occurring.
--->
-
-`process.nextTick()` に渡されたコールバックは、*通常* 現在の実行フローの
-後で呼び出され、それは関数を同期的に呼び出すのと同じくらい高速です。
-これを放置するとあらゆる I/O が阻まれ、イベントループは飢餓状態となるでしょう。
-
-<!--
-Consider this code:
--->
-
-以下のコードを考えてみてください。
-
-    process.nextTick(function foo() {
-      process.nextTick(foo);
-    });
-
-<!--
-In order to avoid the situation where Node is blocked by an infinite
-loop of recursive series of nextTick calls, it defers to allow some I/O
-to be done every so often.
--->
-
-nextTick の再帰が連鎖する無限ループによって Node がブロックする状況を
-避けるには、それを先送りして時々 I/O を可能にします。
-
-<!--
-The `process.maxTickDepth` value is the maximum depth of
-nextTick-calling nextTick-callbacks that will be evaluated before
-allowing other forms of I/O to occur.
--->
-
-`process.maxTickDepth` の値は、nextTick が nextTick のコールバックを呼び出す
-最大の深さで、他の I/O を可能にする前に評価されます。
 
 ## process.umask([mask])
 
