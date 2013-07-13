@@ -220,7 +220,13 @@ class of the compressor/decompressor classes.
 `zlib` モジュールによって公開されてはいません。
 ここで文書化するのは圧縮／解凍クラスのベースクラスだからです。
 
-### zlib.flush(callback)
+### zlib.flush([kind], callback)
+
+<!--
+`kind` defaults to `zlib.Z_FULL_FLUSH`.
+-->
+
+`kind` のデフォルトは `zlib.Z_FULL_FLUSH` です。
 
 <!--
 Flush pending data. Don't call this frivolously, premature flushes negatively
@@ -231,6 +237,16 @@ impact the effectiveness of the compression algorithm.
 これを気軽に呼び出さないでください、性急なフラッシュは圧縮アルゴリズムに
 ネガティブな影響を与えます。
 
+### zlib.params(level, strategy, callback)
+
+<!--
+Dynamically update the compression level and compression strategy.
+Only applicable to deflate algorithm.
+-->
+
+圧縮のレベルと戦略を動的に更新します。
+deflate アルゴリズムにだけ適用されます。
+
 ### zlib.reset()
 
 <!--
@@ -239,7 +255,7 @@ the inflate and deflate algorithms.
 -->
 
 圧縮／解凍をファクトリのデフォルトにリセットします。
-infrate および defrate アルゴリズムにのみ効果があります。
+inflate および deflate アルゴリズムにのみ効果があります。
 
 ## Class: zlib.Gzip
 
@@ -350,7 +366,7 @@ Gunzip で生のバッファを解凍します。
 Decompress a raw Buffer with Inflate.
 -->
 
-Infrate で生のバッファを解凍します。
+Inflate で生のバッファを解凍します。
 
 ## zlib.inflateRaw(buf, [options], callback)
 

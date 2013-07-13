@@ -82,35 +82,6 @@ encoding method.  Here are the different string encodings.
 
 * `'hex'` - 各バイトを 2 桁の16進数文字列でエンコードします。
 
-<!--
-A `Buffer` object can also be used with typed arrays.  The buffer object is
-cloned to an `ArrayBuffer` that is used as the backing store for the typed
-array.  The memory of the buffer and the `ArrayBuffer` is not shared.
--->
-
-`Buffer` は Typed Array として使うことができます。
-バッファオブジェクトは、Typed Array のバッキングストアとして使われる
-`ArrayBuffer` から複製されます。
-バッファと `Typed Array` はメモリを共有しません。
-
-<!--
-NOTE: Node.js v0.8 simply retained a reference to the buffer in `array.buffer`
-instead of cloning it.
--->
-
-Node.js の v0.8 では、バッファを複製するのではなく、単純に `array.buffer`
-に参照を維持していました。
-
-<!--
-While more efficient, it introduces subtle incompatibilities with the typed
-arrays specification.  `ArrayBuffer#slice()` makes a copy of the slice while
-`Buffer#slice()` creates a view.
--->
-
-それは効率的ではあったものの、Typed Array との微妙な非互換性をもたらしました。
-`ArrayBuffer#slice()` はスライスのコピーを作成する一方、
-`Buffer#slice()` はビューを作成します。
-
 ## Class: Buffer
 
 <!--

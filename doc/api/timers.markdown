@@ -116,22 +116,17 @@ can also pass arguments to the callback.
 オプションとして、コールバックへの引数を渡すことができます。
 
 <!--
-Immediates are queued in the order created, and are popped off the queue once
-per loop iteration. This is different from `process.nextTick` which will
-execute `process.maxTickDepth` queued callbacks per iteration. `setImmediate`
-will yield to the event loop after firing a queued callback to make sure I/O is
-not being starved. While order is preserved for execution, other I/O events may
-fire between any two scheduled immediate callbacks.
+Callbacks for immediates are queued in the order in which they were created.
+The entire callback queue is processed every event loop iteration. If you queue
+an immediate from a inside an executing callback that immediate won't fire
+until the next event loop iteration.
 -->
 
-`setImmediate()` は作成された順でキューに入れられ、イベントループの
-繰り返し毎に一度、キューから取り出されます。
-これは繰り返し毎に `process.maxTickDepth` で指定された回数までキューに
-入れられた関数が実行される `process.nextTick()` とは異なります。
-`setImmediate()` は I/O が沈み込まないように、キューイングされたコールバックが
-呼び出された後イベントループに制御を譲ります。
-二つの `setImmediate()` のコールバックが実行される順序は維持されますが、
-他の I/O が間に挟まるかもしれません。
+即時実行のコールバックは、それが作られた順でキューイングされます。
+コールバックのキューは全体が各イベントループの繰り返し毎に処理されます。
+もし即時実行のコールバックが実行されている中から `setImmediate()`
+を呼び出しても、そのコールバックは次のイベントループの繰り返しまで
+呼び出されません。
 
 ## clearImmediate(immediateId)
 
