@@ -95,7 +95,7 @@ exceeded. The limits are configurable:
   - `tls.CLIENT_RENEG_LIMIT`: renegotiation limit, default is 3.
 
   - `tls.CLIENT_RENEG_WINDOW`: renegotiation window in seconds, default is
-                               10 minutes.
+    10 minutes.
 
 Don't change the defaults unless you know what you are doing.
 
@@ -117,7 +117,7 @@ TLS プロトコルでは、クライアントに TLS セッションの再ネ�
   - `tls.CLIENT_RENEG_LIMIT`: 再ネゴシエーションの上限、デフォルトは 3 です。
 
   - `tls.CLIENT_RENEG_WINDOW`: 秒単位の再ネゴシエーションウィンドウ、
-                               デフォルトは 10 分です。
+    デフォルトは 10 分です。
 
 あなたが何をしようとしているか十分に理解していない限り、
 デフォルトを変更しないでください。
@@ -205,14 +205,13 @@ automatically set as a listener for the [secureConnection][] event.  The
     conjunction with the `honorCipherOrder` option described below to
     prioritize the non-CBC cipher.
 
-    Defaults to
-    `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`.
+    Defaults to `AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`.
     Consult the [OpenSSL cipher list format documentation] for details on the
-    format.
+    format. ECDH (Elliptic Curve Diffie-Hellman) ciphers are not yet supported.
 
-    `ECDHE-RSA-AES128-SHA256` and `AES128-GCM-SHA256` are used when node.js is
-    linked against OpenSSL 1.0.1 or newer and the client speaks TLS 1.2, RC4 is
-    used as a secure fallback.
+
+    `AES128-GCM-SHA256` is used when node.js is linked against OpenSSL 1.0.1
+    or newer and the client speaks TLS 1.2, RC4 is used as a secure fallback.
 
     **NOTE**: Previous revisions of this section suggested `AES256-SHA` as an
     acceptable cipher. Unfortunately, `AES256-SHA` is a CBC cipher and therefore
@@ -282,14 +281,12 @@ automatically set as a listener for the [secureConnection][] event.  The
     [BEAST 攻撃]を抑制するために、このオプションと以下に示す `honorCipherOrder`
     を共に使って、非 CBC 暗号を優先することを推奨します。
 
-    デフォルトは
-    `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`
-    です。
+    デフォルトは `AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH` です。
     詳細は [OpenSSL 暗号リストフォーマットのドキュメント] を参照してください。
+    ECDH (Elliptic Curve Diffie-Hellman) 暗号はまだサポートされていません。
 
-    `ECDHE-RSA-AES128-SHA256` と `AES128-GCM-SHA256` は、Node.js が
-    OpenSSL 1.0.1 以降とリンクされていて、クライアントが TLS 1.2 を
-    サポートしている場合に使われます。
+    `AES128-GCM-SHA256` は、Node.js が OpenSSL 1.0.1 以降とリンクされていて、
+    クライアントが TLS 1.2 をサポートしている場合に使われます。
     RC4 は安全なフォールバックとして使われます。
 
     **注意**: 以前のバージョンのこのセクションは `AES256-SHA` を
