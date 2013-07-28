@@ -255,6 +255,9 @@ automatically set as a listener for the [secureConnection][] event.  The
     resumption. If `requestCert` is `true`, the default is MD5 hash value
     generated from command-line. Otherwise, the default is not provided.
 
+  - `secureProtocol`: The SSL method to use, e.g. `SSLv3_method` to force
+    SSL version 3. The possible values depend on your installation of
+    OpenSSL and are defined in the constant [SSL_METHODS][].
 -->
 
   - `pfx` : PFX または PKCS12 でエンコードされた秘密鍵、証明書、および CA の
@@ -334,6 +337,10 @@ automatically set as a listener for the [secureConnection][] event.  The
     `requestCedrt` が `true` の場合、デフォルトはコマンドライン引数から
     生成された MD5 ハッシュ値となります。
     そうでない場合はデフォルトは提供されません。
+
+  - `secureProtocol`: 使用する SSL メソッド、たとえば `SSLv3_method` は
+    SSL version 3 の使用を強制します。可能な値は使用する OpenSSL によって
+    定義される [SSL_METHODS][] 定数に依存します。
 
 <!--
 Here is a simple example echo server:
