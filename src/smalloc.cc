@@ -19,9 +19,9 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-
-#include "node.h"
 #include "smalloc.h"
+#include "node.h"
+#include "node_internals.h"
 
 #include "v8.h"
 #include "v8-profiler.h"
@@ -70,34 +70,45 @@ Cached<String> smalloc_sym;
 static bool using_alloc_cb;
 
 
-// for internal use: copyOnto(source, source_start, dest, dest_start, length)
+// copyOnto(source, source_start, dest, dest_start, copy_length)
 void CopyOnto(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   Local<Object> source = args[0]->ToObject();
   Local<Object> dest = args[2]->ToObject();
+
+  if (!source->HasIndexedPropertiesInExternalArrayData())
+    return ThrowError("source has no external array data");
+  if (!dest->HasIndexedPropertiesInExternalArrayData())
+    return ThrowError("dest has no external array data");
+
   size_t source_start = args[1]->Uint32Value();
   size_t dest_start = args[3]->Uint32Value();
-  size_t length = args[4]->Uint32Value();
+  size_t copy_length = args[4]->Uint32Value();
   size_t source_length = source->GetIndexedPropertiesExternalArrayDataLength();
   size_t dest_length = dest->GetIndexedPropertiesExternalArrayDataLength();
   char* source_data = static_cast<char*>(
-                              source->GetIndexedPropertiesExternalArrayData());
+      source->GetIndexedPropertiesExternalArrayData());
   char* dest_data = static_cast<char*>(
-                                dest->GetIndexedPropertiesExternalArrayData());
+      dest->GetIndexedPropertiesExternalArrayData());
 
-  assert(source_data != NULL);
-  assert(dest_data != NULL);
-  // necessary to check in case (source|dest)_start _and_ length overflow
-  assert(length <= source_length);
-  assert(length <= dest_length);
-  assert(source_start <= source_length);
-  assert(dest_start <= dest_length);
+  // necessary to check in case (source|dest)_start _and_ copy_length overflow
+  if (copy_length > source_length)
+    return ThrowRangeError("copy_length > source_length");
+  if (copy_length > dest_length)
+    return ThrowRangeError("copy_length > dest_length");
+  if (source_start > source_length)
+    return ThrowRangeError("source_start > source_length");
+  if (dest_start > dest_length)
+    return ThrowRangeError("dest_start > dest_length");
+
   // now we can guarantee these will catch oob access and *_start overflow
-  assert(source_start + length <= source_length);
-  assert(dest_start + length <= dest_length);
+  if (source_start + copy_length > source_length)
+    return ThrowRangeError("source_start + copy_length > source_length");
+  if (dest_start + copy_length > dest_length)
+    return ThrowRangeError("dest_start + copy_length > dest_length");
 
-  memmove(dest_data + dest_start, source_data + source_start, length);
+  memmove(dest_data + dest_start, source_data + source_start, copy_length);
 }
 
 
@@ -112,15 +123,16 @@ void SliceOnto(const FunctionCallbackInfo<Value>& args) {
   size_t source_len = source->GetIndexedPropertiesExternalArrayDataLength();
   size_t start = args[2]->Uint32Value();
   size_t end = args[3]->Uint32Value();
+  size_t length = end - start;
 
   assert(!dest->HasIndexedPropertiesInExternalArrayData());
-  assert(source_data != NULL);
+  assert(source_data != NULL || length == 0);
   assert(end <= source_len);
   assert(start <= end);
 
   dest->SetIndexedPropertiesToExternalArrayData(source_data + start,
                                                 kExternalUnsignedByteArray,
-                                                end - start);
+                                                length);
   args.GetReturnValue().Set(source);
 }
 
@@ -129,8 +141,11 @@ void SliceOnto(const FunctionCallbackInfo<Value>& args) {
 void Alloc(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  Local<Object> obj = args[0]->ToObject();
+  Local<Object> obj = args[0].As<Object>();
   size_t length = args[1]->Uint32Value();
+
+  if (obj->HasIndexedPropertiesInExternalArrayData())
+    return ThrowTypeError("object already has external array data");
 
   Alloc(obj, length);
   args.GetReturnValue().Set(obj);
@@ -151,6 +166,7 @@ void Alloc(Handle<Object> obj, size_t length) {
 
 
 void Alloc(Handle<Object> obj, char* data, size_t length) {
+  assert(!obj->HasIndexedPropertiesInExternalArrayData());
   Persistent<Object> p_obj(node_isolate, obj);
   node_isolate->AdjustAmountOfExternalAllocatedMemory(length);
   p_obj.MakeWeak(data, TargetCallback);
@@ -176,8 +192,9 @@ void TargetCallback(Isolate* isolate,
 }
 
 
+// for internal use: dispose(obj);
 void AllocDispose(const FunctionCallbackInfo<Value>& args) {
-  AllocDispose(args[0]->ToObject());
+  AllocDispose(args[0].As<Object>());
 }
 
 
@@ -185,9 +202,9 @@ void AllocDispose(Handle<Object> obj) {
   HandleScope scope(node_isolate);
 
   if (using_alloc_cb && obj->Has(smalloc_sym)) {
-    Local<External> ext = obj->Get(smalloc_sym).As<External>();
+    Local<External> ext = obj->GetHiddenValue(smalloc_sym).As<External>();
     CallbackInfo* cb_info = static_cast<CallbackInfo*>(ext->Value());
-    Local<Object> obj = PersistentToLocal(cb_info->p_obj);
+    Local<Object> obj = PersistentToLocal(node_isolate, cb_info->p_obj);
     TargetFreeCallback(node_isolate, obj, cb_info);
     return;
   }
@@ -220,7 +237,7 @@ void Alloc(Handle<Object> obj,
            size_t length,
            FreeCallback fn,
            void* hint) {
-  assert(data != NULL);
+  assert(!obj->HasIndexedPropertiesInExternalArrayData());
 
   if (smalloc_sym.IsEmpty()) {
     smalloc_sym = String::New("_smalloc_p");
@@ -231,6 +248,7 @@ void Alloc(Handle<Object> obj,
   cb_info->cb = fn;
   cb_info->hint = hint;
   cb_info->p_obj.Reset(node_isolate, obj);
+  obj->SetHiddenValue(smalloc_sym, External::New(cb_info));
 
   node_isolate->AdjustAmountOfExternalAllocatedMemory(length +
                                                       sizeof(*cb_info));

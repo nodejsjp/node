@@ -51,6 +51,16 @@ void Assembler::emitl(uint32_t x) {
 }
 
 
+void Assembler::emitp(void* x, RelocInfo::Mode rmode) {
+  uintptr_t value = reinterpret_cast<uintptr_t>(x);
+  Memory::uintptr_at(pc_) = value;
+  if (!RelocInfo::IsNone(rmode)) {
+    RecordRelocInfo(rmode, value);
+  }
+  pc_ += sizeof(uintptr_t);
+}
+
+
 void Assembler::emitq(uint64_t x, RelocInfo::Mode rmode) {
   Memory::uint64_at(pc_) = x;
   if (!RelocInfo::IsNone(rmode)) {
@@ -369,7 +379,7 @@ bool RelocInfo::IsPatchedReturnSequence() {
   // The 11th byte is int3 (0xCC) in the return sequence and
   // REX.WB (0x48+register bit) for the call sequence.
 #ifdef ENABLE_DEBUGGER_SUPPORT
-  return pc_[10] != 0xCC;
+  return pc_[2 + kPointerSize] != 0xCC;
 #else
   return false;
 #endif

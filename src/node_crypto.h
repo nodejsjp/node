@@ -23,8 +23,14 @@
 #define SRC_NODE_CRYPTO_H_
 
 #include "node.h"
-
+#include "node_crypto_clienthello.h"  // ClientHelloParser
+#include "node_crypto_clienthello-inl.h"
 #include "node_object_wrap.h"
+
+#ifdef OPENSSL_NPN_NEGOTIATED
+#include "node_buffer.h"
+#endif
+
 #include "v8.h"
 
 #include <openssl/ssl.h>
@@ -36,10 +42,6 @@
 #include <openssl/hmac.h>
 #include <openssl/rand.h>
 #include <openssl/pkcs12.h>
-
-#ifdef OPENSSL_NPN_NEGOTIATED
-#include "node_buffer.h"
-#endif
 
 #define EVP_F_EVP_DECRYPTFINAL 101
 
@@ -57,7 +59,7 @@ class SecureContext : ObjectWrap {
   static void Initialize(v8::Handle<v8::Object> target);
 
   SSL_CTX *ctx_;
-  // TODO: ca_store_ should probably be removed, it's not used anywhere.
+  // TODO(indutny): ca_store_ should probably be removed, it's not used anywhere
   X509_STORE *ca_store_;
 
   static const int kMaxSessionSize = 10 * 1024;
@@ -79,6 +81,8 @@ class SecureContext : ObjectWrap {
       const v8::FunctionCallbackInfo<v8::Value>& args);
   static void Close(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void LoadPKCS12(const v8::FunctionCallbackInfo<v8::Value>& args);
+  static void GetTicketKeys(const v8::FunctionCallbackInfo<v8::Value>& args);
+  static void SetTicketKeys(const v8::FunctionCallbackInfo<v8::Value>& args);
 
   static SSL_SESSION* GetSessionCallback(SSL* s,
                                          unsigned char* key,
@@ -113,49 +117,6 @@ class SecureContext : ObjectWrap {
   }
 
  private:
-};
-
-class ClientHelloParser {
- public:
-  enum FrameType {
-    kChangeCipherSpec = 20,
-    kAlert = 21,
-    kHandshake = 22,
-    kApplicationData = 23,
-    kOther = 255
-  };
-
-  enum HandshakeType {
-    kClientHello = 1
-  };
-
-  enum ParseState {
-    kWaiting,
-    kTLSHeader,
-    kSSLHeader,
-    kPaused,
-    kEnded
-  };
-
-  ClientHelloParser(Connection* c) : conn_(c),
-                                     state_(kWaiting),
-                                     offset_(0),
-                                     body_offset_(0) {
-  }
-
-  size_t Write(const uint8_t* data, size_t len);
-  void Finish();
-
-  inline bool ended() { return state_ == kEnded; }
-
- private:
-  Connection* conn_;
-  ParseState state_;
-  size_t frame_len_;
-
-  uint8_t data_[18432];
-  size_t offset_;
-  size_t body_offset_;
 };
 
 class Connection : ObjectWrap {
@@ -219,6 +180,10 @@ class Connection : ObjectWrap {
   static int SelectSNIContextCallback_(SSL* s, int* ad, void* arg);
 #endif
 
+  static void OnClientHello(void* arg,
+                            const ClientHelloParser::ClientHello& hello);
+  static void OnClientHelloParseEnd(void* arg);
+
   int HandleBIOError(BIO* bio, const char* func, int rv);
 
   enum ZeroStatus {
@@ -242,10 +207,11 @@ class Connection : ObjectWrap {
     return ss;
   }
 
-  Connection() : ObjectWrap(), hello_parser_(this) {
+  Connection() : ObjectWrap(), hello_offset_(0) {
     bio_read_ = bio_write_ = NULL;
     ssl_ = NULL;
     next_sess_ = NULL;
+    hello_parser_.Start(OnClientHello, OnClientHelloParseEnd, this);
   }
 
   ~Connection() {
@@ -283,6 +249,9 @@ class Connection : ObjectWrap {
   bool is_server_; /* coverity[member_decl] */
   SSL_SESSION* next_sess_;
 
+  uint8_t hello_data_[18432];
+  size_t hello_offset_;
+
   friend class ClientHelloParser;
   friend class SecureContext;
 };
@@ -297,9 +266,13 @@ class CipherBase : public ObjectWrap {
     kDecipher
   };
 
-  void Init(char* cipher_type, char* key_buf, int key_buf_len);
-  void InitIv(char* cipher_type, char* key, int key_len, char* iv, int iv_len);
-  bool Update(char* data, int len, unsigned char** out, int* out_len);
+  void Init(const char* cipher_type, const char* key_buf, int key_buf_len);
+  void InitIv(const char* cipher_type,
+              const char* key,
+              int key_len,
+              const char* iv,
+              int iv_len);
+  bool Update(const char* data, int len, unsigned char** out, int* out_len);
   bool Final(unsigned char** out, int *out_len);
   bool SetAutoPadding(bool auto_padding);
 
@@ -310,9 +283,9 @@ class CipherBase : public ObjectWrap {
   static void Final(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SetAutoPadding(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  CipherBase(CipherKind kind) : cipher_(NULL),
-                                initialised_(false),
-                                kind_(kind) {
+  explicit CipherBase(CipherKind kind) : cipher_(NULL),
+                                         initialised_(false),
+                                         kind_(kind) {
   }
 
   ~CipherBase() {
@@ -329,11 +302,11 @@ class CipherBase : public ObjectWrap {
 
 class Hmac : public ObjectWrap {
  public:
-  static void Initialize (v8::Handle<v8::Object> target);
+  static void Initialize(v8::Handle<v8::Object> target);
 
  protected:
-  void HmacInit(char* hashType, char* key, int key_len);
-  bool HmacUpdate(char* data, int len);
+  void HmacInit(const char* hash_type, const char* key, int key_len);
+  bool HmacUpdate(const char* data, int len);
   bool HmacDigest(unsigned char** md_value, unsigned int* md_len);
 
   static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -357,10 +330,10 @@ class Hmac : public ObjectWrap {
 
 class Hash : public ObjectWrap {
  public:
-  static void Initialize (v8::Handle<v8::Object> target);
+  static void Initialize(v8::Handle<v8::Object> target);
 
-  bool HashInit(const char* hashType);
-  bool HashUpdate(char* data, int len);
+  bool HashInit(const char* hash_type);
+  bool HashUpdate(const char* data, int len);
 
  protected:
   static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -386,10 +359,10 @@ class Sign : public ObjectWrap {
   static void Initialize(v8::Handle<v8::Object> target);
 
   void SignInit(const char* sign_type);
-  bool SignUpdate(char* data, int len);
+  bool SignUpdate(const char* data, int len);
   bool SignFinal(unsigned char** md_value,
                  unsigned int *md_len,
-                 char* key_pem,
+                 const char* key_pem,
                  int key_pem_len);
 
  protected:
@@ -414,17 +387,17 @@ class Sign : public ObjectWrap {
 
 class Verify : public ObjectWrap {
  public:
-  static void Initialize (v8::Handle<v8::Object> target);
+  static void Initialize(v8::Handle<v8::Object> target);
 
   void VerifyInit(const char* verify_type);
-  bool VerifyUpdate(char* data, int len);
-  bool VerifyFinal(char* key_pem,
+  bool VerifyUpdate(const char* data, int len);
+  bool VerifyFinal(const char* key_pem,
                    int key_pem_len,
-                   unsigned char* sig,
+                   const char* sig,
                    int siglen);
 
  protected:
-  static void New (const v8::FunctionCallbackInfo<v8::Value>& args);
+  static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void VerifyInit(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void VerifyUpdate(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void VerifyFinal(const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -441,7 +414,6 @@ class Verify : public ObjectWrap {
   EVP_MD_CTX mdctx_; /* coverity[member_decl] */
   const EVP_MD* md_; /* coverity[member_decl] */
   bool initialised_;
-
 };
 
 class DiffieHellman : public ObjectWrap {
@@ -449,8 +421,8 @@ class DiffieHellman : public ObjectWrap {
   static void Initialize(v8::Handle<v8::Object> target);
 
   bool Init(int primeLength);
-  bool Init(unsigned char* p, int p_len);
-  bool Init(unsigned char* p, int p_len, unsigned char* g, int g_len);
+  bool Init(const char* p, int p_len);
+  bool Init(const char* p, int p_len, const char* g, int g_len);
 
  protected:
   static void DiffieHellmanGroup(

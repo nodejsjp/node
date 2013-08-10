@@ -19,13 +19,13 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#include "pipe_wrap.h"
 #include "node.h"
 #include "node_buffer.h"
-#include "req_wrap.h"
 #include "handle_wrap.h"
-#include "stream_wrap.h"
-#include "pipe_wrap.h"
 #include "node_wrap.h"
+#include "req_wrap.h"
+#include "stream_wrap.h"
 
 namespace node {
 
@@ -41,6 +41,7 @@ using v8::Object;
 using v8::Persistent;
 using v8::PropertyAttribute;
 using v8::String;
+using v8::Undefined;
 using v8::Value;
 
 static Persistent<Function> pipeConstructor;
@@ -48,7 +49,7 @@ static Cached<String> onconnection_sym;
 static Cached<String> oncomplete_sym;
 
 
-// TODO share with TCPWrap?
+// TODO(bnoordhuis) share with TCPWrap?
 typedef class ReqWrap<uv_connect_t> ConnectWrap;
 
 
@@ -99,7 +100,9 @@ void PipeWrap::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "shutdown", StreamWrap::Shutdown);
 
   NODE_SET_PROTOTYPE_METHOD(t, "writeBuffer", StreamWrap::WriteBuffer);
-  NODE_SET_PROTOTYPE_METHOD(t, "writeAsciiString", StreamWrap::WriteAsciiString);
+  NODE_SET_PROTOTYPE_METHOD(t,
+                            "writeAsciiString",
+                            StreamWrap::WriteAsciiString);
   NODE_SET_PROTOTYPE_METHOD(t, "writeUtf8String", StreamWrap::WriteUtf8String);
   NODE_SET_PROTOTYPE_METHOD(t, "writeUcs2String", StreamWrap::WriteUcs2String);
 
@@ -133,8 +136,8 @@ void PipeWrap::New(const FunctionCallbackInfo<Value>& args) {
 PipeWrap::PipeWrap(Handle<Object> object, bool ipc)
     : StreamWrap(object, reinterpret_cast<uv_stream_t*>(&handle_)) {
   int r = uv_pipe_init(uv_default_loop(), &handle_, ipc);
-  assert(r == 0); // How do we proxy this error up to javascript?
-                  // Suggestion: uv_pipe_init() returns void.
+  assert(r == 0);  // How do we proxy this error up to javascript?
+                   // Suggestion: uv_pipe_init() returns void.
   UpdateWriteQueueSize();
 }
 
@@ -145,13 +148,8 @@ void PipeWrap::Bind(const FunctionCallbackInfo<Value>& args) {
   UNWRAP(PipeWrap)
 
   String::AsciiValue name(args[0]);
-
-  int r = uv_pipe_bind(&wrap->handle_, *name);
-
-  // Error starting the pipe.
-  if (r) SetErrno(uv_last_error(uv_default_loop()));
-
-  args.GetReturnValue().Set(r);
+  int err = uv_pipe_bind(&wrap->handle_, *name);
+  args.GetReturnValue().Set(err);
 }
 
 
@@ -174,19 +172,14 @@ void PipeWrap::Listen(const FunctionCallbackInfo<Value>& args) {
   UNWRAP(PipeWrap)
 
   int backlog = args[0]->Int32Value();
-
-  int r = uv_listen(reinterpret_cast<uv_stream_t*>(&wrap->handle_),
-                    backlog,
-                    OnConnection);
-
-  // Error starting the pipe.
-  if (r) SetErrno(uv_last_error(uv_default_loop()));
-
-  args.GetReturnValue().Set(r);
+  int err = uv_listen(reinterpret_cast<uv_stream_t*>(&wrap->handle_),
+                      backlog,
+                      OnConnection);
+  args.GetReturnValue().Set(err);
 }
 
 
-// TODO maybe share with TCPWrap?
+// TODO(bnoordhuis) maybe share with TCPWrap?
 void PipeWrap::OnConnection(uv_stream_t* handle, int status) {
   HandleScope scope(node_isolate);
 
@@ -197,9 +190,13 @@ void PipeWrap::OnConnection(uv_stream_t* handle, int status) {
   // uv_close() on the handle.
   assert(wrap->persistent().IsEmpty() == false);
 
+  Local<Value> argv[] = {
+    Integer::New(status, node_isolate),
+    Undefined()
+  };
+
   if (status != 0) {
-    SetErrno(uv_last_error(uv_default_loop()));
-    MakeCallback(wrap->object(), "onconnection", 0, NULL);
+    MakeCallback(wrap->object(), "onconnection", ARRAY_SIZE(argv), argv);
     return;
   }
 
@@ -215,17 +212,17 @@ void PipeWrap::OnConnection(uv_stream_t* handle, int status) {
   if (uv_accept(handle, client_handle)) return;
 
   // Successful accept. Call the onconnection callback in JavaScript land.
-  Local<Value> argv[1] = { client_obj };
+  argv[1] = client_obj;
   if (onconnection_sym.IsEmpty()) {
     onconnection_sym = String::New("onconnection");
   }
   MakeCallback(wrap->object(), onconnection_sym, ARRAY_SIZE(argv), argv);
 }
 
-// TODO Maybe share this with TCPWrap?
+// TODO(bnoordhuis) Maybe share this with TCPWrap?
 void PipeWrap::AfterConnect(uv_connect_t* req, int status) {
-  ConnectWrap* req_wrap = (ConnectWrap*) req->data;
-  PipeWrap* wrap = (PipeWrap*) req->handle->data;
+  ConnectWrap* req_wrap = static_cast<ConnectWrap*>(req->data);
+  PipeWrap* wrap = static_cast<PipeWrap*>(req->handle->data);
 
   HandleScope scope(node_isolate);
 
@@ -236,7 +233,6 @@ void PipeWrap::AfterConnect(uv_connect_t* req, int status) {
   bool readable, writable;
 
   if (status) {
-    SetErrno(uv_last_error(uv_default_loop()));
     readable = writable = 0;
   } else {
     readable = uv_is_readable(req->handle) != 0;
@@ -277,18 +273,20 @@ void PipeWrap::Connect(const FunctionCallbackInfo<Value>& args) {
 
   UNWRAP(PipeWrap)
 
-  String::AsciiValue name(args[0]);
+  assert(args[0]->IsObject());
+  assert(args[1]->IsString());
 
-  ConnectWrap* req_wrap = new ConnectWrap();
+  Local<Object> req_wrap_obj = args[0].As<Object>();
+  String::AsciiValue name(args[1]);
 
+  ConnectWrap* req_wrap = new ConnectWrap(req_wrap_obj);
   uv_pipe_connect(&req_wrap->req_,
                   &wrap->handle_,
                   *name,
                   AfterConnect);
-
   req_wrap->Dispatched();
 
-  args.GetReturnValue().Set(req_wrap->persistent());
+  args.GetReturnValue().Set(0);  // uv_pipe_connect() doesn't return errors.
 }
 
 

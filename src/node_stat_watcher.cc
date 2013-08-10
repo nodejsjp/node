@@ -60,10 +60,8 @@ static void Delete(uv_handle_t* handle) {
 }
 
 
-StatWatcher::StatWatcher()
-  : ObjectWrap()
-  , watcher_(new uv_fs_poll_t)
-{
+StatWatcher::StatWatcher() : ObjectWrap(),
+                             watcher_(new uv_fs_poll_t) {
   uv_fs_poll_init(uv_default_loop(), watcher_);
   watcher_->data = static_cast<void*>(this);
 }
@@ -86,9 +84,6 @@ void StatWatcher::Callback(uv_fs_poll_t* handle,
   argv[0] = BuildStatsObject(curr);
   argv[1] = BuildStatsObject(prev);
   argv[2] = Integer::New(status, node_isolate);
-  if (status == -1) {
-    SetErrno(uv_last_error(wrap->watcher_->loop));
-  }
   if (onchange_sym.IsEmpty()) {
     onchange_sym = String::New("onchange");
   }
@@ -133,7 +128,7 @@ void StatWatcher::Stop(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void StatWatcher::Stop () {
+void StatWatcher::Stop() {
   if (!uv_is_active(reinterpret_cast<uv_handle_t*>(watcher_))) return;
   uv_fs_poll_stop(watcher_);
   Unref();

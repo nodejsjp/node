@@ -75,7 +75,7 @@ class ProcessWrap : public HandleWrap {
     new ProcessWrap(args.This());
   }
 
-  ProcessWrap(Handle<Object> object)
+  explicit ProcessWrap(Handle<Object> object)
       : HandleWrap(object, reinterpret_cast<uv_handle_t*>(&process_)) {
   }
 
@@ -86,13 +86,12 @@ class ProcessWrap : public HandleWrap {
                                 uv_process_options_t* options) {
     Local<Array> stdios = js_options
         ->Get(String::NewSymbol("stdio")).As<Array>();
-    int len = stdios->Length();
+    uint32_t len = stdios->Length();
     options->stdio = new uv_stdio_container_t[len];
     options->stdio_count = len;
 
-    for (int i = 0; i < len; i++) {
-      Local<Object> stdio = stdios
-          ->Get(Number::New(static_cast<double>(i))).As<Object>();
+    for (uint32_t i = 0; i < len; i++) {
+      Local<Object> stdio = stdios->Get(i).As<Object>();
       Local<Value> type = stdio->Get(String::NewSymbol("type"));
 
       if (type->Equals(String::NewSymbol("ignore"))) {
@@ -158,7 +157,7 @@ class ProcessWrap : public HandleWrap {
       return ThrowTypeError("options.gid should be a number");
     }
 
-    // TODO is this possible to do without mallocing ?
+    // TODO(bnoordhuis) is this possible to do without mallocing ?
 
     // options.file
     Local<Value> file_v = js_options->Get(String::NewSymbol("file"));
@@ -195,7 +194,7 @@ class ProcessWrap : public HandleWrap {
     if (!env_v.IsEmpty() && env_v->IsArray()) {
       Local<Array> env = Local<Array>::Cast(env_v);
       int envc = env->Length();
-      options.env = new char*[envc + 1]; // Heap allocated to detect errors.
+      options.env = new char*[envc + 1];  // Heap allocated to detect errors.
       for (int i = 0; i < envc; i++) {
         String::Utf8Value pair(env->Get(i));
         options.env[i] = strdup(*pair);
@@ -212,17 +211,14 @@ class ProcessWrap : public HandleWrap {
       options.flags |= UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS;
     }
 
-    //options.detached
+    // options.detached
     if (js_options->Get(String::NewSymbol("detached"))->IsTrue()) {
       options.flags |= UV_PROCESS_DETACHED;
     }
 
-    int r = uv_spawn(uv_default_loop(), &wrap->process_, options);
+    int err = uv_spawn(uv_default_loop(), &wrap->process_, options);
 
-    if (r) {
-      SetErrno(uv_last_error(uv_default_loop()));
-    }
-    else {
+    if (err == 0) {
       assert(wrap->process_.data == wrap);
       wrap->object()->Set(String::New("pid"),
                           Integer::New(wrap->process_.pid, node_isolate));
@@ -240,7 +236,7 @@ class ProcessWrap : public HandleWrap {
 
     delete[] options.stdio;
 
-    args.GetReturnValue().Set(r);
+    args.GetReturnValue().Set(err);
   }
 
   static void Kill(const FunctionCallbackInfo<Value>& args) {
@@ -248,9 +244,8 @@ class ProcessWrap : public HandleWrap {
     UNWRAP(ProcessWrap)
 
     int signal = args[0]->Int32Value();
-    int r = uv_process_kill(&wrap->process_, signal);
-    if (r) SetErrno(uv_last_error(uv_default_loop()));
-    args.GetReturnValue().Set(r);
+    int err = uv_process_kill(&wrap->process_, signal);
+    args.GetReturnValue().Set(err);
   }
 
   static void OnExit(uv_process_t* handle, int exit_status, int term_signal) {
@@ -260,14 +255,10 @@ class ProcessWrap : public HandleWrap {
     assert(wrap);
     assert(&wrap->process_ == handle);
 
-    Local<Value> argv[2] = {
+    Local<Value> argv[] = {
       Integer::New(exit_status, node_isolate),
       String::New(signo_string(term_signal))
     };
-
-    if (exit_status == -1) {
-      SetErrno(uv_last_error(uv_default_loop()));
-    }
 
     if (onexit_sym.IsEmpty()) {
       onexit_sym = String::New("onexit");

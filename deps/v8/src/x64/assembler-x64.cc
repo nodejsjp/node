@@ -902,10 +902,12 @@ void Assembler::clc() {
   emit(0xF8);
 }
 
+
 void Assembler::cld() {
   EnsureSpace ensure_space(this);
   emit(0xFC);
 }
+
 
 void Assembler::cdq() {
   EnsureSpace ensure_space(this);
@@ -1375,7 +1377,7 @@ void Assembler::load_rax(void* value, RelocInfo::Mode mode) {
   EnsureSpace ensure_space(this);
   emit(0x48);  // REX.W
   emit(0xA1);
-  emitq(reinterpret_cast<uintptr_t>(value), mode);
+  emitp(value, mode);
 }
 
 
@@ -1527,7 +1529,7 @@ void Assembler::movq(Register dst, void* value, RelocInfo::Mode rmode) {
   EnsureSpace ensure_space(this);
   emit_rex_64(dst);
   emit(0xB8 | dst.low_bits());
-  emitq(reinterpret_cast<uintptr_t>(value), rmode);
+  emitp(value, rmode);
 }
 
 
@@ -1604,7 +1606,7 @@ void Assembler::movq(Register dst, Handle<Object> value, RelocInfo::Mode mode) {
     ASSERT(!HEAP->InNewSpace(*value));
     emit_rex_64(dst);
     emit(0xB8 | dst.low_bits());
-    emitq(reinterpret_cast<uintptr_t>(value.location()), mode);
+    emitp(value.location(), mode);
   }
 }
 
@@ -1996,7 +1998,7 @@ void Assembler::store_rax(void* dst, RelocInfo::Mode mode) {
   EnsureSpace ensure_space(this);
   emit(0x48);  // REX.W
   emit(0xA3);
-  emitq(reinterpret_cast<uintptr_t>(dst), mode);
+  emitp(dst, mode);
 }
 
 
@@ -2522,6 +2524,7 @@ void Assembler::emit_farith(int b1, int b2, int i) {
   emit(b2 + i);
 }
 
+
 // SSE 2 operations.
 
 void Assembler::movd(XMMRegister dst, Register src) {
@@ -2581,6 +2584,7 @@ void Assembler::movq(XMMRegister dst, XMMRegister src) {
     emit_sse_operand(src, dst);
   }
 }
+
 
 void Assembler::movdqa(const Operand& dst, XMMRegister src) {
   EnsureSpace ensure_space(this);
@@ -3035,9 +3039,11 @@ void Assembler::emit_sse_operand(XMMRegister dst, XMMRegister src) {
   emit(0xC0 | (dst.low_bits() << 3) | src.low_bits());
 }
 
+
 void Assembler::emit_sse_operand(XMMRegister dst, Register src) {
   emit(0xC0 | (dst.low_bits() << 3) | src.low_bits());
 }
+
 
 void Assembler::emit_sse_operand(Register dst, XMMRegister src) {
   emit(0xC0 | (dst.low_bits() << 3) | src.low_bits());
@@ -3074,6 +3080,7 @@ void Assembler::RecordRelocInfo(RelocInfo::Mode rmode, intptr_t data) {
   RelocInfo rinfo(pc_, rmode, data, NULL);
   reloc_info_writer.Write(&rinfo);
 }
+
 
 void Assembler::RecordJSReturn() {
   positions_recorder()->WriteRecordedPositions();

@@ -46,21 +46,7 @@ int Deoptimizer::patch_size() {
 }
 
 
-void Deoptimizer::DeoptimizeFunctionWithPreparedFunctionList(
-    JSFunction* function) {
-  Isolate* isolate = function->GetIsolate();
-  HandleScope scope(isolate);
-  DisallowHeapAllocation nha;
-
-  ASSERT(function->IsOptimized());
-  ASSERT(function->FunctionsInFunctionListShareSameCode());
-
-  // Get the optimized code.
-  Code* code = function->code();
-
-  // The optimized code is going to be patched, so we cannot use it any more.
-  function->shared()->EvictFromOptimizedCodeMap(code, "deoptimized function");
-
+void Deoptimizer::PatchCodeForDeoptimization(Isolate* isolate, Code* code) {
   // Invalidate the relocation information, as it will become invalid by the
   // code patching below, and is not needed any more.
   code->InvalidateRelocation();
@@ -71,7 +57,7 @@ void Deoptimizer::DeoptimizeFunctionWithPreparedFunctionList(
   // before the safepoint table (space was allocated there when the Code
   // object was created, if necessary).
 
-  Address instruction_start = function->code()->instruction_start();
+  Address instruction_start = code->instruction_start();
 #ifdef DEBUG
   Address prev_call_address = NULL;
 #endif
@@ -92,25 +78,6 @@ void Deoptimizer::DeoptimizeFunctionWithPreparedFunctionList(
 #ifdef DEBUG
     prev_call_address = call_address;
 #endif
-  }
-
-  // Add the deoptimizing code to the list.
-  DeoptimizingCodeListNode* node = new DeoptimizingCodeListNode(code);
-  DeoptimizerData* data = isolate->deoptimizer_data();
-  node->set_next(data->deoptimizing_code_list_);
-  data->deoptimizing_code_list_ = node;
-
-  // We might be in the middle of incremental marking with compaction.
-  // Tell collector to treat this code object in a special way and
-  // ignore all slots that might have been recorded on it.
-  isolate->heap()->mark_compact_collector()->InvalidateCode(code);
-
-  ReplaceCodeForRelatedFunctions(function, code);
-
-  if (FLAG_trace_deopt) {
-    PrintF("[forced deoptimization: ");
-    function->PrintName();
-    PrintF(" / %" V8PRIxPTR "]\n", reinterpret_cast<intptr_t>(function));
   }
 }
 
@@ -451,16 +418,11 @@ void Deoptimizer::EntryGenerator::Generate() {
   // Get the bailout id from the stack.
   __ movq(arg_reg_3, Operand(rsp, kSavedRegistersAreaSize));
 
-  // Get the address of the location in the code object if possible
+  // Get the address of the location in the code object
   // and compute the fp-to-sp delta in register arg5.
-  if (type() == EAGER || type() == SOFT) {
-    __ Set(arg_reg_4, 0);
-    __ lea(arg5, Operand(rsp, kSavedRegistersAreaSize + 1 * kPointerSize));
-  } else {
-    __ movq(arg_reg_4,
-            Operand(rsp, kSavedRegistersAreaSize + 1 * kPointerSize));
-    __ lea(arg5, Operand(rsp, kSavedRegistersAreaSize + 2 * kPointerSize));
-  }
+  __ movq(arg_reg_4,
+          Operand(rsp, kSavedRegistersAreaSize + 1 * kPointerSize));
+  __ lea(arg5, Operand(rsp, kSavedRegistersAreaSize + 2 * kPointerSize));
 
   __ subq(arg5, rbp);
   __ neg(arg5);
@@ -503,12 +465,8 @@ void Deoptimizer::EntryGenerator::Generate() {
     __ pop(Operand(rbx, dst_offset));
   }
 
-  // Remove the bailout id from the stack.
-  if (type() == EAGER || type() == SOFT) {
-    __ addq(rsp, Immediate(kPointerSize));
-  } else {
-    __ addq(rsp, Immediate(2 * kPointerSize));
-  }
+  // Remove the bailout id and return address from the stack.
+  __ addq(rsp, Immediate(2 * kPointerSize));
 
   // Compute a pointer to the unwinding limit in register rcx; that is
   // the first stack slot not part of the input frame.
@@ -618,6 +576,17 @@ void Deoptimizer::TableEntryGenerator::GeneratePrologue() {
   }
   __ bind(&done);
 }
+
+
+void FrameDescription::SetCallerPc(unsigned offset, intptr_t value) {
+  SetFrameSlot(offset, value);
+}
+
+
+void FrameDescription::SetCallerFp(unsigned offset, intptr_t value) {
+  SetFrameSlot(offset, value);
+}
+
 
 #undef __
 

@@ -625,6 +625,84 @@ with a single error handler in a single place.
       // with the normal line number and stack message.
     });
 
+### domain.enter()
+
+<!--
+The `enter` method is plumbing used by the `run`, `bind`, and `intercept`
+methods to set the active domain. It sets `domain.active` and `process.domain`
+to the domain, and implicitly pushes the domain onto the domain stack managed
+by the domain module (see `domain.exit()` for details on the domain stack). The
+call to `enter` delimits the beginning of a chain of asynchronous calls and I/O
+operations bound to a domain.
+-->
+
+`enter()` メソッドは、`run()`、`bind()`、そして `intercept()` メソッドを
+アクティブなドメインに結びつけるために使われます。
+これは (このドメインオブジェクト、すなわち `this` を) `domain.active` および
+`process.domain` を設定し、ドメインモジュールによって管理される
+ドメインのスタックに暗黙的に積み上げます (ドメインのスタックに関する詳細は
+`domain.exit()` を参照)。
+
+<!--
+Calling `enter` changes only the active domain, and does not alter the domain
+itself. `Enter` and `exit` can be called an arbitrary number of times on a
+single domain.
+-->
+
+`enter()` の呼び出しはアクティブなドメインを変更することだけで、
+ドメイン自身は変化しません。
+`enter()` と `exit()` は一つのドメインに対して何度でも呼び出すことができます。
+
+<!--
+If the domain on which `enter` is called has been disposed, `enter` will return
+without setting the domain.
+-->
+
+もし `enter()` が呼び出されたドメインが破棄済みだと、
+`enter()` は何も設定せずにリターンします。
+
+### domain.exit()
+
+<!--
+The `exit` method exits the current domain, popping it off the domain stack.
+Any time execution is going to switch to the context of a different chain of
+asynchronous calls, it's important to ensure that the current domain is exited.
+The call to `exit` delimits either the end of or an interruption to the chain
+of asynchronous calls and I/O operations bound to a domain.
+-->
+
+`exit()` メソッドは現在のドメインから抜け出し、スタックから取り除きます。
+非同期呼び出しのチェーンが異なるコンテキストに切り替わる場合はどんな時でも、
+現在のドメインから確実に抜け出すことは重要です。
+`exit()` の呼び出しは、ドメインに束縛された非同期呼び出しおよび
+I/O 操作のチェーンを、終端または途中で区切ります。
+
+<!--
+If there are multiple, nested domains bound to the current execution context,
+`exit` will exit any domains nested within this domain.
+-->
+
+もし複数のネストしたドメインが現在の実行コンテキストに束縛されていると、
+`exit()` はネストしたどのドメインからも抜け出します。
+
+<!--
+Calling `exit` changes only the active domain, and does not alter the domain
+itself. `Enter` and `exit` can be called an arbitrary number of times on a
+single domain.
+-->
+
+`exit()` の呼び出しはアクティブなドメインを変更することだけで、
+ドメイン自身は変化しません。
+`enter()` と `exit()` は一つのドメインに対して何度でも呼び出すことができます。
+
+<!--
+If the domain on which `exit` is called has been disposed, `exit` will return
+without exiting the domain.
+-->
+
+もし `exit()` が呼び出されたドメインが破棄済みだと、
+`exit()` は何も設定せずにリターンします。
+
 ### domain.dispose()
 
 <!--

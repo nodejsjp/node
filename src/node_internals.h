@@ -22,27 +22,14 @@
 #ifndef SRC_NODE_INTERNALS_H_
 #define SRC_NODE_INTERNALS_H_
 
+#include "v8.h"
+
 #include <assert.h>
 #include <stdlib.h>
 
-#include "v8.h"
+struct sockaddr;
 
 namespace node {
-
-// Forward declarations from node_buffer.h.  We can't include node_buffer.h
-// in this file because:
-//
-// a) we're included early on in node.h, and
-// b) node_buffer.h depends on the definition of the |encoding| enum that's
-//    defined further down in node.h...
-namespace Buffer {
-
-NODE_EXTERN char* Data(v8::Handle<v8::Value>);
-NODE_EXTERN char* Data(v8::Handle<v8::Object>);
-NODE_EXTERN size_t Length(v8::Handle<v8::Value>);
-NODE_EXTERN size_t Length(v8::Handle<v8::Object>);
-
-} // namespace Buffer
 
 // Defined in node.cc
 extern v8::Isolate* node_isolate;
@@ -52,12 +39,12 @@ extern v8::Persistent<v8::Object> process_p;
 
 template <typename TypeName>
 class CachedBase {
-public:
+ public:
   CachedBase();
   operator v8::Handle<TypeName>() const;
   void operator=(v8::Handle<TypeName> that);  // Can only assign once.
   bool IsEmpty() const;
-private:
+ private:
   CachedBase(const CachedBase&);
   void operator=(const CachedBase&);
   v8::Persistent<TypeName> handle_;
@@ -65,22 +52,21 @@ private:
 
 template <typename TypeName>
 class Cached : public CachedBase<TypeName> {
-public:
+ public:
   operator v8::Handle<v8::Value>() const;
   void operator=(v8::Handle<TypeName> that);
 };
 
 template <>
 class Cached<v8::Value> : public CachedBase<v8::Value> {
-public:
+ public:
   operator v8::Handle<v8::Value>() const;
   void operator=(v8::Handle<v8::Value> that);
 };
 
-template <class TypeName>
-inline v8::Local<TypeName> PersistentToLocal(
-    const v8::Persistent<TypeName>& persistent);
-
+// If persistent.IsWeak() == false, then do not call persistent.Dispose()
+// while the returned Local<T> is still in scope, it will destroy the
+// reference to the object.
 template <class TypeName>
 inline v8::Local<TypeName> PersistentToLocal(
     v8::Isolate* isolate,
@@ -100,24 +86,21 @@ v8::Handle<v8::Value> MakeCallback(
     int argc,
     v8::Handle<v8::Value>* argv);
 
-inline bool HasInstance(v8::Persistent<v8::FunctionTemplate>& function_template,
-                        v8::Handle<v8::Value> value);
+inline bool HasInstance(
+    const v8::Persistent<v8::FunctionTemplate>& function_template,
+    v8::Handle<v8::Value> value);
 
-inline v8::Local<v8::Object> NewInstance(v8::Persistent<v8::Function>& ctor,
-                                          int argc = 0,
-                                          v8::Handle<v8::Value>* argv = NULL);
+inline v8::Local<v8::Object> NewInstance(
+    const v8::Persistent<v8::Function>& ctor,
+    int argc = 0,
+    v8::Handle<v8::Value>* argv = NULL);
 
-// TODO(bnoordhuis) Move to src/node_buffer.h once it's been established
-// that the current approach to dealing with Persistent is working out.
-namespace Buffer {
-
-template <typename TypeName>
-inline char* Data(v8::Persistent<TypeName>& val);
-
-template <typename TypeName>
-inline size_t Length(v8::Persistent<TypeName>& val);
-
-} // namespace Buffer
+// Convert a struct sockaddr to a { address: '1.2.3.4', port: 1234 } JS object.
+// Sets address and port properties on the info object and returns it.
+// If |info| is omitted, a new object is returned.
+v8::Local<v8::Object> AddressToJS(
+    const sockaddr* addr,
+    v8::Handle<v8::Object> info = v8::Handle<v8::Object>());
 
 #ifdef _WIN32
 // emulate snprintf() on windows, _snprintf() doesn't zero-terminate the buffer
@@ -143,12 +126,14 @@ inline static int snprintf(char* buf, unsigned int len, const char* fmt, ...) {
 // g++ in strict mode complains loudly about the system offsetof() macro
 // because it uses NULL as the base address.
 # define offset_of(type, member) \
-  ((intptr_t) ((char *) &(((type *) 8)->member) - 8))
+  (reinterpret_cast<intptr_t>( \
+      reinterpret_cast<char*>(&(reinterpret_cast<type*>(8)->member)) - 8))
 #endif
 
 #ifndef container_of
 # define container_of(ptr, type, member) \
-  ((type *) ((char *) (ptr) - offset_of(type, member)))
+  (reinterpret_cast<type*>(reinterpret_cast<char*>(ptr) - \
+                           offset_of(type, member)))
 #endif
 
 #ifndef ARRAY_SIZE
@@ -262,12 +247,6 @@ inline MUST_USE_RESULT bool ParseArrayIndex(v8::Handle<v8::Value> arg,
 
 template <class TypeName>
 inline v8::Local<TypeName> PersistentToLocal(
-    const v8::Persistent<TypeName>& persistent) {
-  return PersistentToLocal(node_isolate, persistent);
-}
-
-template <class TypeName>
-inline v8::Local<TypeName> PersistentToLocal(
     v8::Isolate* isolate,
     const v8::Persistent<TypeName>& persistent) {
   if (persistent.IsWeak()) {
@@ -284,7 +263,7 @@ CachedBase<TypeName>::CachedBase() {
 
 template <typename TypeName>
 CachedBase<TypeName>::operator v8::Handle<TypeName>() const {
-  return PersistentToLocal(handle_);
+  return PersistentToLocal(node_isolate, handle_);
 }
 
 template <typename TypeName>
@@ -322,7 +301,7 @@ v8::Handle<v8::Value> MakeCallback(
     const TypeName method,
     int argc,
     v8::Handle<v8::Value>* argv) {
-  v8::Local<v8::Object> recv_obj = PersistentToLocal(recv);
+  v8::Local<v8::Object> recv_obj = PersistentToLocal(node_isolate, recv);
   return MakeCallback(recv_obj, method, argc, argv);
 }
 
@@ -336,34 +315,23 @@ v8::Handle<v8::Value> MakeCallback(
   return MakeCallback(recv, handle, argc, argv);
 }
 
-inline bool HasInstance(v8::Persistent<v8::FunctionTemplate>& function_template,
-                        v8::Handle<v8::Value> value) {
+inline bool HasInstance(
+    const v8::Persistent<v8::FunctionTemplate>& function_template,
+    v8::Handle<v8::Value> value) {
   v8::Local<v8::FunctionTemplate> function_template_handle =
-      PersistentToLocal(function_template);
+      PersistentToLocal(node_isolate, function_template);
   return function_template_handle->HasInstance(value);
 }
 
-inline v8::Local<v8::Object> NewInstance(v8::Persistent<v8::Function>& ctor,
-                                          int argc,
-                                          v8::Handle<v8::Value>* argv) {
-  v8::Local<v8::Function> constructor_handle = PersistentToLocal(ctor);
+inline v8::Local<v8::Object> NewInstance(
+    const v8::Persistent<v8::Function>& ctor,
+    int argc,
+    v8::Handle<v8::Value>* argv) {
+  v8::Local<v8::Function> constructor_handle =
+      PersistentToLocal(node_isolate, ctor);
   return constructor_handle->NewInstance(argc, argv);
 }
 
-namespace Buffer {
+}  // namespace node
 
-template <typename TypeName>
-inline char* Data(v8::Persistent<TypeName>& val) {
-  return Data(PersistentToLocal(val));
-}
-
-template <typename TypeName>
-inline size_t Length(v8::Persistent<TypeName>& val) {
-  return Length(PersistentToLocal(val));
-}
-
-} // namespace Buffer
-
-} // namespace node
-
-#endif // SRC_NODE_INTERNALS_H_
+#endif  // SRC_NODE_INTERNALS_H_

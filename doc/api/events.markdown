@@ -228,11 +228,13 @@ Return the number of listeners for a given event.
 * `listener` {Function} The event handler function
 
 <!--
-This event is emitted any time someone adds a new listener.
+This event is emitted any time someone adds a new listener.  It is unspecified
+if `listener` is in the list returned by `emitter.listeners(event)`.
 -->
 
 このイベントは新しいリスナーが追加されるたびに生成されます。
-
+`emitter.listeners(event)` が返すリストに
+`listener` が含まれるかどうかは未定義です。
 
 ### Event: 'removeListener'
 
@@ -244,9 +246,11 @@ This event is emitted any time someone adds a new listener.
 * `event` {String} イベント名
 * `listener` {Function} イベントハンドラ関数
 
-
 <!--
-This event is emitted any time someone removes a listener.
+This event is emitted any time someone removes a listener.  It is unspecified
+if `listener` is in the list returned by `emitter.listeners(event)`.
 -->
 
 このイベントはリスナが取り除かれるたびに生成されます。
+`emitter.listeners(event)` が返すリストに
+`listener` が含まれるかどうかは未定義です。

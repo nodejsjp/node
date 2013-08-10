@@ -261,7 +261,8 @@ The syntax is:
 
 <!--
 * `node debug -p <pid>` - Connects to the process via the `pid`
-* `node debug <URI> - Connects to the process via the URI such as localhost:5858-->
+* `node debug <URI>` - Connects to the process via the URI such as localhost:5858
+-->
 
 * `node debug -p <pid>` - `pid` を通じてプロセスに接続
-* `node debug <URI> - `localhost:585` のような URI を通じてプロセスに接続
+* `node debug <URI>` - `localhost:585` のような URI を通じてプロセスに接続

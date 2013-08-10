@@ -553,61 +553,38 @@ Synchronous close(2).
 
 <!--
 Asynchronous file open. See open(2). `flags` can be:
-
-* `'r'` - Open file for reading.
-An exception occurs if the file does not exist.
-
-* `'r+'` - Open file for reading and writing.
-An exception occurs if the file does not exist.
-
-* `'rs'` - Open file for reading in synchronous mode. Instructs the operating
-  system to bypass the local file system cache.
-
-  This is primarily useful for opening files on NFS mounts as it allows you to
-  skip the potentially stale local cache. It has a very real impact on I/O
-  performance so don't use this mode unless you need it.
-
-  Note that this doesn't turn `fs.open()` into a synchronous blocking call.
-  If that's what you want then you should be using `fs.openSync()`
-
-* `'rs+'` - Open file for reading and writing, telling the OS to open it
-  synchronously. See notes for `'rs'` about using this with caution.
-
-* `'w'` - Open file for writing.
-The file is created (if it does not exist) or truncated (if it exists).
-
-* `'wx'` - Like `'w'` but opens the file in exclusive mode.
-
-* `'w+'` - Open file for reading and writing.
-The file is created (if it does not exist) or truncated (if it exists).
-
-* `'wx+'` - Like `'w+'` but opens the file in exclusive mode.
-
-* `'a'` - Open file for appending.
-The file is created if it does not exist.
-
-* `'ax'` - Like `'a'` but opens the file in exclusive mode.
-
-* `'a+'` - Open file for reading and appending.
-The file is created if it does not exist.
-
-* `'ax+'` - Like `'a+'` but opens the file in exclusive mode.
-
-`mode` defaults to `0666`. The callback gets two arguments `(err, fd)`.
-
-Exclusive mode (`O_EXCL`) ensures that `path` is newly created. `fs.open()`
-fails if a file by that name already exists. On POSIX systems, symlinks are
-not followed. Exclusive mode may or may not work with network file systems.
 -->
 
 非同期のファイルオープン。open(2) を参照してください。
 フラグは以下になります:
 
+<!--
+* `'r'` - Open file for reading.
+An exception occurs if the file does not exist.
+-->
+
 * `'r'` - ファイルを読み込み専用でオープンします。
   ファイルが存在しない場合は例外が発生します。
 
+<!--
+* `'r+'` - Open file for reading and writing.
+An exception occurs if the file does not exist.
+-->
+
 * `'r+'` - ファイルを読み書き両用でオープンします。
   ファイルが存在しない場合は例外が発生します。
+
+<!--
+* `'rs'` - Open file for reading in synchronous mode. Instructs the operating
+  system to bypass the local file system cache.
+
+  This is primarily useful for opening files on NFS mounts as it allows you to
+  skip the potentially stale local cache. It has a very real impact on I/O
+  performance so don't use this flag unless you need it.
+
+  Note that this doesn't turn `fs.open()` into a synchronous blocking call.
+  If that's what you want then you should be using `fs.openSync()`
+-->
 
 * `'rs'` - ファイルを同期モードで読み込むためにオープンします。
   オペレーティングシステムにローカルファイルシステムのキャッシュを
@@ -615,45 +592,99 @@ not followed. Exclusive mode may or may not work with network file systems.
 
   これは主に NFS にマウントされたファイルをオープンして、潜在的に古い
   ローカルキャッシュをスキップするのに役立ちます。
-  これはI/O パフォーマンスにとても深刻な影響を与えるため、必要でない限り
-  使用しないでください。
+  これはI/O パフォーマンスにとても深刻な影響を与えるため、必要でない限りは
+  このフラグを使用しないでください。
 
   これは `fs.open()` を同期的なブロッキング呼び出しにするわけではないことに
   注意してください。
   それが必要な場合は `fs.openSync()` を使用すべきです。
 
+<!--
+* `'rs+'` - Open file for reading and writing, telling the OS to open it
+  synchronously. See notes for `'rs'` about using this with caution.
+-->
+
 * `'rs+'` - ファイルを読み書き両方でオープンし、OS に同期的にオープンするように
   伝えます。これを使用する際の警告は `'rs'` の注意を参照してください。
 
+<!--
+* `'w'` - Open file for writing.
+The file is created (if it does not exist) or truncated (if it exists).
+-->
+
 * `'w'` - ファイルを書き込み専用でオープンします。
-  ファイルは作成される (存在しない場合) または長さ 0 に切り詰められます
+  ファイルは作成されるか (存在しない場合)、または長さ 0 に切り詰められます
   (存在する場合)。
 
-* `'wx'` - `'w'` と似ていますが、ファイルを排他モードでオープンします。
+<!--
+* `'wx'` - Like `'w'` but fails if `path` exists.
+-->
+
+* `'wx'` - `'w'` と似ていますが、`path` が存在すると失敗します。
+
+<!--
+* `'w+'` - Open file for reading and writing.
+The file is created (if it does not exist) or truncated (if it exists).
+-->
 
 * `'w+'` - ファイルを読み書き両用でオープンします。
-  ファイルは作成される (存在しない場合) または長さ 0 に切り詰められます
+  ファイルは作成されるか (存在しない場合)、または長さ 0 に切り詰められます
   (存在する場合)。
 
-* `'wx+'` - `'w+'` と似ていますが、ファイルを排他モードでオープンします。
+<!--
+* `'wx+'` - Like `'w+'` but fails if `path` exists.
+-->
+
+* `'wx+'` - `'w+'` と似ていますが、`path` が存在すると失敗します。
+
+<!--
+* `'a'` - Open file for appending.
+The file is created if it does not exist.
+-->
 
 * `'a'` - ファイルを追記用でオープンします。
   ファイルが存在しない場合は作成されます。
 
-* `'ax'` - `'a'` と似ていますが、ファイルを排他モードでオープンします。
+<!--
+* `'ax'` - Like `'a'` but fails if `path` exists.
+-->
+
+* `'ax'` - `'a'` と似ていますが、`path` が存在すると失敗します。
+
+<!--
+* `'a+'` - Open file for reading and appending.
+The file is created if it does not exist.
+-->
 
 * `'a+'` - ファイルを読み込みおよび追記用でオープンします。
   ファイルが存在しない場合は作成されます。
 
-* `'ax+'` - `'a+'` と似ていますが、ファイルを排他モードでオープンします。
+<!--
+* `'ax+'` - Like `'a+'` but fails if `path` exists.
 
-`mode` のデフォルトは 0666 です。
+`mode` sets the file mode (permission and sticky bits), but only if the file was
+created. It defaults to `0666`, readable and writeable.
+
+The callback gets two arguments `(err, fd)`.
+
+The exclusive flag `'x'` (`O_EXCL` flag in open(2)) ensures that `path` is newly
+created. On POSIX systems, `path` is considered to exist even if it is a symlink
+to a non-existent file. The exclusive flag may or may not work with network file
+systems.
+-->
+
+* `'ax+'` - `'a+'` と似ていますが、`path` が存在すると失敗します。
+
+`mode` はファイルモード (許可とスティッキービット) を設定しますが、
+それはファイルが作成される場合に限られます。
+デフォルトは 0666 です。
+
 コールバックは 2 つの引数を受け取る `(err, fd)`です。
 
-排他モード (`O_EXCL`) は、`path` が新しいファイルとして作成されることを
-確実にします。 指定された名前のファイルが既に存在する場合、
-`fs.open()` は失敗します。
-POSIX システムでは、シンボリックリンクは辿られません。
+排他フラグ `'x'` (open(2) の `O_EXCL` フラグ) は、
+`path` が新しいファイルとして作成されることを保証します。
+POSIX システムでは、`path` がたとえ存在しないファイルへのシンボリックだとしても、
+存在すると見なされます。
 排他モードはネットワークファイルシステムでは動くかもしれませんし、
 動かないかもしれません。
 
@@ -670,10 +701,10 @@ Linux では、ファイルを追記モードでオープンした場合、
 ## fs.openSync(path, flags, [mode])
 
 <!--
-Synchronous open(2).
+Synchronous version of `fs.open()`.
 -->
 
-同期の open(2)。
+同期版の open(2)。
 
 ## fs.utimes(path, atime, mtime, callback)
 ## fs.utimesSync(path, atime, mtime)
@@ -712,7 +743,7 @@ Synchronous fsync(2).
 
 同期の fsync(2)。
 
-## fs.write(fd, buffer, offset, length, position, callback)
+## fs.write(fd, buffer, offset, length[, position], callback)
 
 <!--
 Write `buffer` to the file specified by `fd`.
@@ -728,20 +759,17 @@ Write `buffer` to the file specified by `fd`.
 
 <!--
 `position` refers to the offset from the beginning of the file where this data
-should be written. If `position` is `null`, the data will be written at the
-current position.
-See pwrite(2).
+should be written. If `typeof position !== 'number'`, the data will be written
+at the current position. See pwrite(2).
 -->
 
 `position` はデータが書き込まれる位置をファイルの先頭からのオフセットで示します。
-`position` が `null` の場合、データは現在の位置から書き込まれます。
-pwrite(2) を参照してください。
+`position` が数値型ではない (`typeof position !== 'number'`) 場合、
+データは現在の位置から書き込まれます。pwrite(2) を参照してください。
 
 <!--
-The callback will be given two arguments `(err, written)` where `written`
-specifies how many _bytes_ were written.
-The callback will be given three arguments `(err, written, buffer)` where `written`
-specifies how many _bytes_ were written from `buffer`.
+The callback will be given three arguments `(err, written, buffer)` where
+`written` specifies how many _bytes_ were written from `buffer`.
 -->
 
 コールバックは 3 つの引数が与えられる `(err, written, buffer)` で、
@@ -766,10 +794,83 @@ Linux では、ファイルを追記モードでオープンした場合、
 ポジションを指定した書き込みは動作しません。
 カーネルはポジション引数を無視し、データを常にファイルの最後に追記します。
 
-## fs.writeSync(fd, buffer, offset, length, position)
+## fs.write(fd, data[, position[, encoding]], callback)
 
 <!--
-Synchronous version of `fs.write()`. Returns the number of bytes written.
+Write `data` to the file specified by `fd`.  If `data` is not a Buffer instance
+then the value will be coerced to a string.
+-->
+
+`fd` で指定されたファイルに `data` を書き込みます。
+もし `data` が Buffer のインスタンスではない場合、値は強制的に文字列化されます。
+
+<!--
+`position` refers to the offset from the beginning of the file where this data
+should be written. If `typeof position !== 'number'` the data will be written at
+the current position. See pwrite(2).
+-->
+
+`position` はデータが書き込まれる位置をファイルの先頭からのオフセットで示します。
+`position` が数値型ではない (`typeof position !== 'number'`) 場合、
+データは現在の位置から書き込まれます。pwrite(2) を参照してください。
+
+<!--
+`encoding` is the expected string encoding.
+-->
+
+`encoding` は期待される文字列のエンコーディングです。
+
+<!--
+The callback will receive the arguments `(err, written, string)` where `written`
+specifies how many _bytes_ the passed string required to be written. Note that
+bytes written is not the same as string characters. See
+[Buffer.byteLength](buffer.html#buffer_class_method_buffer_bytelength_string_encoding).
+-->
+
+コールバックは引数 `(err, written, string)` を受け取ります。
+`written` は渡された文字列から何 _バイト_ が書き込まれたかを示します。
+書き込まれたバイト数は文字列の文字数とは異なることに注意してください。
+詳細は
+[Buffer.byteLength](buffer.html#buffer_class_method_buffer_bytelength_string_encoding)
+を参照してください。
+
+<!--
+Unlike when writing `buffer`, the entire string must be written. No substring
+may be specified. This is because the byte offset of the resulting data may not
+be the same as the string offset.
+-->
+
+`buffer` の書き込みとは異なり、文字列全体が書き込まれます。
+部分文字列を指定することはできません。
+これは、書き込まれることになるデータのバイト単位のオフセットと、
+文字列のオフセットは異なるかもしれないためです。
+
+<!--
+Note that it is unsafe to use `fs.write` multiple times on the same file
+without waiting for the callback. For this scenario,
+`fs.createWriteStream` is strongly recommended.
+-->
+
+同じファイルに対してコールバックを待つことなく `fs.write()`
+を繰り返し呼び出すのは安全ではないことに注意してください。
+このシナリオでは、`fs.createWriteStream()` を強く推奨します。
+
+<!--
+On Linux, positional writes don't work when the file is opened in append mode.
+The kernel ignores the position argument and always appends the data to
+the end of the file.
+-->
+
+Linux では、追記モードでオープンしたファイルに対してポジションを指定した
+書き込みは動作しません。カーネルはポジション引数を無視し、
+常にデータをファイルの最後に追加します。
+
+## fs.writeSync(fd, buffer, offset, length[, position])
+
+## fs.writeSync(fd, data[, position[, encoding]])
+
+<!--
+Synchronous versions of `fs.write()`. Returns the number of bytes written.
 -->
 
 同期版の `fs.write()`。書き込まれたバイト数を返します。
@@ -789,10 +890,10 @@ Read data from the file specified by `fd`.
 `buffer` はデータが書き込まれるバッファです。
 
 <!--
-`offset` is offset within the buffer where reading will start.
+`offset` is the offset in the buffer to start writing at.
 -->
 
-`offset` は読み込みを開始するバッファ内のオフセットです。
+`offset` は書き込みを開始するバッファ内のオフセットです。
 
 <!--
 `length` is an integer specifying the number of bytes to read.
