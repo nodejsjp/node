@@ -849,6 +849,10 @@ See also: `child_process.exec()` and `child_process.fork()`
   * `cwd` {String} Current working directory of the child process
   * `env` {Object} Environment key-value pairs
   * `encoding` {String} (Default: 'utf8')
+  * `shell` {String} Shell to execute the command with
+    (Default: '/bin/sh' on UNIX, 'cmd.exe' on Windows,  The shell should
+     understand the `-c` switch on UNIX or `/s /c` on Windows. On Windows,
+     command line parsing should be compatible with `cmd.exe`.)
   * `timeout` {Number} (Default: 0)
   * `maxBuffer` {Number} (Default: 200*1024)
   * `killSignal` {String} (Default: 'SIGTERM')
@@ -864,6 +868,10 @@ See also: `child_process.exec()` and `child_process.fork()`
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
   * `env` {Object} 環境変数として与えるキー・値のペア
   * `encoding` {String} (Default: 'utf8')
+  * `shell` {String} コマンドを実行するシェル
+    (デフォルト: UNIX では `'bin/sh'`、Windows では `'cmd.exe'`。
+    シェルは UNIX では `-c` スイッチを、 Windows では `/s /c` を理解すべきです。
+    Windows では、コマンドラインの解析は `cmd.exe` と互換であるべきです)。
   * `timeout` {Number} (Default: 0)
   * `maxBuffer` {Number} (Default: 200*1024)
   * `killSignal` {String} (Default: 'SIGTERM')

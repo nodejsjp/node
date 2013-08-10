@@ -19,16 +19,17 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#include "tty_wrap.h"
 #include "node.h"
 #include "node_buffer.h"
-#include "req_wrap.h"
 #include "handle_wrap.h"
-#include "stream_wrap.h"
-#include "tty_wrap.h"
 #include "node_wrap.h"
+#include "req_wrap.h"
+#include "stream_wrap.h"
 
 namespace node {
 
+using v8::Array;
 using v8::Function;
 using v8::FunctionCallbackInfo;
 using v8::FunctionTemplate;
@@ -68,7 +69,9 @@ void TTYWrap::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "readStop", StreamWrap::ReadStop);
 
   NODE_SET_PROTOTYPE_METHOD(t, "writeBuffer", StreamWrap::WriteBuffer);
-  NODE_SET_PROTOTYPE_METHOD(t, "writeAsciiString", StreamWrap::WriteAsciiString);
+  NODE_SET_PROTOTYPE_METHOD(t,
+                            "writeAsciiString",
+                            StreamWrap::WriteAsciiString);
   NODE_SET_PROTOTYPE_METHOD(t, "writeUtf8String", StreamWrap::WriteUtf8String);
   NODE_SET_PROTOTYPE_METHOD(t, "writeUcs2String", StreamWrap::WriteUcs2String);
 
@@ -131,15 +134,18 @@ void TTYWrap::GetWindowSize(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   UNWRAP(TTYWrap)
+  assert(args[0]->IsArray());
 
   int width, height;
-  int r = uv_tty_get_winsize(&wrap->handle_, &width, &height);
-  if (r) return SetErrno(uv_last_error(uv_default_loop()));
+  int err = uv_tty_get_winsize(&wrap->handle_, &width, &height);
 
-  Local<v8::Array> a = v8::Array::New(2);
-  a->Set(0, Integer::New(width, node_isolate));
-  a->Set(1, Integer::New(height, node_isolate));
-  args.GetReturnValue().Set(a);
+  if (err == 0) {
+    Local<v8::Array> a = args[0].As<Array>();
+    a->Set(0, Integer::New(width, node_isolate));
+    a->Set(1, Integer::New(height, node_isolate));
+  }
+
+  args.GetReturnValue().Set(err);
 }
 
 
@@ -148,9 +154,8 @@ void TTYWrap::SetRawMode(const FunctionCallbackInfo<Value>& args) {
 
   UNWRAP(TTYWrap)
 
-  int r = uv_tty_set_mode(&wrap->handle_, args[0]->IsTrue());
-  if (r) SetErrno(uv_last_error(uv_default_loop()));
-  args.GetReturnValue().Set(r);
+  int err = uv_tty_set_mode(&wrap->handle_, args[0]->IsTrue());
+  args.GetReturnValue().Set(err);
 }
 
 

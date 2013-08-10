@@ -23,6 +23,8 @@
 #include "node_buffer.h"  // Buffer
 #include "node_crypto.h"  // SecureContext
 #include "node_crypto_bio.h"  // NodeBIO
+#include "node_crypto_clienthello.h"  // ClientHelloParser
+#include "node_crypto_clienthello-inl.h"
 #include "node_wrap.h"  // WithGenericStream
 #include "node_counters.h"
 
@@ -30,12 +32,15 @@ namespace node {
 
 using crypto::SecureContext;
 using v8::Array;
+using v8::Boolean;
 using v8::Exception;
 using v8::Function;
 using v8::FunctionCallbackInfo;
 using v8::FunctionTemplate;
+using v8::Handle;
 using v8::HandleScope;
 using v8::Integer;
+using v8::Local;
 using v8::Null;
 using v8::Object;
 using v8::Persistent;
@@ -44,7 +49,6 @@ using v8::Value;
 
 static Cached<String> onread_sym;
 static Cached<String> onerror_sym;
-static Cached<String> onsniselect_sym;
 static Cached<String> onhandshakestart_sym;
 static Cached<String> onhandshakedone_sym;
 static Cached<String> onclienthello_sym;
@@ -61,6 +65,9 @@ static Cached<String> name_sym;
 static Cached<String> version_sym;
 static Cached<String> ext_key_usage_sym;
 static Cached<String> sessionid_sym;
+static Cached<String> tls_ticket_sym;
+static Cached<String> servername_sym;
+static Cached<String> sni_context_sym;
 
 static Persistent<Function> tlsWrap;
 
@@ -97,11 +104,6 @@ TLSCallbacks::TLSCallbacks(Kind kind,
 
   // Initialize queue for clearIn writes
   QUEUE_INIT(&write_item_queue_);
-
-  // Initialize hello parser
-  hello_.state = kParseEnded;
-  hello_.frame_len = 0;
-  hello_.body_offset = 0;
 
   // We've our own session callbacks
   SSL_CTX_sess_set_get_cb(sc_->ctx_, GetSessionCallback);
@@ -173,7 +175,6 @@ TLSCallbacks::~TLSCallbacks() {
 #endif  // OPENSSL_NPN_NEGOTIATED
 
 #ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
-  servername_.Dispose();
   sni_context_.Dispose();
 #endif  // SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
 }
@@ -367,7 +368,7 @@ void TLSCallbacks::SSLInfoCallback(const SSL* ssl_, int where, int ret) {
 
 void TLSCallbacks::EncOut() {
   // Ignore cycling data if ClientHello wasn't yet parsed
-  if (hello_.state != kParseEnded)
+  if (!hello_.IsEnded())
     return;
 
   // Write in progress
@@ -418,7 +419,6 @@ void TLSCallbacks::EncOutCb(uv_write_t* req, int status) {
       return;
 
     // Notify about error
-    SetErrno(uv_last_error(uv_default_loop()));
     Local<Value> arg = String::Concat(
         String::New("write cb error, status: "),
         Integer::New(status, node_isolate)->ToString());
@@ -441,29 +441,29 @@ Handle<Value> TLSCallbacks::GetSSLError(int status, int* err) {
 
   *err = SSL_get_error(ssl_, status);
   switch (*err) {
-   case SSL_ERROR_NONE:
-   case SSL_ERROR_WANT_READ:
-   case SSL_ERROR_WANT_WRITE:
-    break;
-   case SSL_ERROR_ZERO_RETURN:
-    return scope.Close(String::NewSymbol("ZERO_RETURN"));
-    break;
-   default:
-    {
-      BUF_MEM* mem;
-      BIO* bio;
+    case SSL_ERROR_NONE:
+    case SSL_ERROR_WANT_READ:
+    case SSL_ERROR_WANT_WRITE:
+      break;
+    case SSL_ERROR_ZERO_RETURN:
+      return scope.Close(String::NewSymbol("ZERO_RETURN"));
+      break;
+    default:
+      {
+        BUF_MEM* mem;
+        BIO* bio;
 
-      assert(*err == SSL_ERROR_SSL || *err == SSL_ERROR_SYSCALL);
+        assert(*err == SSL_ERROR_SSL || *err == SSL_ERROR_SYSCALL);
 
-      bio = BIO_new(BIO_s_mem());
-      assert(bio != NULL);
-      ERR_print_errors(bio);
-      BIO_get_mem_ptr(bio, &mem);
-      Handle<Value> r = Exception::Error(String::New(mem->data, mem->length));
-      BIO_free_all(bio);
+        bio = BIO_new(BIO_s_mem());
+        assert(bio != NULL);
+        ERR_print_errors(bio);
+        BIO_get_mem_ptr(bio, &mem);
+        Handle<Value> r = Exception::Error(String::New(mem->data, mem->length));
+        BIO_free_all(bio);
 
-      return scope.Close(r);
-    }
+        return scope.Close(r);
+      }
   }
   return Handle<Value>();
 }
@@ -471,7 +471,7 @@ Handle<Value> TLSCallbacks::GetSSLError(int status, int* err) {
 
 void TLSCallbacks::ClearOut() {
   // Ignore cycling data if ClientHello wasn't yet parsed
-  if (hello_.state != kParseEnded)
+  if (!hello_.IsEnded())
     return;
 
   HandleScope scope(node_isolate);
@@ -483,8 +483,11 @@ void TLSCallbacks::ClearOut() {
   do {
     read = SSL_read(ssl_, out, sizeof(out));
     if (read > 0) {
-      Handle<Value> buf = Buffer::New(out, read);
-      MakeCallback(Self(), onread_sym, 1, &buf);
+      Local<Value> argv[] = {
+        Integer::New(read, node_isolate),
+        Buffer::New(out, read)
+      };
+      MakeCallback(Self(), onread_sym, ARRAY_SIZE(argv), argv);
     }
   } while (read > 0);
 
@@ -500,7 +503,7 @@ void TLSCallbacks::ClearOut() {
 
 bool TLSCallbacks::ClearIn() {
   // Ignore cycling data if ClientHello wasn't yet parsed
-  if (hello_.state != kParseEnded)
+  if (!hello_.IsEnded())
     return false;
 
   HandleScope scope(node_isolate);
@@ -621,12 +624,10 @@ void TLSCallbacks::DoRead(uv_stream_t* handle,
                           uv_buf_t buf,
                           uv_handle_type pending) {
   if (nread < 0)  {
-    uv_err_t err = uv_last_error(uv_default_loop());
-    SetErrno(err);
-
     // Error should be emitted only after all data was read
     ClearOut();
-    MakeCallback(Self(), onread_sym, 0, NULL);
+    Local<Value> arg = Integer::New(nread, node_isolate);
+    MakeCallback(Self(), onread_sym, 1, &arg);
     return;
   }
 
@@ -634,11 +635,16 @@ void TLSCallbacks::DoRead(uv_stream_t* handle,
   assert(ssl_ != NULL);
 
   // Commit read data
-  NodeBIO::FromBIO(enc_in_)->Commit(nread);
+  NodeBIO* enc_in = NodeBIO::FromBIO(enc_in_);
+  enc_in->Commit(nread);
 
   // Parse ClientHello first
-  if (hello_.state != kParseEnded)
-    return ParseClientHello();
+  if (!hello_.IsEnded()) {
+    size_t avail = 0;
+    uint8_t* data = reinterpret_cast<uint8_t*>(enc_in->Peek(&avail));
+    assert(avail == 0 || data != NULL);
+    return hello_.Parse(data, avail);
+  }
 
   // Cycle OpenSSL's state
   Cycle();
@@ -651,138 +657,6 @@ int TLSCallbacks::DoShutdown(ShutdownWrap* req_wrap, uv_shutdown_cb cb) {
   shutdown_ = true;
   EncOut();
   return StreamWrapCallbacks::DoShutdown(req_wrap, cb);
-}
-
-
-void TLSCallbacks::ParseClientHello() {
-  enum FrameType {
-    kChangeCipherSpec = 20,
-    kAlert = 21,
-    kHandshake = 22,
-    kApplicationData = 23,
-    kOther = 255
-  };
-
-  enum HandshakeType {
-    kClientHello = 1
-  };
-
-  assert(session_callbacks_);
-  HandleScope scope(node_isolate);
-
-  NodeBIO* enc_in = NodeBIO::FromBIO(enc_in_);
-
-  size_t avail = 0;
-  uint8_t* data = reinterpret_cast<uint8_t*>(enc_in->Peek(&avail));
-  assert(avail == 0 || data != NULL);
-
-  // Vars for parsing hello
-  bool is_clienthello = false;
-  uint8_t session_size = -1;
-  uint8_t* session_id = NULL;
-  Local<Object> hello_obj;
-  Handle<Value> argv[1];
-
-  switch (hello_.state) {
-   case kParseWaiting:
-    // >= 5 bytes for header parsing
-    if (avail < 5)
-      break;
-
-    if (data[0] == kChangeCipherSpec ||
-        data[0] == kAlert ||
-        data[0] == kHandshake ||
-        data[0] == kApplicationData) {
-      hello_.frame_len = (data[3] << 8) + data[4];
-      hello_.state = kParseTLSHeader;
-      hello_.body_offset = 5;
-    } else {
-      hello_.frame_len = (data[0] << 8) + data[1];
-      hello_.state = kParseSSLHeader;
-      if (*data & 0x40) {
-        // header with padding
-        hello_.body_offset = 3;
-      } else {
-        // without padding
-        hello_.body_offset = 2;
-      }
-    }
-
-    // Sanity check (too big frame, or too small)
-    // Let OpenSSL handle it
-    if (hello_.frame_len >= kMaxTLSFrameLen)
-      return ParseFinish();
-
-    // Fall through
-   case kParseTLSHeader:
-   case kParseSSLHeader:
-    // >= 5 + frame size bytes for frame parsing
-    if (avail < hello_.body_offset + hello_.frame_len)
-      break;
-
-    // Skip unsupported frames and gather some data from frame
-
-    // TODO(indutny): Check protocol version
-    if (data[hello_.body_offset] == kClientHello) {
-      is_clienthello = true;
-      uint8_t* body;
-      size_t session_offset;
-
-      if (hello_.state == kParseTLSHeader) {
-        // Skip frame header, hello header, protocol version and random data
-        session_offset = hello_.body_offset + 4 + 2 + 32;
-
-        if (session_offset + 1 < avail) {
-          body = data + session_offset;
-          session_size = *body;
-          session_id = body + 1;
-        }
-      } else if (hello_.state == kParseSSLHeader) {
-        // Skip header, version
-        session_offset = hello_.body_offset + 3;
-
-        if (session_offset + 4 < avail) {
-          body = data + session_offset;
-
-          int ciphers_size = (body[0] << 8) + body[1];
-
-          if (body + 4 + ciphers_size < data + avail) {
-            session_size = (body[2] << 8) + body[3];
-            session_id = body + 4 + ciphers_size;
-          }
-        }
-      } else {
-        // Whoa? How did we get here?
-        abort();
-      }
-
-      // Check if we overflowed (do not reply with any private data)
-      if (session_id == NULL ||
-          session_size > 32 ||
-          session_id + session_size > data + avail) {
-        return ParseFinish();
-      }
-
-      // TODO(indutny): Parse other things?
-    }
-
-    // Not client hello - let OpenSSL handle it
-    if (!is_clienthello)
-      return ParseFinish();
-
-    hello_.state = kParsePaused;
-    hello_obj = Object::New();
-    hello_obj->Set(sessionid_sym,
-                   Buffer::New(reinterpret_cast<char*>(session_id),
-                               session_size));
-
-    argv[0] = hello_obj;
-    MakeCallback(object(), onclienthello_sym, 1, argv);
-    break;
-   case kParseEnded:
-   default:
-    break;
-  }
 }
 
 
@@ -895,9 +769,49 @@ void TLSCallbacks::EnableSessionCallbacks(
   UNWRAP(TLSCallbacks);
 
   wrap->session_callbacks_ = true;
-  wrap->hello_.state = kParseWaiting;
-  wrap->hello_.frame_len = 0;
-  wrap->hello_.body_offset = 0;
+  EnableHelloParser(args);
+}
+
+
+void TLSCallbacks::EnableHelloParser(
+    const FunctionCallbackInfo<Value>& args) {
+  HandleScope scope(node_isolate);
+
+  UNWRAP(TLSCallbacks);
+
+  wrap->hello_.Start(OnClientHello, OnClientHelloParseEnd, wrap);
+}
+
+
+void TLSCallbacks::OnClientHello(void* arg,
+                                 const ClientHelloParser::ClientHello& hello) {
+  HandleScope scope(node_isolate);
+
+  TLSCallbacks* c = static_cast<TLSCallbacks*>(arg);
+
+  Local<Object> hello_obj = Object::New();
+  Local<Object> buff = Buffer::New(
+      reinterpret_cast<const char*>(hello.session_id()),
+                                    hello.session_size());
+  hello_obj->Set(sessionid_sym, buff);
+  if (hello.servername() == NULL) {
+    hello_obj->Set(servername_sym, String::Empty(node_isolate));
+  } else {
+    Local<String> servername = String::New(
+        reinterpret_cast<const char*>(hello.servername()),
+        hello.servername_size());
+    hello_obj->Set(servername_sym, servername);
+  }
+  hello_obj->Set(tls_ticket_sym, Boolean::New(hello.has_ticket()));
+
+  Handle<Value> argv[1] = { hello_obj };
+  MakeCallback(c->object(), onclienthello_sym, 1, argv);
+}
+
+
+void TLSCallbacks::OnClientHelloParseEnd(void* arg) {
+  TLSCallbacks* c = static_cast<TLSCallbacks*>(arg);
+  c->Cycle();
 }
 
 
@@ -1102,9 +1016,25 @@ void TLSCallbacks::LoadSession(const FunctionCallbackInfo<Value>& args) {
     if (wrap->next_sess_ != NULL)
       SSL_SESSION_free(wrap->next_sess_);
     wrap->next_sess_ = sess;
-  }
 
-  wrap->ParseFinish();
+    Local<Object> info = Object::New();
+#ifndef OPENSSL_NO_TLSEXT
+    if (sess->tlsext_hostname == NULL) {
+      info->Set(servername_sym, False(node_isolate));
+    } else {
+      info->Set(servername_sym, String::New(sess->tlsext_hostname));
+    }
+#endif
+    args.GetReturnValue().Set(info);
+  }
+}
+
+void TLSCallbacks::EndParser(const FunctionCallbackInfo<Value>& args) {
+  HandleScope scope(node_isolate);
+
+  UNWRAP(TLSCallbacks);
+
+  wrap->hello_.End();
 }
 
 
@@ -1141,9 +1071,9 @@ int TLSCallbacks::AdvertiseNextProtoCallback(SSL* s,
     *data = reinterpret_cast<const unsigned char*>("");
     *len = 0;
   } else {
-    *data = reinterpret_cast<const unsigned char*>(
-        Buffer::Data(p->npn_protos_));
-    *len = Buffer::Length(p->npn_protos_);
+    Local<Object> obj = PersistentToLocal(node_isolate, p->npn_protos_);
+    *data = reinterpret_cast<const unsigned char*>(Buffer::Data(obj));
+    *len = Buffer::Length(obj);
   }
 
   return SSL_TLSEXT_ERR_OK;
@@ -1173,24 +1103,25 @@ int TLSCallbacks::SelectNextProtoCallback(SSL* s,
     return SSL_TLSEXT_ERR_OK;
   }
 
+  Local<Object> obj = PersistentToLocal(node_isolate, p->npn_protos_);
   const unsigned char* npn_protos =
-      reinterpret_cast<const unsigned char*>(Buffer::Data(p->npn_protos_));
-  size_t len = Buffer::Length(p->npn_protos_);
+      reinterpret_cast<const unsigned char*>(Buffer::Data(obj));
+  size_t len = Buffer::Length(obj);
 
   int status = SSL_select_next_proto(out, outlen, in, inlen, npn_protos, len);
   Handle<Value> result;
   switch (status) {
-   case OPENSSL_NPN_UNSUPPORTED:
-    result = Null(node_isolate);
-    break;
-   case OPENSSL_NPN_NEGOTIATED:
-    result = String::New(reinterpret_cast<const char*>(*out), *outlen);
-    break;
-   case OPENSSL_NPN_NO_OVERLAP:
-    result = False(node_isolate);
-    break;
-   default:
-    break;
+    case OPENSSL_NPN_UNSUPPORTED:
+      result = Null(node_isolate);
+      break;
+    case OPENSSL_NPN_NEGOTIATED:
+      result = String::New(reinterpret_cast<const char*>(*out), *outlen);
+      break;
+    case OPENSSL_NPN_NO_OVERLAP:
+      result = False(node_isolate);
+      break;
+    default:
+      break;
   }
 
   if (!result.IsEmpty())
@@ -1245,8 +1176,10 @@ void TLSCallbacks::GetServername(const FunctionCallbackInfo<Value>& args) {
 
   UNWRAP(TLSCallbacks);
 
-  if (wrap->kind_ == kTLSServer && !wrap->servername_.IsEmpty()) {
-    args.GetReturnValue().Set(wrap->servername_);
+  const char* servername = SSL_get_servername(wrap->ssl_,
+                                              TLSEXT_NAMETYPE_host_name);
+  if (servername != NULL) {
+    args.GetReturnValue().Set(String::New(servername));
   } else {
     args.GetReturnValue().Set(false);
   }
@@ -1281,25 +1214,22 @@ int TLSCallbacks::SelectSNIContextCallback(SSL* s, int* ad, void* arg) {
 
   const char* servername = SSL_get_servername(s, TLSEXT_NAMETYPE_host_name);
 
-  if (servername) {
-    p->servername_.Reset(node_isolate, String::New(servername));
-
+  if (servername != NULL) {
     // Call the SNI callback and use its return value as context
     Local<Object> object = p->object();
-    if (object->Has(onsniselect_sym)) {
-      p->sni_context_.Dispose();
-
-      Local<Value> arg = PersistentToLocal(p->servername_);
-      Handle<Value> ret = MakeCallback(object, onsniselect_sym, 1, &arg);
-
-      // If ret is SecureContext
-      if (ret->IsUndefined())
-        return SSL_TLSEXT_ERR_NOACK;
-
-      p->sni_context_.Reset(node_isolate, ret);
-      SecureContext* sc = ObjectWrap::Unwrap<SecureContext>(ret.As<Object>());
-      SSL_set_SSL_CTX(s, sc->ctx_);
+    Local<Value> ctx;
+    if (object->Has(sni_context_sym)) {
+      ctx = object->Get(sni_context_sym);
     }
+
+    if (ctx.IsEmpty() || ctx->IsUndefined())
+      return SSL_TLSEXT_ERR_NOACK;
+
+    p->sni_context_.Dispose();
+    p->sni_context_.Reset(node_isolate, ctx);
+
+    SecureContext* sc = ObjectWrap::Unwrap<SecureContext>(ctx.As<Object>());
+    SSL_set_SSL_CTX(s, sc->ctx_);
   }
 
   return SSL_TLSEXT_ERR_OK;
@@ -1321,6 +1251,7 @@ void TLSCallbacks::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "getSession", GetSession);
   NODE_SET_PROTOTYPE_METHOD(t, "setSession", SetSession);
   NODE_SET_PROTOTYPE_METHOD(t, "loadSession", LoadSession);
+  NODE_SET_PROTOTYPE_METHOD(t, "endParser", EndParser);
   NODE_SET_PROTOTYPE_METHOD(t, "getCurrentCipher", GetCurrentCipher);
   NODE_SET_PROTOTYPE_METHOD(t, "verifyError", VerifyError);
   NODE_SET_PROTOTYPE_METHOD(t, "setVerifyMode", SetVerifyMode);
@@ -1328,6 +1259,9 @@ void TLSCallbacks::Initialize(Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t,
                             "enableSessionCallbacks",
                             EnableSessionCallbacks);
+  NODE_SET_PROTOTYPE_METHOD(t,
+                            "enableHelloParser",
+                            EnableHelloParser);
 
 #ifdef OPENSSL_NPN_NEGOTIATED
   NODE_SET_PROTOTYPE_METHOD(t, "getNegotiatedProtocol", GetNegotiatedProto);
@@ -1342,7 +1276,6 @@ void TLSCallbacks::Initialize(Handle<Object> target) {
   tlsWrap.Reset(node_isolate, t->GetFunction());
 
   onread_sym = String::New("onread");
-  onsniselect_sym = String::New("onsniselect");
   onerror_sym = String::New("onerror");
   onhandshakestart_sym = String::New("onhandshakestart");
   onhandshakedone_sym = String::New("onhandshakedone");
@@ -1361,6 +1294,9 @@ void TLSCallbacks::Initialize(Handle<Object> target) {
   version_sym = String::New("version");
   ext_key_usage_sym = String::New("ext_key_usage");
   sessionid_sym = String::New("sessionId");
+  tls_ticket_sym = String::New("tlsTicket");
+  servername_sym = String::New("servername");
+  sni_context_sym = String::New("sni_context");
 }
 
 }  // namespace node

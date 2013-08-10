@@ -45,6 +45,7 @@
 #include "global-handles.h"
 #include "heap-profiler.h"
 #include "heap-snapshot-generator-inl.h"
+#include "icu_util.h"
 #include "messages.h"
 #ifdef COMPRESS_STARTUP_DATA_BZ2
 #include "natives.h"
@@ -298,6 +299,7 @@ static inline bool EmptyCheck(const char* location, const v8::Data* obj) {
   return (obj == 0) ? ReportEmptyHandle(location) : false;
 }
 
+
 // --- S t a t i c s ---
 
 
@@ -321,6 +323,7 @@ static inline bool EnsureInitializedForIsolate(i::Isolate* isolate,
   ASSERT(isolate == i::Isolate::Current());
   return ApiCheck(InitializeHelper(isolate), location, "Error initializing V8");
 }
+
 
 // Some initializing API functions are called early and may be
 // called on a thread different from static initializer thread.
@@ -400,6 +403,7 @@ enum CompressedStartupDataItems {
 #endif
   kCompressedStartupDataCount
 };
+
 
 int V8::GetCompressedStartupDataCount() {
 #ifdef COMPRESS_STARTUP_DATA_BZ2
@@ -669,6 +673,7 @@ void V8::ClearWeak(i::Object** obj) {
 void V8::DisposeGlobal(i::Object** obj) {
   i::GlobalHandles::Destroy(obj);
 }
+
 
 // --- H a n d l e s ---
 
@@ -4422,6 +4427,7 @@ bool String::IsOneByte() const {
   return str->HasOnlyOneByteChars();
 }
 
+
 // Helpers for ContainsOnlyOneByteHelper
 template<size_t size> struct OneByteMask;
 template<> struct OneByteMask<4> {
@@ -4435,6 +4441,8 @@ static const uintptr_t kAlignmentMask = sizeof(uintptr_t) - 1;
 static inline bool Unaligned(const uint16_t* chars) {
   return reinterpret_cast<const uintptr_t>(chars) & kAlignmentMask;
 }
+
+
 static inline const uint16_t* Align(const uint16_t* chars) {
   return reinterpret_cast<uint16_t*>(
     reinterpret_cast<uintptr_t>(chars) & ~kAlignmentMask);
@@ -5419,6 +5427,11 @@ int v8::V8::ContextDisposedNotification() {
 }
 
 
+bool v8::V8::InitializeICU() {
+  return i::InitializeICU();
+}
+
+
 const char* v8::V8::GetVersion() {
   return i::Version::GetVersion();
 }
@@ -5918,6 +5931,23 @@ i::Handle<i::String> NewExternalAsciiStringHandle(i::Isolate* isolate,
 }
 
 
+bool RedirectToExternalString(i::Isolate* isolate,
+                              i::Handle<i::String> parent,
+                              i::Handle<i::String> external) {
+  if (parent->IsConsString()) {
+    i::Handle<i::ConsString> cons = i::Handle<i::ConsString>::cast(parent);
+    cons->set_first(*external);
+    cons->set_second(isolate->heap()->empty_string());
+  } else {
+    ASSERT(parent->IsSlicedString());
+    i::Handle<i::SlicedString> slice = i::Handle<i::SlicedString>::cast(parent);
+    slice->set_parent(*external);
+    slice->set_offset(0);
+  }
+  return true;
+}
+
+
 Local<String> v8::String::NewExternal(
       v8::String::ExternalStringResource* resource) {
   i::Isolate* isolate = i::Isolate::Current();
@@ -5946,9 +5976,23 @@ bool v8::String::MakeExternal(v8::String::ExternalStringResource* resource) {
     return false;
   }
   CHECK(resource && resource->data());
-  bool result = obj->MakeExternal(resource);
-  if (result && !obj->IsInternalizedString()) {
-    isolate->heap()->external_string_table()->AddString(*obj);
+
+  bool result;
+  i::Handle<i::String> external;
+  if (isolate->heap()->old_pointer_space()->Contains(*obj)) {
+    // We do not allow external strings in the old pointer space.  Instead of
+    // converting the string in-place, we keep the cons/sliced string and
+    // point it to a newly-allocated external string.
+    external = NewExternalStringHandle(isolate, resource);
+    result = RedirectToExternalString(isolate, obj, external);
+  } else {
+    result = obj->MakeExternal(resource);
+    external = obj;
+  }
+
+  ASSERT(external->IsExternalString());
+  if (result && !external->IsInternalizedString()) {
+    isolate->heap()->external_string_table()->AddString(*external);
   }
   return result;
 }
@@ -5983,9 +6027,23 @@ bool v8::String::MakeExternal(
     return false;
   }
   CHECK(resource && resource->data());
-  bool result = obj->MakeExternal(resource);
-  if (result && !obj->IsInternalizedString()) {
-    isolate->heap()->external_string_table()->AddString(*obj);
+
+  bool result;
+  i::Handle<i::String> external;
+  if (isolate->heap()->old_pointer_space()->Contains(*obj)) {
+    // We do not allow external strings in the old pointer space.  Instead of
+    // converting the string in-place, we keep the cons/sliced string and
+    // point it to a newly-allocated external string.
+    external = NewExternalAsciiStringHandle(isolate, resource);
+    result = RedirectToExternalString(isolate, obj, external);
+  } else {
+    result = obj->MakeExternal(resource);
+    external = obj;
+  }
+
+  ASSERT(external->IsExternalString());
+  if (result && !external->IsInternalizedString()) {
+    isolate->heap()->external_string_table()->AddString(*external);
   }
   return result;
 }
@@ -6026,7 +6084,7 @@ Local<v8::Value> v8::NumberObject::New(double value) {
 }
 
 
-double v8::NumberObject::NumberValue() const {
+double v8::NumberObject::ValueOf() const {
   i::Isolate* isolate = i::Isolate::Current();
   if (IsDeadCheck(isolate, "v8::NumberObject::NumberValue()")) return 0;
   LOG_API(isolate, "NumberObject::NumberValue");
@@ -6050,7 +6108,7 @@ Local<v8::Value> v8::BooleanObject::New(bool value) {
 }
 
 
-bool v8::BooleanObject::BooleanValue() const {
+bool v8::BooleanObject::ValueOf() const {
   i::Isolate* isolate = i::Isolate::Current();
   if (IsDeadCheck(isolate, "v8::BooleanObject::BooleanValue()")) return 0;
   LOG_API(isolate, "BooleanObject::BooleanValue");
@@ -6071,7 +6129,7 @@ Local<v8::Value> v8::StringObject::New(Handle<String> value) {
 }
 
 
-Local<v8::String> v8::StringObject::StringValue() const {
+Local<v8::String> v8::StringObject::ValueOf() const {
   i::Isolate* isolate = i::Isolate::Current();
   if (IsDeadCheck(isolate, "v8::StringObject::StringValue()")) {
     return Local<v8::String>();
@@ -6095,7 +6153,7 @@ Local<v8::Value> v8::SymbolObject::New(Isolate* isolate, Handle<Symbol> value) {
 }
 
 
-Local<v8::Symbol> v8::SymbolObject::SymbolValue() const {
+Local<v8::Symbol> v8::SymbolObject::ValueOf() const {
   i::Isolate* isolate = i::Isolate::Current();
   if (IsDeadCheck(isolate, "v8::SymbolObject::SymbolValue()"))
     return Local<v8::Symbol>();
@@ -6124,7 +6182,7 @@ Local<v8::Value> v8::Date::New(double time) {
 }
 
 
-double v8::Date::NumberValue() const {
+double v8::Date::ValueOf() const {
   i::Isolate* isolate = i::Isolate::Current();
   if (IsDeadCheck(isolate, "v8::Date::NumberValue()")) return 0;
   LOG_API(isolate, "Date::NumberValue");
@@ -6280,6 +6338,7 @@ Local<Object> Array::CloneElementAt(uint32_t index) {
 bool v8::ArrayBuffer::IsExternal() const {
   return Utils::OpenHandle(this)->is_external();
 }
+
 
 v8::ArrayBuffer::Contents v8::ArrayBuffer::Externalize() {
   i::Handle<i::JSArrayBuffer> obj = Utils::OpenHandle(this);
@@ -6581,6 +6640,7 @@ v8::AssertNoGCScope::AssertNoGCScope(v8::Isolate* isolate) {
   disallow_heap_allocation_ = new i::DisallowHeapAllocation();
 }
 
+
 v8::AssertNoGCScope::~AssertNoGCScope() {
   delete static_cast<i::DisallowHeapAllocation*>(disallow_heap_allocation_);
 }
@@ -6644,6 +6704,7 @@ void V8::SetCounterFunction(CounterLookupCallback callback) {
   isolate->stats_table()->SetCounterFunction(callback);
 }
 
+
 void V8::SetCreateHistogramFunction(CreateHistogramCallback callback) {
   i::Isolate* isolate = EnterIsolateIfNeeded();
   if (IsDeadCheck(isolate, "v8::V8::SetCreateHistogramFunction()")) return;
@@ -6651,6 +6712,7 @@ void V8::SetCreateHistogramFunction(CreateHistogramCallback callback) {
   isolate->InitializeLoggingAndCounters();
   isolate->counters()->ResetHistograms();
 }
+
 
 void V8::SetAddHistogramSampleFunction(AddHistogramSampleCallback callback) {
   i::Isolate* isolate = EnterIsolateIfNeeded();
@@ -6999,6 +7061,7 @@ String::Value::~Value() {
   i::DeleteArray(str_);
 }
 
+
 Local<Value> Exception::RangeError(v8::Handle<v8::String> raw_message) {
   i::Isolate* isolate = i::Isolate::Current();
   LOG_API(isolate, "RangeError");
@@ -7014,6 +7077,7 @@ Local<Value> Exception::RangeError(v8::Handle<v8::String> raw_message) {
   i::Handle<i::Object> result(error, isolate);
   return Utils::ToLocal(result);
 }
+
 
 Local<Value> Exception::ReferenceError(v8::Handle<v8::String> raw_message) {
   i::Isolate* isolate = i::Isolate::Current();
@@ -7032,6 +7096,7 @@ Local<Value> Exception::ReferenceError(v8::Handle<v8::String> raw_message) {
   return Utils::ToLocal(result);
 }
 
+
 Local<Value> Exception::SyntaxError(v8::Handle<v8::String> raw_message) {
   i::Isolate* isolate = i::Isolate::Current();
   LOG_API(isolate, "SyntaxError");
@@ -7048,6 +7113,7 @@ Local<Value> Exception::SyntaxError(v8::Handle<v8::String> raw_message) {
   return Utils::ToLocal(result);
 }
 
+
 Local<Value> Exception::TypeError(v8::Handle<v8::String> raw_message) {
   i::Isolate* isolate = i::Isolate::Current();
   LOG_API(isolate, "TypeError");
@@ -7063,6 +7129,7 @@ Local<Value> Exception::TypeError(v8::Handle<v8::String> raw_message) {
   i::Handle<i::Object> result(error, isolate);
   return Utils::ToLocal(result);
 }
+
 
 Local<Value> Exception::Error(v8::Handle<v8::String> raw_message) {
   i::Isolate* isolate = i::Isolate::Current();
@@ -7437,7 +7504,7 @@ void CpuProfile::Delete() {
   i::CpuProfiler* profiler = isolate->cpu_profiler();
   ASSERT(profiler != NULL);
   profiler->DeleteProfile(reinterpret_cast<i::CpuProfile*>(this));
-  if (profiler->GetProfilesCount() == 0 && !profiler->HasDetachedProfiles()) {
+  if (profiler->GetProfilesCount() == 0) {
     // If this was the last profile, clean up all accessory data as well.
     profiler->DeleteAllProfiles();
   }
@@ -7484,27 +7551,9 @@ int CpuProfiler::GetProfileCount() {
 }
 
 
-const CpuProfile* CpuProfiler::GetCpuProfile(int index,
-                                             Handle<Value> security_token) {
-  return reinterpret_cast<const CpuProfile*>(
-      reinterpret_cast<i::CpuProfiler*>(this)->GetProfile(
-          security_token.IsEmpty() ? NULL : *Utils::OpenHandle(*security_token),
-          index));
-}
-
-
 const CpuProfile* CpuProfiler::GetCpuProfile(int index) {
   return reinterpret_cast<const CpuProfile*>(
-      reinterpret_cast<i::CpuProfiler*>(this)->GetProfile(NULL, index));
-}
-
-
-const CpuProfile* CpuProfiler::FindCpuProfile(unsigned uid,
-                                              Handle<Value> security_token) {
-  return reinterpret_cast<const CpuProfile*>(
-      reinterpret_cast<i::CpuProfiler*>(this)->FindProfile(
-          security_token.IsEmpty() ? NULL : *Utils::OpenHandle(*security_token),
-          uid));
+      reinterpret_cast<i::CpuProfiler*>(this)->GetProfile(index));
 }
 
 
@@ -7514,19 +7563,9 @@ void CpuProfiler::StartCpuProfiling(Handle<String> title, bool record_samples) {
 }
 
 
-const CpuProfile* CpuProfiler::StopCpuProfiling(Handle<String> title,
-                                                Handle<Value> security_token) {
-  return reinterpret_cast<const CpuProfile*>(
-      reinterpret_cast<i::CpuProfiler*>(this)->StopProfiling(
-          security_token.IsEmpty() ? NULL : *Utils::OpenHandle(*security_token),
-          *Utils::OpenHandle(*title)));
-}
-
-
 const CpuProfile* CpuProfiler::StopCpuProfiling(Handle<String> title) {
   return reinterpret_cast<const CpuProfile*>(
       reinterpret_cast<i::CpuProfiler*>(this)->StopProfiling(
-          NULL,
           *Utils::OpenHandle(*title)));
 }
 
@@ -7562,6 +7601,7 @@ Handle<Value> HeapGraphEdge::GetName() const {
           isolate->factory()->InternalizeUtf8String(edge->name()));
     case i::HeapGraphEdge::kElement:
     case i::HeapGraphEdge::kHidden:
+    case i::HeapGraphEdge::kWeak:
       return ToApiHandle<Number>(
           isolate->factory()->NewNumberFromInt(edge->index()));
     default: UNREACHABLE();
@@ -7807,6 +7847,7 @@ v8::Testing::StressType internal::Testing::stress_type_ =
 void Testing::SetStressRunType(Testing::StressType type) {
   internal::Testing::set_stress_type(type);
 }
+
 
 int Testing::GetStressRuns() {
   if (internal::FLAG_stress_runs != 0) return internal::FLAG_stress_runs;

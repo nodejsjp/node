@@ -61,6 +61,7 @@ void SetElementNonStrict(Handle<JSObject> object,
   USE(no_failure);
 }
 
+
 // A simple implementation of dynamic programming algorithm. It solves
 // the problem of finding the difference of 2 arrays. It uses a table of results
 // of subproblems. Each cell contains a number together with 2-bit flag
@@ -1456,6 +1457,7 @@ class RelocInfoBuffer {
   static const int kMaximalBufferSize = 512*MB;
 };
 
+
 // Patch positions in code (changes relocation info section) and possibly
 // returns new instance of code.
 static Handle<Code> PatchPositionsInCode(
@@ -1555,10 +1557,13 @@ static Handle<Script> CreateScriptCopy(Handle<Script> original) {
   copy->set_data(original->data());
   copy->set_type(original->type());
   copy->set_context_data(original->context_data());
-  copy->set_compilation_type(original->compilation_type());
   copy->set_eval_from_shared(original->eval_from_shared());
   copy->set_eval_from_instructions_offset(
       original->eval_from_instructions_offset());
+
+  // Copy all the flags, but clear compilation state.
+  copy->set_flags(original->flags());
+  copy->set_compilation_state(Script::COMPILATION_STATE_INITIAL);
 
   return copy;
 }
@@ -1619,8 +1624,7 @@ static bool CheckActivation(Handle<JSArray> shared_info_array,
                             LiveEdit::FunctionPatchabilityStatus status) {
   if (!frame->is_java_script()) return false;
 
-  Handle<JSFunction> function(
-      JSFunction::cast(JavaScriptFrame::cast(frame)->function()));
+  Handle<JSFunction> function(JavaScriptFrame::cast(frame)->function());
 
   Isolate* isolate = shared_info_array->GetIsolate();
   int len = GetArrayLength(shared_info_array);
@@ -1829,6 +1833,7 @@ class MultipleFunctionTarget {
   Handle<JSArray> m_result;
 };
 
+
 // Drops all call frame matched by target and all frames above them.
 template<typename TARGET>
 static const char* DropActivationsInActiveThreadImpl(
@@ -1924,6 +1929,7 @@ static const char* DropActivationsInActiveThreadImpl(
                                restarter_frame_function_pointer);
   return NULL;
 }
+
 
 // Fills result array with statuses of functions. Modifies the stack
 // removing all listed function if possible and if do_drop is true.

@@ -37,30 +37,6 @@ namespace internal {
 
 struct OffsetRange;
 
-class TokenEnumerator {
- public:
-  TokenEnumerator();
-  ~TokenEnumerator();
-  int GetTokenId(Object* token);
-
-  static const int kNoSecurityToken = -1;
-  static const int kInheritsSecurityToken = -2;
-
- private:
-  static void TokenRemovedCallback(v8::Isolate* isolate,
-                                   v8::Persistent<v8::Value>* handle,
-                                   void* parameter);
-  void TokenRemoved(Object** token_location);
-
-  List<Object**> token_locations_;
-  List<bool> token_removed_;
-
-  friend class TokenEnumeratorTester;
-
-  DISALLOW_COPY_AND_ASSIGN(TokenEnumerator);
-};
-
-
 // Provides a storage of strings allocated in C++ heap, to hold them
 // forever, even if they disappear from JS heap or external storage.
 class StringsStorage {
@@ -98,7 +74,6 @@ class CodeEntry {
   // CodeEntry doesn't own name strings, just references them.
   INLINE(CodeEntry(Logger::LogEventsAndTags tag,
                    const char* name,
-                   int security_token_id = TokenEnumerator::kNoSecurityToken,
                    const char* name_prefix = CodeEntry::kEmptyNamePrefix,
                    const char* resource_name = CodeEntry::kEmptyResourceName,
                    int line_number = v8::CpuProfileNode::kNoLineNumberInfo));
@@ -113,7 +88,6 @@ class CodeEntry {
   INLINE(void set_shared_id(int shared_id)) { shared_id_ = shared_id; }
   INLINE(int script_id() const) { return script_id_; }
   INLINE(void set_script_id(int script_id)) { script_id_ = script_id; }
-  INLINE(int security_token_id() const) { return security_token_id_; }
 
   INLINE(static bool is_js_function_tag(Logger::LogEventsAndTags tag));
 
@@ -141,7 +115,6 @@ class CodeEntry {
   int line_number_;
   int shared_id_;
   int script_id_;
-  int security_token_id_;
   List<OffsetRange>* no_frame_ranges_;
 
   DISALLOW_COPY_AND_ASSIGN(CodeEntry);
@@ -201,7 +174,6 @@ class ProfileTree {
   ProfileNode* AddPathFromEnd(const Vector<CodeEntry*>& path);
   void AddPathFromStart(const Vector<CodeEntry*>& path);
   void CalculateTotalTicks();
-  void FilteredClone(ProfileTree* src, int security_token_id);
 
   double TicksToMillis(unsigned ticks) const {
     return ticks * ms_to_ticks_scale_;
@@ -231,14 +203,11 @@ class ProfileTree {
 
 class CpuProfile {
  public:
-  CpuProfile(const char* title, unsigned uid, bool record_samples)
-      : title_(title), uid_(uid), record_samples_(record_samples) { }
+  CpuProfile(const char* title, unsigned uid, bool record_samples);
 
   // Add pc -> ... -> main() call path to the profile.
   void AddPath(const Vector<CodeEntry*>& path);
-  void CalculateTotalTicks();
-  void SetActualSamplingRate(double actual_sampling_rate);
-  CpuProfile* FilteredClone(int security_token_id);
+  void CalculateTotalTicksAndSamplingRate();
 
   INLINE(const char* title() const) { return title_; }
   INLINE(unsigned uid() const) { return uid_; }
@@ -256,6 +225,8 @@ class CpuProfile {
   const char* title_;
   unsigned uid_;
   bool record_samples_;
+  double start_time_ms_;
+  double end_time_ms_;
   List<ProfileNode*> samples_;
   ProfileTree top_down_;
 
@@ -315,10 +286,8 @@ class CpuProfilesCollection {
   ~CpuProfilesCollection();
 
   bool StartProfiling(const char* title, unsigned uid, bool record_samples);
-  CpuProfile* StopProfiling(int security_token_id,
-                            const char* title,
-                            double actual_sampling_rate);
-  List<CpuProfile*>* Profiles(int security_token_id);
+  CpuProfile* StopProfiling(const char* title);
+  List<CpuProfile*>* profiles() { return &finished_profiles_; }
   const char* GetName(Name* name) {
     return function_and_resource_names_.GetName(name);
   }
@@ -331,15 +300,12 @@ class CpuProfilesCollection {
   const char* GetFunctionName(const char* name) {
     return function_and_resource_names_.GetFunctionName(name);
   }
-  CpuProfile* GetProfile(int security_token_id, unsigned uid);
   bool IsLastProfile(const char* title);
   void RemoveProfile(CpuProfile* profile);
-  bool HasDetachedProfiles() { return detached_profiles_.length() > 0; }
 
   CodeEntry* NewCodeEntry(
       Logger::LogEventsAndTags tag,
       const char* name,
-      int security_token_id = TokenEnumerator::kNoSecurityToken,
       const char* name_prefix = CodeEntry::kEmptyNamePrefix,
       const char* resource_name = CodeEntry::kEmptyResourceName,
       int line_number = v8::CpuProfileNode::kNoLineNumberInfo);
@@ -351,65 +317,15 @@ class CpuProfilesCollection {
   static const int kMaxSimultaneousProfiles = 100;
 
  private:
-  int GetProfileIndex(unsigned uid);
-  List<CpuProfile*>* GetProfilesList(int security_token_id);
-  int TokenToIndex(int security_token_id);
-
-  INLINE(static bool UidsMatch(void* key1, void* key2)) {
-    return key1 == key2;
-  }
-
   StringsStorage function_and_resource_names_;
   List<CodeEntry*> code_entries_;
-  List<List<CpuProfile*>* > profiles_by_token_;
-  // Mapping from profiles' uids to indexes in the second nested list
-  // of profiles_by_token_.
-  HashMap profiles_uids_;
-  List<CpuProfile*> detached_profiles_;
+  List<CpuProfile*> finished_profiles_;
 
   // Accessed by VM thread and profile generator thread.
   List<CpuProfile*> current_profiles_;
   Semaphore* current_profiles_semaphore_;
 
   DISALLOW_COPY_AND_ASSIGN(CpuProfilesCollection);
-};
-
-
-class SampleRateCalculator {
- public:
-  SampleRateCalculator()
-      : result_(Logger::kSamplingIntervalMs * kResultScale),
-        ticks_per_ms_(Logger::kSamplingIntervalMs),
-        measurements_count_(0),
-        wall_time_query_countdown_(1) {
-  }
-
-  double ticks_per_ms() {
-    return result_ / static_cast<double>(kResultScale);
-  }
-  void Tick();
-  void UpdateMeasurements(double current_time);
-
-  // Instead of querying current wall time each tick,
-  // we use this constant to control query intervals.
-  static const unsigned kWallTimeQueryIntervalMs = 100;
-
- private:
-  // As the result needs to be accessed from a different thread, we
-  // use type that guarantees atomic writes to memory.  There should
-  // be <= 1000 ticks per second, thus storing a value of a 10 ** 5
-  // order should provide enough precision while keeping away from a
-  // potential overflow.
-  static const int kResultScale = 100000;
-
-  AtomicWord result_;
-  // All other fields are accessed only from the sampler thread.
-  double ticks_per_ms_;
-  unsigned measurements_count_;
-  unsigned wall_time_query_countdown_;
-  double last_wall_time_;
-
-  DISALLOW_COPY_AND_ASSIGN(SampleRateCalculator);
 };
 
 
@@ -420,11 +336,6 @@ class ProfileGenerator {
   void RecordTickSample(const TickSample& sample);
 
   INLINE(CodeMap* code_map()) { return &code_map_; }
-
-  INLINE(void Tick()) { sample_rate_calc_.Tick(); }
-  INLINE(double actual_sampling_rate()) {
-    return sample_rate_calc_.ticks_per_ms();
-  }
 
   static const char* const kAnonymousFunctionName;
   static const char* const kProgramEntryName;
@@ -441,7 +352,6 @@ class ProfileGenerator {
   CodeEntry* program_entry_;
   CodeEntry* gc_entry_;
   CodeEntry* unresolved_entry_;
-  SampleRateCalculator sample_rate_calc_;
 
   DISALLOW_COPY_AND_ASSIGN(ProfileGenerator);
 };

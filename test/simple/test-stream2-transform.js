@@ -310,8 +310,7 @@ test('complex transform', function(t) {
         pt.end();
         t.end();
       });
-      t.equal(pt.read().toString(), 'abc');
-      t.equal(pt.read().toString(), 'def');
+      t.equal(pt.read().toString(), 'abcdef');
       t.equal(pt.read(), null);
     });
   });
@@ -471,6 +470,8 @@ test('object transform (json parse)', function(t) {
   });
 
   jp.end();
+  // read one more time to get the 'end' event
+  jp.read();
 
   process.nextTick(function() {
     t.ok(ended);
@@ -511,6 +512,8 @@ test('object transform (json stringify)', function(t) {
   });
 
   js.end();
+  // read one more time to get the 'end' event
+  js.read();
 
   process.nextTick(function() {
     t.ok(ended);

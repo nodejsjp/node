@@ -111,14 +111,16 @@ argument. Supported placeholders are:
 <!--
 * `%s` - String.
 * `%d` - Number (both integer and float).
-* `%j` - JSON.
+* `%j` - JSON.  Replaced with the string `'[Circular]'` if the argument
+         contains circular references.
 * `%%` - single percent sign (`'%'`). This does not consume an argument.
 -->
 
 * `%s` - 文字列。
 * `%d` - 数値 (整数と浮動小数点数の両方)。
-* `%j` - JSON。
-* `%%` - 一つのパーセント記号 (`'%'`)。これは引数を消費しません。
+* `%j` - JSON。もし引数が循環した参照を含む場合、それは`'[Circular]'`
+  に置換されます。
+* `%%%%` - 一つのパーセント記号 (`'%'`)。これは引数を消費しません。
 
 <!--
 If the placeholder does not have a corresponding argument, the placeholder is

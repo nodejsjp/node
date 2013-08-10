@@ -63,7 +63,8 @@ HBasicBlock* HOsrBuilder::BuildPossibleOsrLoopEntry(
   HBasicBlock* non_osr_entry = graph->CreateBasicBlock();
   osr_entry_ = graph->CreateBasicBlock();
   HValue* true_value = graph->GetConstantTrue();
-  HBranch* test = new(zone) HBranch(true_value, non_osr_entry, osr_entry_);
+  HBranch* test = new(zone) HBranch(true_value, ToBooleanStub::Types(),
+                                    non_osr_entry, osr_entry_);
   builder_->current_block()->Finish(test);
 
   HBasicBlock* loop_predecessor = graph->CreateBasicBlock();
@@ -93,7 +94,7 @@ HBasicBlock* HOsrBuilder::BuildPossibleOsrLoopEntry(
     }
   }
 
-  builder_->AddSimulate(osr_entry_id);
+  builder_->Add<HSimulate>(osr_entry_id);
   builder_->Add<HOsrEntry>(osr_entry_id);
   HContext* context = builder_->Add<HContext>();
   environment->BindContext(context);

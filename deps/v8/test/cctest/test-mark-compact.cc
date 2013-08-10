@@ -119,10 +119,8 @@ TEST(NoPromotion) {
   HEAP->CollectGarbage(OLD_POINTER_SPACE);
 
   // Allocate a big Fixed array in the new space.
-  int max_size =
-      Min(Page::kMaxNonCodeHeapObjectSize, HEAP->MaxObjectSizeInNewSpace());
-
-  int length = (max_size - FixedArray::kHeaderSize) / (2*kPointerSize);
+  int length = (Page::kMaxNonCodeHeapObjectSize -
+      FixedArray::kHeaderSize) / (2 * kPointerSize);
   Object* obj = i::Isolate::Current()->heap()->AllocateFixedArray(length)->
       ToObjectChecked();
 
@@ -309,6 +307,7 @@ static void WeakPointerCallback(v8::Isolate* isolate,
   NumberOfWeakCalls++;
   handle->Dispose(isolate);
 }
+
 
 TEST(ObjectGroups) {
   FLAG_incremental_marking = false;
@@ -560,7 +559,7 @@ TEST(BootUpMemoryUse) {
       if (v8::internal::Snapshot::IsEnabled()) {
         CHECK_LE(delta, 3100 * 1024);
       } else {
-        CHECK_LE(delta, 3400 * 1024);
+        CHECK_LE(delta, 3450 * 1024);
       }
     }
   }

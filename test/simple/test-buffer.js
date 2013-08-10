@@ -778,6 +778,14 @@ assert.equal(buf[3], 0xFF);
   assert.equal(buf[3], 0xFF);
 });
 
+// test offset returns are correct
+var b = new Buffer(16);
+assert.equal(4, b.writeUInt32LE(0, 0));
+assert.equal(6, b.writeUInt16LE(0, 4));
+assert.equal(7, b.writeUInt8(0, 6));
+assert.equal(8, b.writeInt8(0, 7));
+assert.equal(16, b.writeDoubleLE(0, 8));
+
 // test for buffer overrun
 buf = new Buffer([0, 0, 0, 0, 0]); // length: 5
 var sub = buf.slice(0, 4);         // length: 4
@@ -939,6 +947,13 @@ assert.throws(function() { buf.readInt8(0); }, RangeError);
     assert.equal(buf.slice(-i), s.slice(-i));
     assert.equal(buf.slice(0, -i), s.slice(0, -i));
   }
+  // try to slice a zero length Buffer
+  // see https://github.com/joyent/node/issues/5881
+  SlowBuffer(0).slice(0, 1);
+  // make sure a zero length slice doesn't set the .parent attribute
+  assert.equal(Buffer(5).slice(0,0).parent, undefined);
+  // and make sure a proper slice does have a parent
+  assert.ok(typeof Buffer(5).slice(0, 5).parent === 'object');
 })();
 
 // Make sure byteLength properly checks for base64 padding
@@ -950,39 +965,3 @@ assert.throws(function() {
   Buffer('', 'buffer');
 }, TypeError);
 
-
-// test Buffer alloc
-
-// arrays are unsupported by v8
-assert.throws(function() {
-  Buffer.alloc(0, []);
-}, TypeError);
-
-// can't create too large an alloc
-assert.throws(function() {
-  Buffer.alloc(0x3fffffff + 1);
-}, RangeError);
-
-// make sure values are assigned
-var b = {};
-Buffer.alloc(256, b);
-for (var i = 0; i < 256; i++)
-  b[i] = i;
-for (var i = 0; i < 256; i++)
-  assert.equal(b[i], i);
-assert.equal(b[257], undefined);
-
-// several other types that shouldn't throw
-Buffer.alloc(1, function() { });
-Buffer.alloc(1, /abc/);
-Buffer.alloc(1, new Date());
-
-
-// make sure disposal works
-var b = {};
-Buffer.alloc(5, b);
-for (var i = 0; i < 5; i++)
-  b[i] = i;
-Buffer.dispose(b);
-for (var i = 0; i < 5; i++)
-  assert.equal(b[i], undefined);

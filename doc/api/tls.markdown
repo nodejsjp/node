@@ -244,9 +244,10 @@ automatically set as a listener for the [secureConnection][] event.  The
   - `NPNProtocols`: An array or `Buffer` of possible NPN protocols. (Protocols
     should be ordered by their priority).
 
-  - `SNICallback`: A function that will be called if client supports SNI TLS
-    extension. Only one argument will be passed to it: `servername`. And
-    `SNICallback` should return SecureContext instance.
+  - `SNICallback(servername, cb)`: A function that will be called if client
+    supports SNI TLS extension. Two argument will be passed to it: `servername`,
+    and `cb`. `SNICallback` should invoke `cb(null, ctx)`, where `ctx` is a
+    SecureContext instance.
     (You can use `crypto.createCredentials(...).context` to get proper
     SecureContext). If `SNICallback` wasn't provided - default callback with
     high-level API will be used (see below).
@@ -258,6 +259,10 @@ automatically set as a listener for the [secureConnection][] event.  The
   - `sessionIdContext`: A string containing a opaque identifier for session
     resumption. If `requestCert` is `true`, the default is MD5 hash value
     generated from command-line. Otherwise, the default is not provided.
+
+  - `secureProtocol`: The SSL method to use, e.g. `SSLv3_method` to force
+    SSL version 3. The possible values depend on your installation of
+    OpenSSL and are defined in the constant [SSL_METHODS][].
 
 -->
 
@@ -325,10 +330,11 @@ automatically set as a listener for the [secureConnection][] event.  The
   - `NPNProtocols`: NPN プロトコルで使用可能な文字列または `Buffer` の配列
     (プロトコルはその優先度に応じて並んでいる必要があります)。
 
-  - `SNICallback`: クライアントが TLS 拡張の SNI をサポートしている場合に
-    呼び出される関数です。
-    `servername` が唯一の引数として渡されます。
-    `SNICallback` は SecureContext のインスタンスを返す必要があります
+  - `SNICallback(servername, cb)`: クライアントが TLS 拡張の SNI を
+    サポートしている場合に呼び出される関数です。
+    二つの引数、`servername` と `cb` が渡されます。
+    `SNICallback` は、`cb(null, ctx)` を呼び出す必要があります。
+    `ctx` はSecureContext のインスタンスです
     (SecureContext を取得するために `crypto.createCredentials(...).context`
     を使用することができます)。
     `SNICallback` が渡されなかった場合は、デフォルトのコールバックとして
@@ -342,6 +348,10 @@ automatically set as a listener for the [secureConnection][] event.  The
     `requestCedrt` が `true` の場合、デフォルトはコマンドライン引数から
     生成された MD5 ハッシュ値となります。
     そうでない場合はデフォルトは提供されません。
+
+  - `secureProtocol`: 使用する SSL メソッド、たとえば `SSLv3_method` は
+    SSL version 3 の使用を強制します。可能な値は使用する OpenSSL によって
+    定義される [SSL_METHODS][] 定数に依存します。
 
 <!--
 Here is a simple example echo server:

@@ -792,6 +792,46 @@ void MacroAssembler::Vmov(const DwVfpRegister dst,
 }
 
 
+void MacroAssembler::VmovHigh(Register dst, DwVfpRegister src) {
+  if (src.code() < 16) {
+    const LowDwVfpRegister loc = LowDwVfpRegister::from_code(src.code());
+    vmov(dst, loc.high());
+  } else {
+    vmov(dst, VmovIndexHi, src);
+  }
+}
+
+
+void MacroAssembler::VmovHigh(DwVfpRegister dst, Register src) {
+  if (dst.code() < 16) {
+    const LowDwVfpRegister loc = LowDwVfpRegister::from_code(dst.code());
+    vmov(loc.high(), src);
+  } else {
+    vmov(dst, VmovIndexHi, src);
+  }
+}
+
+
+void MacroAssembler::VmovLow(Register dst, DwVfpRegister src) {
+  if (src.code() < 16) {
+    const LowDwVfpRegister loc = LowDwVfpRegister::from_code(src.code());
+    vmov(dst, loc.low());
+  } else {
+    vmov(dst, VmovIndexLo, src);
+  }
+}
+
+
+void MacroAssembler::VmovLow(DwVfpRegister dst, Register src) {
+  if (dst.code() < 16) {
+    const LowDwVfpRegister loc = LowDwVfpRegister::from_code(dst.code());
+    vmov(loc.low(), src);
+  } else {
+    vmov(dst, VmovIndexLo, src);
+  }
+}
+
+
 void MacroAssembler::ConvertNumberToInt32(Register object,
                                           Register dst,
                                           Register heap_number_map,
@@ -799,7 +839,7 @@ void MacroAssembler::ConvertNumberToInt32(Register object,
                                           Register scratch2,
                                           Register scratch3,
                                           DwVfpRegister double_scratch1,
-                                          DwVfpRegister double_scratch2,
+                                          LowDwVfpRegister double_scratch2,
                                           Label* not_number) {
   Label done;
   UntagAndJumpIfSmi(dst, object, &done);
@@ -813,7 +853,7 @@ void MacroAssembler::ConvertNumberToInt32(Register object,
 
 
 void MacroAssembler::LoadNumber(Register object,
-                                DwVfpRegister dst,
+                                LowDwVfpRegister dst,
                                 Register heap_number_map,
                                 Register scratch,
                                 Label* not_number) {
@@ -838,7 +878,7 @@ void MacroAssembler::LoadNumberAsInt32Double(Register object,
                                              DwVfpRegister double_dst,
                                              Register heap_number_map,
                                              Register scratch,
-                                             DwVfpRegister double_scratch,
+                                             LowDwVfpRegister double_scratch,
                                              Label* not_int32) {
   ASSERT(!scratch.is(object));
   ASSERT(!heap_number_map.is(object) && !heap_number_map.is(scratch));
@@ -870,7 +910,7 @@ void MacroAssembler::LoadNumberAsInt32(Register object,
                                        Register heap_number_map,
                                        Register scratch,
                                        DwVfpRegister double_scratch0,
-                                       DwVfpRegister double_scratch1,
+                                       LowDwVfpRegister double_scratch1,
                                        Label* not_int32) {
   ASSERT(!dst.is(object));
   ASSERT(!scratch.is(object));
@@ -1032,6 +1072,7 @@ void MacroAssembler::LeaveExitFrame(bool save_doubles,
     add(sp, sp, Operand(argument_count, LSL, kPointerSizeLog2));
   }
 }
+
 
 void MacroAssembler::GetCFunctionDoubleResult(const DwVfpRegister dst) {
   if (use_eabi_hardfloat()) {
@@ -1624,6 +1665,7 @@ void MacroAssembler::Allocate(int object_size,
                               Register scratch2,
                               Label* gc_required,
                               AllocationFlags flags) {
+  ASSERT(object_size <= Page::kMaxNonCodeHeapObjectSize);
   if (!FLAG_inline_new) {
     if (emit_debug_code()) {
       // Trash the registers to simulate an allocation failure.
@@ -2064,12 +2106,14 @@ void MacroAssembler::CheckFastSmiElements(Register map,
 }
 
 
-void MacroAssembler::StoreNumberToDoubleElements(Register value_reg,
-                                                 Register key_reg,
-                                                 Register elements_reg,
-                                                 Register scratch1,
-                                                 Label* fail,
-                                                 int elements_offset) {
+void MacroAssembler::StoreNumberToDoubleElements(
+                                      Register value_reg,
+                                      Register key_reg,
+                                      Register elements_reg,
+                                      Register scratch1,
+                                      LowDwVfpRegister double_scratch,
+                                      Label* fail,
+                                      int elements_offset) {
   Label smi_value, store;
 
   // Handle smi values specially.
@@ -2082,23 +2126,24 @@ void MacroAssembler::StoreNumberToDoubleElements(Register value_reg,
            fail,
            DONT_DO_SMI_CHECK);
 
-  vldr(d0, FieldMemOperand(value_reg, HeapNumber::kValueOffset));
+  vldr(double_scratch, FieldMemOperand(value_reg, HeapNumber::kValueOffset));
   // Force a canonical NaN.
   if (emit_debug_code()) {
     vmrs(ip);
     tst(ip, Operand(kVFPDefaultNaNModeControlBit));
     Assert(ne, "Default NaN mode not set");
   }
-  VFPCanonicalizeNaN(d0);
+  VFPCanonicalizeNaN(double_scratch);
   b(&store);
 
   bind(&smi_value);
-  SmiToDouble(d0, value_reg);
+  SmiToDouble(double_scratch, value_reg);
 
   bind(&store);
   add(scratch1, elements_reg, Operand::DoubleOffsetFromSmiKey(key_reg));
-  vstr(d0, FieldMemOperand(scratch1,
-                           FixedDoubleArray::kHeaderSize - elements_offset));
+  vstr(double_scratch,
+       FieldMemOperand(scratch1,
+                       FixedDoubleArray::kHeaderSize - elements_offset));
 }
 
 
@@ -2404,8 +2449,7 @@ void MacroAssembler::IndexFromHash(Register hash, Register index) {
 }
 
 
-void MacroAssembler::SmiToDouble(DwVfpRegister value, Register smi) {
-  ASSERT(value.code() < 16);
+void MacroAssembler::SmiToDouble(LowDwVfpRegister value, Register smi) {
   if (CpuFeatures::IsSupported(VFP3)) {
     vmov(value.low(), smi);
     vcvt_f64_s32(value, 1);
@@ -2418,7 +2462,7 @@ void MacroAssembler::SmiToDouble(DwVfpRegister value, Register smi) {
 
 
 void MacroAssembler::TestDoubleIsInt32(DwVfpRegister double_input,
-                                       DwVfpRegister double_scratch) {
+                                       LowDwVfpRegister double_scratch) {
   ASSERT(!double_input.is(double_scratch));
   vcvt_s32_f64(double_scratch.low(), double_input);
   vcvt_f64_s32(double_scratch, double_scratch.low());
@@ -2428,7 +2472,7 @@ void MacroAssembler::TestDoubleIsInt32(DwVfpRegister double_input,
 
 void MacroAssembler::TryDoubleToInt32Exact(Register result,
                                            DwVfpRegister double_input,
-                                           DwVfpRegister double_scratch) {
+                                           LowDwVfpRegister double_scratch) {
   ASSERT(!double_input.is(double_scratch));
   vcvt_s32_f64(double_scratch.low(), double_input);
   vmov(result, double_scratch.low());
@@ -2440,12 +2484,14 @@ void MacroAssembler::TryDoubleToInt32Exact(Register result,
 void MacroAssembler::TryInt32Floor(Register result,
                                    DwVfpRegister double_input,
                                    Register input_high,
-                                   DwVfpRegister double_scratch,
+                                   LowDwVfpRegister double_scratch,
                                    Label* done,
                                    Label* exact) {
   ASSERT(!result.is(input_high));
   ASSERT(!double_input.is(double_scratch));
   Label negative, exception;
+
+  VmovHigh(input_high, double_input);
 
   // Test for NaN and infinities.
   Sbfx(result, input_high,
@@ -2487,7 +2533,7 @@ void MacroAssembler::ECMAToInt32(Register result,
                                  Register scratch,
                                  Register scratch_high,
                                  Register scratch_low,
-                                 DwVfpRegister double_scratch) {
+                                 LowDwVfpRegister double_scratch) {
   ASSERT(!scratch_high.is(result));
   ASSERT(!scratch_low.is(result));
   ASSERT(!scratch_low.is(scratch_high));
@@ -3092,11 +3138,14 @@ void MacroAssembler::JumpIfNotBothSequentialAsciiStrings(Register first,
 
 void MacroAssembler::JumpIfNotUniqueName(Register reg,
                                          Label* not_unique_name) {
-  STATIC_ASSERT(((SYMBOL_TYPE - 1) & kIsInternalizedMask) == kInternalizedTag);
-  cmp(reg, Operand(kInternalizedTag));
-  b(lt, not_unique_name);
+  STATIC_ASSERT(kInternalizedTag == 0 && kStringTag == 0);
+  Label succeed;
+  tst(reg, Operand(kIsNotStringMask | kIsNotInternalizedMask));
+  b(eq, &succeed);
   cmp(reg, Operand(SYMBOL_TYPE));
-  b(gt, not_unique_name);
+  b(ne, not_unique_name);
+
+  bind(&succeed);
 }
 
 
@@ -3138,8 +3187,7 @@ void MacroAssembler::AllocateHeapNumberWithValue(Register result,
 // Copies a fixed number of fields of heap objects from src to dst.
 void MacroAssembler::CopyFields(Register dst,
                                 Register src,
-                                DwVfpRegister double_scratch,
-                                SwVfpRegister single_scratch,
+                                LowDwVfpRegister double_scratch,
                                 int field_count) {
   int double_count = field_count / (DwVfpRegister::kSizeInBytes / kPointerSize);
   for (int i = 0; i < double_count; i++) {
@@ -3152,9 +3200,9 @@ void MacroAssembler::CopyFields(Register dst,
 
   int remain = field_count % (DwVfpRegister::kSizeInBytes / kPointerSize);
   if (remain != 0) {
-    vldr(single_scratch,
+    vldr(double_scratch.low(),
          FieldMemOperand(src, (field_count - 1) * kPointerSize));
-    vstr(single_scratch,
+    vstr(double_scratch.low(),
          FieldMemOperand(dst, (field_count - 1) * kPointerSize));
   }
 }
@@ -3256,9 +3304,10 @@ void MacroAssembler::JumpIfBothInstanceTypesAreNotSequentialAscii(
     Register scratch1,
     Register scratch2,
     Label* failure) {
-  int kFlatAsciiStringMask =
+  const int kFlatAsciiStringMask =
       kIsNotStringMask | kStringEncodingMask | kStringRepresentationMask;
-  int kFlatAsciiStringTag = ASCII_STRING_TYPE;
+  const int kFlatAsciiStringTag =
+      kStringTag | kOneByteStringTag | kSeqStringTag;
   and_(scratch1, first, Operand(kFlatAsciiStringMask));
   and_(scratch2, second, Operand(kFlatAsciiStringMask));
   cmp(scratch1, Operand(kFlatAsciiStringTag));
@@ -3271,9 +3320,10 @@ void MacroAssembler::JumpIfBothInstanceTypesAreNotSequentialAscii(
 void MacroAssembler::JumpIfInstanceTypeIsNotSequentialAscii(Register type,
                                                             Register scratch,
                                                             Label* failure) {
-  int kFlatAsciiStringMask =
+  const int kFlatAsciiStringMask =
       kIsNotStringMask | kStringEncodingMask | kStringRepresentationMask;
-  int kFlatAsciiStringTag = ASCII_STRING_TYPE;
+  const int kFlatAsciiStringTag =
+      kStringTag | kOneByteStringTag | kSeqStringTag;
   and_(scratch, type, Operand(kFlatAsciiStringMask));
   cmp(scratch, Operand(kFlatAsciiStringTag));
   b(ne, failure);
@@ -3653,13 +3703,12 @@ void MacroAssembler::ClampUint8(Register output_reg, Register input_reg) {
 
 void MacroAssembler::ClampDoubleToUint8(Register result_reg,
                                         DwVfpRegister input_reg,
-                                        DwVfpRegister temp_double_reg) {
+                                        LowDwVfpRegister double_scratch) {
   Label above_zero;
   Label done;
   Label in_bounds;
 
-  Vmov(temp_double_reg, 0.0);
-  VFPCompareAndSetFlags(input_reg, temp_double_reg);
+  VFPCompareAndSetFlags(input_reg, 0.0);
   b(gt, &above_zero);
 
   // Double value is less than zero, NaN or Inf, return 0.
@@ -3668,8 +3717,8 @@ void MacroAssembler::ClampDoubleToUint8(Register result_reg,
 
   // Double value is >= 255, return 255.
   bind(&above_zero);
-  Vmov(temp_double_reg, 255.0, result_reg);
-  VFPCompareAndSetFlags(input_reg, temp_double_reg);
+  Vmov(double_scratch, 255.0, result_reg);
+  VFPCompareAndSetFlags(input_reg, double_scratch);
   b(le, &in_bounds);
   mov(result_reg, Operand(255));
   b(al, &done);
@@ -3681,8 +3730,8 @@ void MacroAssembler::ClampDoubleToUint8(Register result_reg,
   // Set rounding mode to round to the nearest integer by clearing bits[23:22].
   bic(result_reg, ip, Operand(kVFPRoundingModeMask));
   vmsr(result_reg);
-  vcvt_s32_f64(input_reg.low(), input_reg, kFPSCRRounding);
-  vmov(result_reg, input_reg.low());
+  vcvt_s32_f64(double_scratch.low(), input_reg, kFPSCRRounding);
+  vmov(result_reg, double_scratch.low());
   // Restore FPSCR.
   vmsr(ip);
   bind(&done);
@@ -3746,26 +3795,26 @@ void MacroAssembler::CheckEnumCache(Register null_value, Label* call_runtime) {
 }
 
 
-void MacroAssembler::TestJSArrayForAllocationSiteInfo(
+void MacroAssembler::TestJSArrayForAllocationMemento(
     Register receiver_reg,
     Register scratch_reg) {
-  Label no_info_available;
+  Label no_memento_available;
   ExternalReference new_space_start =
       ExternalReference::new_space_start(isolate());
   ExternalReference new_space_allocation_top =
       ExternalReference::new_space_allocation_top_address(isolate());
   add(scratch_reg, receiver_reg,
-      Operand(JSArray::kSize + AllocationSiteInfo::kSize - kHeapObjectTag));
+      Operand(JSArray::kSize + AllocationMemento::kSize - kHeapObjectTag));
   cmp(scratch_reg, Operand(new_space_start));
-  b(lt, &no_info_available);
+  b(lt, &no_memento_available);
   mov(ip, Operand(new_space_allocation_top));
   ldr(ip, MemOperand(ip));
   cmp(scratch_reg, ip);
-  b(gt, &no_info_available);
-  ldr(scratch_reg, MemOperand(scratch_reg, -AllocationSiteInfo::kSize));
+  b(gt, &no_memento_available);
+  ldr(scratch_reg, MemOperand(scratch_reg, -AllocationMemento::kSize));
   cmp(scratch_reg,
-      Operand(Handle<Map>(isolate()->heap()->allocation_site_info_map())));
-  bind(&no_info_available);
+      Operand(Handle<Map>(isolate()->heap()->allocation_memento_map())));
+  bind(&no_memento_available);
 }
 
 

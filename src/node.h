@@ -58,12 +58,7 @@
 # define SIGKILL         9
 #endif
 
-#include "uv.h"
-#include "v8.h"
-#include <sys/types.h> /* struct stat */
-#include <sys/stat.h>
-#include <assert.h>
-
+#include "node_version.h"  // NODE_MODULE_VERSION
 #include "node_object_wrap.h"
 
 // Forward-declare these functions now to stop MSVS from becoming
@@ -97,8 +92,13 @@ NODE_EXTERN v8::Handle<v8::Value> MakeCallback(
 }  // namespace node
 
 #if NODE_WANT_INTERNALS
-# include "node_internals.h"
+#include "node_internals.h"
 #endif
+
+#include "uv.h"
+#include "v8.h"
+
+#include <assert.h>
 
 #ifndef NODE_STRINGIFY
 #define NODE_STRINGIFY(n) NODE_STRINGIFY_HELPER(n)
@@ -137,11 +137,14 @@ void EmitExit(v8::Handle<v8::Object> process);
 
 // Used to be a macro, hence the uppercase name.
 template <typename TypeName>
-inline void NODE_SET_METHOD(TypeName& recv,
+inline void NODE_SET_METHOD(const TypeName& recv,
                             const char* name,
                             v8::FunctionCallback callback) {
   v8::Local<v8::FunctionTemplate> t = v8::FunctionTemplate::New(callback);
-  recv->Set(v8::String::New(name), t->GetFunction());
+  v8::Local<v8::Function> fn = t->GetFunction();
+  v8::Local<v8::String> fn_name = v8::String::New(name);
+  fn->SetName(fn_name);
+  recv->Set(fn_name, fn);
 }
 #define NODE_SET_METHOD node::NODE_SET_METHOD
 
@@ -158,7 +161,7 @@ inline void NODE_SET_PROTOTYPE_METHOD(v8::Handle<v8::FunctionTemplate> recv,
 enum encoding {ASCII, UTF8, BASE64, UCS2, BINARY, HEX, BUFFER};
 enum encoding ParseEncoding(v8::Handle<v8::Value> encoding_v,
                             enum encoding _default = BINARY);
-NODE_EXTERN void FatalException(v8::TryCatch &try_catch);
+NODE_EXTERN void FatalException(const v8::TryCatch& try_catch);
 void DisplayExceptionLine(v8::Handle<v8::Message> message);
 
 NODE_EXTERN v8::Local<v8::Value> Encode(const void *buf, size_t len,
@@ -199,14 +202,6 @@ struct node_module_struct {
 
 node_module_struct* get_builtin_module(const char *name);
 
-/**
- * When this version number is changed, node.js will refuse
- * to load older modules.  This should be done whenever
- * an API is broken in the C++ side, including in v8 or
- * other dependencies.
- */
-#define NODE_MODULE_VERSION 0x000C /* v0.12 */
-
 #define NODE_STANDARD_MODULE_STUFF \
           NODE_MODULE_VERSION,     \
           NULL,                    \
@@ -235,8 +230,6 @@ node_module_struct* get_builtin_module(const char *name);
  * Callbacks are run in reverse order of registration, i.e. newest first.
  */
 NODE_EXTERN void AtExit(void (*cb)(void* arg), void* arg = 0);
-
-NODE_EXTERN void SetErrno(uv_err_t err);
 
 }  // namespace node
 

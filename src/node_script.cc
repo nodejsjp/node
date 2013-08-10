@@ -168,13 +168,13 @@ WrappedContext::~WrappedContext() {
 
 Local<Object> WrappedContext::NewInstance() {
   Local<FunctionTemplate> constructor_template_handle =
-      PersistentToLocal(constructor_template);
+      PersistentToLocal(node_isolate, constructor_template);
   return constructor_template_handle->GetFunction()->NewInstance();
 }
 
 
 Local<Context> WrappedContext::GetV8Context() {
-  return PersistentToLocal(context_);
+  return PersistentToLocal(node_isolate, context_);
 }
 
 
@@ -310,9 +310,8 @@ void WrappedScript::EvalMachine(const FunctionCallbackInfo<Value>& args) {
   }
 
   const int sandbox_index = input_flag == compileCode ? 1 : 0;
-  if (context_flag == userContext
-    && !WrappedContext::InstanceOf(args[sandbox_index]))
-  {
+  if (context_flag == userContext &&
+      !WrappedContext::InstanceOf(args[sandbox_index])) {
     return ThrowTypeError("needs a 'context' argument.");
   }
 
@@ -405,7 +404,7 @@ void WrappedScript::EvalMachine(const FunctionCallbackInfo<Value>& args) {
           "'this' must be a result of previous new Script(code) call.");
     }
 
-    script = PersistentToLocal(n_script->script_);
+    script = PersistentToLocal(node_isolate, n_script->script_);
   }
 
   if (output_flag == returnResult) {

@@ -158,7 +158,7 @@ result. Running code does not have access to local scope. The object `sandbox`
 will be used as the global object for `code`.
 `sandbox` and `filename` are optional, `filename` is only used in stack traces.
 `timeout` specifies an optional number of milliseconds to execute `code` before
-terminating execution. If execution is terminated, `null` will be thrown.
+terminating execution. If execution is terminated, an `Error` will be thrown.
 -->
 
 `vm.runInNewContext` は `code` をコンパイルし、それを `sandbox` の中で実行して
@@ -169,7 +169,7 @@ terminating execution. If execution is terminated, `null` will be thrown.
 スタックトレースでのみ使用されます。
 `timeout` はオプションで、`code` の実行が打ち切られるまでの時間を
 ミリ秒単位の数値で指定します。
-実行が打ち切られると、`null` がスローされます。
+実行が打ち切られると、`Error` がスローされます。
 
 <!--
 Example: compile and execute code that increments a global variable and sets a new one.
@@ -219,7 +219,7 @@ and the global object held within `context` will be used as the global object
 for `code`.
 `filename` is optional, it's used only in stack traces.
 `timeout` specifies an optional number of milliseconds to execute `code` before
-terminating execution. If execution is terminated, `null` will be thrown.
+terminating execution. If execution is terminated, an `Error` will be thrown.
 -->
 
 `vm.runInContext` は `code` をコンパイルして、
@@ -231,7 +231,7 @@ terminating execution. If execution is terminated, `null` will be thrown.
 `filename` はオプションで、スタックトレースでのみ使用されます。
 `timeout` はオプションで、`code` の実行が打ち切られるまでの時間を
 ミリ秒単位の数値で指定します。
-実行が打ち切られると、`null` がスローされます。
+実行が打ち切られると、`Error` がスローされます。
 
 <!--
 Example: compile and execute code in a existing context.
@@ -331,7 +331,7 @@ Similar to `vm.runInThisContext` but a method of a precompiled `Script` object.
 Running code does not have access to local scope, but does have access to the `global` object
 (v8: in actual context).
 `timeout` specifies an optional number of milliseconds to execute `code` before
-terminating execution. If execution is terminated, `null` will be thrown.
+terminating execution. If execution is terminated, an `Error` will be thrown.
 -->
 
 `vm.runInThisContext` と同様ですが、
@@ -341,7 +341,7 @@ terminating execution. If execution is terminated, `null` will be thrown.
 `global` オブジェクト (v8: 実際のコンテキスト) にはアクセスします。
 `timeout` はオプションで、`code` の実行が打ち切られるまでの時間を
 ミリ秒単位の数値で指定します。
-実行が打ち切られると、`null` がスローされます。
+実行が打ち切られると、`Error` がスローされます。
 
 <!--
 Example of using `script.runInThisContext` to compile code once and run it multiple times:
@@ -371,7 +371,7 @@ Similar to `vm.runInNewContext` a method of a precompiled `Script` object.
 `script.runInNewContext` runs the code of `script` with `sandbox` as the global object and returns the result.
 Running code does not have access to local scope. `sandbox` is optional.
 `timeout` specifies an optional number of milliseconds to execute `code` before
-terminating execution. If execution is terminated, `null` will be thrown.
+terminating execution. If execution is terminated, an `Error` will be thrown.
 -->
 
 `vm.runInNewContext` と同様ですが、
@@ -382,7 +382,7 @@ terminating execution. If execution is terminated, `null` will be thrown.
 `sandbox` はオプションです。
 `timeout` はオプションで、`code` の実行が打ち切られるまでの時間を
 ミリ秒単位の数値で指定します。
-実行が打ち切られると、`null` がスローされます。
+実行が打ち切られると、`Error` がスローされます。
 
 <!--
 Example: compile code that increments a global variable and sets one, then execute this code multiple times.

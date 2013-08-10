@@ -38,7 +38,10 @@
 #include <signal.h>
 #include <sys/time.h>
 #include <sys/syscall.h>
-#if !defined(__ANDROID__) || defined(__BIONIC_HAVE_UCONTEXT_T)
+// OpenBSD doesn't have <ucontext.h>. ucontext_t lives in <signal.h>
+// and is a typedef for struct sigcontext. There is no uc_mcontext.
+#if (!defined(__ANDROID__) || defined(__BIONIC_HAVE_UCONTEXT_T)) \
+    && !defined(__OpenBSD__)
 #include <ucontext.h>
 #endif
 #include <unistd.h>
@@ -69,6 +72,7 @@
 #include "platform.h"
 #include "simulator.h"
 #include "v8threads.h"
+#include "vm-state-inl.h"
 
 
 #if defined(__ANDROID__) && !defined(__BIONIC_HAVE_UCONTEXT_T)
@@ -329,7 +333,9 @@ void SignalHandler::HandleProfilerSignal(int signal, siginfo_t* info,
 #else
   // Extracting the sample from the context is extremely machine dependent.
   ucontext_t* ucontext = reinterpret_cast<ucontext_t*>(context);
+#if !defined(__OpenBSD__)
   mcontext_t& mcontext = ucontext->uc_mcontext;
+#endif
 #if defined(__linux__) || defined(__ANDROID__)
 #if V8_HOST_ARCH_IA32
   state.pc = reinterpret_cast<Address>(mcontext.gregs[REG_EIP]);
@@ -383,7 +389,6 @@ void SignalHandler::HandleProfilerSignal(int signal, siginfo_t* info,
   state.fp = reinterpret_cast<Address>(mcontext.__gregs[_REG_RBP]);
 #endif  // V8_HOST_ARCH_*
 #elif defined(__OpenBSD__)
-  USE(mcontext);
 #if V8_HOST_ARCH_IA32
   state.pc = reinterpret_cast<Address>(ucontext->sc_eip);
   state.sp = reinterpret_cast<Address>(ucontext->sc_esp);
@@ -621,9 +626,13 @@ DISABLE_ASAN void TickSample::Init(Isolate* isolate,
     return;
   }
 
-  const Address callback = isolate->external_callback();
-  if (callback != NULL) {
-    external_callback = callback;
+  ExternalCallbackScope* scope = isolate->external_callback_scope();
+  Address handler = Isolate::handler(isolate->thread_local_top());
+  // If there is a handler on top of the external callback scope then
+  // we have already entrered JavaScript again and the external callback
+  // is not the top function.
+  if (scope && scope->scope_address() < handler) {
+    external_callback = scope->callback();
     has_external_callback = true;
   } else {
     // Sample potential return address value for frameless invocation of
@@ -658,7 +667,8 @@ Sampler::Sampler(Isolate* isolate, int interval)
       interval_(interval),
       profiling_(false),
       active_(false),
-      samples_taken_(0) {
+      is_counting_samples_(false),
+      js_and_external_sample_count_(0) {
   data_ = new PlatformData;
 }
 
@@ -667,6 +677,7 @@ Sampler::~Sampler() {
   ASSERT(!IsActive());
   delete data_;
 }
+
 
 void Sampler::Start() {
   ASSERT(!IsActive());
@@ -681,12 +692,17 @@ void Sampler::Stop() {
   SetActive(false);
 }
 
+
 void Sampler::SampleStack(const RegisterState& state) {
   TickSample* sample = isolate_->cpu_profiler()->TickSampleEvent();
   TickSample sample_obj;
   if (sample == NULL) sample = &sample_obj;
   sample->Init(isolate_, state);
-  if (++samples_taken_ < 0) samples_taken_ = 0;
+  if (is_counting_samples_) {
+    if (sample->state == JS || sample->state == EXTERNAL) {
+      ++js_and_external_sample_count_;
+    }
+  }
   Tick(sample);
 }
 

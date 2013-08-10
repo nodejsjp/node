@@ -102,9 +102,11 @@ class LCodeGen BASE_EMBEDDED {
   XMMRegister ToDoubleRegister(LOperand* op) const;
   bool IsInteger32Constant(LConstantOperand* op) const;
   bool IsSmiConstant(LConstantOperand* op) const;
-  int ToInteger32(LConstantOperand* op) const;
+  int ToRepresentation(LConstantOperand* op, const Representation& r) const;
+  int32_t ToInteger32(LConstantOperand* op) const;
   Smi* ToSmi(LConstantOperand* op) const;
   double ToDouble(LConstantOperand* op) const;
+  ExternalReference ToExternalReference(LConstantOperand* op) const;
   bool IsTaggedConstant(LConstantOperand* op) const;
   Handle<Object> ToHandle(LConstantOperand* op) const;
   Operand ToOperand(LOperand* op) const;
@@ -127,7 +129,6 @@ class LCodeGen BASE_EMBEDDED {
   void DoDeferredRandom(LRandom* instr);
   void DoDeferredStringCharCodeAt(LStringCharCodeAt* instr);
   void DoDeferredStringCharFromCode(LStringCharFromCode* instr);
-  void DoDeferredAllocateObject(LAllocateObject* instr);
   void DoDeferredAllocate(LAllocate* instr);
   void DoDeferredInstanceOfKnownGlobal(LInstanceOfKnownGlobal* instr,
                                        Label* map_check);
@@ -246,7 +247,7 @@ class LCodeGen BASE_EMBEDDED {
                     LEnvironment* environment,
                     Deoptimizer::BailoutType bailout_type);
   void DeoptimizeIf(Condition cc, LEnvironment* environment);
-  void SoftDeoptimize(LEnvironment* environment);
+  void ApplyCheckIf(Condition cc, LBoundsCheck* check);
   void AddToTranslation(Translation* translation,
                         LOperand* op,
                         bool is_tagged,
