@@ -446,6 +446,15 @@ a6.write('123');
 a6.end();
 a6 = a6.read();
 
+var a7 = crypto.createHash('sha512');
+a7.end();
+a7 = a7.read();
+
+var a8 = crypto.createHash('sha512');
+a8.write('');
+a8.end();
+a8 = a8.read();
+
 assert.equal(a0, '8308651804facb7b9af8ffc53a33a22d6a1c8ac2', 'Test SHA1');
 assert.equal(a1, 'h\u00ea\u00cb\u0097\u00d8o\fF!\u00fa+\u000e\u0017\u00ca' +
              '\u00bd\u008c', 'Test MD5 as binary');
@@ -468,6 +477,8 @@ assert.deepEqual(a4,
 // stream interface should produce the same result.
 assert.deepEqual(a5, a3, 'stream interface is consistent');
 assert.deepEqual(a6, a3, 'stream interface is consistent');
+assert.notEqual(a7, undefined, 'no data should return data');
+assert.notEqual(a8, undefined, 'empty string should generate data');
 
 // Test multiple updates to same hash
 var h1 = crypto.createHash('sha1').update('Test123').digest('hex');
@@ -915,3 +926,25 @@ assert.throws(function() {
   c.update('update', 'utf-8');
   c.final('utf8');  // Should not throw.
 })();
+
+// Regression tests for #5725: hex input that's not a power of two should
+// throw, not assert in C++ land.
+assert.throws(function() {
+  crypto.createCipher('aes192', 'test').update('0', 'hex');
+}, /Bad input string/);
+
+assert.throws(function() {
+  crypto.createDecipher('aes192', 'test').update('0', 'hex');
+}, /Bad input string/);
+
+assert.throws(function() {
+  crypto.createHash('sha1').update('0', 'hex');
+}, /Bad input string/);
+
+assert.throws(function() {
+  crypto.createSign('RSA-SHA1').update('0', 'hex');
+}, /Bad input string/);
+
+assert.throws(function() {
+  crypto.createVerify('RSA-SHA1').update('0', 'hex');
+}, /Bad input string/);

@@ -75,7 +75,7 @@ class TimerWrap : public HandleWrap {
     new TimerWrap(args.This());
   }
 
-  TimerWrap(Handle<Object> object)
+  explicit TimerWrap(Handle<Object> object)
       : HandleWrap(object, reinterpret_cast<uv_handle_t*>(&handle_)) {
     int r = uv_timer_init(uv_default_loop(), &handle_);
     assert(r == 0);
@@ -90,27 +90,24 @@ class TimerWrap : public HandleWrap {
 
     int64_t timeout = args[0]->IntegerValue();
     int64_t repeat = args[1]->IntegerValue();
-    int r = uv_timer_start(&wrap->handle_, OnTimeout, timeout, repeat);
-    if (r) SetErrno(uv_last_error(uv_default_loop()));
-    args.GetReturnValue().Set(r);
+    int err = uv_timer_start(&wrap->handle_, OnTimeout, timeout, repeat);
+    args.GetReturnValue().Set(err);
   }
 
   static void Stop(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
     UNWRAP(TimerWrap)
 
-    int r = uv_timer_stop(&wrap->handle_);
-    if (r) SetErrno(uv_last_error(uv_default_loop()));
-    args.GetReturnValue().Set(r);
+    int err = uv_timer_stop(&wrap->handle_);
+    args.GetReturnValue().Set(err);
   }
 
   static void Again(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
     UNWRAP(TimerWrap)
 
-    int r = uv_timer_again(&wrap->handle_);
-    if (r) SetErrno(uv_last_error(uv_default_loop()));
-    args.GetReturnValue().Set(r);
+    int err = uv_timer_again(&wrap->handle_);
+    args.GetReturnValue().Set(err);
   }
 
   static void SetRepeat(const FunctionCallbackInfo<Value>& args) {
@@ -127,7 +124,6 @@ class TimerWrap : public HandleWrap {
     UNWRAP(TimerWrap)
 
     int64_t repeat = uv_timer_get_repeat(&wrap->handle_);
-    if (repeat < 0) SetErrno(uv_last_error(uv_default_loop()));
     args.GetReturnValue().Set(static_cast<double>(repeat));
   }
 

@@ -270,7 +270,7 @@ int StackSlotOffset(int index) {
     return -(index + 3) * kPointerSize;
   } else {
     // Incoming parameter. Skip the return address.
-    return -(index - 1) * kPointerSize;
+    return -(index + 1) * kPointerSize + kFPOnStackSize + kPCOnStackSize;
   }
 }
 
@@ -305,6 +305,7 @@ Label* LChunk::GetAssemblyLabel(int block_id) const {
   ASSERT(!label->HasReplacement());
   return label->label();
 }
+
 
 void LChunk::MarkEmptyBlocks() {
   LPhase phase("L_Mark empty blocks", this);

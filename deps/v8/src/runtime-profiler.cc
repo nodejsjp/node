@@ -247,7 +247,7 @@ void RuntimeProfiler::OptimizeNow() {
        frame_count++ < frame_count_limit && !it.done();
        it.Advance()) {
     JavaScriptFrame* frame = it.frame();
-    JSFunction* function = JSFunction::cast(frame->function());
+    JSFunction* function = frame->function();
 
     if (!FLAG_watch_ic_patching) {
       // Adjust threshold each time we have processed
@@ -405,11 +405,6 @@ void RuntimeProfiler::Reset() {
 
 void RuntimeProfiler::TearDown() {
   // Nothing to do.
-}
-
-
-int RuntimeProfiler::SamplerWindowSize() {
-  return kSamplerWindowSize;
 }
 
 

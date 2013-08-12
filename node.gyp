@@ -16,6 +16,7 @@
     'node_use_openssl%': 'true',
     'node_use_systemtap%': 'false',
     'node_shared_openssl%': 'false',
+    'node_use_mdb%': 'false',
     'library_files': [
       'src/node.js',
       'lib/_debugger.js',
@@ -49,6 +50,7 @@
       'lib/querystring.js',
       'lib/readline.js',
       'lib/repl.js',
+      'lib/smalloc.js',
       'lib/stream.js',
       'lib/_stream_readable.js',
       'lib/_stream_writable.js',
@@ -100,7 +102,6 @@
         'src/node_os.cc',
         'src/node_script.cc',
         'src/node_stat_watcher.cc',
-        'src/node_string.cc',
         'src/node_watchdog.cc',
         'src/node_zlib.cc',
         'src/pipe_wrap.cc',
@@ -113,6 +114,7 @@
         'src/tty_wrap.cc',
         'src/process_wrap.cc',
         'src/udp_wrap.cc',
+        'src/uv.cc',
         # headers to make for a more pleasant IDE experience
         'src/handle_wrap.h',
         'src/node.h',
@@ -125,7 +127,6 @@
         'src/node_os.h',
         'src/node_root_certs.h',
         'src/node_script.h',
-        'src/node_string.h',
         'src/node_version.h',
         'src/node_watchdog.h',
         'src/node_wrap.h',
@@ -160,8 +161,10 @@
           'sources': [
             'src/node_crypto.cc',
             'src/node_crypto_bio.cc',
+            'src/node_crypto_clienthello.cc',
             'src/node_crypto.h',
             'src/node_crypto_bio.h',
+            'src/node_crypto_clienthello.h',
             'src/tls_wrap.cc',
             'src/tls_wrap.h'
           ],
@@ -204,6 +207,13 @@
               ]
             }
           ] ]
+        } ],
+        [ 'node_use_mdb=="true"', {
+          'dependencies': [ 'node_mdb' ],
+          'include_dirs': [ '<(SHARED_INTERMEDIATE_DIR)' ],
+          'sources': [
+            'src/node_mdb.cc',
+          ],
         } ],
         [ 'node_use_systemtap=="true"', {
           'defines': [ 'HAVE_SYSTEMTAP=1', 'STAP_SDT_V1=1' ],
@@ -376,19 +386,18 @@
               ' and node_use_etw=="false"'
               ' and node_use_systemtap=="false"',
             {
-                'inputs': ['src/macros.py']
-              }
-              ],
+              'inputs': ['src/notrace_macros.py']
+            }],
             [ 'node_use_perfctr=="false"', {
               'inputs': [ 'src/perfctr_macros.py' ]
             }]
           ],
-              'action': [
-                '<(python)',
-                'tools/js2c.py',
-                '<@(_outputs)',
-                '<@(_inputs)',
-              ],
+          'action': [
+            '<(python)',
+            'tools/js2c.py',
+            '<@(_outputs)',
+            '<@(_inputs)',
+          ],
         },
       ],
     }, # end node_js2c
@@ -408,6 +417,32 @@
           ]
         } ]
       ]
+    },
+    {
+      'target_name': 'node_mdb',
+      'type': 'none',
+      'conditions': [
+        [ 'node_use_mdb=="true"',
+          {
+            'dependencies': [ 'deps/mdb_v8/mdb_v8.gyp:mdb_v8' ],
+            'actions': [
+              {
+                'action_name': 'node_mdb',
+                'inputs': [ '<(PRODUCT_DIR)/obj.target/deps/mdb_v8/mdb_v8.so' ],
+                'outputs': [ '<(PRODUCT_DIR)/obj.target/node/src/node_mdb.o' ],
+                'conditions': [
+                  [ 'target_arch=="ia32"', {
+                    'action': [ 'elfwrap', '-o', '<@(_outputs)', '<@(_inputs)' ],
+                  } ],
+                  [ 'target_arch=="x64"', {
+                    'action': [ 'elfwrap', '-64', '-o', '<@(_outputs)', '<@(_inputs)' ],
+                  } ],
+                ],
+              },
+            ],
+          },
+        ],
+      ],
     },
     {
       'target_name': 'node_dtrace_provider',

@@ -40,6 +40,11 @@ namespace internal {
 static const char* TypeToString(InstanceType type);
 
 
+void MaybeObject::Print() {
+  Print(stdout);
+}
+
+
 void MaybeObject::Print(FILE* out) {
   Object* this_as_object;
   if (ToObject(&this_as_object)) {
@@ -52,6 +57,11 @@ void MaybeObject::Print(FILE* out) {
     Failure::cast(this)->FailurePrint(out);
   }
   Flush(out);
+}
+
+
+void MaybeObject::PrintLn() {
+  PrintLn(stdout);
 }
 
 
@@ -173,6 +183,9 @@ void HeapObject::HeapObjectPrint(FILE* out) {
     case JS_WEAK_MAP_TYPE:
       JSWeakMap::cast(this)->JSWeakMapPrint(out);
       break;
+    case JS_WEAK_SET_TYPE:
+      JSWeakSet::cast(this)->JSWeakSetPrint(out);
+      break;
     case FOREIGN_TYPE:
       Foreign::cast(this)->ForeignPrint(out);
       break;
@@ -281,9 +294,9 @@ void JSObject::PrintProperties(FILE* out) {
           PrintF(out, " (field at offset %d)\n", index);
           break;
         }
-        case CONSTANT_FUNCTION:
-          descs->GetConstantFunction(i)->ShortPrint(out);
-          PrintF(out, " (constant function)\n");
+        case CONSTANT:
+          descs->GetConstant(i)->ShortPrint(out);
+          PrintF(out, " (constant)\n");
           break;
         case CALLBACKS:
           descs->GetCallbacksObject(i)->ShortPrint(out);
@@ -437,8 +450,8 @@ void JSObject::PrintTransitions(FILE* out) {
         PrintF(out, " (transition to field)\n");
         break;
       }
-      case CONSTANT_FUNCTION:
-        PrintF(out, " (transition to constant function)\n");
+      case CONSTANT:
+        PrintF(out, " (transition to constant)\n");
         break;
       case CALLBACKS:
         PrintF(out, " (transition to callback)\n");
@@ -549,6 +562,7 @@ static const char* TypeToString(InstanceType type) {
     case JS_ARRAY_TYPE: return "JS_ARRAY";
     case JS_PROXY_TYPE: return "JS_PROXY";
     case JS_WEAK_MAP_TYPE: return "JS_WEAK_MAP";
+    case JS_WEAK_SET_TYPE: return "JS_WEAK_SET";
     case JS_REGEXP_TYPE: return "JS_REGEXP";
     case JS_VALUE_TYPE: return "JS_VALUE";
     case JS_GLOBAL_OBJECT_TYPE: return "JS_GLOBAL_OBJECT";
@@ -760,6 +774,7 @@ static const char* const weekdays[] = {
   "???", "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 };
 
+
 void JSDate::JSDatePrint(FILE* out) {
   HeapObject::PrintHeader(out, "JSDate");
   PrintF(out, " - map = 0x%p\n", reinterpret_cast<void*>(map()));
@@ -806,6 +821,15 @@ void JSFunctionProxy::JSFunctionProxyPrint(FILE* out) {
 
 void JSWeakMap::JSWeakMapPrint(FILE* out) {
   HeapObject::PrintHeader(out, "JSWeakMap");
+  PrintF(out, " - map = 0x%p\n", reinterpret_cast<void*>(map()));
+  PrintF(out, " - table = ");
+  table()->ShortPrint(out);
+  PrintF(out, "\n");
+}
+
+
+void JSWeakSet::JSWeakSetPrint(FILE* out) {
+  HeapObject::PrintHeader(out, "JSWeakSet");
   PrintF(out, " - map = 0x%p\n", reinterpret_cast<void*>(map()));
   PrintF(out, " - table = ");
   table()->ShortPrint(out);
@@ -1116,11 +1140,15 @@ void TypeSwitchInfo::TypeSwitchInfoPrint(FILE* out) {
 }
 
 
-void AllocationSiteInfo::AllocationSiteInfoPrint(FILE* out) {
-  HeapObject::PrintHeader(out, "AllocationSiteInfo");
-  PrintF(out, " - payload: ");
-  if (payload()->IsCell()) {
-    Cell* cell = Cell::cast(payload());
+void AllocationSite::AllocationSitePrint(FILE* out) {
+  HeapObject::PrintHeader(out, "AllocationSite");
+  PrintF(out, " - weak_next: ");
+  weak_next()->ShortPrint(out);
+  PrintF(out, "\n");
+
+  PrintF(out, " - transition_info: ");
+  if (transition_info()->IsCell()) {
+    Cell* cell = Cell::cast(transition_info());
     Object* cell_contents = cell->value();
     if (cell_contents->IsSmi()) {
       ElementsKind kind = static_cast<ElementsKind>(
@@ -1130,16 +1158,27 @@ void AllocationSiteInfo::AllocationSiteInfoPrint(FILE* out) {
       PrintF(out, "\n");
       return;
     }
-  } else if (payload()->IsJSArray()) {
+  } else if (transition_info()->IsJSArray()) {
     PrintF(out, "Array literal ");
-    payload()->ShortPrint(out);
+    transition_info()->ShortPrint(out);
     PrintF(out, "\n");
     return;
   }
 
-  PrintF(out, "unknown payload ");
-  payload()->ShortPrint(out);
+  PrintF(out, "unknown transition_info");
+  transition_info()->ShortPrint(out);
   PrintF(out, "\n");
+}
+
+
+void AllocationMemento::AllocationMementoPrint(FILE* out) {
+  HeapObject::PrintHeader(out, "AllocationMemento");
+  PrintF(out, " - allocation site: ");
+  if (IsValid()) {
+    GetAllocationSite()->Print();
+  } else {
+    PrintF(out, "<invalid>\n");
+  }
 }
 
 
@@ -1163,8 +1202,7 @@ void Script::ScriptPrint(FILE* out) {
   context_data()->ShortPrint(out);
   PrintF(out, "\n - wrapper: ");
   wrapper()->ShortPrint(out);
-  PrintF(out, "\n - compilation type: ");
-  compilation_type()->ShortPrint(out);
+  PrintF(out, "\n - compilation type: %d", compilation_type());
   PrintF(out, "\n - line ends: ");
   line_ends()->ShortPrint(out);
   PrintF(out, "\n - eval from shared: ");
@@ -1223,8 +1261,8 @@ void TransitionArray::PrintTransitions(FILE* out) {
         PrintF(out, " (transition to field)\n");
         break;
       }
-      case CONSTANT_FUNCTION:
-        PrintF(out, " (transition to constant function)\n");
+      case CONSTANT:
+        PrintF(out, " (transition to constant)\n");
         break;
       case CALLBACKS:
         PrintF(out, " (transition to callback)\n");

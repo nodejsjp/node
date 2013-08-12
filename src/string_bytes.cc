@@ -21,13 +21,13 @@
 
 #include "string_bytes.h"
 
-#include <assert.h>
-#include <string.h>  // memcpy
-#include <limits.h>
-
 #include "node.h"
 #include "node_buffer.h"
 #include "v8.h"
+
+#include <assert.h>
+#include <limits.h>
+#include <string.h>  // memcpy
 
 // When creating strings >= this length v8's gc spins up and consumes
 // most of the execution time. For these cases it's more performant to
@@ -230,15 +230,18 @@ size_t hex_decode(char* buf,
 }
 
 
-bool GetExternalParts(Handle<Value> val, const char** data, size_t* len) {
+bool StringBytes::GetExternalParts(Handle<Value> val,
+                                   const char** data,
+                                   size_t* len) {
   if (Buffer::HasInstance(val)) {
     *data = Buffer::Data(val);
     *len = Buffer::Length(val);
     return true;
-
   }
 
-  assert(val->IsString());
+  if (!val->IsString())
+    return false;
+
   Local<String> str = Local<String>::New(val.As<String>());
 
   if (str->IsExternalAscii()) {
@@ -335,6 +338,13 @@ size_t StringBytes::Write(char* buf,
   }
 
   return len;
+}
+
+
+bool StringBytes::IsValidString(Handle<String> string, enum encoding enc) {
+  if (enc == HEX && string->Length() % 2 != 0) return false;
+  // TODO(bnoordhuis) Add BASE64 check?
+  return true;
 }
 
 
@@ -448,7 +458,7 @@ static bool contains_non_ascii(const char* src, size_t len) {
     return contains_non_ascii_slow(src, len);
   }
 
-  const unsigned bytes_per_word = sizeof(void*);
+  const unsigned bytes_per_word = sizeof(uintptr_t);
   const unsigned align_mask = bytes_per_word - 1;
   const unsigned unaligned = reinterpret_cast<uintptr_t>(src) & align_mask;
 
@@ -495,7 +505,7 @@ static void force_ascii(const char* src, char* dst, size_t len) {
     return;
   }
 
-  const unsigned bytes_per_word = sizeof(void*);
+  const unsigned bytes_per_word = sizeof(uintptr_t);
   const unsigned align_mask = bytes_per_word - 1;
   const unsigned src_unalign = reinterpret_cast<uintptr_t>(src) & align_mask;
   const unsigned dst_unalign = reinterpret_cast<uintptr_t>(dst) & align_mask;

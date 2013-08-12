@@ -41,60 +41,6 @@ namespace v8 {
 namespace internal {
 
 
-TokenEnumerator::TokenEnumerator()
-    : token_locations_(4),
-      token_removed_(4) {
-}
-
-
-TokenEnumerator::~TokenEnumerator() {
-  Isolate* isolate = Isolate::Current();
-  for (int i = 0; i < token_locations_.length(); ++i) {
-    if (!token_removed_[i]) {
-      isolate->global_handles()->ClearWeakness(token_locations_[i]);
-      isolate->global_handles()->Destroy(token_locations_[i]);
-    }
-  }
-}
-
-
-int TokenEnumerator::GetTokenId(Object* token) {
-  Isolate* isolate = Isolate::Current();
-  if (token == NULL) return TokenEnumerator::kNoSecurityToken;
-  for (int i = 0; i < token_locations_.length(); ++i) {
-    if (*token_locations_[i] == token && !token_removed_[i]) return i;
-  }
-  Handle<Object> handle = isolate->global_handles()->Create(token);
-  // handle.location() points to a memory cell holding a pointer
-  // to a token object in the V8's heap.
-  isolate->global_handles()->MakeWeak(handle.location(),
-                                      this,
-                                      TokenRemovedCallback);
-  token_locations_.Add(handle.location());
-  token_removed_.Add(false);
-  return token_locations_.length() - 1;
-}
-
-
-void TokenEnumerator::TokenRemovedCallback(v8::Isolate* isolate,
-                                           v8::Persistent<v8::Value>* handle,
-                                           void* parameter) {
-  reinterpret_cast<TokenEnumerator*>(parameter)->TokenRemoved(
-      Utils::OpenPersistent(handle).location());
-  handle->Dispose(isolate);
-}
-
-
-void TokenEnumerator::TokenRemoved(Object** token_location) {
-  for (int i = 0; i < token_locations_.length(); ++i) {
-    if (token_locations_[i] == token_location && !token_removed_[i]) {
-      token_removed_[i] = true;
-      return;
-    }
-  }
-}
-
-
 StringsStorage::StringsStorage()
     : names_(StringsMatch) {
 }
@@ -274,12 +220,11 @@ double ProfileNode::GetTotalMillis() const {
 
 
 void ProfileNode::Print(int indent) {
-  OS::Print("%5u %5u %*c %s%s [%d] #%d %d",
+  OS::Print("%5u %5u %*c %s%s #%d %d",
             total_ticks_, self_ticks_,
             indent, ' ',
             entry_->name_prefix(),
             entry_->name(),
-            entry_->security_token_id(),
             entry_->script_id(),
             id());
   if (entry_->resource_name()[0] != '\0')
@@ -351,58 +296,6 @@ struct NodesPair {
   ProfileNode* src;
   ProfileNode* dst;
 };
-
-
-class FilteredCloneCallback {
- public:
-  FilteredCloneCallback(ProfileNode* dst_root, int security_token_id)
-      : stack_(10),
-        security_token_id_(security_token_id) {
-    stack_.Add(NodesPair(NULL, dst_root));
-  }
-
-  void BeforeTraversingChild(ProfileNode* parent, ProfileNode* child) {
-    if (IsTokenAcceptable(child->entry()->security_token_id(),
-                          parent->entry()->security_token_id())) {
-      ProfileNode* clone = stack_.last().dst->FindOrAddChild(child->entry());
-      clone->IncreaseSelfTicks(child->self_ticks());
-      stack_.Add(NodesPair(child, clone));
-    } else {
-      // Attribute ticks to parent node.
-      stack_.last().dst->IncreaseSelfTicks(child->self_ticks());
-    }
-  }
-
-  void AfterAllChildrenTraversed(ProfileNode* parent) { }
-
-  void AfterChildTraversed(ProfileNode*, ProfileNode* child) {
-    if (stack_.last().src == child) {
-      stack_.RemoveLast();
-    }
-  }
-
- private:
-  bool IsTokenAcceptable(int token, int parent_token) {
-    if (token == TokenEnumerator::kNoSecurityToken
-        || token == security_token_id_) return true;
-    if (token == TokenEnumerator::kInheritsSecurityToken) {
-      ASSERT(parent_token != TokenEnumerator::kInheritsSecurityToken);
-      return parent_token == TokenEnumerator::kNoSecurityToken
-          || parent_token == security_token_id_;
-    }
-    return false;
-  }
-
-  List<NodesPair> stack_;
-  int security_token_id_;
-};
-
-void ProfileTree::FilteredClone(ProfileTree* src, int security_token_id) {
-  ms_to_ticks_scale_ = src->ms_to_ticks_scale_;
-  FilteredCloneCallback cb(root_, security_token_id);
-  src->TraverseDepthFirst(&cb);
-  CalculateTotalTicks();
-}
 
 
 void ProfileTree::SetTickRatePerMs(double ticks_per_ms) {
@@ -479,27 +372,30 @@ void ProfileTree::ShortPrint() {
 }
 
 
+CpuProfile::CpuProfile(const char* title, unsigned uid, bool record_samples)
+    : title_(title),
+      uid_(uid),
+      record_samples_(record_samples),
+      start_time_ms_(OS::TimeCurrentMillis()),
+      end_time_ms_(0) {
+}
+
+
 void CpuProfile::AddPath(const Vector<CodeEntry*>& path) {
   ProfileNode* top_frame_node = top_down_.AddPathFromEnd(path);
   if (record_samples_) samples_.Add(top_frame_node);
 }
 
 
-void CpuProfile::CalculateTotalTicks() {
+void CpuProfile::CalculateTotalTicksAndSamplingRate() {
+  end_time_ms_ = OS::TimeCurrentMillis();
   top_down_.CalculateTotalTicks();
-}
 
-
-void CpuProfile::SetActualSamplingRate(double actual_sampling_rate) {
-  top_down_.SetTickRatePerMs(actual_sampling_rate);
-}
-
-
-CpuProfile* CpuProfile::FilteredClone(int security_token_id) {
-  ASSERT(security_token_id != TokenEnumerator::kNoSecurityToken);
-  CpuProfile* clone = new CpuProfile(title_, uid_, false);
-  clone->top_down_.FilteredClone(&top_down_, security_token_id);
-  return clone;
+  double duration = end_time_ms_ - start_time_ms_;
+  if (duration < 1) duration = 1;
+  unsigned ticks = top_down_.root()->total_ticks();
+  double rate = ticks / duration;
+  top_down_.SetTickRatePerMs(rate);
 }
 
 
@@ -601,10 +497,7 @@ void CodeMap::Print() {
 
 
 CpuProfilesCollection::CpuProfilesCollection()
-    : profiles_uids_(UidsMatch),
-      current_profiles_semaphore_(OS::CreateSemaphore(1)) {
-  // Create list of unabridged profiles.
-  profiles_by_token_.Add(new List<CpuProfile*>());
+    : current_profiles_semaphore_(OS::CreateSemaphore(1)) {
 }
 
 
@@ -612,22 +505,16 @@ static void DeleteCodeEntry(CodeEntry** entry_ptr) {
   delete *entry_ptr;
 }
 
+
 static void DeleteCpuProfile(CpuProfile** profile_ptr) {
   delete *profile_ptr;
 }
 
-static void DeleteProfilesList(List<CpuProfile*>** list_ptr) {
-  if (*list_ptr != NULL) {
-    (*list_ptr)->Iterate(DeleteCpuProfile);
-    delete *list_ptr;
-  }
-}
 
 CpuProfilesCollection::~CpuProfilesCollection() {
   delete current_profiles_semaphore_;
+  finished_profiles_.Iterate(DeleteCpuProfile);
   current_profiles_.Iterate(DeleteCpuProfile);
-  detached_profiles_.Iterate(DeleteCpuProfile);
-  profiles_by_token_.Iterate(DeleteProfilesList);
   code_entries_.Iterate(DeleteCodeEntry);
 }
 
@@ -653,9 +540,7 @@ bool CpuProfilesCollection::StartProfiling(const char* title, unsigned uid,
 }
 
 
-CpuProfile* CpuProfilesCollection::StopProfiling(int security_token_id,
-                                                 const char* title,
-                                                 double actual_sampling_rate) {
+CpuProfile* CpuProfilesCollection::StopProfiling(const char* title) {
   const int title_len = StrLength(title);
   CpuProfile* profile = NULL;
   current_profiles_semaphore_->Wait();
@@ -667,48 +552,10 @@ CpuProfile* CpuProfilesCollection::StopProfiling(int security_token_id,
   }
   current_profiles_semaphore_->Signal();
 
-  if (profile != NULL) {
-    profile->CalculateTotalTicks();
-    profile->SetActualSamplingRate(actual_sampling_rate);
-    List<CpuProfile*>* unabridged_list =
-        profiles_by_token_[TokenToIndex(TokenEnumerator::kNoSecurityToken)];
-    unabridged_list->Add(profile);
-    HashMap::Entry* entry =
-        profiles_uids_.Lookup(reinterpret_cast<void*>(profile->uid()),
-                              static_cast<uint32_t>(profile->uid()),
-                              true);
-    ASSERT(entry->value == NULL);
-    entry->value = reinterpret_cast<void*>(unabridged_list->length() - 1);
-    return GetProfile(security_token_id, profile->uid());
-  }
-  return NULL;
-}
-
-
-CpuProfile* CpuProfilesCollection::GetProfile(int security_token_id,
-                                              unsigned uid) {
-  int index = GetProfileIndex(uid);
-  if (index < 0) return NULL;
-  List<CpuProfile*>* unabridged_list =
-      profiles_by_token_[TokenToIndex(TokenEnumerator::kNoSecurityToken)];
-  if (security_token_id == TokenEnumerator::kNoSecurityToken) {
-    return unabridged_list->at(index);
-  }
-  List<CpuProfile*>* list = GetProfilesList(security_token_id);
-  if (list->at(index) == NULL) {
-    (*list)[index] =
-        unabridged_list->at(index)->FilteredClone(security_token_id);
-  }
-  return list->at(index);
-}
-
-
-int CpuProfilesCollection::GetProfileIndex(unsigned uid) {
-  HashMap::Entry* entry = profiles_uids_.Lookup(reinterpret_cast<void*>(uid),
-                                                static_cast<uint32_t>(uid),
-                                                false);
-  return entry != NULL ?
-      static_cast<int>(reinterpret_cast<intptr_t>(entry->value)) : -1;
+  if (profile == NULL) return NULL;
+  profile->CalculateTotalTicksAndSamplingRate();
+  finished_profiles_.Add(profile);
+  return profile;
 }
 
 
@@ -724,74 +571,13 @@ bool CpuProfilesCollection::IsLastProfile(const char* title) {
 void CpuProfilesCollection::RemoveProfile(CpuProfile* profile) {
   // Called from VM thread for a completed profile.
   unsigned uid = profile->uid();
-  int index = GetProfileIndex(uid);
-  if (index < 0) {
-    detached_profiles_.RemoveElement(profile);
-    return;
-  }
-  profiles_uids_.Remove(reinterpret_cast<void*>(uid),
-                        static_cast<uint32_t>(uid));
-  // Decrement all indexes above the deleted one.
-  for (HashMap::Entry* p = profiles_uids_.Start();
-       p != NULL;
-       p = profiles_uids_.Next(p)) {
-    intptr_t p_index = reinterpret_cast<intptr_t>(p->value);
-    if (p_index > index) {
-      p->value = reinterpret_cast<void*>(p_index - 1);
+  for (int i = 0; i < finished_profiles_.length(); i++) {
+    if (uid == finished_profiles_[i]->uid()) {
+      finished_profiles_.Remove(i);
+      return;
     }
   }
-  for (int i = 0; i < profiles_by_token_.length(); ++i) {
-    List<CpuProfile*>* list = profiles_by_token_[i];
-    if (list != NULL && index < list->length()) {
-      // Move all filtered clones into detached_profiles_,
-      // so we can know that they are still in use.
-      CpuProfile* cloned_profile = list->Remove(index);
-      if (cloned_profile != NULL && cloned_profile != profile) {
-        detached_profiles_.Add(cloned_profile);
-      }
-    }
-  }
-}
-
-
-int CpuProfilesCollection::TokenToIndex(int security_token_id) {
-  ASSERT(TokenEnumerator::kNoSecurityToken == -1);
-  return security_token_id + 1;  // kNoSecurityToken -> 0, 0 -> 1, ...
-}
-
-
-List<CpuProfile*>* CpuProfilesCollection::GetProfilesList(
-    int security_token_id) {
-  const int index = TokenToIndex(security_token_id);
-  const int lists_to_add = index - profiles_by_token_.length() + 1;
-  if (lists_to_add > 0) profiles_by_token_.AddBlock(NULL, lists_to_add);
-  List<CpuProfile*>* unabridged_list =
-      profiles_by_token_[TokenToIndex(TokenEnumerator::kNoSecurityToken)];
-  const int current_count = unabridged_list->length();
-  if (profiles_by_token_[index] == NULL) {
-    profiles_by_token_[index] = new List<CpuProfile*>(current_count);
-  }
-  List<CpuProfile*>* list = profiles_by_token_[index];
-  const int profiles_to_add = current_count - list->length();
-  if (profiles_to_add > 0) list->AddBlock(NULL, profiles_to_add);
-  return list;
-}
-
-
-List<CpuProfile*>* CpuProfilesCollection::Profiles(int security_token_id) {
-  List<CpuProfile*>* unabridged_list =
-      profiles_by_token_[TokenToIndex(TokenEnumerator::kNoSecurityToken)];
-  if (security_token_id == TokenEnumerator::kNoSecurityToken) {
-    return unabridged_list;
-  }
-  List<CpuProfile*>* list = GetProfilesList(security_token_id);
-  const int current_count = unabridged_list->length();
-  for (int i = 0; i < current_count; ++i) {
-    if (list->at(i) == NULL) {
-      (*list)[i] = unabridged_list->at(i)->FilteredClone(security_token_id);
-    }
-  }
-  return list;
+  UNREACHABLE();
 }
 
 
@@ -811,41 +597,16 @@ void CpuProfilesCollection::AddPathToCurrentProfiles(
 CodeEntry* CpuProfilesCollection::NewCodeEntry(
       Logger::LogEventsAndTags tag,
       const char* name,
-      int security_token_id,
       const char* name_prefix,
       const char* resource_name,
       int line_number) {
   CodeEntry* code_entry = new CodeEntry(tag,
                                         name,
-                                        security_token_id,
                                         name_prefix,
                                         resource_name,
                                         line_number);
   code_entries_.Add(code_entry);
   return code_entry;
-}
-
-
-void SampleRateCalculator::Tick() {
-  if (--wall_time_query_countdown_ == 0)
-    UpdateMeasurements(OS::TimeCurrentMillis());
-}
-
-
-void SampleRateCalculator::UpdateMeasurements(double current_time) {
-  if (measurements_count_++ != 0) {
-    const double measured_ticks_per_ms =
-        (kWallTimeQueryIntervalMs * ticks_per_ms_) /
-        (current_time - last_wall_time_);
-    // Update the average value.
-    ticks_per_ms_ +=
-        (measured_ticks_per_ms - ticks_per_ms_) / measurements_count_;
-    // Update the externally accessible result.
-    result_ = static_cast<AtomicWord>(ticks_per_ms_ * kResultScale);
-  }
-  last_wall_time_ = current_time;
-  wall_time_query_countdown_ =
-      static_cast<unsigned>(kWallTimeQueryIntervalMs * ticks_per_ms_);
 }
 
 
@@ -880,7 +641,8 @@ void ProfileGenerator::RecordTickSample(const TickSample& sample) {
   CodeEntry** entry = entries.start();
   memset(entry, 0, entries.length() * sizeof(*entry));
   if (sample.pc != NULL) {
-    if (sample.has_external_callback) {
+    if (sample.has_external_callback && sample.state == EXTERNAL &&
+        sample.top_frame_type == StackFrame::EXIT) {
       // Don't use PC when in external callback code, as it can point
       // inside callback's code, and we will erroneously report
       // that a callback calls itself.

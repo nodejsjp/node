@@ -19,8 +19,8 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#ifndef STREAM_WRAP_H_
-#define STREAM_WRAP_H_
+#ifndef SRC_STREAM_WRAP_H_
+#define SRC_STREAM_WRAP_H_
 
 #include "v8.h"
 #include "node.h"
@@ -37,7 +37,8 @@ typedef class ReqWrap<uv_shutdown_t> ShutdownWrap;
 
 class WriteWrap: public ReqWrap<uv_write_t> {
  public:
-  explicit WriteWrap(StreamWrap* wrap) {
+  explicit WriteWrap(v8::Local<v8::Object> obj, StreamWrap* wrap)
+      : ReqWrap<uv_write_t>(obj) {
     wrap_ = wrap;
   }
 
@@ -52,8 +53,8 @@ class WriteWrap: public ReqWrap<uv_write_t> {
  protected:
   // People should not be using the non-placement new and delete operator on a
   // WriteWrap. Ensure this never happens.
-  void* operator new(size_t size) { assert(0); };
-  void operator delete(void* ptr) { assert(0); };
+  void* operator new(size_t size) { assert(0); }
+  void operator delete(void* ptr) { assert(0); }
 };
 
 // Overridable callbacks' types
@@ -159,4 +160,4 @@ class StreamWrap : public HandleWrap {
 }  // namespace node
 
 
-#endif  // STREAM_WRAP_H_
+#endif  // SRC_STREAM_WRAP_H_

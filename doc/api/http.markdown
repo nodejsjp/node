@@ -640,7 +640,7 @@ Boolean (read-only). True if headers were sent, false otherwise.
 ### response.sendDate
 
 <!--
-When true, the Date header will be automatically generated and sent in 
+When true, the Date header will be automatically generated and sent in
 the response if it is not already present in the headers. Defaults to true.
 
 This should only be disabled for testing; HTTP requires the Date header
@@ -1057,7 +1057,7 @@ Alternatively, you could just opt out of pooling entirely using `agent:false`:
 ### agent.maxSockets
 
 <!--
-By default set to 5. Determines how many concurrent sockets the agent can have 
+By default set to 5. Determines how many concurrent sockets the agent can have
 open per host.
 -->
 
@@ -1067,7 +1067,7 @@ open per host.
 ### agent.sockets
 
 <!--
-An object which contains arrays of sockets currently in use by the Agent. Do not 
+An object which contains arrays of sockets currently in use by the Agent. Do not
 modify.
 -->
 
@@ -1077,7 +1077,7 @@ modify.
 ### agent.requests
 
 <!--
-An object which contains queues of requests that have not yet been assigned to 
+An object which contains queues of requests that have not yet been assigned to
 sockets. Do not modify.
 -->
 
@@ -1135,7 +1135,9 @@ entirely discarded.  However, if you add a `'response'` event handler,
 then you **must** consume the data from the response object, either by
 calling `response.read()` whenever there is a `'readable'` event, or
 by adding a `'data'` handler, or by calling the `.resume()` method.
-Until the data is consumed, the `'end'` event will not fire.
+Until the data is consumed, the `'end'` event will not fire.  Also, until
+the data is read it will consume memory that can eventually lead to a
+'process out of memory' error.
 -->
 
 `'response'` ハンドラが加えられない場合、レスポンスは完全に捨てられます。
@@ -1143,21 +1145,15 @@ Until the data is consumed, the `'end'` event will not fire.
 `'readable'` イベントが発生した時に `response.read()` を呼ぶか、
 `'data'` ハンドラを加えるか、`.resume()` メソッドを呼び出すかのいずれかにより、
 レスポンスオブジェクトからのデータを消費しなければ *なりません* 。
+また、データは読まれるまでメモリを消費し、'process out of memory'
+エラーにつながることになります。
 
 <!--
-This is a `Writable Stream`.
-Note: Node does not check whether Content-Length and the length of the body
-which has been transmitted are equal or not.
-
 Note: Node does not check whether Content-Length and the length of the body
 which has been transmitted are equal or not.
 -->
 
-これは `Writable Stream` です。
 注意: Node は Content-Length と実際に送信されたリクエストボディの長さが等しいかどうかチェックしません。
-
-`ServerRequest` が `'data'` イベントを生成した時にリスナが存在しなければ、
-__データは失われる__ことに注意してください。
 
 <!--
 The request implements the [Writable Stream][] interface. This is an

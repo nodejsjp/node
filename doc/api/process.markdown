@@ -788,22 +788,35 @@ This will generate:
 
 ## process.nextTick(callback)
 
+* `callback` {Function}
+
 <!--
-On the next loop around the event loop call this callback.
-This is *not* a simple alias to `setTimeout(fn, 0)`, it's much more
-efficient.  It typically runs before any other I/O events fire, but there
-are some exceptions.
+Once the current event loop turn runs to completion, call the callback
+function.
 -->
 
-イベントループの次以降のループでコールバックを呼び出します。
+現在のイベントループが完了した後、コールバック関数を呼び出します。
+
+<!--
+This is *not* a simple alias to `setTimeout(fn, 0)`, it's much more
+efficient.  It runs before any additional I/O events (including
+timers) fire in subsequent ticks of the event loop.
+-->
+
 これは `setTimeout(fn, 0)` の単純なエイリアス*ではなく*、
 はるかに効率的です。
-これは通常他の I/O イベントが発生するよりも前に実行されますが、
-いくつかの例外があります。
+これは他のどの I/O イベント (タイマを含みます) が発生するよりも前に
+実行されます。
 
+    console.log('start');
     process.nextTick(function() {
       console.log('nextTick callback');
     });
+    console.log('scheduled');
+    // Output:
+    // start
+    // scheduled
+    // nextTick callback
 
 <!--
 This is important in developing APIs where you want to give the user the
@@ -877,6 +890,18 @@ This approach is much better:
 
       fs.stat('file', cb);
     }
+
+<!--
+Note: the nextTick queue is completely drained on each pass of the
+event loop **before** additional I/O is processed.  As a result,
+recursively setting nextTick callbacks will block any I/O from
+happening, just like a `while(true);` loop.
+-->
+
+注意: イベントループの各繰り返しでは、I/O が処理される **前** に
+nextTick のキューが完全に空にされます。
+この結果、再帰的に設定された nextTick のコールバックは、
+`while (true);` ループのように全てのI/O をブロックします
 
 ## process.umask([mask])
 

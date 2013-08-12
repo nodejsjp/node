@@ -30,26 +30,25 @@
 
 #ifdef __MINGW32__
 # include <io.h>
-#endif
+#endif  // __MINGW32__
 
 #ifdef __POSIX__
 # include <netdb.h>         // MAXHOSTNAMELEN on Solaris.
 # include <unistd.h>        // gethostname, sysconf
 # include <sys/param.h>     // MAXHOSTNAMELEN on Linux and the BSDs.
 # include <sys/utsname.h>
-#endif
+#endif  // __MINGW32__
 
 // Add Windows fallback.
 #ifndef MAXHOSTNAMELEN
 # define MAXHOSTNAMELEN 256
-#endif
+#endif  // MAXHOSTNAMELEN
 
 namespace node {
 
 using v8::Array;
 using v8::FunctionCallbackInfo;
 using v8::HandleScope;
-using v8::Integer;
 using v8::Local;
 using v8::Number;
 using v8::Object;
@@ -71,9 +70,9 @@ static void GetHostname(const FunctionCallbackInfo<Value>& args) {
   if (gethostname(buf, sizeof(buf))) {
 #ifdef __POSIX__
     int errorno = errno;
-#else // __MINGW32__
+#else  // __MINGW32__
     int errorno = WSAGetLastError();
-#endif // __MINGW32__
+#endif  // __POSIX__
     return ThrowErrnoException(errorno, "gethostname");
   }
   buf[sizeof(buf) - 1] = '\0';
@@ -92,9 +91,9 @@ static void GetOSType(const FunctionCallbackInfo<Value>& args) {
     return ThrowErrnoException(errno, "uname");
   }
   rval = info.sysname;
-#else // __MINGW32__
+#else  // __MINGW32__
   rval ="Windows_NT";
-#endif
+#endif  // __POSIX__
 
   args.GetReturnValue().Set(String::New(rval));
 }
@@ -110,17 +109,21 @@ static void GetOSRelease(const FunctionCallbackInfo<Value>& args) {
     return ThrowErrnoException(errno, "uname");
   }
   rval = info.release;
-#else // __MINGW32__
+#else  // __MINGW32__
   char release[256];
   OSVERSIONINFO info;
 
   info.dwOSVersionInfoSize = sizeof(info);
   if (GetVersionEx(&info) == 0) return;
 
-  sprintf(release, "%d.%d.%d", static_cast<int>(info.dwMajorVersion),
-      static_cast<int>(info.dwMinorVersion), static_cast<int>(info.dwBuildNumber));
+  snprintf(release,
+           sizeof(release),
+           "%d.%d.%d",
+           static_cast<int>(info.dwMajorVersion),
+           static_cast<int>(info.dwMinorVersion),
+           static_cast<int>(info.dwBuildNumber));
   rval = release;
-#endif
+#endif  // __POSIX__
 
   args.GetReturnValue().Set(String::New(rval));
 }
@@ -131,29 +134,31 @@ static void GetCPUInfo(const FunctionCallbackInfo<Value>& args) {
   uv_cpu_info_t* cpu_infos;
   int count, i;
 
-  uv_err_t err = uv_cpu_info(&cpu_infos, &count);
-  if (err.code != UV_OK) return;
+  int err = uv_cpu_info(&cpu_infos, &count);
+  if (err) return;
 
   Local<Array> cpus = Array::New();
   for (i = 0; i < count; i++) {
+    uv_cpu_info_t* ci = cpu_infos + i;
+
     Local<Object> times_info = Object::New();
     times_info->Set(String::New("user"),
-      Integer::New(cpu_infos[i].cpu_times.user, node_isolate));
+                    Number::New(node_isolate, ci->cpu_times.user));
     times_info->Set(String::New("nice"),
-      Integer::New(cpu_infos[i].cpu_times.nice, node_isolate));
+                    Number::New(node_isolate, ci->cpu_times.nice));
     times_info->Set(String::New("sys"),
-      Integer::New(cpu_infos[i].cpu_times.sys, node_isolate));
+                    Number::New(node_isolate, ci->cpu_times.sys));
     times_info->Set(String::New("idle"),
-      Integer::New(cpu_infos[i].cpu_times.idle, node_isolate));
+                    Number::New(node_isolate, ci->cpu_times.idle));
     times_info->Set(String::New("irq"),
-      Integer::New(cpu_infos[i].cpu_times.irq, node_isolate));
+                    Number::New(node_isolate, ci->cpu_times.irq));
 
     Local<Object> cpu_info = Object::New();
-    cpu_info->Set(String::New("model"), String::New(cpu_infos[i].model));
-    cpu_info->Set(String::New("speed"),
-                  Integer::New(cpu_infos[i].speed, node_isolate));
+    cpu_info->Set(String::New("model"), String::New(ci->model));
+    cpu_info->Set(String::New("speed"), Number::New(node_isolate, ci->speed));
     cpu_info->Set(String::New("times"), times_info);
-    (*cpus)->Set(i,cpu_info);
+
+    (*cpus)->Set(i, cpu_info);
   }
 
   uv_free_cpu_info(cpu_infos, count);
@@ -180,9 +185,8 @@ static void GetTotalMemory(const FunctionCallbackInfo<Value>& args) {
 static void GetUptime(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
   double uptime;
-  uv_err_t err = uv_uptime(&uptime);
-  if (err.code != UV_OK) return;
-  args.GetReturnValue().Set(uptime);
+  int err = uv_uptime(&uptime);
+  if (err == 0) args.GetReturnValue().Set(uptime);
 }
 
 
@@ -204,13 +208,14 @@ static void GetInterfaceAddresses(const FunctionCallbackInfo<Value>& args) {
   int count, i;
   char ip[INET6_ADDRSTRLEN];
   char netmask[INET6_ADDRSTRLEN];
+  char mac[18];
   Local<Object> ret, o;
   Local<String> name, family;
   Local<Array> ifarr;
 
-  uv_err_t err = uv_interface_addresses(&interfaces, &count);
-  if (err.code != UV_OK) {
-    return ThrowUVException(err.code, "uv_interface_addresses");
+  int err = uv_interface_addresses(&interfaces, &count);
+  if (err) {
+    return ThrowUVException(err, "uv_interface_addresses");
   }
 
   ret = Object::New();
@@ -224,8 +229,18 @@ static void GetInterfaceAddresses(const FunctionCallbackInfo<Value>& args) {
       ret->Set(name, ifarr);
     }
 
+    snprintf(mac,
+             18,
+             "%02x:%02x:%02x:%02x:%02x:%02x",
+             static_cast<unsigned char>(interfaces[i].phys_addr[0]),
+             static_cast<unsigned char>(interfaces[i].phys_addr[1]),
+             static_cast<unsigned char>(interfaces[i].phys_addr[2]),
+             static_cast<unsigned char>(interfaces[i].phys_addr[3]),
+             static_cast<unsigned char>(interfaces[i].phys_addr[4]),
+             static_cast<unsigned char>(interfaces[i].phys_addr[5]));
+
     if (interfaces[i].address.address4.sin_family == AF_INET) {
-      uv_ip4_name(&interfaces[i].address.address4,ip, sizeof(ip));
+      uv_ip4_name(&interfaces[i].address.address4, ip, sizeof(ip));
       uv_ip4_name(&interfaces[i].netmask.netmask4, netmask, sizeof(netmask));
       family = String::New("IPv4");
     } else if (interfaces[i].address.address4.sin_family == AF_INET6) {
@@ -241,6 +256,7 @@ static void GetInterfaceAddresses(const FunctionCallbackInfo<Value>& args) {
     o->Set(String::New("address"), String::New(ip));
     o->Set(String::New("netmask"), String::New(netmask));
     o->Set(String::New("family"), family);
+    o->Set(String::New("mac"), String::New(mac));
 
     const bool internal = interfaces[i].is_internal;
     o->Set(String::New("internal"),

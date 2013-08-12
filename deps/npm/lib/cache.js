@@ -723,7 +723,7 @@ function installTargetsError (requested, data) {
 function addNameVersion (name, v, data, cb) {
   if (typeof cb !== "function") cb = data, data = null
 
-  ver = semver.valid(v, true)
+  var ver = semver.valid(v, true)
   if (!ver) return cb(new Error("Invalid version: "+v))
 
   var response
@@ -1107,9 +1107,7 @@ function addLocalDirectory (p, name, shasum, cb) {
   // tar it to the proper place, and add the cache tar
   if (p.indexOf(npm.cache) === 0) return cb(new Error(
     "Adding a cache directory to the cache will make the world implode."))
-  var strict = p.indexOf(npm.tmp) !== 0
-                && p.indexOf(npm.cache) !== 0
-  readJson(path.join(p, "package.json"), strict, function (er, data) {
+  readJson(path.join(p, "package.json"), false, function (er, data) {
     er = needName(er, data)
     er = needVersion(er, data)
     if (er) return cb(er)
@@ -1124,7 +1122,7 @@ function addLocalDirectory (p, name, shasum, cb) {
     getCacheStat(function (er, cs) {
       mkdir(path.dirname(tgz), function (er, made) {
         if (er) return cb(er)
-        tar.pack(tgz, p, data, strict, function (er) {
+        tar.pack(tgz, p, data, false, function (er) {
           if (er) {
             log.error( "addLocalDirectory", "Could not pack %j to %j"
                      , p, tgz )

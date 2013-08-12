@@ -449,6 +449,7 @@ OptimizingCompiler::Status OptimizingCompiler::CreateGraph() {
   return SetLastStatus(SUCCEEDED);
 }
 
+
 OptimizingCompiler::Status OptimizingCompiler::OptimizeGraph() {
   DisallowHeapAllocation no_allocation;
   DisallowHandleAllocation no_handles;
@@ -557,15 +558,13 @@ static Handle<SharedFunctionInfo> MakeFunctionInfo(CompilationInfo* info) {
 
 #ifdef ENABLE_DEBUGGER_SUPPORT
   if (info->is_eval()) {
-    Script::CompilationType compilation_type = Script::COMPILATION_TYPE_EVAL;
-    script->set_compilation_type(Smi::FromInt(compilation_type));
+    script->set_compilation_type(Script::COMPILATION_TYPE_EVAL);
     // For eval scripts add information on the function from which eval was
     // called.
     if (info->is_eval()) {
       StackTraceFrameIterator it(isolate);
       if (!it.done()) {
-        script->set_eval_from_shared(
-            JSFunction::cast(it.frame()->function())->shared());
+        script->set_eval_from_shared(it.frame()->function()->shared());
         Code* code = it.frame()->LookupCode();
         int offset = static_cast<int>(
             it.frame()->pc() - code->instruction_start());
@@ -650,8 +649,7 @@ static Handle<SharedFunctionInfo> MakeFunctionInfo(CompilationInfo* info) {
   // the instances of the function.
   SetExpectedNofPropertiesFromEstimate(result, lit->expected_property_count());
 
-  script->set_compilation_state(
-      Smi::FromInt(Script::COMPILATION_STATE_COMPILED));
+  script->set_compilation_state(Script::COMPILATION_STATE_COMPILED);
 
 #ifdef ENABLE_DEBUGGER_SUPPORT
   // Notify debugger
@@ -1199,9 +1197,9 @@ void Compiler::RecordFunctionCompilation(Logger::LogEventsAndTags tag,
     Handle<Code> code = info->code();
     if (*code == info->isolate()->builtins()->builtin(Builtins::kLazyCompile))
       return;
+    int line_num = GetScriptLineNumber(script, shared->start_position()) + 1;
+    USE(line_num);
     if (script->name()->IsString()) {
-      int line_num = GetScriptLineNumber(script, shared->start_position()) + 1;
-      USE(line_num);
       PROFILE(info->isolate(),
               CodeCreateEvent(Logger::ToNativeByScript(tag, *script),
                               *code,
@@ -1215,7 +1213,8 @@ void Compiler::RecordFunctionCompilation(Logger::LogEventsAndTags tag,
                               *code,
                               *shared,
                               info,
-                              shared->DebugName()));
+                              info->isolate()->heap()->empty_string(),
+                              line_num));
     }
   }
 
@@ -1246,10 +1245,13 @@ CompilationPhase::~CompilationPhase() {
 
 
 bool CompilationPhase::ShouldProduceTraceOutput() const {
-  // Produce trace output if flag is set so that the first letter of the
-  // phase name matches the command line parameter FLAG_trace_phase.
-  return (FLAG_trace_hydrogen &&
-          OS::StrChr(const_cast<char*>(FLAG_trace_phase), name_[0]) != NULL);
+  // Trace if the appropriate trace flag is set and the phase name's first
+  // character is in the FLAG_trace_phase command line parameter.
+  bool tracing_on = info()->IsStub() ?
+      FLAG_trace_hydrogen_stubs :
+      FLAG_trace_hydrogen;
+  return (tracing_on &&
+      OS::StrChr(const_cast<char*>(FLAG_trace_phase), name_[0]) != NULL);
 }
 
 } }  // namespace v8::internal

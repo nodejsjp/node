@@ -2377,6 +2377,7 @@ class V8EXPORT Function : public Object {
 };
 
 #ifndef V8_ARRAY_BUFFER_INTERNAL_FIELD_COUNT
+// The number of required internal fields can be defined by embedder.
 #define V8_ARRAY_BUFFER_INTERNAL_FIELD_COUNT 2
 #endif
 
@@ -2489,6 +2490,12 @@ class V8EXPORT ArrayBuffer : public Object {
 };
 
 
+#ifndef V8_ARRAY_BUFFER_VIEW_INTERNAL_FIELD_COUNT
+// The number of required internal fields can be defined by embedder.
+#define V8_ARRAY_BUFFER_VIEW_INTERNAL_FIELD_COUNT 2
+#endif
+
+
 /**
  * A base class for an instance of one of "views" over ArrayBuffer,
  * including TypedArrays and DataView (ES6 draft 15.13).
@@ -2515,6 +2522,9 @@ class V8EXPORT ArrayBufferView : public Object {
   void* BaseAddress();
 
   V8_INLINE(static ArrayBufferView* Cast(Value* obj));
+
+  static const int kInternalFieldCount =
+      V8_ARRAY_BUFFER_VIEW_INTERNAL_FIELD_COUNT;
 
  private:
   ArrayBufferView();
@@ -2709,11 +2719,15 @@ class V8EXPORT Date : public Object {
  public:
   static Local<Value> New(double time);
 
+  // Deprecated, use Date::ValueOf() instead.
+  // TODO(svenpanne) Actually deprecate when Chrome is adapted.
+  double NumberValue() const { return ValueOf(); }
+
   /**
    * A specialization of Value::NumberValue that is more efficient
    * because we know the structure of this object.
    */
-  double NumberValue() const;
+  double ValueOf() const;
 
   V8_INLINE(static Date* Cast(v8::Value* obj));
 
@@ -2743,10 +2757,14 @@ class V8EXPORT NumberObject : public Object {
  public:
   static Local<Value> New(double value);
 
+  // Deprecated, use NumberObject::ValueOf() instead.
+  // TODO(svenpanne) Actually deprecate when Chrome is adapted.
+  double NumberValue() const { return ValueOf(); }
+
   /**
    * Returns the Number held by the object.
    */
-  double NumberValue() const;
+  double ValueOf() const;
 
   V8_INLINE(static NumberObject* Cast(v8::Value* obj));
 
@@ -2762,10 +2780,14 @@ class V8EXPORT BooleanObject : public Object {
  public:
   static Local<Value> New(bool value);
 
+  // Deprecated, use BooleanObject::ValueOf() instead.
+  // TODO(svenpanne) Actually deprecate when Chrome is adapted.
+  bool BooleanValue() const { return ValueOf(); }
+
   /**
    * Returns the Boolean held by the object.
    */
-  bool BooleanValue() const;
+  bool ValueOf() const;
 
   V8_INLINE(static BooleanObject* Cast(v8::Value* obj));
 
@@ -2781,10 +2803,14 @@ class V8EXPORT StringObject : public Object {
  public:
   static Local<Value> New(Handle<String> value);
 
+  // Deprecated, use StringObject::ValueOf() instead.
+  // TODO(svenpanne) Actually deprecate when Chrome is adapted.
+  Local<String> StringValue() const { return ValueOf(); }
+
   /**
    * Returns the String held by the object.
    */
-  Local<String> StringValue() const;
+  Local<String> ValueOf() const;
 
   V8_INLINE(static StringObject* Cast(v8::Value* obj));
 
@@ -2802,10 +2828,14 @@ class V8EXPORT SymbolObject : public Object {
  public:
   static Local<Value> New(Isolate* isolate, Handle<Symbol> value);
 
+  // Deprecated, use SymbolObject::ValueOf() instead.
+  // TODO(svenpanne) Actually deprecate when Chrome is adapted.
+  Local<Symbol> SymbolValue() const { return ValueOf(); }
+
   /**
    * Returns the Symbol held by the object.
    */
-  Local<Symbol> SymbolValue() const;
+  Local<Symbol> ValueOf() const;
 
   V8_INLINE(static SymbolObject* Cast(v8::Value* obj));
 
@@ -4535,18 +4565,18 @@ class V8EXPORT V8 {
    * See also the --prof and --prof_auto command line switches to
    * enable V8 profiling.
    */
-  static void PauseProfiler();
+  V8_DEPRECATED(static void PauseProfiler());
 
   /**
    * Resumes recording of tick samples in the profiler.
    * See also PauseProfiler().
    */
-  static void ResumeProfiler();
+  V8_DEPRECATED(static void ResumeProfiler());
 
   /**
    * Return whether profiler is currently paused.
    */
-  static bool IsProfilerPaused();
+  V8_DEPRECATED(static bool IsProfilerPaused());
 
   /**
    * Retrieve the V8 thread id of the calling thread.
@@ -4688,6 +4718,12 @@ class V8EXPORT V8 {
    * V8 had a chance to clean up.
    */
   static int ContextDisposedNotification();
+
+  /**
+   * Initialize the ICU library bundled with V8. The embedder should only
+   * invoke this method when using the bundled ICU. Returns true on success.
+   */
+  static bool InitializeICU();
 
  private:
   V8();
@@ -5383,7 +5419,7 @@ class Internals {
   static const int kNullValueRootIndex = 7;
   static const int kTrueValueRootIndex = 8;
   static const int kFalseValueRootIndex = 9;
-  static const int kEmptyStringRootIndex = 131;
+  static const int kEmptyStringRootIndex = 134;
 
   static const int kNodeClassIdOffset = 1 * kApiPointerSize;
   static const int kNodeFlagsOffset = 1 * kApiPointerSize + 3;
@@ -5393,10 +5429,10 @@ class Internals {
   static const int kNodeIsIndependentShift = 4;
   static const int kNodeIsPartiallyDependentShift = 5;
 
-  static const int kJSObjectType = 0xb0;
+  static const int kJSObjectType = 0xb1;
   static const int kFirstNonstringType = 0x80;
   static const int kOddballType = 0x83;
-  static const int kForeignType = 0x88;
+  static const int kForeignType = 0x87;
 
   static const int kUndefinedOddballKind = 5;
   static const int kNullOddballKind = 3;
