@@ -1145,6 +1145,7 @@ the data is read it will consume memory that can eventually lead to a
 `'readable'` イベントが発生した時に `response.read()` を呼ぶか、
 `'data'` ハンドラを加えるか、`.resume()` メソッドを呼び出すかのいずれかにより、
 レスポンスオブジェクトからのデータを消費しなければ *なりません* 。
+データが消費されるまで、`'end'` イベントは生成されません。
 また、データは読まれるまでメモリを消費し、'process out of memory'
 エラーにつながることになります。
 
