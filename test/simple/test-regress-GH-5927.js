@@ -19,16 +19,24 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-// Ensure that if a dgram socket is closed before the DNS lookup completes, it
-// won't crash.
+var assert = require('assert');
+var readline = require('readline');
 
-var assert = require('assert'),
-    common = require('../common'),
-    dgram = require('dgram');
+var rl = readline.createInterface(process.stdin, process.stdout);
+rl.resume();
 
-var buf = new Buffer(1024);
-buf.fill(42);
+var hasPaused = false;
 
-var socket = dgram.createSocket('udp4');
-socket.send(buf, 0, buf.length, common.PORT, 'localhost');
-socket.close();
+var origPause = rl.pause;
+rl.pause = function() {
+  hasPaused = true;
+  origPause.apply(this, arguments);
+}
+
+var origSetRawMode = rl._setRawMode;
+rl._setRawMode = function(mode) {
+  assert.ok(hasPaused);
+  origSetRawMode.apply(this, arguments);
+}
+
+rl.close();

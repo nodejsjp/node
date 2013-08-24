@@ -245,25 +245,51 @@ informing the source that the data did not reach its intended recipient).
 
 ### socket.bind(port, [address], [callback])
 
+<!--
 * `port` Integer
 * `address` String, Optional
-* `callback` Function, Optional
-
-<!--
-For UDP sockets, listen for datagrams on a named `port` and optional `address`.
-If `address` is not specified, the OS will try to listen on all addresses.
+* `callback` Function with no parameters, Optional. Callback when
+  binding is done.
 -->
 
-UDP ソケット用です。`port` とオプションの `address` でデータグラムを待ち受けます。
+* `port` Integer
+* `address` String、任意
+* `callback` 引数のない関数、任意。バインディングが終了した時に
+  コールバックされます。
+
+<!--
+For UDP sockets, listen for datagrams on a named `port` and optional
+`address`. If `address` is not specified, the OS will try to listen on
+all addresses.  After binding is done, a "listening" event is emitted
+and the `callback`(if specified) is called. Specifying both a
+"listening" event listener and `callback` is not harmful but not very
+useful.
+-->
+
+UDP ソケットに対して、`port` とオプションの `address` でデータグラムを
+待ち受けます。
 `address` が指定されなければ、OS は全てのアドレスからの待ち受けを試みます。
+バインディングが完了すると、`'listening'` イベントが生成され、
+(もし指定されていれば) `callback` が呼び出されます。
+`'listening'` イベントリスナと `callback` の両方を指定しても有害ではありませんが
+あまり役には立ちません。
 
 <!--
-The `callback` argument, if provided, is added as a one-shot `'listening'`
-event listener.
+A bound datagram socket keeps the node process running to receive
+datagrams.
 -->
 
-`callback` 引数は、もし提供されると `'listening'` イベントの一回限りの
-リスナとして追加されます。
+束縛されたデータグラムソケットはデータグラムを受信するために node プロセスの
+実行を維持し続けます。
+
+<!--
+If binding fails, an "error" event is generated. In rare case (e.g.
+binding a closed socket), an `Error` may be thrown by this method.
+-->
+
+バインディングが失敗すると、`'error'` イベントが生成されます。
+まれなケース (たとえばクローズしたソケットへのバインディング) では、
+このメソッドは `Error` をスローすることがあります。
 
 <!--
 Example of a UDP server listening on port 41234:
@@ -274,6 +300,11 @@ Example of a UDP server listening on port 41234:
     var dgram = require("dgram");
 
     var server = dgram.createSocket("udp4");
+
+    server.on("error", function (err) {
+      console.log("server error:\n" + err.stack);
+      server.close();
+    });
 
     server.on("message", function (msg, rinfo) {
       console.log("server got: " + msg + " from " +
