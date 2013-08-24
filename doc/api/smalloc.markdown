@@ -2,15 +2,17 @@
 
     Stability: 1 - Experimental
 
-## smalloc.alloc(length[, receiver])
+## smalloc.alloc(length[, receiver][, type])
 
 <!--
-* `length` Number `<= smalloc.kMaxLength`
-* `receiver` Object, Optional, Default: `new Object`
+* `length` {Number} `<= smalloc.kMaxLength`
+* `receiver` {Object}, Optional, Default: `new Object`
+* `type` {Enum}, Optional, Default: `Uint8`
 -->
 
-* `length` Number `<= smalloc.kMaxLength`
-* `receiver` Object, オプション、デフォルトは `new Object`
+* `length` {Number} `<= smalloc.kMaxLength`
+* `receiver` {Object} オプション、デフォルトは `new Object`
+* `type` {Enum} オプション、デフォルトは `Uint8`
 
 <!--
 Returns `receiver` with allocated external array data. If no `receiver` is
@@ -66,6 +68,21 @@ will throw.
 
 v8は外部の配列データを Array オブジェクトに割り当てることを
 サポートしていないため、もし渡すと例外がスローされます。
+
+<!--
+It's possible is to specify the type of external array data you would like. All
+possible options are listed in `smalloc.Types`. Example usage:
+-->
+
+外部の配列データの型を指定することができます。
+全ての可能なオプションは `smalloc.Types` に列挙されています。使用例:
+
+    var doubleArr = smalloc.alloc(3, smalloc.Types.Double);
+
+    for (var i = 0; i < 3; i++)
+      doubleArr = i / 10;
+
+    // { '0': 0, '1': 0.1, '2': 0.2 }
 
 ## smalloc.copyOnto(source, sourceStart, dest, destStart, copyLength);
 
@@ -167,3 +184,21 @@ Size of maximum allocation. This is also applicable to Buffer creation.
 
 割り当てられる最大長です。
 これは `Buffer` を作成する際にも適用されます。
+
+## smalloc.Types
+
+<!--
+Enum of possible external array types. Contains:
+-->
+
+外部の配列で可能な型の列挙です。以下を含みます:
+
+* `Int8`
+* `Uint8`
+* `Int16`
+* `Uint16`
+* `Int32`
+* `Uint32`
+* `Float`
+* `Double`
+* `Uint8Clamped`

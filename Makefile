@@ -14,6 +14,12 @@ NODE ?= ./node
 # or set the V environment variable to an empty string.
 V ?= 1
 
+ifeq ($(USE_NINJA),1)
+ifneq ($(V),)
+NINJA := $(NINJA) -v
+endif
+endif
+
 # BUILDTYPE=Debug builds both release and debug builds. If you want to compile
 # just the debug build, run `make -C out BUILDTYPE=Debug` instead.
 ifeq ($(BUILDTYPE),Release)
@@ -53,7 +59,11 @@ else
 endif
 
 config.gypi: configure
-	$(PYTHON) ./configure
+	if [ -f $@ ]; then
+		$(error Stale $@, please re-run ./configure)
+	else
+		$(error No $@, please run ./configure first)
+	fi
 
 install: all
 	$(PYTHON) tools/install.py $@ '$(DESTDIR)' '$(PREFIX)'

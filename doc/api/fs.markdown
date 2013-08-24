@@ -661,29 +661,35 @@ The file is created if it does not exist.
 
 <!--
 * `'ax+'` - Like `'a+'` but fails if `path` exists.
+-->
 
+* `'ax+'` - `'a+'` と似ていますが、`path` が存在すると失敗します。
+
+<!--
 `mode` sets the file mode (permission and sticky bits), but only if the file was
 created. It defaults to `0666`, readable and writeable.
+-->
 
+`mode` はファイルモード (許可とスティッキービット) を設定しますが、
+それはファイルが作成される場合に限られます。
+デフォルトは 0666 です。
+
+<!--
 The callback gets two arguments `(err, fd)`.
+-->
 
+コールバックは 2 つの引数を受け取る `(err, fd)`です。
+
+<!--
 The exclusive flag `'x'` (`O_EXCL` flag in open(2)) ensures that `path` is newly
 created. On POSIX systems, `path` is considered to exist even if it is a symlink
 to a non-existent file. The exclusive flag may or may not work with network file
 systems.
 -->
 
-* `'ax+'` - `'a+'` と似ていますが、`path` が存在すると失敗します。
-
-`mode` はファイルモード (許可とスティッキービット) を設定しますが、
-それはファイルが作成される場合に限られます。
-デフォルトは 0666 です。
-
-コールバックは 2 つの引数を受け取る `(err, fd)`です。
-
 排他フラグ `'x'` (open(2) の `O_EXCL` フラグ) は、
 `path` が新しいファイルとして作成されることを保証します。
-POSIX システムでは、`path` がたとえ存在しないファイルへのシンボリックだとしても、
+POSIX システムでは、`path` がたとえ存在しないファイルへのシンボリックだとしても
 存在すると見なされます。
 排他モードはネットワークファイルシステムでは動くかもしれませんし、
 動かないかもしれません。
