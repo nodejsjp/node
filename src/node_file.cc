@@ -63,16 +63,22 @@ using v8::Value;
 
 class FSReqWrap: public ReqWrap<uv_fs_t> {
  public:
-  explicit FSReqWrap(const char* syscall)
-    : must_free_(false),
-      syscall_(syscall) {
+  explicit FSReqWrap(const char* syscall, char* data = NULL)
+    : syscall_(syscall)
+    , data_(data) {
+  }
+
+  void ReleaseEarly() {
+    if (data_ == NULL) return;
+    delete[] data_;
+    data_ = NULL;
   }
 
   const char* syscall() { return syscall_; }
-  bool must_free_;  // request is responsible for free'ing memory oncomplete
 
  private:
   const char* syscall_;
+  char* data_;
 };
 
 
@@ -100,10 +106,7 @@ static void After(uv_fs_t *req) {
 
   FSReqWrap* req_wrap = static_cast<FSReqWrap*>(req->data);
   assert(&req_wrap->req_ == req);
-
-  // check if data needs to be cleaned
-  if (req_wrap->must_free_ == true)
-    delete[] static_cast<char*>(req_wrap->data_);
+  req_wrap->ReleaseEarly();  // Free memory that's no longer used now.
 
   // there is always at least one argument. "error"
   int argc = 1;
@@ -169,7 +172,8 @@ static void After(uv_fs_t *req) {
         break;
 
       case UV_FS_READLINK:
-        argv[1] = String::New(static_cast<char*>(req->ptr));
+        argv[1] = String::NewFromUtf8(node_isolate,
+                                      static_cast<const char*>(req->ptr));
         break;
 
       case UV_FS_READ:
@@ -185,8 +189,8 @@ static void After(uv_fs_t *req) {
           Local<Array> names = Array::New(nnames);
 
           for (int i = 0; i < nnames; i++) {
-            Local<String> name = String::New(namebuf);
-            names->Set(Integer::New(i, node_isolate), name);
+            Local<String> name = String::NewFromUtf8(node_isolate, namebuf);
+            names->Set(i, name);
 #ifndef NDEBUG
             namebuf += strlen(namebuf);
             assert(*namebuf == '\0');
@@ -205,9 +209,6 @@ static void After(uv_fs_t *req) {
     }
   }
 
-  if (oncomplete_sym.IsEmpty()) {
-    oncomplete_sym = String::New("oncomplete");
-  }
   MakeCallback(req_wrap->object(), oncomplete_sym, argc, argv);
 
   uv_fs_req_cleanup(&req_wrap->req_);
@@ -290,19 +291,19 @@ Local<Object> BuildStatsObject(const uv_stat_t* s) {
   HandleScope scope(node_isolate);
 
   if (dev_symbol.IsEmpty()) {
-    dev_symbol = String::New("dev");
-    ino_symbol = String::New("ino");
-    mode_symbol = String::New("mode");
-    nlink_symbol = String::New("nlink");
-    uid_symbol = String::New("uid");
-    gid_symbol = String::New("gid");
-    rdev_symbol = String::New("rdev");
-    size_symbol = String::New("size");
-    blksize_symbol = String::New("blksize");
-    blocks_symbol = String::New("blocks");
-    atime_symbol = String::New("atime");
-    mtime_symbol = String::New("mtime");
-    ctime_symbol = String::New("ctime");
+    dev_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "dev");
+    ino_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "ino");
+    mode_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "mode");
+    nlink_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "nlink");
+    uid_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "uid");
+    gid_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "gid");
+    rdev_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "rdev");
+    size_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "size");
+    blksize_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "blksize");
+    blocks_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "blocks");
+    atime_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "atime");
+    mtime_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "mtime");
+    ctime_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "ctime");
   }
 
   Local<Function> constructor =
@@ -481,8 +482,9 @@ static void ReadLink(const FunctionCallbackInfo<Value>& args) {
     ASYNC_CALL(readlink, args[1], *path)
   } else {
     SYNC_CALL(readlink, *path, *path)
-    args.GetReturnValue().Set(
-        String::New(static_cast<const char*>(SYNC_REQ.ptr)));
+    const char* link_path = static_cast<const char*>(SYNC_REQ.ptr);
+    Local<String> rc = String::NewFromUtf8(node_isolate, link_path);
+    args.GetReturnValue().Set(rc);
   }
 }
 
@@ -616,13 +618,13 @@ static void ReadDir(const FunctionCallbackInfo<Value>& args) {
   } else {
     SYNC_CALL(readdir, *path, *path, 0 /*flags*/)
 
-    char *namebuf = static_cast<char*>(SYNC_REQ.ptr);
-    int nnames = req_wrap.req.result;
+    assert(SYNC_REQ.result >= 0);
+    char* namebuf = static_cast<char*>(SYNC_REQ.ptr);
+    uint32_t nnames = SYNC_REQ.result;
     Local<Array> names = Array::New(nnames);
 
-    for (int i = 0; i < nnames; i++) {
-      Local<String> name = String::New(namebuf);
-      names->Set(Integer::New(i, node_isolate), name);
+    for (uint32_t i = 0; i < nnames; ++i) {
+      names->Set(i, String::NewFromUtf8(node_isolate, namebuf));
 #ifndef NDEBUG
       namebuf += strlen(namebuf);
       assert(*namebuf == '\0');
@@ -725,7 +727,7 @@ static void WriteString(const FunctionCallbackInfo<Value>& args) {
   char* buf = NULL;
   int64_t pos;
   size_t len;
-  bool must_free_ = false;
+  bool must_free = false;
 
   // will assign buf and len if string was external
   if (!StringBytes::GetExternalParts(string,
@@ -737,33 +739,35 @@ static void WriteString(const FunctionCallbackInfo<Value>& args) {
     // StorageSize may return too large a char, so correct the actual length
     // by the write size
     len = StringBytes::Write(buf, len, args[1], enc);
-    must_free_ = true;
+    must_free = true;
   }
   pos = GET_OFFSET(args[2]);
   cb = args[4];
 
-  if (cb->IsFunction()) {
-    FSReqWrap* req_wrap = new FSReqWrap("write");
-    int err = uv_fs_write(uv_default_loop(), &req_wrap->req_,
-        fd, buf, len, pos, After);
-    req_wrap->object()->Set(oncomplete_sym, cb);
-    req_wrap->must_free_ = must_free_;
-    req_wrap->Dispatched();
-    req_wrap->data_ = buf;
-    if (err < 0) {
-      uv_fs_t* req = &req_wrap->req_;
-      req->result = err;
-      req->path = NULL;
-      After(req);
-    }
-    return args.GetReturnValue().Set(req_wrap->persistent());
+  if (!cb->IsFunction()) {
+    SYNC_CALL(write, NULL, fd, buf, len, pos)
+    if (must_free) delete[] buf;
+    return args.GetReturnValue().Set(SYNC_RESULT);
   }
 
-  SYNC_CALL(write, NULL, fd, buf, len, pos)
-  args.GetReturnValue().Set(SYNC_RESULT);
+  FSReqWrap* req_wrap = new FSReqWrap("write", must_free ? buf : NULL);
+  int err = uv_fs_write(uv_default_loop(),
+                        &req_wrap->req_,
+                        fd,
+                        buf,
+                        len,
+                        pos,
+                        After);
+  req_wrap->object()->Set(oncomplete_sym, cb);
+  req_wrap->Dispatched();
+  if (err < 0) {
+    uv_fs_t* req = &req_wrap->req_;
+    req->result = err;
+    req->path = NULL;
+    After(req);
+  }
 
-  if (must_free_)
-    delete[] buf;
+  return args.GetReturnValue().Set(req_wrap->persistent());
 }
 
 
@@ -1005,12 +1009,12 @@ void InitFs(Handle<Object> target) {
 
   // Initialize the stats object
   Local<Function> constructor = FunctionTemplate::New()->GetFunction();
-  target->Set(String::NewSymbol("Stats"), constructor);
+  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Stats"), constructor);
   stats_constructor.Reset(node_isolate, constructor);
 
   File::Initialize(target);
 
-  oncomplete_sym = String::New("oncomplete");
+  oncomplete_sym = FIXED_ONE_BYTE_STRING(node_isolate, "oncomplete");
 
   StatWatcher::Initialize(target);
 }

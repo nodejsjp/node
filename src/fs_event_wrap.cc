@@ -71,22 +71,20 @@ FSEventWrap::~FSEventWrap() {
 
 
 void FSEventWrap::Initialize(Handle<Object> target) {
-  HandleWrap::Initialize(target);
-
   HandleScope scope(node_isolate);
 
   Local<FunctionTemplate> t = FunctionTemplate::New(New);
   t->InstanceTemplate()->SetInternalFieldCount(1);
-  t->SetClassName(String::NewSymbol("FSEvent"));
+  t->SetClassName(FIXED_ONE_BYTE_STRING(node_isolate, "FSEvent"));
 
   NODE_SET_PROTOTYPE_METHOD(t, "start", Start);
   NODE_SET_PROTOTYPE_METHOD(t, "close", Close);
 
-  target->Set(String::New("FSEvent"), t->GetFunction());
+  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "FSEvent"), t->GetFunction());
 
-  change_sym = String::New("change");
-  onchange_sym = String::New("onchange");
-  rename_sym = String::New("rename");
+  change_sym = FIXED_ONE_BYTE_STRING(node_isolate, "change");
+  onchange_sym = FIXED_ONE_BYTE_STRING(node_isolate, "onchange");
+  rename_sym = FIXED_ONE_BYTE_STRING(node_isolate, "rename");
 }
 
 
@@ -100,7 +98,8 @@ void FSEventWrap::New(const FunctionCallbackInfo<Value>& args) {
 void FSEventWrap::Start(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP(FSEventWrap)
+  FSEventWrap* wrap;
+  NODE_UNWRAP(args.This(), FSEventWrap, wrap);
 
   if (args.Length() < 1 || !args[0]->IsString()) {
     return ThrowTypeError("Bad arguments");
@@ -163,7 +162,7 @@ void FSEventWrap::OnEvent(uv_fs_event_t* handle, const char* filename,
   };
 
   if (filename != NULL) {
-    argv[2] = String::New(filename);
+    argv[2] = OneByteString(node_isolate, filename);
   }
 
   MakeCallback(wrap->object(), onchange_sym, ARRAY_SIZE(argv), argv);
@@ -173,13 +172,8 @@ void FSEventWrap::OnEvent(uv_fs_event_t* handle, const char* filename,
 void FSEventWrap::Close(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  // Unwrap manually here. The UNWRAP() macro asserts that wrap != NULL.
-  // That usually indicates an error but not here: double closes are possible
-  // and legal, HandleWrap::Close() deals with them the same way.
-  assert(!args.This().IsEmpty());
-  assert(args.This()->InternalFieldCount() > 0);
-  void* ptr = args.This()->GetAlignedPointerFromInternalField(0);
-  FSEventWrap* wrap = static_cast<FSEventWrap*>(ptr);
+  FSEventWrap* wrap;
+  NODE_UNWRAP_NO_ABORT(args.This(), FSEventWrap, wrap);
 
   if (wrap == NULL || wrap->initialized_ == false) return;
   wrap->initialized_ = false;

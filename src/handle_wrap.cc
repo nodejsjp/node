@@ -38,15 +38,11 @@ extern QUEUE handle_wrap_queue;
 static Cached<String> close_sym;
 
 
-void HandleWrap::Initialize(Handle<Object> target) {
-  /* Doesn't do anything at the moment. */
-}
-
-
 void HandleWrap::Ref(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP_NO_ABORT(HandleWrap)
+  HandleWrap* wrap;
+  NODE_UNWRAP_NO_ABORT(args.This(), HandleWrap, wrap);
 
   if (wrap != NULL && wrap->handle__ != NULL) {
     uv_ref(wrap->handle__);
@@ -58,7 +54,8 @@ void HandleWrap::Ref(const FunctionCallbackInfo<Value>& args) {
 void HandleWrap::Unref(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP_NO_ABORT(HandleWrap)
+  HandleWrap* wrap;
+  NODE_UNWRAP_NO_ABORT(args.This(), HandleWrap, wrap);
 
   if (wrap != NULL && wrap->handle__ != NULL) {
     uv_unref(wrap->handle__);
@@ -70,8 +67,8 @@ void HandleWrap::Unref(const FunctionCallbackInfo<Value>& args) {
 void HandleWrap::Close(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  HandleWrap *wrap = static_cast<HandleWrap*>(
-      args.This()->GetAlignedPointerFromInternalField(0));
+  HandleWrap* wrap;
+  NODE_UNWRAP(args.This(), HandleWrap, wrap);
 
   // guard against uninitialized handle or double close
   if (wrap == NULL || wrap->handle__ == NULL) return;
@@ -81,7 +78,9 @@ void HandleWrap::Close(const FunctionCallbackInfo<Value>& args) {
   wrap->handle__ = NULL;
 
   if (args[0]->IsFunction()) {
-    if (close_sym.IsEmpty() == true) close_sym = String::New("close");
+    if (close_sym.IsEmpty() == true) {
+      close_sym = FIXED_ONE_BYTE_STRING(node_isolate, "close");
+    }
     wrap->object()->Set(close_sym, args[0]);
     wrap->flags_ |= kCloseCallback;
   }
@@ -95,9 +94,8 @@ HandleWrap::HandleWrap(Handle<Object> object, uv_handle_t* h) {
 
   HandleScope scope(node_isolate);
   assert(persistent().IsEmpty());
-  assert(object->InternalFieldCount() > 0);
   persistent().Reset(node_isolate, object);
-  object->SetAlignedPointerInInternalField(0, this);
+  NODE_WRAP(object, this);
   QUEUE_INSERT_TAIL(&handle_wrap_queue, &handle_wrap_queue_);
 }
 

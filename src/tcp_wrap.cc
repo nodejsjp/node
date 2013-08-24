@@ -67,19 +67,18 @@ Local<Object> TCPWrap::Instantiate() {
 
 
 void TCPWrap::Initialize(Handle<Object> target) {
-  HandleWrap::Initialize(target);
   StreamWrap::Initialize(target);
 
   HandleScope scope(node_isolate);
 
   Local<FunctionTemplate> t = FunctionTemplate::New(New);
-  t->SetClassName(String::NewSymbol("TCP"));
+  t->SetClassName(FIXED_ONE_BYTE_STRING(node_isolate, "TCP"));
 
   t->InstanceTemplate()->SetInternalFieldCount(1);
 
   enum PropertyAttribute attributes =
       static_cast<PropertyAttribute>(v8::ReadOnly | v8::DontDelete);
-  t->InstanceTemplate()->SetAccessor(String::New("fd"),
+  t->InstanceTemplate()->SetAccessor(FIXED_ONE_BYTE_STRING(node_isolate, "fd"),
                                      StreamWrap::GetFD,
                                      NULL,
                                      Handle<Value>(),
@@ -120,19 +119,19 @@ void TCPWrap::Initialize(Handle<Object> target) {
                             SetSimultaneousAccepts);
 #endif
 
-  onconnection_sym = String::New("onconnection");
-  oncomplete_sym = String::New("oncomplete");
+  onconnection_sym = FIXED_ONE_BYTE_STRING(node_isolate, "onconnection");
+  oncomplete_sym = FIXED_ONE_BYTE_STRING(node_isolate, "oncomplete");
 
   tcpConstructorTmpl.Reset(node_isolate, t);
   tcpConstructor.Reset(node_isolate, t->GetFunction());
-  target->Set(String::NewSymbol("TCP"), t->GetFunction());
+  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "TCP"), t->GetFunction());
 }
 
 
 TCPWrap* TCPWrap::Unwrap(Local<Object> obj) {
-  assert(!obj.IsEmpty());
-  assert(obj->InternalFieldCount() > 0);
-  return static_cast<TCPWrap*>(obj->GetAlignedPointerFromInternalField(0));
+  TCPWrap* wrap;
+  NODE_UNWRAP(obj, TCPWrap, wrap);
+  return wrap;
 }
 
 
@@ -170,7 +169,8 @@ void TCPWrap::GetSockName(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
   struct sockaddr_storage address;
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   assert(args[0]->IsObject());
   Local<Object> out = args[0].As<Object>();
@@ -192,7 +192,8 @@ void TCPWrap::GetPeerName(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
   struct sockaddr_storage address;
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   assert(args[0]->IsObject());
   Local<Object> out = args[0].As<Object>();
@@ -213,7 +214,8 @@ void TCPWrap::GetPeerName(const FunctionCallbackInfo<Value>& args) {
 void TCPWrap::SetNoDelay(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   int enable = static_cast<int>(args[0]->BooleanValue());
   int err = uv_tcp_nodelay(&wrap->handle_, enable);
@@ -224,7 +226,8 @@ void TCPWrap::SetNoDelay(const FunctionCallbackInfo<Value>& args) {
 void TCPWrap::SetKeepAlive(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   int enable = args[0]->Int32Value();
   unsigned int delay = args[1]->Uint32Value();
@@ -238,7 +241,8 @@ void TCPWrap::SetKeepAlive(const FunctionCallbackInfo<Value>& args) {
 void TCPWrap::SetSimultaneousAccepts(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   bool enable = args[0]->BooleanValue();
   int err = uv_tcp_simultaneous_accepts(&wrap->handle_, enable);
@@ -249,7 +253,8 @@ void TCPWrap::SetSimultaneousAccepts(const FunctionCallbackInfo<Value>& args) {
 
 void TCPWrap::Open(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
   int fd = args[0]->IntegerValue();
   uv_tcp_open(&wrap->handle_, fd);
 }
@@ -258,7 +263,8 @@ void TCPWrap::Open(const FunctionCallbackInfo<Value>& args) {
 void TCPWrap::Bind(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   String::AsciiValue ip_address(args[0]);
   int port = args[1]->Int32Value();
@@ -273,7 +279,8 @@ void TCPWrap::Bind(const FunctionCallbackInfo<Value>& args) {
 void TCPWrap::Bind6(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   String::AsciiValue ip6_address(args[0]);
   int port = args[1]->Int32Value();
@@ -288,7 +295,8 @@ void TCPWrap::Bind6(const FunctionCallbackInfo<Value>& args) {
 void TCPWrap::Listen(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   int backlog = args[0]->Int32Value();
   int err = uv_listen(reinterpret_cast<uv_stream_t*>(&wrap->handle_),
@@ -301,12 +309,12 @@ void TCPWrap::Listen(const FunctionCallbackInfo<Value>& args) {
 void TCPWrap::OnConnection(uv_stream_t* handle, int status) {
   HandleScope scope(node_isolate);
 
-  TCPWrap* wrap = static_cast<TCPWrap*>(handle->data);
-  assert(&wrap->handle_ == reinterpret_cast<uv_tcp_t*>(handle));
+  TCPWrap* tcp_wrap = static_cast<TCPWrap*>(handle->data);
+  assert(&tcp_wrap->handle_ == reinterpret_cast<uv_tcp_t*>(handle));
 
   // We should not be getting this callback if someone as already called
   // uv_close() on the handle.
-  assert(wrap->persistent().IsEmpty() == false);
+  assert(tcp_wrap->persistent().IsEmpty() == false);
 
   Local<Value> argv[2] = {
     Integer::New(status, node_isolate),
@@ -318,19 +326,17 @@ void TCPWrap::OnConnection(uv_stream_t* handle, int status) {
     Local<Object> client_obj = Instantiate();
 
     // Unwrap the client javascript object.
-    assert(client_obj->InternalFieldCount() > 0);
-
-    void* client_wrap_v = client_obj->GetAlignedPointerFromInternalField(0);
-    TCPWrap* client_wrap = static_cast<TCPWrap*>(client_wrap_v);
-    uv_stream_t* client_handle =
-        reinterpret_cast<uv_stream_t*>(&client_wrap->handle_);
-    if (uv_accept(handle, client_handle)) return;
+    TCPWrap* wrap;
+    NODE_UNWRAP(client_obj, TCPWrap, wrap);
+    uv_stream_t* client_handle = reinterpret_cast<uv_stream_t*>(&wrap->handle_);
+    if (uv_accept(handle, client_handle))
+      return;
 
     // Successful accept. Call the onconnection callback in JavaScript land.
     argv[1] = client_obj;
   }
 
-  MakeCallback(wrap->object(), onconnection_sym, ARRAY_SIZE(argv), argv);
+  MakeCallback(tcp_wrap->object(), onconnection_sym, ARRAY_SIZE(argv), argv);
 }
 
 
@@ -361,7 +367,8 @@ void TCPWrap::AfterConnect(uv_connect_t* req, int status) {
 void TCPWrap::Connect(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   assert(args[0]->IsObject());
   assert(args[1]->IsString());
@@ -392,7 +399,8 @@ void TCPWrap::Connect(const FunctionCallbackInfo<Value>& args) {
 void TCPWrap::Connect6(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  UNWRAP(TCPWrap)
+  TCPWrap* wrap;
+  NODE_UNWRAP(args.This(), TCPWrap, wrap);
 
   assert(args[0]->IsObject());
   assert(args[1]->IsString());
@@ -432,11 +440,11 @@ Local<Object> AddressToJS(const sockaddr* addr, Handle<Object> info) {
   int port;
 
   if (address_sym.IsEmpty()) {
-    address_sym = String::New("address");
-    family_sym = String::New("family");
-    port_sym = String::New("port");
-    ipv4_sym = String::New("IPv4");
-    ipv6_sym = String::New("IPv6");
+    address_sym = FIXED_ONE_BYTE_STRING(node_isolate, "address");
+    family_sym = FIXED_ONE_BYTE_STRING(node_isolate, "family");
+    port_sym = FIXED_ONE_BYTE_STRING(node_isolate, "port");
+    ipv4_sym = FIXED_ONE_BYTE_STRING(node_isolate, "IPv4");
+    ipv6_sym = FIXED_ONE_BYTE_STRING(node_isolate, "IPv6");
   }
 
   if (info.IsEmpty()) info = Object::New();
@@ -446,7 +454,7 @@ Local<Object> AddressToJS(const sockaddr* addr, Handle<Object> info) {
     a6 = reinterpret_cast<const sockaddr_in6*>(addr);
     uv_inet_ntop(AF_INET6, &a6->sin6_addr, ip, sizeof ip);
     port = ntohs(a6->sin6_port);
-    info->Set(address_sym, String::New(ip));
+    info->Set(address_sym, OneByteString(node_isolate, ip));
     info->Set(family_sym, ipv6_sym);
     info->Set(port_sym, Integer::New(port, node_isolate));
     break;
@@ -455,7 +463,7 @@ Local<Object> AddressToJS(const sockaddr* addr, Handle<Object> info) {
     a4 = reinterpret_cast<const sockaddr_in*>(addr);
     uv_inet_ntop(AF_INET, &a4->sin_addr, ip, sizeof ip);
     port = ntohs(a4->sin_port);
-    info->Set(address_sym, String::New(ip));
+    info->Set(address_sym, OneByteString(node_isolate, ip));
     info->Set(family_sym, ipv4_sym);
     info->Set(port_sym, Integer::New(port, node_isolate));
     break;

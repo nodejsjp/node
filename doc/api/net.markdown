@@ -111,6 +111,8 @@ TCP ソケットの場合、`options` 引数は以下を指定したオブジェ
   - `host`: Host the client should connect to. Defaults to `'localhost'`.
 
   - `localAddress`: Local interface to bind to for network connections.
+
+  - `family` : Version of IP stack. Defaults to `4`.
 -->
 
   - `port`: クライアントが接続するポート番号です (必須)。
@@ -119,7 +121,8 @@ TCP ソケットの場合、`options` 引数は以下を指定したオブジェ
 
   - `localAddress`: ネットワーク接続をバインドするローカルインタフェースです。
 
-<!--
+  - `family` : IP スタックのバージョン。デフォルトは `4` です。
+
 For UNIX domain sockets, `options` argument should be an object which specifies:
 -->
 

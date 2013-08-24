@@ -25,7 +25,11 @@
 #include "v8.h"
 
 #include <assert.h>
+#include <stdint.h>
 #include <stdlib.h>
+
+#define FIXED_ONE_BYTE_STRING(isolate, string)                                \
+  (node::OneByteString((isolate), (string), sizeof(string) - 1))
 
 struct sockaddr;
 
@@ -72,6 +76,12 @@ inline v8::Local<TypeName> PersistentToLocal(
     v8::Isolate* isolate,
     const v8::Persistent<TypeName>& persistent);
 
+v8::Handle<v8::Value> MakeCallback(
+    const v8::Handle<v8::Object> recv,
+    uint32_t index,
+    int argc,
+    v8::Handle<v8::Value>* argv);
+
 template <typename TypeName>
 v8::Handle<v8::Value> MakeCallback(
     const v8::Persistent<v8::Object>& recv,
@@ -94,6 +104,20 @@ inline v8::Local<v8::Object> NewInstance(
     const v8::Persistent<v8::Function>& ctor,
     int argc = 0,
     v8::Handle<v8::Value>* argv = NULL);
+
+// Convenience wrapper around v8::String::NewFromOneByte().
+inline v8::Local<v8::String> OneByteString(v8::Isolate* isolate,
+                                           const char* data,
+                                           int length = -1);
+
+// For the people that compile with -funsigned-char.
+inline v8::Local<v8::String> OneByteString(v8::Isolate* isolate,
+                                           const signed char* data,
+                                           int length = -1);
+
+inline v8::Local<v8::String> OneByteString(v8::Isolate* isolate,
+                                           const unsigned char* data,
+                                           int length = -1);
 
 // Convert a struct sockaddr to a { address: '1.2.3.4', port: 1234 } JS object.
 // Sets address and port properties on the info object and returns it.
@@ -157,7 +181,7 @@ inline static int snprintf(char* buf, unsigned int len, const char* fmt, ...) {
 #define THROW_ERROR(fun)                                                      \
   do {                                                                        \
     v8::HandleScope scope(node_isolate);                                      \
-    v8::ThrowException(fun(v8::String::New(errmsg)));                         \
+    v8::ThrowException(fun(OneByteString(node_isolate, errmsg)));             \
   }                                                                           \
   while (0)
 
@@ -189,19 +213,36 @@ inline static void ThrowUVException(int errorno,
 
 NO_RETURN void FatalError(const char* location, const char* message);
 
-#define UNWRAP(type)                                                        \
-  assert(!args.This().IsEmpty());                                           \
-  assert(args.This()->InternalFieldCount() > 0);                            \
-  type* wrap = static_cast<type*>(                                          \
-      args.This()->GetAlignedPointerFromInternalField(0));                  \
-  if (!wrap) {                                                              \
-    fprintf(stderr, #type ": Aborting due to unwrap failure at %s:%d\n",    \
-            __FILE__, __LINE__);                                            \
-    abort();                                                                \
-  }
+#define NODE_WRAP(Object, Pointer)                                             \
+  do {                                                                         \
+    assert(!Object.IsEmpty());                                                 \
+    assert(Object->InternalFieldCount() > 0);                                  \
+    Object->SetAlignedPointerInInternalField(0, Pointer);                      \
+  }                                                                            \
+  while (0)
 
-// allow for quick domain check
-extern bool using_domains;
+#define NODE_UNWRAP(Object, TypeName, Var)                                     \
+  do {                                                                         \
+    assert(!Object.IsEmpty());                                                 \
+    assert(Object->InternalFieldCount() > 0);                                  \
+    Var = static_cast<TypeName*>(                                              \
+        Object->GetAlignedPointerFromInternalField(0));                        \
+    if (!Var) {                                                                \
+      fprintf(stderr, #TypeName ": Aborting due to unwrap failure at %s:%d\n", \
+              __FILE__, __LINE__);                                             \
+      abort();                                                                 \
+    }                                                                          \
+  }                                                                            \
+  while (0)
+
+#define NODE_UNWRAP_NO_ABORT(Object, TypeName, Var)                            \
+  do {                                                                         \
+    assert(!Object.IsEmpty());                                                 \
+    assert(Object->InternalFieldCount() > 0);                                  \
+    Var = static_cast<TypeName*>(                                              \
+        Object->GetAlignedPointerFromInternalField(0));                        \
+  }                                                                            \
+  while (0)
 
 enum Endianness {
   kLittleEndian,  // _Not_ LITTLE_ENDIAN, clashes with endian.h.
@@ -318,6 +359,7 @@ v8::Handle<v8::Value> MakeCallback(
 inline bool HasInstance(
     const v8::Persistent<v8::FunctionTemplate>& function_template,
     v8::Handle<v8::Value> value) {
+  if (function_template.IsEmpty()) return false;
   v8::Local<v8::FunctionTemplate> function_template_handle =
       PersistentToLocal(node_isolate, function_template);
   return function_template_handle->HasInstance(value);
@@ -331,6 +373,37 @@ inline v8::Local<v8::Object> NewInstance(
       PersistentToLocal(node_isolate, ctor);
   return constructor_handle->NewInstance(argc, argv);
 }
+
+inline v8::Local<v8::String> OneByteString(v8::Isolate* isolate,
+                                           const char* data,
+                                           int length) {
+  return v8::String::NewFromOneByte(isolate,
+                                    reinterpret_cast<const uint8_t*>(data),
+                                    v8::String::kNormalString,
+                                    length);
+}
+
+inline v8::Local<v8::String> OneByteString(v8::Isolate* isolate,
+                                           const signed char* data,
+                                           int length) {
+  return v8::String::NewFromOneByte(isolate,
+                                    reinterpret_cast<const uint8_t*>(data),
+                                    v8::String::kNormalString,
+                                    length);
+}
+
+inline v8::Local<v8::String> OneByteString(v8::Isolate* isolate,
+                                           const unsigned char* data,
+                                           int length) {
+  return v8::String::NewFromOneByte(isolate,
+                                    reinterpret_cast<const uint8_t*>(data),
+                                    v8::String::kNormalString,
+                                    length);
+}
+
+bool InDomain();
+
+v8::Handle<v8::Value> GetDomain();
 
 }  // namespace node
 

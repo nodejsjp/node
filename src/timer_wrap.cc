@@ -22,6 +22,8 @@
 #include "node.h"
 #include "handle_wrap.h"
 
+#include <stdint.h>
+
 namespace node {
 
 using v8::Function;
@@ -35,18 +37,18 @@ using v8::Object;
 using v8::String;
 using v8::Value;
 
-static Cached<String> ontimeout_sym;
+const uint32_t kOnTimeout = 0;
 
 class TimerWrap : public HandleWrap {
  public:
   static void Initialize(Handle<Object> target) {
     HandleScope scope(node_isolate);
 
-    HandleWrap::Initialize(target);
-
     Local<FunctionTemplate> constructor = FunctionTemplate::New(New);
     constructor->InstanceTemplate()->SetInternalFieldCount(1);
-    constructor->SetClassName(String::NewSymbol("Timer"));
+    constructor->SetClassName(FIXED_ONE_BYTE_STRING(node_isolate, "Timer"));
+    constructor->Set(FIXED_ONE_BYTE_STRING(node_isolate, "kOnTimeout"),
+                     Integer::New(kOnTimeout, node_isolate));
 
     NODE_SET_METHOD(constructor, "now", Now);
 
@@ -60,9 +62,8 @@ class TimerWrap : public HandleWrap {
     NODE_SET_PROTOTYPE_METHOD(constructor, "getRepeat", GetRepeat);
     NODE_SET_PROTOTYPE_METHOD(constructor, "again", Again);
 
-    ontimeout_sym = String::New("ontimeout");
-
-    target->Set(String::NewSymbol("Timer"), constructor->GetFunction());
+    target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Timer"),
+                constructor->GetFunction());
   }
 
  private:
@@ -86,7 +87,8 @@ class TimerWrap : public HandleWrap {
 
   static void Start(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
-    UNWRAP(TimerWrap)
+    TimerWrap* wrap;
+    NODE_UNWRAP(args.This(), TimerWrap, wrap);
 
     int64_t timeout = args[0]->IntegerValue();
     int64_t repeat = args[1]->IntegerValue();
@@ -96,7 +98,8 @@ class TimerWrap : public HandleWrap {
 
   static void Stop(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
-    UNWRAP(TimerWrap)
+    TimerWrap* wrap;
+    NODE_UNWRAP(args.This(), TimerWrap, wrap);
 
     int err = uv_timer_stop(&wrap->handle_);
     args.GetReturnValue().Set(err);
@@ -104,7 +107,8 @@ class TimerWrap : public HandleWrap {
 
   static void Again(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
-    UNWRAP(TimerWrap)
+    TimerWrap* wrap;
+    NODE_UNWRAP(args.This(), TimerWrap, wrap);
 
     int err = uv_timer_again(&wrap->handle_);
     args.GetReturnValue().Set(err);
@@ -112,7 +116,8 @@ class TimerWrap : public HandleWrap {
 
   static void SetRepeat(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
-    UNWRAP(TimerWrap)
+    TimerWrap* wrap;
+    NODE_UNWRAP(args.This(), TimerWrap, wrap);
 
     int64_t repeat = args[0]->IntegerValue();
     uv_timer_set_repeat(&wrap->handle_, repeat);
@@ -121,7 +126,8 @@ class TimerWrap : public HandleWrap {
 
   static void GetRepeat(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
-    UNWRAP(TimerWrap)
+    TimerWrap* wrap;
+    NODE_UNWRAP(args.This(), TimerWrap, wrap);
 
     int64_t repeat = uv_timer_get_repeat(&wrap->handle_);
     args.GetReturnValue().Set(static_cast<double>(repeat));
@@ -134,7 +140,7 @@ class TimerWrap : public HandleWrap {
     assert(wrap);
 
     Local<Value> argv[1] = { Integer::New(status, node_isolate) };
-    MakeCallback(wrap->object(), ontimeout_sym, ARRAY_SIZE(argv), argv);
+    MakeCallback(wrap->object(), kOnTimeout, ARRAY_SIZE(argv), argv);
   }
 
   static void Now(const FunctionCallbackInfo<Value>& args) {
