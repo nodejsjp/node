@@ -31,6 +31,7 @@ HTTP メッセージヘッダはこのようなオブジェクトとして表現
     { 'content-length': '123',
       'content-type': 'text/plain',
       'connection': 'keep-alive',
+      'host': 'mysite.com',
       'accept': '*/*' }
 
 <!--
@@ -50,6 +51,37 @@ parse the actual headers or the body.
 Node の HTTP API はとても低水準です。それはストリームのハンドリングとメッセージの解析だけに対処します。
 解析はメッセージをヘッダとボディに分けますが、実際のヘッダとボディは解析しません。
 
+<!--
+Defined headers that allow multiple values are concatenated with a `,`
+character, except for the `set-cookie` and `cookie` headers which are
+represented as an array of values.  Headers such as `content-length`
+which can only have a single value are parsed accordingly, and only a
+single value is represented on the parsed object.
+-->
+
+複数の値を取ることができると定義されたヘッダは、`,` 区切りで連結されます。
+ただし、`set-cookie` および `cookie` ヘッダは例外で、値の配列で表現されます。
+`content-length` のように単一の値だけを持つヘッダはそれに応じて解析され、
+その結果は一つだけの値として表現されます。
+
+<!--
+The raw headers as they were received are retained in the `rawHeaders`
+property, which is an array of `[key, value, key2, value2, ...]`.  For
+example, the previous message header object might have a `rawHeaders`
+list like the following:
+-->
+
+受信した生のヘッダは `rawHeaders` プロパティに保持されます。
+それは `[key, value, key2, value2, ...]` の配列です。
+たとえば、前述のメッセージヘッダオブジェクトは、以下のような `rawHeaders`
+を持つかもしれません:
+
+    [ 'ConTent-Length', '123456',
+      'content-LENGTH', '123',
+      'content-type', 'text/plain',
+      'CONNECTION', 'keep-alive',
+      'Host', 'mysite.com',
+      'accepT', '*/*' ]
 
 ## http.STATUS_CODES
 
@@ -107,17 +139,13 @@ This is an [EventEmitter][] with the following events:
 <!--
 Emitted each time there is a request. Note that there may be multiple requests
 per connection (in the case of keep-alive connections).
+`request` is an instance of `http.IncomingMessage` and `response` is
+an instance of `http.ServerResponse`
 -->
 
 リクエストの度に生成されます。
 コネクションごとに複数のリクエストがあるかもしれないことに注意してください
 (Keep Alive なコネクションの場合)。
-
-<!--
- `request` is an instance of `http.IncomingMessage` and `response` is
- an instance of `http.ServerResponse`
--->
-
 `request` は `http.IncomingMessage` のインスタンス、
 `response` は `http.ServerResponse` のインスタンスです。
 
@@ -126,11 +154,11 @@ per connection (in the case of keep-alive connections).
 `function (socket) { }`
 
 <!--
- When a new TCP stream is established. `socket` is an object of type
- `net.Socket`. Usually users will not want to access this event. In
- particular, the socket will not emit `readable` events because of how
- the protocol parser attaches to the socket. The `socket` can also be
- accessed at `request.connection`.
+When a new TCP stream is established. `socket` is an object of type
+`net.Socket`. Usually users will not want to access this event. In
+particular, the socket will not emit `readable` events because of how
+the protocol parser attaches to the socket. The `socket` can also be
+accessed at `request.connection`.
 -->
 
 新しい TCP ストリームが確立した時。
@@ -145,7 +173,7 @@ per connection (in the case of keep-alive connections).
 `function () { }`
 
 <!--
- Emitted when the server closes.
+Emitted when the server closes.
 -->
 
 サーバがクローズした時に生成されます。
@@ -852,6 +880,11 @@ Options:
  - `Agent` object: explicitly use the passed in `Agent`.
  - `false`: opts out of connection pooling with an Agent, defaults request to
    `Connection: close`.
+- `keepAlive`: {Boolean} Keep sockets around in a pool to be used
+  by other requests in the future. Default = `false`
+- `keepAliveMsecs`: {Integer} When using HTTP KeepAlive, how often to
+  send TCP KeepAlive packets over sockets being kept alive.  Default =
+  `1000`.  Only relevant if `keepAlive` is set to `true`.
 -->
 
 - `host`: リクエストを発行するサーバのドメイン名または IP アドレス。
@@ -875,6 +908,11 @@ Options:
   - `Agent` オブジェクト: 明示的に渡された `Agent` を使用します。
   - `false`: Agent によるコネクションプーリングを使用しません。
      Connection:close の場合のデフォルトです。
+  - `keepAlive`: {Boolean} 将来、他のリクエストで使用できるように、
+  ソケットをプールに保持します。デフォルトは `false` です。
+  - `keepAliveMsecs`: {Integer} HTTP キープアライブが使用された場合、
+  ソケットの接続を維持するために TCP キープアライブパケットを送信する間隔です。
+  `keepAlive` が `true` に設定された場合だけ関係があります。
 
 <!--
 `http.request()` returns an instance of the `http.ClientRequest`
@@ -998,38 +1036,57 @@ Example:
 ## Class: http.Agent
 
 <!--
-In node 0.5.3+ there is a new implementation of the HTTP Agent which is used
-for pooling sockets used in HTTP client requests.
-
-Previously, a single agent instance helped pool for a single host+port. The
-current implementation now holds sockets for any number of hosts.
-
-The current HTTP Agent also defaults client requests to using
-Connection:keep-alive. If no pending HTTP requests are waiting on a socket
-to become free the socket is closed. This means that node's pool has the
-benefit of keep-alive when under load but still does not require developers
-to manually close the HTTP clients using keep-alive.
-
-Sockets are removed from the agent's pool when the socket emits either a
-"close" event or a special "agentRemove" event. This means that if you intend
-to keep one HTTP request open for a long time and don't want it to stay in the
-pool you can do something along the lines of:
+The HTTP Agent is used for pooling sockets used in HTTP client
+requests.
 -->
 
-Node 0.5.3 以降には、HTTP クライアントリクエストのソケットを
-プーリングするために新しい HTTP Agent の実装が存在します。
+HTTP エージェントは HTTP クライアントリクエストでソケットをプーリング
+するためのものです。
 
-以前は、エージェントの一つのインスタンスが一つのホスト + ポートのプールを
-助けていましたが、現在の実装では任意の数のホストに対するソケットを
-保持できるようになりました。
+<!--
+The HTTP Agent also defaults client requests to using
+Connection:keep-alive. If no pending HTTP requests are waiting on a
+socket to become free the socket is closed. This means that Node's
+pool has the benefit of keep-alive when under load but still does not
+require developers to manually close the HTTP clients using
+KeepAlive.
+-->
 
-現在の HTTP Agent では、クライアントリクエストはデフォルトで
-Connection:keep-alive を使うようにもなりました。
+HTTP エージェントでは、クライアントリクエストはデフォルトで
+Connection:keep-alive を使います。
 ソケットを待ってペンディングになっている HTTP リクエストがなければ、
 ソケットはクローズされます。
 これは、node のプールは高負荷時に keep-alive のメリットを持ちながら、
-keep-alive を使用する HTTP クライアントを開発者が手動でクローズする
+keep-alive を使用する HTTP クライアントの開発者が手動でクローズする
 必要がないことを意味します。
+-->
+
+<!--
+If you opt into using HTTP KeepAlive, you can create an Agent object
+with that flag set to `true`.  (See the [constructor
+options](#http_new_agent_options) below.)  Then, the Agent will keep
+unused sockets in a pool for later use.  They will be explicitly
+marked so as to not keep the Node process running.  However, it is
+still a good idea to explicitly [`destroy()`](#http_agent_destroy)
+KeepAlive agents when they are no longer in use, so that the Sockets
+will be shut down.
+-->
+
+より積極的に HTTP キープアライブを使用したければ、`keepAlive` フラグを
+`true` に設定してエージェントを生成します
+(後述する [コンストラクタオプション](#http_new_agent_options) 参照)。
+すると、エージェントは未使用の ソケットを後で使うためにプールに維持します。
+それらは Node プロセスの実行を維持しないように明示的にマークされます。
+しかし、キープアライブなエージェントがもはや使われなくなった場合に
+明示的に [`destroy()`](#http_agent_destroy) を呼び出すのはいいことです。
+すると、ソケットはシャットダウンされます。
+
+<!--
+Sockets are removed from the agent's pool when the socket emits either
+a "close" event or a special "agentRemove" event. This means that if
+you intend to keep one HTTP request open for a long time and don't
+want it to stay in the pool you can do something along the lines of:
+-->
 
 ソケットは `'close'` イベントまたは特別な `'agentRemove'` イベントが
 生成された時にエージェントのプールから削除されます。
@@ -1044,35 +1101,113 @@ keep-alive を使用する HTTP クライアントを開発者が手動でクロ
     });
 
 <!--
-Alternatively, you could just opt out of pooling entirely using `agent:false`:
+Alternatively, you could just opt out of pooling entirely using
+`agent:false`:
 -->
 
 別の方法として、 `agent: false` を指定することで、
 プーリングを使用しないこともできます:
 
-    http.get({hostname:'localhost', port:80, path:'/', agent:false}, function (res) {
-      // Do stuff
+    http.get({
+      hostname: 'localhost',
+      port: 80,
+      path: '/',
+      agent: false  // create a new agent just for this one request
+    }, function (res) {
+      // Do stuff with response
     })
+
+### new Agent([options])
+
+<!--
+* `options` {Object} Set of configurable options to set on the agent.
+  Can have the following fields:
+  * `keepAlive` {Boolean} Keep sockets around in a pool to be used by
+    other requests in the future. Default = `false`
+  * `keepAliveMsecs` {Integer} When using HTTP KeepAlive, how often
+    to send TCP KeepAlive packets over sockets being kept alive.
+    Default = `1000`.  Only relevant if `keepAlive` is set to `true`.
+  * `maxSockets` {Number} Maximum number of sockets to allow per
+    host.  Default = `Infinity`.
+  * `maxFreeSockets` {Number} Maximum number of sockets to leave open
+    in a free state.  Only relevant if `keepAlive` is set to `true`.
+    Default = `256`.
+-->
+
+* `options` {Object} エージェントに設定される構成可能なオプションの集合。
+  以下のフィールドを持つことができます:
+  * `keepAlive`: {Boolean} 将来、他のリクエストで使用できるように、
+    ソケットをプールに保持します。デフォルトは `false` です。
+  * `keepAliveMsecs`: {Integer} HTTP キープアライブが使用された場合、
+    ソケットの接続を維持するために TCP キープアライブパケットを送信する間隔。
+    `keepAlive` が `true` に設定された場合だけ関係があります。
+  * `maxSockets` {Number} ホスト毎に許されるソケットの最大数。
+    デフォルトは `Infinity`。
+  * `maxFreeSockets` {Number} フリーな状態でオープンしたままにするソケットの
+    最大数。デフォルトは `256`。
+
+<!--
+The default `http.globalAgent` that is used by `http.request` has all
+of these values set to their respective defaults.
+-->
+
+`http.request` によって使われるデフォルトの `http.globalAgent` は、
+これら全ての値をそれぞれのデフォルトに設定しています。
+
+<!--
+To configure any of them, you must create your own `Agent` object.
+-->
+
+これらの値を構成するためには、独自の `Agent` オブジェクトを作成する必要が
+あります。
+
+```javascript
+var http = require('http');
+var keepAliveAgent = new http.Agent({ keepAlive: true });
+keepAliveAgent.request(options, onResponseCallback);
+```
 
 ### agent.maxSockets
 
 <!--
-By default set to 5. Determines how many concurrent sockets the agent can have
-open per host.
+By default set to Infinity. Determines how many concurrent sockets the
+agent can have open per host.
 -->
 
-デフォルトでは 5 に設定されます。
+デフォルトでは無制限に設定されます。
 エージェントがいくつのソケットを並行にオープンするかを決定します。
+
+### agent.maxFreeSockets
+
+<!--
+By default set to 256.  For Agents supporting HTTP KeepAlive, this
+sets the maximum number of sockets that will be left open in the free
+state.
+-->
+
+デフォルトでは 256 に設定されます。
+HTTP キープアライブをサポートするエージェントでは、
+空いた状態でオープンしたままにされるソケットの最大数を設定します。
 
 ### agent.sockets
 
 <!--
-An object which contains arrays of sockets currently in use by the Agent. Do not
-modify.
+An object which contains arrays of sockets currently in use by the
+Agent.  Do not modify.
 -->
 
 エージェントが現在使っているソケットの配列です。
 変更しないでください。
+
+### agent.freeSockets
+
+<!--
+An object which contains arrays of sockets currently awaiting use by
+the Agent when HTTP KeepAlive is used.  Do not modify.
+-->
+
+HTTP キープアライブが使われているエージェントの場合、使われるのを待っている
+ソケットの配列です。変更しないでください。
 
 ### agent.requests
 
@@ -1083,6 +1218,46 @@ sockets. Do not modify.
 
 まだソケットが割り当てられていないリクエストのキューを含むオブジェクトです。
 変更しないでください。
+
+### agent.destroy()
+
+<!--
+Destroy any sockets that are currently in use by the agent.
+-->
+
+このエージェントで現在使用されているソケットを破棄します。
+
+<!--
+It is usually not necessary to do this.  However, if you are using an
+agent with KeepAlive enabled, then it is best to explicitly shut down
+the agent when you know that it will no longer be used.  Otherwise,
+sockets may hang open for quite a long time before the server
+terminates them.
+-->
+
+通常、これは必要ありません。
+しかしながら、キープアライブが有効なエージェントを使用していて、
+それがもう必要ないとわかっているなら、エージェントを明示的に
+シャットダウンするのがベストです。
+そうでなければ、サーバがそれらを解放するまで、ソケットはとても長い時間
+オープンしたままになるかもしれません。
+
+### agent.getName(options)
+
+<!--
+Get a unique name for a set of request options, to determine whether a
+connection can be reused.  In the http agent, this returns
+`host:port:localAddress`.  In the https agent, the name includes the
+CA, cert, ciphers, and other HTTPS/TLS-specific options that determine
+socket reusability.
+-->
+
+接続が再利用できるかどうかを決定するために、リクエストのオプションから
+ユニークな名前を返します。
+http のエージェントでは、これは `host:port:localAddress` です。
+https のエージェントでは、名前は CA，証明書、暗号、その他 HTTPS/TLS に特有の
+オプションによってソケットの再利用性が決定されます。
+
 
 ## http.globalAgent
 
@@ -1145,6 +1320,7 @@ the data is read it will consume memory that can eventually lead to a
 `'readable'` イベントが発生した時に `response.read()` を呼ぶか、
 `'data'` ハンドラを加えるか、`.resume()` メソッドを呼び出すかのいずれかにより、
 レスポンスオブジェクトからのデータを消費しなければ *なりません* 。
+データが消費されるまで、`'end'` イベントは生成されません。
 また、データは読まれるまでメモリを消費し、'process out of memory'
 エラーにつながることになります。
 
@@ -1524,14 +1700,60 @@ Example:
     //   accept: '*/*' }
     console.log(request.headers);
 
+### message.rawHeaders
+
+<!--
+The raw request/response headers list exactly as they were received.
+-->
+
+受信したものと正確に等しい生のリクエスト／レスポンスヘッダのリストです。
+
+<!--
+Note that the keys and values are in the same list.  It is *not* a
+list of tuples.  So, the even-numbered offsets are key values, and the
+odd-numbered offsets are the associated values.
+-->
+
+キーと値は同じリストに含まれることに注意してください。
+これはタプルのリストでは *ありません* 。
+すなわち、偶数番目はキーで、奇数番目は関連づけられた値です。
+
+<!--
+Header names are not lowercased, and duplicates are not merged.
+-->
+
+ヘッダの名前は小文字化されず、重複はマージされません。
+
+    // Prints something like:
+    //
+    // [ 'user-agent',
+    //   'this is invalid because there can be only one',
+    //   'User-Agent',
+    //   'curl/7.22.0',
+    //   'Host',
+    //   '127.0.0.1:8000',
+    //   'ACCEPT',
+    //   '*/*' ]
+    console.log(request.rawHeaders);
+
 ### message.trailers
 
 <!--
-The request/response trailers object. Only populated after the 'end' event.
+The request/response trailers object. Only populated at the 'end' event.
 -->
 
 リクエスト／レスポンスのトレーラオブジェクトです。
-`'end'` イベントの後にだけ発生します。
+`'end'` イベントが生成されて以降のみ存在します。
+
+### message.rawTrailers
+
+<!--
+The raw request/response trailer keys and values exactly as they were
+received.  Only populated at the 'end' event.
+-->
+
+受信したものと正確に等しい生のリクエスト／レスポンストレーラのリストです。
+`'end'` イベントが生成されて以降のみ存在します。
 
 ### message.setTimeout(msecs, callback)
 

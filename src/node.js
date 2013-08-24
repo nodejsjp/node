@@ -83,7 +83,7 @@
       var path = NativeModule.require('path');
       process.argv[1] = path.resolve(process.argv[1]);
 
-      // If this is a worker in cluster mode, start up the communiction
+      // If this is a worker in cluster mode, start up the communication
       // channel.
       if (process.env.NODE_UNIQUE_ID) {
         var cluster = NativeModule.require('cluster');
@@ -318,7 +318,7 @@
     var nextTickQueue = [];
 
     // this infoBox thing is used so that the C++ code in src/node.cc
-    // can have easy accesss to our nextTick state, and avoid unnecessary
+    // can have easy access to our nextTick state, and avoid unnecessary
     // calls into process._tickCallback.
     // order is [length, index, inTick, lastThrew]
     // Never write code like this without very good reason!
@@ -330,7 +330,6 @@
 
     process.nextTick = nextTick;
     // needs to be accessible from cc land
-    process._nextDomainTick = _nextDomainTick;
     process._tickCallback = _tickCallback;
     process._tickDomainCallback = _tickDomainCallback;
 
@@ -351,13 +350,8 @@
     // run callbacks that have no domain
     // using domains will cause this to be overridden
     function _tickCallback() {
-      var callback, nextTickLength, threw;
+      var callback, threw;
 
-      if (infoBox[inTick] === 1) return;
-      if (infoBox[length] === 0) {
-        infoBox[index] = 0;
-        return;
-      }
       infoBox[inTick] = 1;
 
       while (infoBox[index] < infoBox[length]) {
@@ -375,26 +369,17 @@
     }
 
     function _tickDomainCallback() {
-      var nextTickLength, tock, callback;
+      var tock, callback, domain;
 
-      if (infoBox[lastThrew] === 1) {
-        infoBox[lastThrew] = 0;
-        return;
-      }
-
-      if (infoBox[inTick] === 1) return;
-      if (infoBox[length] === 0) {
-        infoBox[index] = 0;
-        return;
-      }
       infoBox[inTick] = 1;
 
       while (infoBox[index] < infoBox[length]) {
         tock = nextTickQueue[infoBox[index]++];
         callback = tock.callback;
-        if (tock.domain) {
-          if (tock.domain._disposed) continue;
-          tock.domain.enter();
+        domain = tock.domain;
+        if (domain) {
+          if (domain._disposed) continue;
+          domain.enter();
         }
         infoBox[lastThrew] = 1;
         try {
@@ -403,8 +388,8 @@
         } finally {
           if (infoBox[lastThrew] === 1) tickDone();
         }
-        if (tock.domain)
-          tock.domain.exit();
+        if (domain)
+          domain.exit();
       }
 
       tickDone();
@@ -415,16 +400,10 @@
       if (process._exiting)
         return;
 
-      nextTickQueue.push({ callback: callback, domain: null });
-      infoBox[length]++;
-    }
-
-    function _nextDomainTick(callback) {
-      // on the way out, don't bother. it won't get fired anyway.
-      if (process._exiting)
-        return;
-
-      nextTickQueue.push({ callback: callback, domain: process.domain });
+      nextTickQueue.push({
+        callback: callback,
+        domain: process.domain || null
+      });
       infoBox[length]++;
     }
   };

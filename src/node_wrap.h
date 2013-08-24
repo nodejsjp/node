@@ -38,17 +38,14 @@ extern v8::Persistent<v8::FunctionTemplate> tcpConstructorTmpl;
 
 #define WITH_GENERIC_STREAM(obj, BODY)                    \
     do {                                                  \
-      if (!tcpConstructorTmpl.IsEmpty() &&                \
-          HasInstance(tcpConstructorTmpl, obj)) {         \
-        TCPWrap* wrap = TCPWrap::Unwrap(obj);             \
+      if (HasInstance(tcpConstructorTmpl, obj)) {         \
+        TCPWrap* const wrap = TCPWrap::Unwrap(obj);       \
         BODY                                              \
-      } else if (!ttyConstructorTmpl.IsEmpty() &&         \
-                 HasInstance(ttyConstructorTmpl, obj)) {  \
-        TTYWrap* wrap = TTYWrap::Unwrap(obj);             \
+      } else if (HasInstance(ttyConstructorTmpl, obj)) {  \
+        TTYWrap* const wrap = TTYWrap::Unwrap(obj);       \
         BODY                                              \
-      } else if (!pipeConstructorTmpl.IsEmpty() &&        \
-                 HasInstance(pipeConstructorTmpl, obj)) { \
-        PipeWrap* wrap = PipeWrap::Unwrap(obj);           \
+      } else if (HasInstance(pipeConstructorTmpl, obj)) { \
+        PipeWrap* const wrap = PipeWrap::Unwrap(obj);     \
         BODY                                              \
       }                                                   \
     } while (0)

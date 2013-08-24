@@ -42,20 +42,58 @@ static const unsigned int kMaxLength = 0x3fffffff;
 NODE_EXTERN typedef void (*FreeCallback)(char* data, void* hint);
 
 /**
- * Allocate external memory and set to passed object. If data is passed then
- * will use that instead of allocating new.
+ * Return byte size of external array type.
  */
-NODE_EXTERN void Alloc(v8::Handle<v8::Object> obj, size_t length);
-NODE_EXTERN void Alloc(v8::Handle<v8::Object> obj, char* data, size_t length);
+NODE_EXTERN size_t ExternalArraySize(enum v8::ExternalArrayType type);
+
+/**
+ * Allocate external array data onto obj.
+ *
+ * Passed data transfers ownership, and if no callback is passed then memory
+ * will automatically be free'd using free() (not delete[]).
+ *
+ * length is always the byte size of the data. Not the length of the external
+ * array. This intentionally differs from the JS API so users always know
+ * exactly how much memory is being allocated, regardless of the external array
+ * type. For this reason the helper function ExternalArraySize is provided to
+ * help determine the appropriate byte size to be allocated.
+ *
+ * In the following example we're allocating a Float array and setting the
+ * "length" property on the Object:
+ *
+ * \code
+ *    size_t array_length = 8;
+ *    size_t byte_length = node::smalloc::ExternalArraySize(
+ *        v8::kExternalFloatArray);
+ *    v8::Local<v8::Object> obj = v8::Object::New();
+ *    char* data = static_cast<char*>(malloc(byte_length * array_length));
+ *    node::smalloc::Alloc(obj, data, byte_length, v8::kExternalFloatArray);
+ *    obj->Set(v8::String::NewFromUtf8("length"),
+ *             v8::Integer::NewFromUnsigned(array_length));
+ * \code
+ */
+NODE_EXTERN void Alloc(v8::Handle<v8::Object> obj,
+                       size_t length,
+                       enum v8::ExternalArrayType type =
+                       v8::kExternalUnsignedByteArray);
+NODE_EXTERN void Alloc(v8::Handle<v8::Object> obj,
+                       char* data,
+                       size_t length,
+                       enum v8::ExternalArrayType type =
+                       v8::kExternalUnsignedByteArray);
 NODE_EXTERN void Alloc(v8::Handle<v8::Object> obj,
                        size_t length,
                        FreeCallback fn,
-                       void* hint);
+                       void* hint,
+                       enum v8::ExternalArrayType type =
+                       v8::kExternalUnsignedByteArray);
 NODE_EXTERN void Alloc(v8::Handle<v8::Object> obj,
                        char* data,
                        size_t length,
                        FreeCallback fn,
-                       void* hint);
+                       void* hint,
+                       enum v8::ExternalArrayType type =
+                       v8::kExternalUnsignedByteArray);
 
 /**
  * Free memory associated with an externally allocated object. If no external

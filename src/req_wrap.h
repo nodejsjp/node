@@ -23,6 +23,7 @@
 #define SRC_REQ_WRAP_H_
 
 #include "node.h"
+#include "node_internals.h"
 #include "queue.h"
 
 namespace node {
@@ -40,16 +41,10 @@ class ReqWrap {
     if (object.IsEmpty()) object = v8::Object::New();
     persistent().Reset(node_isolate, object);
 
-    if (using_domains) {
-      v8::Local<v8::Value> domain = v8::Context::GetCurrent()
-                                    ->Global()
-                                    ->Get(process_symbol)
-                                    ->ToObject()
-                                    ->Get(domain_symbol);
-
-      if (!domain->IsUndefined()) {
+    if (InDomain()) {
+      v8::Local<v8::Value> domain = GetDomain();
+      if (domain->IsObject())
         object->Set(domain_symbol, domain);
-      }
     }
 
     QUEUE_INSERT_TAIL(&req_wrap_queue, &req_wrap_queue_);
@@ -79,7 +74,6 @@ class ReqWrap {
 
   v8::Persistent<v8::Object> object_;
   QUEUE req_wrap_queue_;
-  void* data_;
   T req_;  // *must* be last, GetActiveRequests() in node.cc depends on it
 };
 

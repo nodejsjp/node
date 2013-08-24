@@ -48,11 +48,9 @@ class ProcessWrap : public HandleWrap {
   static void Initialize(Handle<Object> target) {
     HandleScope scope(node_isolate);
 
-    HandleWrap::Initialize(target);
-
     Local<FunctionTemplate> constructor = FunctionTemplate::New(New);
     constructor->InstanceTemplate()->SetInternalFieldCount(1);
-    constructor->SetClassName(String::NewSymbol("Process"));
+    constructor->SetClassName(FIXED_ONE_BYTE_STRING(node_isolate, "Process"));
 
     NODE_SET_PROTOTYPE_METHOD(constructor, "close", HandleWrap::Close);
 
@@ -62,7 +60,8 @@ class ProcessWrap : public HandleWrap {
     NODE_SET_PROTOTYPE_METHOD(constructor, "ref", HandleWrap::Ref);
     NODE_SET_PROTOTYPE_METHOD(constructor, "unref", HandleWrap::Unref);
 
-    target->Set(String::NewSymbol("Process"), constructor->GetFunction());
+    target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Process"),
+                constructor->GetFunction());
   }
 
  private:
@@ -84,34 +83,41 @@ class ProcessWrap : public HandleWrap {
 
   static void ParseStdioOptions(Local<Object> js_options,
                                 uv_process_options_t* options) {
-    Local<Array> stdios = js_options
-        ->Get(String::NewSymbol("stdio")).As<Array>();
+    Local<String> stdio_key =
+        FIXED_ONE_BYTE_STRING(node_isolate, "stdio");
+    Local<Array> stdios = js_options->Get(stdio_key).As<Array>();
     uint32_t len = stdios->Length();
     options->stdio = new uv_stdio_container_t[len];
     options->stdio_count = len;
 
     for (uint32_t i = 0; i < len; i++) {
       Local<Object> stdio = stdios->Get(i).As<Object>();
-      Local<Value> type = stdio->Get(String::NewSymbol("type"));
+      Local<Value> type =
+          stdio->Get(FIXED_ONE_BYTE_STRING(node_isolate, "type"));
 
-      if (type->Equals(String::NewSymbol("ignore"))) {
+      if (type->Equals(FIXED_ONE_BYTE_STRING(node_isolate, "ignore"))) {
         options->stdio[i].flags = UV_IGNORE;
-      } else if (type->Equals(String::NewSymbol("pipe"))) {
+      } else if (type->Equals(FIXED_ONE_BYTE_STRING(node_isolate, "pipe"))) {
         options->stdio[i].flags = static_cast<uv_stdio_flags>(
             UV_CREATE_PIPE | UV_READABLE_PIPE | UV_WRITABLE_PIPE);
-        options->stdio[i].data.stream = reinterpret_cast<uv_stream_t*>(
-            PipeWrap::Unwrap(stdio
-                ->Get(String::NewSymbol("handle")).As<Object>())->UVHandle());
-      } else if (type->Equals(String::NewSymbol("wrap"))) {
-        uv_stream_t* stream = HandleToStream(
-            stdio->Get(String::NewSymbol("handle")).As<Object>());
+        Local<String> handle_key =
+            FIXED_ONE_BYTE_STRING(node_isolate, "handle");
+        Local<Object> handle = stdio->Get(handle_key).As<Object>();
+        options->stdio[i].data.stream =
+            reinterpret_cast<uv_stream_t*>(
+                PipeWrap::Unwrap(handle)->UVHandle());
+      } else if (type->Equals(FIXED_ONE_BYTE_STRING(node_isolate, "wrap"))) {
+        Local<String> handle_key =
+            FIXED_ONE_BYTE_STRING(node_isolate, "handle");
+        Local<Object> handle = stdio->Get(handle_key).As<Object>();
+        uv_stream_t* stream = HandleToStream(handle);
         assert(stream != NULL);
 
         options->stdio[i].flags = UV_INHERIT_STREAM;
         options->stdio[i].data.stream = stream;
       } else {
-        int fd = static_cast<int>(
-            stdio->Get(String::NewSymbol("fd"))->IntegerValue());
+        Local<String> fd_key = FIXED_ONE_BYTE_STRING(node_isolate, "fd");
+        int fd = static_cast<int>(stdio->Get(fd_key)->IntegerValue());
 
         options->stdio[i].flags = UV_INHERIT_FD;
         options->stdio[i].data.fd = fd;
@@ -122,7 +128,8 @@ class ProcessWrap : public HandleWrap {
   static void Spawn(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
 
-    UNWRAP(ProcessWrap)
+    ProcessWrap* wrap;
+    NODE_UNWRAP(args.This(), ProcessWrap, wrap);
 
     Local<Object> js_options = args[0]->ToObject();
 
@@ -132,7 +139,8 @@ class ProcessWrap : public HandleWrap {
     options.exit_cb = OnExit;
 
     // options.uid
-    Local<Value> uid_v = js_options->Get(String::NewSymbol("uid"));
+    Local<Value> uid_v =
+        js_options->Get(FIXED_ONE_BYTE_STRING(node_isolate, "uid"));
     if (uid_v->IsInt32()) {
       int32_t uid = uid_v->Int32Value();
       if (uid & ~((uv_uid_t) ~0)) {
@@ -145,7 +153,8 @@ class ProcessWrap : public HandleWrap {
     }
 
     // options.gid
-    Local<Value> gid_v = js_options->Get(String::NewSymbol("gid"));
+    Local<Value> gid_v =
+        js_options->Get(FIXED_ONE_BYTE_STRING(node_isolate, "gid"));
     if (gid_v->IsInt32()) {
       int32_t gid = gid_v->Int32Value();
       if (gid & ~((uv_gid_t) ~0)) {
@@ -160,7 +169,8 @@ class ProcessWrap : public HandleWrap {
     // TODO(bnoordhuis) is this possible to do without mallocing ?
 
     // options.file
-    Local<Value> file_v = js_options->Get(String::NewSymbol("file"));
+    Local<Value> file_v =
+        js_options->Get(FIXED_ONE_BYTE_STRING(node_isolate, "file"));
     String::Utf8Value file(file_v->IsString() ? file_v : Local<Value>());
     if (file.length() > 0) {
       options.file = *file;
@@ -169,7 +179,8 @@ class ProcessWrap : public HandleWrap {
     }
 
     // options.args
-    Local<Value> argv_v = js_options->Get(String::NewSymbol("args"));
+    Local<Value> argv_v =
+        js_options->Get(FIXED_ONE_BYTE_STRING(node_isolate, "args"));
     if (!argv_v.IsEmpty() && argv_v->IsArray()) {
       Local<Array> js_argv = Local<Array>::Cast(argv_v);
       int argc = js_argv->Length();
@@ -183,14 +194,16 @@ class ProcessWrap : public HandleWrap {
     }
 
     // options.cwd
-    Local<Value> cwd_v = js_options->Get(String::NewSymbol("cwd"));
+    Local<Value> cwd_v =
+        js_options->Get(FIXED_ONE_BYTE_STRING(node_isolate, "cwd"));
     String::Utf8Value cwd(cwd_v->IsString() ? cwd_v : Local<Value>());
     if (cwd.length() > 0) {
       options.cwd = *cwd;
     }
 
     // options.env
-    Local<Value> env_v = js_options->Get(String::NewSymbol("envPairs"));
+    Local<Value> env_v =
+        js_options->Get(FIXED_ONE_BYTE_STRING(node_isolate, "envPairs"));
     if (!env_v.IsEmpty() && env_v->IsArray()) {
       Local<Array> env = Local<Array>::Cast(env_v);
       int envc = env->Length();
@@ -206,13 +219,16 @@ class ProcessWrap : public HandleWrap {
     ParseStdioOptions(js_options, &options);
 
     // options.windows_verbatim_arguments
-    if (js_options->Get(String::NewSymbol("windowsVerbatimArguments"))->
-          IsTrue()) {
+    Local<String> windows_verbatim_arguments_key =
+        FIXED_ONE_BYTE_STRING(node_isolate, "windowsVerbatimArguments");
+    if (js_options->Get(windows_verbatim_arguments_key)->IsTrue()) {
       options.flags |= UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS;
     }
 
     // options.detached
-    if (js_options->Get(String::NewSymbol("detached"))->IsTrue()) {
+    Local<String> detached_key =
+        FIXED_ONE_BYTE_STRING(node_isolate, "detached");
+    if (js_options->Get(detached_key)->IsTrue()) {
       options.flags |= UV_PROCESS_DETACHED;
     }
 
@@ -220,7 +236,7 @@ class ProcessWrap : public HandleWrap {
 
     if (err == 0) {
       assert(wrap->process_.data == wrap);
-      wrap->object()->Set(String::New("pid"),
+      wrap->object()->Set(FIXED_ONE_BYTE_STRING(node_isolate, "pid"),
                           Integer::New(wrap->process_.pid, node_isolate));
     }
 
@@ -241,7 +257,8 @@ class ProcessWrap : public HandleWrap {
 
   static void Kill(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
-    UNWRAP(ProcessWrap)
+    ProcessWrap* wrap;
+    NODE_UNWRAP(args.This(), ProcessWrap, wrap);
 
     int signal = args[0]->Int32Value();
     int err = uv_process_kill(&wrap->process_, signal);
@@ -257,11 +274,11 @@ class ProcessWrap : public HandleWrap {
 
     Local<Value> argv[] = {
       Integer::New(exit_status, node_isolate),
-      String::New(signo_string(term_signal))
+      OneByteString(node_isolate, signo_string(term_signal))
     };
 
     if (onexit_sym.IsEmpty()) {
-      onexit_sym = String::New("onexit");
+      onexit_sym = FIXED_ONE_BYTE_STRING(node_isolate, "onexit");
     }
 
     MakeCallback(wrap->object(), onexit_sym, ARRAY_SIZE(argv), argv);
