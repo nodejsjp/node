@@ -1,6 +1,6 @@
 # util
 
-    Stability: 5 - Locked
+    Stability: 4 - API Frozen
 
 <!--
 These functions are in the module `'util'`. Use `require('util')` to
@@ -212,12 +212,12 @@ formatted string:
 後述するように、色はカスタマイズ可能です。
 
 <!--
- - `customInspect` - if `false`, then custom `inspect()` functions defined on the
-   objects being inspected won't be called. Defaults to `true`.
+ - `customInspect` - if `false`, then custom `inspect(depth, opts)` functions
+   defined on the objects being inspected won't be called. Defaults to `true`.
 -->
 
- - `customInspect` - `false` の場合、オブジェクト独自の `inspect()` 関数は
-   呼び出されません。デフォルトは `false` です。
+ - `customInspect` - `false` の場合、オブジェクト独自の `inspect(depth, opts)`
+   関数は呼び出されません。デフォルトは `false` です。
 
 <!--
 Example of inspecting all properties of the `util` object:
@@ -228,6 +228,16 @@ Example of inspecting all properties of the `util` object:
     var util = require('util');
 
     console.log(util.inspect(util, { showHidden: true, depth: null }));
+
+<!--
+Values may supply their own custom `inspect(depth, opts)` functions, when
+called they receive the current depth in the recursive inspection, as well as
+the options object passed to `util.inspect()`.
+-->
+
+値はそれ自身のカスタム `inspect(depth, opts)` 関数を提供するかもしれません。
+それは呼び出される時、現在の再帰的な深さおよび `util.inspect()` に渡された
+`options` オブジェクトを受け取ります。
 
 ### Customizing `util.inspect` colors
 

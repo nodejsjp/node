@@ -1,4 +1,119 @@
-2013.08.22, Version 0.11.8 (Unstable)
+2013.09.05, Version 0.11.13 (Unstable)
+
+Changes since version 0.11.12:
+
+* unix: define _GNU_SOURCE, exposes glibc-isms (Ben Noordhuis)
+
+* windows: check for nonconforming swprintf arguments (Brent Cook)
+
+* build: include internal headers in source list (Brent Cook)
+
+* include: merge uv_tcp_bind and uv_tcp_bind6 (Ben Noordhuis)
+
+* include: merge uv_tcp_connect and uv_tcp_connect6 (Ben Noordhuis)
+
+* include: merge uv_udp_bind and uv_udp_bind6 (Ben Noordhuis)
+
+* include: merge uv_udp_send and uv_udp_send6 (Ben Noordhuis)
+
+
+2013.09.03, Version 0.11.12 (Unstable), 82d01d5f6780d178f5176a01425ec297583c0811
+
+Changes since version 0.11.11:
+
+* test: fix epoll_wait() usage in test-embed.c (Ben Noordhuis)
+
+* include: uv_alloc_cb now takes uv_buf_t* (Ben Noordhuis)
+
+* include: uv_read{2}_cb now takes const uv_buf_t* (Ben Noordhuis)
+
+* include: uv_ip[46]_addr now takes sockaddr_in* (Ben Noordhuis)
+
+* include: uv_tcp_bind{6} now takes sockaddr_in* (Ben Noordhuis)
+
+* include: uv_tcp_connect{6} now takes sockaddr_in* (Ben Noordhuis)
+
+* include: uv_udp_recv_cb now takes const uv_buf_t* (Ben Noordhuis)
+
+* include: uv_udp_bind{6} now takes sockaddr_in* (Ben Noordhuis)
+
+* include: uv_udp_send{6} now takes sockaddr_in* (Ben Noordhuis)
+
+* include: uv_spawn takes const uv_process_options_t* (Ben Noordhuis)
+
+* include: make uv_write{2} const correct (Ben Noordhuis)
+
+* windows: fix flags assignment in uv_fs_readdir() (Ben Noordhuis)
+
+* windows: fix stray comments (Ben Noordhuis)
+
+* windows: remove unused is_path_dir() function (Ben Noordhuis)
+
+
+2013.08.30, Version 0.11.11 (Unstable), ba876d53539ed0427c52039012419cd9374c6f0d
+
+Changes since version 0.11.10:
+
+* unix, windows: add thread-local storage API (Ben Noordhuis)
+
+* linux: don't turn on SO_REUSEPORT socket option (Ben Noordhuis)
+
+* darwin: fix 10.6 build error in fsevents.c (Ben Noordhuis)
+
+* windows: make uv_shutdown() for write-only pipes work (Bert Belder)
+
+* include: update uv_udp_open() / uv_udp_bind() docs (Ben Noordhuis)
+
+* unix: req queue must be empty when destroying loop (Ben Noordhuis)
+
+* unix: move loop functions from core.c to loop.c (Ben Noordhuis)
+
+* darwin: remove CoreFoundation dependency (Ben Noordhuis)
+
+* windows: make autotools build system work with mingw (Keno Fischer)
+
+* windows: fix mingw build (Alex Crichton)
+
+* windows: tweak Makefile.mingw for easier usage (Alex Crichton)
+
+* build: remove _GNU_SOURCE macro definition (Ben Noordhuis)
+
+
+2013.08.25, Version 0.11.10 (Unstable), 742dadcb7154cc7bb89c0c228a223b767a36cf0d
+
+* windows: Re-implement uv_fs_stat. The st_ctime field now contains the change
+  time, not the creation time, like on unix systems. st_dev, st_ino, st_blocks
+  and st_blksize are now also filled out. (Bert Belder)
+
+* linux: fix setsockopt(SO_REUSEPORT) error handling (Ben Noordhuis)
+
+* windows: report uv_process_t exit code correctly (Bert Belder)
+
+* windows: make uv_fs_chmod() report errors correctly (Bert Belder)
+
+* windows: make some more NT apis available for libuv's internal use (Bert
+  Belder)
+
+* windows: squelch some compiler warnings (Bert Belder)
+
+
+2013.08.24, Version 0.11.9 (Unstable), a2d29b5b068cbac93dc16138fb30a74e2669daad
+
+Changes since version 0.11.8:
+
+* fsevents: share FSEventStream between multiple FS watchers, which removes a
+  limit on the maximum number of file watchers that can be created on OS X.
+  (Fedor Indutny)
+
+* process: the `exit_status` parameter for a uv_process_t's exit callback now
+  is an int64_t, and no longer an int. (Bert Belder)
+
+* process: make uv_spawn() return some types of errors immediately on windows,
+  instead of passing the error code the the exit callback. This brings it on
+  par with libuv's behavior on unix. (Bert Belder)
+
+
+2013.08.22, Version 0.11.8 (Unstable), a5260462db80ab0deab6b9e6a8991dd8f5a9a2f8
 
 Changes since version 0.11.7:
 

@@ -232,7 +232,7 @@ class ProcessWrap : public HandleWrap {
       options.flags |= UV_PROCESS_DETACHED;
     }
 
-    int err = uv_spawn(uv_default_loop(), &wrap->process_, options);
+    int err = uv_spawn(uv_default_loop(), &wrap->process_, &options);
 
     if (err == 0) {
       assert(wrap->process_.data == wrap);
@@ -265,7 +265,9 @@ class ProcessWrap : public HandleWrap {
     args.GetReturnValue().Set(err);
   }
 
-  static void OnExit(uv_process_t* handle, int exit_status, int term_signal) {
+  static void OnExit(uv_process_t* handle,
+                     int64_t exit_status,
+                     int term_signal) {
     HandleScope scope(node_isolate);
 
     ProcessWrap* wrap = static_cast<ProcessWrap*>(handle->data);
@@ -273,7 +275,7 @@ class ProcessWrap : public HandleWrap {
     assert(&wrap->process_ == handle);
 
     Local<Value> argv[] = {
-      Integer::New(exit_status, node_isolate),
+      Number::New(node_isolate, static_cast<double>(exit_status)),
       OneByteString(node_isolate, signo_string(term_signal))
     };
 

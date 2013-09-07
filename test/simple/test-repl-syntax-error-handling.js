@@ -19,19 +19,51 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#ifndef SRC_NODE_OS_H_
-#define SRC_NODE_OS_H_
+var common = require('../common');
+var assert = require('assert');
 
-#include "node.h"
-#include "v8.h"
+switch (process.argv[2]) {
+  case 'child':
+    return child();
+  case undefined:
+    return parent();
+  default:
+    throw new Error('wtf');
+}
 
-namespace node {
+function parent() {
+  var spawn = require('child_process').spawn;
+  var child = spawn(process.execPath, [__filename, 'child']);
 
-class OS {
- public:
-  static void Initialize(v8::Handle<v8::Object> target);
-};
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', function(c) {
+    console.error('%j', c);
+    throw new Error('should not get stderr data');
+  });
 
-}  // namespace node
+  child.stdout.setEncoding('utf8');
+  var out = '';
+  child.stdout.on('data', function(c) {
+    out += c;
+  });
+  child.stdout.on('end', function() {
+    assert.equal(out, '10\n');
+    console.log('ok - got expected output');
+  });
 
-#endif  // SRC_NODE_OS_H_
+  child.on('exit', function(c) {
+    assert(!c);
+    console.log('ok - exit success');
+  });
+}
+
+function child() {
+  var vm = require('vm');
+  try {
+    vm.runInThisContext('haf!@##&$!@$*!@', { displayErrors: false });
+  } catch (er) {
+    var caught = true;
+  }
+  assert(caught);
+  vm.runInThisContext('console.log(10)', { displayErrors: false });
+}
