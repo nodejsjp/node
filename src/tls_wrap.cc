@@ -31,9 +31,8 @@
 
 namespace node {
 
-using crypto::SecureContext;
 using crypto::SSLWrap;
-using v8::Array;
+using crypto::SecureContext;
 using v8::Boolean;
 using v8::Exception;
 using v8::Function;
@@ -145,8 +144,8 @@ void TLSCallbacks::InvokeQueued(int status) {
 
 void TLSCallbacks::InitSSL() {
   // Initialize SSL
-  enc_in_ = BIO_new(NodeBIO::GetMethod());
-  enc_out_ = BIO_new(NodeBIO::GetMethod());
+  enc_in_ = NodeBIO::New();
+  enc_out_ = NodeBIO::New();
 
   SSL_set_bio(ssl_, enc_in_, enc_out_);
 
@@ -513,16 +512,17 @@ void TLSCallbacks::AfterWrite(WriteWrap* w) {
 }
 
 
-uv_buf_t TLSCallbacks::DoAlloc(uv_handle_t* handle, size_t suggested_size) {
-  size_t size = suggested_size;
-  char* data = NodeBIO::FromBIO(enc_in_)->PeekWritable(&size);
-  return uv_buf_init(data, size);
+void TLSCallbacks::DoAlloc(uv_handle_t* handle,
+                           size_t suggested_size,
+                           uv_buf_t* buf) {
+  buf->base = NodeBIO::FromBIO(enc_in_)->PeekWritable(&suggested_size);
+  buf->len = suggested_size;
 }
 
 
 void TLSCallbacks::DoRead(uv_stream_t* handle,
                           ssize_t nread,
-                          uv_buf_t buf,
+                          const uv_buf_t* buf,
                           uv_handle_type pending) {
   if (nread < 0)  {
     // Error should be emitted only after all data was read

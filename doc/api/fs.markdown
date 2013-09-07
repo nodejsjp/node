@@ -1350,30 +1350,81 @@ similar to this:
       blocks: 8,
       atime: Mon, 10 Oct 2011 23:24:11 GMT,
       mtime: Mon, 10 Oct 2011 23:24:11 GMT,
-      ctime: Mon, 10 Oct 2011 23:24:11 GMT }
+      ctime: Mon, 10 Oct 2011 23:24:11 GMT,
+      birthtime: Mon, 10 Oct 2011 23:24:11 GMT }
 
 <!--
-Please note that `atime`, `mtime` and `ctime` are instances
-of [Date][MDN-Date] object and to compare the values of
-these objects you should use appropriate methods. For most
-general uses [getTime()][MDN-Date-getTime] will return
-the number of milliseconds elapsed since _1 January 1970
-00:00:00 UTC_ and this integer should be sufficient for
-any comparison, however there additional methods which can
-be used for displaying fuzzy information. More details can
-be found in the [MDN JavaScript Reference][MDN-Date] page.
+Please note that `atime`, `mtime`, `birthtime`, and `ctime` are
+instances of [Date][MDN-Date] object and to compare the values of
+these objects you should use appropriate methods. For most general
+uses [getTime()][MDN-Date-getTime] will return the number of
+milliseconds elapsed since _1 January 1970 00:00:00 UTC_ and this
+integer should be sufficient for any comparison, however there
+additional methods which can be used for displaying fuzzy information.
+More details can be found in the [MDN JavaScript Reference][MDN-Date]
+page.
 -->
 
-`atime`、`mtime`、そして `ctime` は [Date][MDN-Date] オブジェクトであり、
-その値を比較するには適切な方法があるということに注意してください。
-もっとも一般的に使われる [getTime()][MDN-Date-getTime] は _1970 年 1 月
-1 日_からの経過時間をミリ秒単位で返します。
+`atime`、`mtime`、`birthtime`、そして `ctime` は [Date][MDN-Date]
+オブジェクトであり、その値を比較するには適切な方法があるということに
+注意してください。もっとも一般的に使われる [getTime()][MDN-Date-getTime] は
+_1970年 1月 1日_ からの経過時間をミリ秒単位で返します。
 それは比較には十分ですが、曖昧な情報を表示するには別の方法を使ってください。
 より詳しい情報は [MDN JavaScript Reference][MDN-Date] で探すことができます。
 
 [MDN-Date]: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Date
 [MDN-Date-getTime]: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Date/getTime
 
+### Stat Time Values
+
+<!--
+The times in the stat object have the following semantics:
+-->
+
+stat オブジェクト中の時間は以下の意味を持ちます。
+
+<!--
+* `atime` "Access Time" - Time when file data last accessed.  Changed
+  by the `mknod(2)`, `utimes(2)`, and `read(2)` system calls.
+* `mtime` "Modified Time" - Time when file data last modified.
+  Changed by the `mknod(2)`, `utimes(2)`, and `write(2)` system calls.
+* `ctime` "Change Time" - Time when file status was last changed
+  (inode data modification).  Changed by the `chmod(2)`, `chown(2)`,
+  `link(2)`, `mknod(2)`, `rename(2)`, `unlink(2)`, `utimes(2)`,
+  `read(2)`, and `write(2)` system calls.
+* `birthtime` "Birth Time" -  Time of file creation. Set once when the
+  file is created.  On filesystems where birthtime is not available,
+  this field may instead hold either the `ctime` or
+  `1970-01-01T00:00Z` (ie, unix epoch timestamp `0`).  On Darwin and
+  other FreeBSD variants, also set if the `atime` is explicitly set to
+  an earlier value than the current `birthtime` using the `utimes(2)`
+  system call.
+-->
+
+* `atime` "Access Time" - ファイルが最後にアクセスされた時間。
+  `mknod(2)`、`utimes(2)、そして `read(2)` システムコールによって変更されます。
+* `mtime` "Modified TIme" - ファイルが最後に変更された時間。
+  `mknod(2)`、`utimes(2)、そして `write(2)` システムコールによって変更されます。
+* `ctime` "Change Time" - ファイルの属性 (iノードのデータ) が最後に変更された
+  時間
+  `chmod(2)`、`chown(2)`、`link(2)`、`mknod(2)`、`rename(2)`、`unlink(2)`、
+  `utimes(2)`、`read(2)`、そして`write(2)`システムコールによって変更されます。
+* `birthtime` "Birth Time" - ファイルが作成された時間。
+  `birthtime` を利用できないファイルシステムでは、このフィールドは `citme`
+  と同じか、`1970-01-01T00:00Z` (Unix エポック時刻の `0`) を持ちます。
+  Darwin およびその他の FreeBSD 方言は、`utimes(2)` システムコールによって
+  現在の `birthtime` より前の時間を `atime` に明示的に設定した場合も
+  変更されます。
+
+<!--
+Prior to Node v0.12, the `ctime` held the `birthtime` on Windows
+systems.  Note that as of v0.12, `ctime` is not "creation time", and
+on Unix systems, it never was.
+-->
+
+Node v0.12 より前、Windows システムでは `ctime` は `birthtime`
+を保持していました。v0.12 では、Unix システムでは決してそうではなかったように
+`ctime` は "creation time" ではないことに注意してください。
 
 ## fs.createReadStream(path, [options])
 

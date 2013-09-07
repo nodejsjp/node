@@ -706,45 +706,21 @@ without exiting the domain.
 ### domain.dispose()
 
 <!--
-The dispose method destroys a domain, and makes a best effort attempt to
-clean up any and all IO that is associated with the domain.  Streams are
-aborted, ended, closed, and/or destroyed.  Timers are cleared.
-Explicitly bound callbacks are no longer called.  Any error events that
-are raised as a result of this are ignored.
+    Stability: 0 - Deprecated.  Please recover from failed IO actions
+    explicitly via error event handlers set on the domain.
 -->
 
-`dispose()` メソッドはドメインを破棄し、ドメインに関連づけられた全ての
-I/O を可能な限りクリーンナップしようと試みます。
-ストリームはアボートされ、終了され、クローズされ、そして／または破棄されます。
-タイマはクリアされます。明示的に束縛されたコールバックはもう呼び出されません。
-結果として発生するどんなエラーイベントも無視されます。
+    Stability: 0 - Deprecated.  IO 操作の明らかな失敗から回復するには、
+    ドメインに設定したエラーハンドラを通じておこなってください。
 
 <!--
-The intention of calling `dispose` is generally to prevent cascading
-errors when a critical part of the Domain context is found to be in an
-error state.
+Once `dispose` has been called, the domain will no longer be used by callbacks
+bound into the domain via `run`, `bind`, or `intercept`, and a `dispose` event
+is emitted.
 -->
 
-`dispose()` を呼び出す意図は通常、エラー状態の中でドメインコンテキストの
-クリティカルな部分が見つかった場合に、カスケードしたエラーを防ぐことです。
-
-<!--
-Once the domain is disposed the `dispose` event will emit.
--->
-
-ドメインが破棄されると、`'dispose'` イベントが生成されます。
-
-<!--
-Note that IO might still be performed.  However, to the highest degree
-possible, once a domain is disposed, further errors from the emitters in
-that set will be ignored.  So, even if some remaining actions are still
-in flight, Node.js will not communicate further about them.
--->
-
-I/O がまだ行われているかもしれないことに注意してください。
-しかしながら、可能な限り高い視点から見ると、一度ドメインが破棄されれば、
-その集合の中の EventEmitter からのさらなるエラーは無視されます。
-そのため、たとえ残りのアクションがまだ実行中だとしても、
-Node.js はそれらとコミュニケートしません。
+一度 `dispose()` が呼び出されると、`run()`、`bind()`、または `intercept()`
+によってドメインに束縛されたコールバックはもうドメインが使われなくなります。
+そして `'dispose'` イベントが生成されます。
 
 [EventEmitter]: events.html#events_class_events_eventemitter

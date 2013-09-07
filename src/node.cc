@@ -25,7 +25,6 @@
 #include "node_file.h"
 #include "node_http_parser.h"
 #include "node_javascript.h"
-#include "node_script.h"
 #include "node_version.h"
 
 #if defined HAVE_PERFCTR
@@ -160,12 +159,10 @@ static bool print_eval = false;
 static bool force_repl = false;
 static bool trace_deprecation = false;
 static bool throw_deprecation = false;
-static char *eval_string = NULL;
-static int option_end_index = 0;
+static const char* eval_string = NULL;
 static bool use_debug_agent = false;
 static bool debug_wait_connect = false;
 static int debug_port = 5858;
-static int max_stack_size = 0;
 bool using_domains = false;
 
 // used by C++ modules as well
@@ -188,18 +185,6 @@ static struct {
 static struct {
   uint32_t count;
 } domain_flag;
-
-#ifdef OPENSSL_NPN_NEGOTIATED
-static bool use_npn = true;
-#else
-static bool use_npn = false;
-#endif
-
-#ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
-static bool use_sni = true;
-#else
-static bool use_sni = false;
-#endif
 
 // process-relative uptime base, initialized at start-up
 static double prog_start_time;
@@ -2224,10 +2209,20 @@ static Handle<Object> GetFeatures() {
   // TODO(bnoordhuis) ping libuv
   obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "ipv6"), True(node_isolate));
 
-  obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "tls_npn"),
-           Boolean::New(use_npn));
-  obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "tls_sni"),
-           Boolean::New(use_sni));
+#ifdef OPENSSL_NPN_NEGOTIATED
+  Local<Boolean> tls_npn = True(node_isolate);
+#else
+  Local<Boolean> tls_npn = False(node_isolate);
+#endif
+  obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "tls_npn"), tls_npn);
+
+#ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
+  Local<Boolean> tls_sni = True(node_isolate);
+#else
+  Local<Boolean> tls_sni = False(node_isolate);
+#endif
+  obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "tls_sni"), tls_sni);
+
   obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "tls"),
            Boolean::New(get_builtin_module("crypto") != NULL));
 
@@ -2289,7 +2284,10 @@ static void NeedImmediateCallbackSetter(Local<String> property,
   } while (0)
 
 
-Handle<Object> SetupProcessObject(int argc, char *argv[]) {
+Handle<Object> SetupProcessObject(int argc,
+                                  const char* const* argv,
+                                  int exec_argc,
+                                  const char* const* exec_argv) {
   HandleScope scope(node_isolate);
 
   int i, j;
@@ -2378,19 +2376,18 @@ Handle<Object> SetupProcessObject(int argc, char *argv[]) {
                     OneByteString(node_isolate, PLATFORM));
 
   // process.argv
-  Local<Array> arguments = Array::New(argc - option_end_index + 1);
-  arguments->Set(0, String::NewFromUtf8(node_isolate, argv[0]));
-  for (j = 1, i = option_end_index; i < argc; j++, i++) {
-    arguments->Set(j, String::NewFromUtf8(node_isolate, argv[i]));
+  Local<Array> arguments = Array::New(argc);
+  for (int i = 0; i < argc; ++i) {
+    arguments->Set(i, String::NewFromUtf8(node_isolate, argv[i]));
   }
   process->Set(FIXED_ONE_BYTE_STRING(node_isolate, "argv"), arguments);
 
   // process.execArgv
-  Local<Array> exec_argv = Array::New(option_end_index - 1);
-  for (j = 1, i = 0; j < option_end_index; j++, i++) {
-    exec_argv->Set(i, String::NewFromUtf8(node_isolate, argv[j]));
+  Local<Array> exec_arguments = Array::New(exec_argc);
+  for (int i = 0; i < exec_argc; ++i) {
+    exec_arguments->Set(i, String::NewFromUtf8(node_isolate, exec_argv[i]));
   }
-  process->Set(FIXED_ONE_BYTE_STRING(node_isolate, "execArgv"), exec_argv);
+  process->Set(FIXED_ONE_BYTE_STRING(node_isolate, "execArgv"), exec_arguments);
 
   // create process.env
   Local<ObjectTemplate> envTemplate = ObjectTemplate::New();
@@ -2528,6 +2525,22 @@ static void SignalExit(int signal) {
 }
 
 
+// Most of the time, it's best to use `console.error` to write
+// to the process.stderr stream.  However, in some cases, such as
+// when debugging the stream.Writable class or the process.nextTick
+// function, it is useful to bypass JavaScript entirely.
+static void RawDebug(const FunctionCallbackInfo<Value>& args) {
+  HandleScope scope(node_isolate);
+
+  assert(args.Length() == 1 && args[0]->IsString() &&
+         "must be called with a single string");
+
+  String::Utf8Value message(args[0]);
+  fprintf(stderr, "%s\n", *message);
+  fflush(stderr);
+}
+
+
 void Load(Handle<Object> process_l) {
   HandleScope handle_scope(node_isolate);
 
@@ -2583,6 +2596,8 @@ void Load(Handle<Object> process_l) {
   // to attach the debugger fast enought to break on exception
   // thrown during process startup.
   try_catch.SetVerbose(true);
+
+  NODE_SET_METHOD(process_l, "_rawDebug", RawDebug);
 
   Local<Value> arg = process_l;
   f->Call(global, 1, &arg);
@@ -2652,77 +2667,117 @@ static void PrintHelp() {
 }
 
 
-// Parse node command line arguments.
-static void ParseArgs(int argc, char **argv) {
-  int i;
+// Parse command line arguments.
+//
+// argv is modified in place. exec_argv and v8_argv are out arguments that
+// ParseArgs() allocates memory for and stores a pointer to the output
+// vector in.  The caller should free them with delete[].
+//
+// On exit:
+//
+//  * argv contains the arguments with node and V8 options filtered out.
+//  * exec_argv contains both node and V8 options and nothing else.
+//  * v8_argv contains argv[0] plus any V8 options
+static void ParseArgs(int* argc,
+                      const char** argv,
+                      int* exec_argc,
+                      const char*** exec_argv,
+                      int* v8_argc,
+                      const char*** v8_argv) {
+  const unsigned int nargs = static_cast<unsigned int>(*argc);
+  const char** new_exec_argv = new const char*[nargs];
+  const char** new_v8_argv = new const char*[nargs];
+  const char** new_argv = new const char*[nargs];
 
-  // TODO(bnoordhuis) use parse opts
-  for (i = 1; i < argc; i++) {
-    const char *arg = argv[i];
+  for (unsigned int i = 0; i < nargs; ++i) {
+    new_exec_argv[i] = NULL;
+    new_v8_argv[i] = NULL;
+    new_argv[i] = NULL;
+  }
+
+  // exec_argv starts with the first option, the other two start with argv[0].
+  unsigned int new_exec_argc = 0;
+  unsigned int new_v8_argc = 1;
+  unsigned int new_argc = 1;
+  new_v8_argv[0] = argv[0];
+  new_argv[0] = argv[0];
+
+  unsigned int index = 1;
+  while (index < nargs && argv[index][0] == '-') {
+    const char* const arg = argv[index];
+    unsigned int args_consumed = 1;
+
     if (strstr(arg, "--debug") == arg) {
       ParseDebugOpt(arg);
-      argv[i] = const_cast<char*>("");
     } else if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
       printf("%s\n", NODE_VERSION);
       exit(0);
-    } else if (strstr(arg, "--max-stack-size=") == arg) {
-      const char *p = 0;
-      p = 1 + strchr(arg, '=');
-      max_stack_size = atoi(p);
-      argv[i] = const_cast<char*>("");
     } else if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
       PrintHelp();
       exit(0);
-    } else if (strcmp(arg, "--eval") == 0   ||
-               strcmp(arg, "-e") == 0       ||
-               strcmp(arg, "--print") == 0  ||
-               strcmp(arg, "-pe") == 0      ||
+    } else if (strcmp(arg, "--eval") == 0 ||
+               strcmp(arg, "-e") == 0 ||
+               strcmp(arg, "--print") == 0 ||
+               strcmp(arg, "-pe") == 0 ||
                strcmp(arg, "-p") == 0) {
       bool is_eval = strchr(arg, 'e') != NULL;
       bool is_print = strchr(arg, 'p') != NULL;
-
-      // argument to -p and --print is optional
-      if (is_eval == true && i + 1 >= argc) {
-        fprintf(stderr, "Error: %s requires an argument\n", arg);
-        exit(13);
-      }
-
       print_eval = print_eval || is_print;
-      argv[i] = const_cast<char*>("");
-
-      // --eval, -e and -pe always require an argument
+      // --eval, -e and -pe always require an argument.
       if (is_eval == true) {
-        eval_string = argv[++i];
-        continue;
+        args_consumed += 1;
+        eval_string = argv[index + 1];
+        if (eval_string == NULL) {
+          fprintf(stderr, "%s: %s requires an argument\n", argv[0], arg);
+          exit(1);
+        }
+      } else if (argv[index + 1] != NULL && argv[index + 1][0] != '-') {
+        args_consumed += 1;
+        eval_string = argv[index + 1];
+        if (strncmp(eval_string, "\\-", 2) == 0) {
+          // Starts with "\\-": escaped expression, drop the backslash.
+          eval_string += 1;
+        }
       }
-
-      // next arg is the expression to evaluate unless it starts with:
-      //  - a dash, then it's another switch
-      //  - "\\-", then it's an escaped expression, drop the backslash
-      if (argv[i + 1] == NULL) continue;
-      if (argv[i + 1][0] == '-') continue;
-      eval_string = argv[++i];
-      if (strncmp(eval_string, "\\-", 2) == 0) ++eval_string;
     } else if (strcmp(arg, "--interactive") == 0 || strcmp(arg, "-i") == 0) {
       force_repl = true;
-      argv[i] = const_cast<char*>("");
-    } else if (strcmp(arg, "--v8-options") == 0) {
-      argv[i] = const_cast<char*>("--help");
     } else if (strcmp(arg, "--no-deprecation") == 0) {
-      argv[i] = const_cast<char*>("");
       no_deprecation = true;
     } else if (strcmp(arg, "--trace-deprecation") == 0) {
-      argv[i] = const_cast<char*>("");
       trace_deprecation = true;
     } else if (strcmp(arg, "--throw-deprecation") == 0) {
-      argv[i] = const_cast<char*>("");
       throw_deprecation = true;
-    } else if (argv[i][0] != '-') {
-      break;
+    } else if (strcmp(arg, "--v8-options") == 0) {
+      new_v8_argv[new_v8_argc] = "--help";
+      new_v8_argc += 1;
+    } else {
+      // V8 option.  Pass through as-is.
+      new_v8_argv[new_v8_argc] = arg;
+      new_v8_argc += 1;
     }
+
+    memcpy(new_exec_argv + new_exec_argc,
+           argv + index,
+           args_consumed * sizeof(*argv));
+
+    new_exec_argc += args_consumed;
+    index += args_consumed;
   }
 
-  option_end_index = i;
+  // Copy remaining arguments.
+  const unsigned int args_left = nargs - index;
+  memcpy(new_argv + new_argc, argv + index, args_left * sizeof(*argv));
+  new_argc += args_left;
+
+  *exec_argc = new_exec_argc;
+  *exec_argv = new_exec_argv;
+  *v8_argc = new_v8_argc;
+  *v8_argv = new_v8_argv;
+
+  // Copy new_argv over argv and update argc.
+  memcpy(argv, new_argv, new_argc * sizeof(*argv));
+  delete[] new_argv;
+  *argc = static_cast<int>(new_argc);
 }
 
 
@@ -2990,7 +3045,10 @@ static void DebugEnd(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-char** Init(int argc, char *argv[]) {
+void Init(int* argc,
+          const char** argv,
+          int* exec_argc,
+          const char*** exec_argv) {
   // Initialize prog_start_time to get relative uptime.
   uv_uptime(&prog_start_time);
 
@@ -3010,37 +3068,29 @@ char** Init(int argc, char *argv[]) {
   uv_unref(reinterpret_cast<uv_handle_t*>(&emit_debug_enabled_async));
 
   // Parse a few arguments which are specific to Node.
-  node::ParseArgs(argc, argv);
-  // Parse the rest of the args (up to the 'option_end_index' (where '--' was
-  // in the command line))
-  int v8argc = option_end_index;
-  char **v8argv = argv;
+  int v8_argc;
+  const char** v8_argv;
+  ParseArgs(argc, argv, exec_argc, exec_argv, &v8_argc, &v8_argv);
+
+  // The const_cast doesn't violate conceptual const-ness.  V8 doesn't modify
+  // the argv array or the elements it points to.
+  V8::SetFlagsFromCommandLine(&v8_argc, const_cast<char**>(v8_argv), true);
+
+  // Anything that's still in v8_argv is not a V8 or a node option.
+  for (int i = 1; i < v8_argc; i++) {
+    fprintf(stderr, "%s: bad option: %s\n", argv[0], v8_argv[i]);
+  }
+  delete[] v8_argv;
+  v8_argv = NULL;
+
+  if (v8_argc > 1) {
+    exit(1);
+  }
 
   if (debug_wait_connect) {
-    // v8argv is a copy of argv up to the script file argument +2 if --debug-brk
-    // to expose the v8 debugger js object so that node.js can set
-    // a breakpoint on the first line of the startup script
-    v8argc += 2;
-    v8argv = new char*[v8argc];
-    memcpy(v8argv, argv, sizeof(*argv) * option_end_index);
-    v8argv[option_end_index] = const_cast<char*>("--expose_debug_as");
-    v8argv[option_end_index + 1] = const_cast<char*>("v8debug");
+    const char expose_debug_as[] = "--expose_debug_as=v8debug";
+    V8::SetFlagsFromString(expose_debug_as, sizeof(expose_debug_as) - 1);
   }
-
-  // For the normal stack which moves from high to low addresses when frames
-  // are pushed, we can compute the limit as stack_size bytes below the
-  // the address of a stack variable (e.g. &stack_var) as an approximation
-  // of the start of the stack (we're assuming that we haven't pushed a lot
-  // of frames yet).
-  if (max_stack_size != 0) {
-    uint32_t stack_var;
-    ResourceConstraints constraints;
-
-    uint32_t *stack_limit = &stack_var - (max_stack_size / sizeof(uint32_t));
-    constraints.set_stack_limit(stack_limit);
-    SetResourceConstraints(&constraints);  // Must be done before V8::Initialize
-  }
-  V8::SetFlagsFromCommandLine(&v8argc, v8argv, false);
 
   const char typed_arrays_flag[] = "--harmony_typed_arrays";
   V8::SetFlagsFromString(typed_arrays_flag, sizeof(typed_arrays_flag) - 1);
@@ -3077,8 +3127,6 @@ char** Init(int argc, char *argv[]) {
     uv_unref(reinterpret_cast<uv_handle_t*>(&signal_watcher));
 #endif  // __POSIX__
   }
-
-  return argv;
 }
 
 
@@ -3124,50 +3172,18 @@ void EmitExit(v8::Handle<v8::Object> process_l) {
   MakeCallback(process_l, "emit", ARRAY_SIZE(args), args);
 }
 
-static char **copy_argv(int argc, char **argv) {
-  size_t strlen_sum;
-  char **argv_copy;
-  char *argv_data;
-  size_t len;
-  int i;
 
-  strlen_sum = 0;
-  for (i = 0; i < argc; i++) {
-    strlen_sum += strlen(argv[i]) + 1;
-  }
+int Start(int argc, char** argv) {
+  assert(argc > 0);
 
-  argv_copy = static_cast<char**>(
-      malloc(sizeof(*argv_copy) * (argc + 1) + strlen_sum));
-  if (!argv_copy) {
-    return NULL;
-  }
-
-  argv_data = reinterpret_cast<char*>(argv_copy) +
-              sizeof(*argv_copy) * (argc + 1);
-
-  for (i = 0; i < argc; i++) {
-    argv_copy[i] = argv_data;
-    len = strlen(argv[i]) + 1;
-    memcpy(argv_data, argv[i], len);
-    argv_data += len;
-  }
-
-  argv_copy[argc] = NULL;
-
-  return argv_copy;
-}
-
-int Start(int argc, char *argv[]) {
-  // Hack aroung with the argv pointer. Used for process.title = "blah".
+  // Hack around with the argv pointer. Used for process.title = "blah".
   argv = uv_setup_args(argc, argv);
 
-  // Logic to duplicate argv as Init() modifies arguments
-  // that are passed into it.
-  char **argv_copy = copy_argv(argc, argv);
-
-  // This needs to run *before* V8::Initialize()
-  // Use copy here as to not modify the original argv:
-  Init(argc, argv_copy);
+  // This needs to run *before* V8::Initialize().  The const_cast is not
+  // optional, in case you're wondering.
+  int exec_argc;
+  const char** exec_argv;
+  Init(&argc, const_cast<const char**>(argv), &exec_argc, &exec_argv);
 
   V8::Initialize();
   {
@@ -3181,7 +3197,8 @@ int Start(int argc, char *argv[]) {
     binding_cache.Reset(node_isolate, Object::New());
 
     // Use original argv, as we're just copying values out of it.
-    Local<Object> process_l = SetupProcessObject(argc, argv);
+    Local<Object> process_l =
+        SetupProcessObject(argc, argv, exec_argc, exec_argv);
 
     // Create all the objects, load modules, do everything.
     // so your next reading stop should be node::Load()!
@@ -3203,8 +3220,8 @@ int Start(int argc, char *argv[]) {
   V8::Dispose();
 #endif  // NDEBUG
 
-  // Clean up the copy:
-  free(argv_copy);
+  delete[] exec_argv;
+  exec_argv = NULL;
 
   return 0;
 }

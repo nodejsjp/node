@@ -51,7 +51,7 @@ namespace crypto {
 
 extern int VerifyCallback(int preverify_ok, X509_STORE_CTX* ctx);
 
-static X509_STORE* root_cert_store;
+extern X509_STORE* root_cert_store;
 
 // Forward declaration
 class Connection;
@@ -60,9 +60,8 @@ class SecureContext : ObjectWrap {
  public:
   static void Initialize(v8::Handle<v8::Object> target);
 
-  SSL_CTX *ctx_;
-  // TODO(indutny): ca_store_ should probably be removed, it's not used anywhere
-  X509_STORE *ca_store_;
+  SSL_CTX* ctx_;
+  X509_STORE* ca_store_;
 
   static const int kMaxSessionSize = 10 * 1024;
 

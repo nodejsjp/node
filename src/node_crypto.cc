@@ -118,6 +118,8 @@ static Persistent<FunctionTemplate> secure_context_constructor;
 
 static uv_rwlock_t* locks;
 
+X509_STORE* root_cert_store;
+
 // Just to generate static methods
 template class SSLWrap<TLSCallbacks>;
 template void SSLWrap<TLSCallbacks>::AddMethods(Handle<FunctionTemplate> t);
@@ -319,7 +321,7 @@ void SecureContext::Init(const FunctionCallbackInfo<Value>& args) {
 // Takes a string or buffer and loads it into a BIO.
 // Caller responsible for BIO_free_all-ing the returned object.
 static BIO* LoadBIO(Handle<Value> v) {
-  BIO *bio = BIO_new(NodeBIO::GetMethod());
+  BIO* bio = NodeBIO::New();
   if (!bio) return NULL;
 
   HandleScope scope(node_isolate);
@@ -562,7 +564,7 @@ void SecureContext::AddRootCerts(const FunctionCallbackInfo<Value>& args) {
     root_cert_store = X509_STORE_new();
 
     for (int i = 0; root_certs[i]; i++) {
-      BIO *bp = BIO_new(NodeBIO::GetMethod());
+      BIO* bp = NodeBIO::New();
 
       if (!BIO_write(bp, root_certs[i], strlen(root_certs[i]))) {
         BIO_free_all(bp);
@@ -1404,7 +1406,7 @@ int Connection::HandleBIOError(BIO *bio, const char* func, int rv) {
     return 0;
 
   } else {
-    static char ssl_error_buf[512];
+    char ssl_error_buf[512];
     ERR_error_string_n(rv, ssl_error_buf, sizeof(ssl_error_buf));
 
     HandleScope scope(node_isolate);
@@ -1658,8 +1660,8 @@ void Connection::New(const FunctionCallbackInfo<Value>& args) {
   conn->Wrap(args.This());
 
   conn->ssl_ = SSL_new(sc->ctx_);
-  conn->bio_read_ = BIO_new(NodeBIO::GetMethod());
-  conn->bio_write_ = BIO_new(NodeBIO::GetMethod());
+  conn->bio_read_ = NodeBIO::New();
+  conn->bio_write_ = NodeBIO::New();
 
   SSL_set_app_data(conn->ssl_, conn);
 
@@ -3370,6 +3372,7 @@ void PBKDF2(const FunctionCallbackInfo<Value>& args) {
   if (args[4]->IsFunction()) {
     Local<Object> obj = Object::New();
     obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "ondone"), args[4]);
+    obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "domain"), GetDomain());
     req->obj.Reset(node_isolate, obj);
     uv_queue_work(uv_default_loop(),
                   &req->work_req,
@@ -3493,6 +3496,7 @@ void RandomBytes(const FunctionCallbackInfo<Value>& args) {
   if (args[1]->IsFunction()) {
     Local<Object> obj = Object::New();
     obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "ondone"), args[1]);
+    obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "domain"), GetDomain());
     req->obj_.Reset(node_isolate, obj);
 
     uv_queue_work(uv_default_loop(),

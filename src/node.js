@@ -55,6 +55,8 @@
 
     startup.processChannel();
 
+    startup.processRawDebug();
+
     startup.resolveArgv0();
 
     // There are various modes that Node can run in. The most common two
@@ -216,60 +218,15 @@
   };
 
   startup.processFatal = function() {
-    // call into the active domain, or emit uncaughtException,
-    // and exit if there are no listeners.
     process._fatalException = function(er) {
       var caught = false;
-      if (process.domain) {
-        var domain = process.domain;
-        var domainModule = NativeModule.require('domain');
-        var domainStack = domainModule._stack;
 
-        // ignore errors on disposed domains.
-        //
-        // XXX This is a bit stupid.  We should probably get rid of
-        // domain.dispose() altogether.  It's almost always a terrible
-        // idea.  --isaacs
-        if (domain._disposed)
-          return true;
-
-        er.domain = domain;
-        er.domainThrown = true;
-        // wrap this in a try/catch so we don't get infinite throwing
-        try {
-          // One of three things will happen here.
-          //
-          // 1. There is a handler, caught = true
-          // 2. There is no handler, caught = false
-          // 3. It throws, caught = false
-          //
-          // If caught is false after this, then there's no need to exit()
-          // the domain, because we're going to crash the process anyway.
-          caught = domain.emit('error', er);
-
-          // Exit all domains on the stack.  Uncaught exceptions end the
-          // current tick and no domains should be left on the stack
-          // between ticks.
-          var domainModule = NativeModule.require('domain');
-          domainStack.length = 0;
-          domainModule.active = process.domain = null;
-        } catch (er2) {
-          // The domain error handler threw!  oh no!
-          // See if another domain can catch THIS error,
-          // or else crash on the original one.
-          // If the user already exited it, then don't double-exit.
-          if (domain === domainModule.active)
-            domainStack.pop();
-          if (domainStack.length) {
-            var parentDomain = domainStack[domainStack.length - 1];
-            process.domain = domainModule.active = parentDomain;
-            caught = process._fatalException(er2);
-          } else
-            caught = false;
-        }
+      if (process.domain && process.domain._errorHandler) {
+        caught = process.domain._errorHandler(er);
       } else {
         caught = process.emit('uncaughtException', er);
       }
+
       // if someone handled it, then great.  otherwise, die in C++ land
       // since that means that we'll exit the process, emit the 'exit' event
       if (!caught) {
@@ -281,19 +238,18 @@
         } catch (er) {
           // nothing to be done about it at this point.
         }
-      }
+
       // if we handled an error, then make sure any ticks get processed
-      if (caught)
+      } else {
         setImmediate(process._tickCallback);
+      }
+
       return caught;
     };
   };
 
   var assert;
   startup.processAssert = function() {
-    // Note that calls to assert() are pre-processed out by JS2C for the
-    // normal build of node. They persist only in the node_g build.
-    // Similarly for debug().
     assert = process.assert = function(x, msg) {
       if (!x) throw new Error(msg || 'assertion error');
     };
@@ -425,8 +381,8 @@
                'global.__dirname = __dirname;\n' +
                'global.require = require;\n' +
                'return require("vm").runInThisContext(' +
-               JSON.stringify(body) + ', ' +
-               JSON.stringify(name) + ', 0, true);\n';
+               JSON.stringify(body) + ', { filename: ' +
+               JSON.stringify(name) + ' });\n';
     }
     var result = module._compile(script, name + '-wrapper');
     if (process._print_eval) console.log(result);
@@ -695,7 +651,17 @@
       cp._forkChild(fd);
       assert(process.send);
     }
-  }
+  };
+
+
+  startup.processRawDebug = function() {
+    var format = NativeModule.require('util').format;
+    var rawDebug = process._rawDebug;
+    process._rawDebug = function() {
+      rawDebug(format.apply(null, arguments));
+    };
+  };
+
 
   startup.resolveArgv0 = function() {
     var cwd = process.cwd();
@@ -717,8 +683,11 @@
   // core modules found in lib/*.js. All core modules are compiled into the
   // node binary, so they can be loaded faster.
 
-  var Script = process.binding('evals').NodeScript;
-  var runInThisContext = Script.runInThisContext;
+  var ContextifyScript = process.binding('contextify').ContextifyScript;
+  function runInThisContext(code, options) {
+    var script = new ContextifyScript(code, options);
+    return script.runInThisContext();
+  }
 
   function NativeModule(id) {
     this.filename = id + '.js';
@@ -779,7 +748,7 @@
     var source = NativeModule.getSource(this.id);
     source = NativeModule.wrap(source);
 
-    var fn = runInThisContext(source, this.filename, 0, true);
+    var fn = runInThisContext(source, { filename: this.filename });
     fn(this.exports, NativeModule.require, this, this.filename);
 
     this.loaded = true;
