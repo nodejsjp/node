@@ -2524,6 +2524,7 @@ modify them.
 [`_read(size)`]: #stream_readable_read_size_1
 [`_read()`]: #stream_readable_read_size_1
 [_read]: #stream_readable_read_size_1
+[`writable.write(chunk)`]: #stream_writable_write_chunk_encoding_callback
 [`write(chunk, encoding, callback)`]: #stream_writable_write_chunk_encoding_callback
 [`write()`]: #stream_writable_write_chunk_encoding_callback
 [`stream.write(chunk)`]: #stream_writable_write_chunk_encoding_callback
@@ -2562,6 +2563,7 @@ modify them.
 [`_read(size)`]: #stream_readable_read_size_1
 [`_read()`]: #stream_readable_read_size_1
 [_read]: #stream_readable_read_size_1
+[`writable.write(chunk)`]: #stream_writable_write_chunk_encoding_callback
 [`write(chunk, encoding, callback)`]: #stream_writable_write_chunk_encoding_callback
 [`write()`]: #stream_writable_write_chunk_encoding_callback
 [`stream.write(chunk)`]: #stream_writable_write_chunk_encoding_callback
