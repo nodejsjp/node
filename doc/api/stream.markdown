@@ -456,6 +456,7 @@ emission of a [`'data'` event][].
 
 <!--
 * `encoding` {String} The encoding to use.
+* Return: `this`
 -->
 
 * `encoding` {String} 使用するエンコーディング。
@@ -499,6 +500,8 @@ readable.on('data', function(chunk) {
 
 #### readable.resume()
 
+* Return: `this`
+
 <!--
 This method will cause the readable stream to resume emitting `data`
 events.
@@ -528,6 +531,8 @@ readable.on('end', function(chunk) {
 ```
 
 #### readable.pause()
+
+* Return: `this`
 
 <!--
 This method will cause a stream in flowing mode to stop emitting
@@ -1476,7 +1481,7 @@ SimpleProtocol.prototype._read = function(n) {
 * `options` {Object}
   * `highWaterMark` {Number} The maximum number of bytes to store in
     the internal buffer before ceasing to read from the underlying
-    resource.  Default=16kb
+    resource.  Default=16kb, or 16 for `objectMode` streams
   * `encoding` {String} If specified, then buffers will be decoded to
     strings using the specified encoding.  Default=null
   * `objectMode` {Boolean} Whether this stream should behave
@@ -1486,7 +1491,8 @@ SimpleProtocol.prototype._read = function(n) {
 
 * `options` {Object} (任意)
   * `highWaterMark` {Number} 下層のリソースから読み込むのを中断するまで
-    内部バッファに貯めておくバイト数の最大値。デフォルトは 16kb。
+    内部バッファに貯めておくバイト数の最大値。
+    デフォルトは 16kb、あるいは `objectMode` では 16。
   * `encoding` {String} 指定されるとバッファは指定のエンコーディングで
     デコードされます。デフォルトは `null`。
   * `objectMode` {Boolean} このストリームがオブジェクトストリームとして
@@ -1701,14 +1707,14 @@ how to implement Writable streams in your programs.
 <!--
 * `options` {Object}
   * `highWaterMark` {Number} Buffer level when [`write()`][] starts
-    returning false. Default=16kb
+    returning false. Default=16kb, or 16 for `objectMode` streams
   * `decodeStrings` {Boolean} Whether or not to decode strings into
     Buffers before passing them to [`_write()`][].  Default=true
 -->
 
 * `options` {Object} (任意)
   * `highWaterMark` {Number} [`write()`][] が `false` を返し始める
-    バッファレベル。デフォルトは 16kb。
+    バッファレベル。デフォルトは 16kb、あるいは `objectMode` では 16。
   * `decodeStrings` {Boolean} 文字列が [`_write()`][] に渡される前に
     バッファにデコードするかどうか。デフォルトは `true`。
 

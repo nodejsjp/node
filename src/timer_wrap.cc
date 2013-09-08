@@ -34,7 +34,6 @@ using v8::HandleScope;
 using v8::Integer;
 using v8::Local;
 using v8::Object;
-using v8::String;
 using v8::Value;
 
 const uint32_t kOnTimeout = 0;
@@ -145,6 +144,7 @@ class TimerWrap : public HandleWrap {
 
   static void Now(const FunctionCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
+    uv_update_time(uv_default_loop());
     double now = static_cast<double>(uv_now(uv_default_loop()));
     args.GetReturnValue().Set(now);
   }

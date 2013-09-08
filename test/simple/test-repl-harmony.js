@@ -21,42 +21,27 @@
 
 var common = require('../common');
 var assert = require('assert');
-var Script = require('vm').Script;
 
-common.globalCheck = false;
+var spawn = require('child_process').spawn;
+var args = ['--harmony', '--use-strict', '-i'];
+var child = spawn(process.execPath, args);
 
-common.debug('run a string');
-var result = Script.runInNewContext('\'passed\';');
-assert.equal('passed', result);
+var input = 'function x(){const y=1;y=2}\n';
+var expectOut = /^> SyntaxError: Assignment to constant variable.\n/;
 
-common.debug('thrown error');
-assert.throws(function() {
-  Script.runInNewContext('throw new Error(\'test\');');
+child.stderr.setEncoding('utf8');
+child.stderr.on('data', function(c) {
+  throw new Error('child.stderr be silent');
 });
 
-hello = 5;
-Script.runInNewContext('hello = 2');
-assert.equal(5, hello);
+child.stdout.setEncoding('utf8');
+var out = '';
+child.stdout.on('data', function(c) {
+  out += c;
+});
+child.stdout.on('end', function() {
+  assert(expectOut.test(out));
+  console.log('ok');
+});
 
-
-common.debug('pass values in and out');
-code = 'foo = 1;' +
-       'bar = 2;' +
-       'if (baz !== 3) throw new Error(\'test fail\');';
-foo = 2;
-obj = { foo: 0, baz: 3 };
-var baz = Script.runInNewContext(code, obj);
-assert.equal(1, obj.foo);
-assert.equal(2, obj.bar);
-assert.equal(2, foo);
-
-common.debug('call a function by reference');
-function changeFoo() { foo = 100 }
-Script.runInNewContext('f()', { f: changeFoo });
-assert.equal(foo, 100);
-
-common.debug('modify an object by reference');
-var f = { a: 1 };
-Script.runInNewContext('f.a = 2', { f: f });
-assert.equal(f.a, 2);
-
+child.stdin.end(input);

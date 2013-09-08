@@ -21,36 +21,50 @@
 
 var common = require('../common');
 var assert = require('assert');
-var vm = require('vm');
 
-// Test 1: Timeout of 100ms executing endless loop
-assert.throws(function() {
-  vm.runInThisContext('while(true) {}', '', 100);
-});
+switch (process.argv[2]) {
+  case 'child':
+    return child();
+  case undefined:
+    return parent();
+  default:
+    throw new Error('wtf? ' + process.argv[2]);
+}
 
-// Test 2: Timeout must be >= 0ms
-assert.throws(function() {
-  vm.runInThisContext('', '', -1);
-});
+function parent() {
+  var spawn = require('child_process').spawn;
+  var child = spawn(process.execPath, [__filename, 'child']);
 
-// Test 3: Timeout of 0ms
-vm.runInThisContext('', '', 0);
+  var output = '';
 
-// Test 4: Timeout of 1000ms, script finishes first
-vm.runInThisContext('', '', 1000);
+  child.stderr.on('data', function(c) {
+    output += c;
+  });
 
-// Test 5: Nested vm timeouts, inner timeout propagates out
-try {
-  var context = {
-    log: console.log,
-    runInVM: function(timeout) {
-      vm.runInNewContext('while(true) {}', context, '', timeout);
-    }
+  child.stderr.setEncoding('utf8');
+
+  child.stderr.on('end', function() {
+    assert.equal(output, 'I can still debug!\n');
+    console.log('ok - got expected message');
+  });
+
+  child.on('exit', function(c) {
+    assert(!c);
+    console.log('ok - child exited nicely');
+  });
+}
+
+function child() {
+  // even when all hope is lost...
+
+  process.nextTick = function() {
+    throw new Error('No ticking!');
   };
-  vm.runInNewContext('runInVM(10)', context, '', 100);
-  throw new Error('Test 5 failed');
-} catch (e) {
-  if (-1 === e.message.search(/Script execution timed out./)) {
-    throw e;
-  }
+
+  var stderr = process.stderr;
+  stderr.write = function() {
+    throw new Error('No writing to stderr!');
+  };
+
+  process._rawDebug('I can still %s!', 'debug');
 }

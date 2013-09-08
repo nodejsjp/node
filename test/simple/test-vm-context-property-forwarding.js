@@ -21,20 +21,13 @@
 
 var common = require('../common');
 var assert = require('assert');
+var vm = require('vm');
 
-var Script = require('vm').Script;
+var sandbox = { x: 3 };
 
-common.debug('run in a new empty context');
-var context = Script.createContext();
-var result = Script.runInContext('"passed";', context);
-assert.equal('passed', result);
+var ctx = vm.createContext(sandbox);
 
-common.debug('create a new pre-populated context');
-context = Script.createContext({'foo': 'bar', 'thing': 'lala'});
-assert.equal('bar', context.foo);
-assert.equal('lala', context.thing);
-
-common.debug('test updating context');
-result = Script.runInContext('var foo = 3;', context);
-assert.equal(3, context.foo);
-assert.equal('lala', context.thing);
+assert.strictEqual(vm.runInContext('x;', ctx), 3);
+vm.runInContext('y = 4;', ctx);
+assert.strictEqual(sandbox.y, 4);
+assert.strictEqual(ctx.y, 4);
