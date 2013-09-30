@@ -115,15 +115,15 @@ You have been warned.
 ## Signal Events
 
 <!--type=event-->
-<!--name=SIGINT, SIGUSR1, etc.-->
+<!--name=SIGINT, SIGHUP, etc.-->
 
 <!--
 Emitted when the processes receives a signal. See sigaction(2) for a list of
-standard POSIX signal names such as SIGINT, SIGUSR1, etc.
+standard POSIX signal names such as SIGINT, SIGHUP, etc.
 -->
 
 プロセスがシグナルを受信した場合に生成されます。
-SIGINT、SIGUSR1、その他の POSIX 標準シグナル名の一覧について は sigaction(2) を参照してください。
+SIGINT、SIGHUP、その他の POSIX 標準シグナル名の一覧について は sigaction(2) を参照してください。
 
 <!--
 Example of listening for `SIGINT`:
@@ -145,6 +145,14 @@ programs.
 
 多くの端末プログラムで簡単に `SIGINT` を送る方法は `Control-C` を押すことです。
 
+<!--
+Note: SIGUSR1 is reserved by node.js to kickstart the debugger.  It's possible
+to install a listener but that won't stop the debugger from starting.
+-->
+
+注意: SIGUSR1はnode.jsによって受信され、デバッガを起動します。
+SIGUSR1のリスナを登録することは可能ですが、
+デバッガの開始を止めることはできません。
 
 ## process.stdout
 
@@ -684,13 +692,13 @@ JavaScript で表現したオブジェクトを保持します。
 <!--
 Send a signal to a process. `pid` is the process id and `signal` is the
 string describing the signal to send.  Signal names are strings like
-'SIGINT' or 'SIGUSR1'.  If omitted, the signal will be 'SIGTERM'.
+'SIGINT' or 'SIGHUP'.  If omitted, the signal will be 'SIGTERM'.
 See kill(2) for more information.
 -->
 
 プロセスにシグナルを送ります。
 `pid` はプロセス ID で `signal` は送信されるシグナルを文字列で記述したものです。
-シグナルの名前は 'SIGINT' や 'SIGUSR1' のような文字列です。
+シグナルの名前は 'SIGINT' や 'SIGHUP' のような文字列です。
 省略すると、シグナルは 'SIGTERM' となります。
 詳細は kill(2) を参照してください。
 
@@ -721,6 +729,13 @@ Example of sending a signal to yourself:
 
     process.kill(process.pid, 'SIGHUP');
 
+<!--
+Note: SIGUSR1 is reserved by node.js.  It can be used to kickstart the
+debugger.
+-->
+
+注意: SIGUSR1はnode.jsによって予約されています。
+それはデバッガを開始するために使われます。
 
 ## process.pid
 
