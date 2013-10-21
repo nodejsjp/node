@@ -69,6 +69,14 @@ namespace crypto {
 
 using namespace v8;
 
+// Forcibly clear OpenSSL's error stack on return. This stops stale errors
+// from popping up later in the lifecycle of crypto operations where they
+// would cause spurious failures. It's a rather blunt method, though.
+// ERR_clear_error() isn't necessarily cheap either.
+struct ClearErrorOnReturn {
+  ~ClearErrorOnReturn() { ERR_clear_error(); }
+};
+
 static Persistent<String> errno_symbol;
 static Persistent<String> syscall_symbol;
 static Persistent<String> subject_symbol;
@@ -640,6 +648,7 @@ Handle<Value> SecureContext::LoadPKCS12(const Arguments& args) {
 
       X509_STORE_add_cert(sc->ca_store_, x509);
       SSL_CTX_add_client_CA(sc->ctx_, x509);
+      X509_free(x509);
     }
 
     EVP_PKEY_free(pkey);
@@ -702,6 +711,9 @@ int Connection::HandleBIOError(BIO *bio, const char* func, int rv) {
 
 
 int Connection::HandleSSLError(const char* func, int rv) {
+  ClearErrorOnReturn clear_error_on_return;
+  (void) &clear_error_on_return;  // Silence unused variable warning.
+
   if (rv >= 0) return rv;
 
   int err = SSL_get_error(ssl_, rv);
@@ -3404,6 +3416,8 @@ class Verify : public ObjectWrap {
 
   int VerifyFinal(char* key_pem, int key_pemLen, unsigned char* sig, int siglen) {
     if (!initialised_) return 0;
+
+    ClearErrorOnReturn clear_error_on_return;
 
     EVP_PKEY* pkey = NULL;
     BIO *bp = NULL;
