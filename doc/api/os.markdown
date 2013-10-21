@@ -86,6 +86,26 @@ Returns an array containing the 1, 5, and 15 minute load averages.
 
 1 分、5 分、15 分間のロードアベレージを含んだ配列を返します。
 
+<!--
+The load average is a measure of system activity, calculated by the operating
+system and expressed as a fractional number.  As a rule of thumb, the load
+average should ideally be less than the number of logical CPUs in the system.
+-->
+
+ロードアベレージはオペレーティングシステムによって測定されて小数で表される
+システム活動の測定値です。経験則として、ロードアベレージは理想的には
+システムの論理 CPU 数よりも小さくあるべきです。
+
+<!--
+The load average is a very UNIX-y concept; there is no real equivalent on
+Windows platforms.  That is why this function always returns `[0, 0, 0]` on
+Windows.
+-->
+
+ロードアベレージはとても Unix 的な概念です; それと完全に対応するものは
+Windows にはありません。そのため、Windows ではこの関数は常に `[0, 0, 0]`
+を返します。
+
 ## os.totalmem()
 
 <!--

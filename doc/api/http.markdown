@@ -114,12 +114,12 @@ per connection (in the case of keep-alive connections).
 (Keep Alive なコネクションの場合)。
 
 <!--
- `request` is an instance of `http.IncomingMessage` and `response` is
- an instance of `http.ServerResponse`
+ `request` is an instance of [http.IncomingMessage][] and `response` is
+an instance of [http.ServerResponse][].
 -->
 
-`request` は `http.IncomingMessage` のインスタンス、
-`response` は `http.ServerResponse` のインスタンスです。
+`request` は [http.IncomingMessage][] のインスタンス、
+`response` は [http.ServerResponse][] のインスタンスです。
 
 ### Event: 'connection'
 
@@ -164,14 +164,14 @@ httpの Expect: 100-continue リクエストを受信する度に生成されま
 このイベントが監視されない場合、サーバは自動的に 100 Continue を応答します。
 
 <!--
-Handling this event involves calling `response.writeContinue` if the client
+Handling this event involves calling [response.writeContinue()][] if the client
 should continue to send the request body, or generating an appropriate HTTP
 response (e.g., 400 Bad Request) if the client should not continue to send the
 request body.
 -->
 
 このイベントを処理する場合、クライアントがリクエストボディを送信し続けるべきなら
-`response.writeContinue` を呼び出す必要があります。
+[response.writeContinue()][] を呼び出す必要があります。
 あるいは、クライアントがリクエストボディを送信し続けるべきでないなら、
 適切な HTTP レスポンス (例えば 400 Bad Request) を生成します。
 
@@ -475,10 +475,10 @@ The response implements the [Writable Stream][] interface. This is an
 
 <!--
 Indicates that the underlying connection was terminated before
-`response.end()` was called or able to flush.
+[response.end()][] was called or able to flush.
 -->
 
-`response.end()` が呼び出されたりフラッシュされる前に、
+[response.end()][] が呼び出されたりフラッシュされる前に、
 下層の接続が切断されたことを示します。
 
 ### response.writeContinue()
@@ -519,16 +519,18 @@ Example:
 
 <!--
 This method must only be called once on a message and it must
-be called before `response.end()` is called.
+be called before [response.end()][] is called.
 
-If you call `response.write()` or `response.end()` before calling this, the
+If you call [response.write()][] or [response.end()][] before calling this, the
 implicit/mutable headers will be calculated and call this function for you.
 -->
 
 このメソッドはメッセージごとに 1 回だけ呼び出されなくてはならず、
-`response.end()` の前に呼び出されなければなりません。
+[response.end()][] の前に呼び出されなければなりません。
 
-もしこのメソッドが呼び出される前に `response.write()` または `response.end()` が呼ばれると、暗黙的で可変のヘッダが算出されてこの関数が呼び出されます。
+もしこのメソッドが呼び出される前に [response.write()][] または
+[response.end()][] が呼ばれると、暗黙的に可変のヘッダが算出されて、
+この関数が呼び出されます。
 
 <!--
 Note: that Content-Length is given in bytes not characters. The above example
@@ -576,12 +578,14 @@ sockets.
 ### response.statusCode
 
 <!--
-When using implicit headers (not calling `response.writeHead()` explicitly), this property
-controls the status code that will be sent to the client when the headers get
-flushed.
+When using implicit headers (not calling [response.writeHead()][] explicitly),
+this property controls the status code that will be sent to the client when
+the headers get flushed.
 -->
 
-(`response.writeHead()` が明示的に呼ばれないために) 暗黙的なヘッダが使われる場合、このプロパティはヘッダがフラッシュされる時にクライアントへ送信されるステータスコードを制御します。
+([response.writeHead()][] が明示的に呼ばれないために) 暗黙的なヘッダが
+使われる場合、このプロパティはヘッダがフラッシュされる時に
+クライアントへ送信されるステータスコードを制御します。
 
 <!--
 Example:
@@ -694,14 +698,14 @@ Example:
 ### response.write(chunk, [encoding])
 
 <!--
-If this method is called and `response.writeHead()` has not been called, it will
-switch to implicit header mode and flush the implicit headers.
+If this method is called and [response.writeHead()][] has not been called,
+it will switch to implicit header mode and flush the implicit headers.
 
 This sends a chunk of the response body. This method may
 be called multiple times to provide successive parts of the body.
 -->
 
-このメソッドが呼び出され、`response.writeHead()` が呼び出されなければ、
+このメソッドが呼び出され、[response.writeHead()][] が呼び出されなければ、
 暗黙的ヘッダモードに切り替わり、暗黙的ヘッダはフラッシュされます。
 
 これはレスポンスボディのチャンクを送信します。
@@ -873,12 +877,12 @@ Options:
      Connection:close の場合のデフォルトです。
 
 <!--
-`http.request()` returns an instance of the `http.ClientRequest`
+`http.request()` returns an instance of the [http.ClientRequest][]
 class. The `ClientRequest` instance is a writable stream. If one needs to
 upload a file with a POST request, then write to the `ClientRequest` object.
 -->
 
-`http.request()` は `http.ClientRequest` クラスのインスタンスを返します。
+`http.request()` は [http.ClientRequest][] クラスのインスタンスを返します。
 `http.ClientRequest` のインスタンスは書き込み可能なストリームです。
 もし POST リクエストでファイルのアップロードがしたければ、
 `http.ClientRequest` オブジェクトに出力してください。
@@ -1109,13 +1113,13 @@ data chunk or when closing the connection.
 To get the response, add a listener for `'response'` to the request object.
 `'response'` will be emitted from the request object when the response
 headers have been received.  The `'response'` event is executed with one
-argument which is an instance of `http.IncomingMessage`.
+argument which is an instance of [http.IncomingMessage][].
 -->
 
 レスポンスを取得するには、`'response'` 用のリスナーをリクエストオブジェクトに加えます。
 `'response'` イベントはレスポンスヘッダを受信するとリクエストオブジェクトによって生成されます。
-`'response'` イベントは `http.IncomingMessage` のインスタンスを唯一の引数として
-実行されます。
+`'response'` イベントは [http.IncomingMessage][] のインスタンスを
+唯一の引数として実行されます。
 
 <!--
 During the `'response'` event, one can add listeners to the
@@ -1174,12 +1178,12 @@ The request implements the [Writable Stream][] interface. This is an
 
 <!--
 Emitted when a response is received to this request. This event is emitted only
-once. The `response` argument will be an instance of `http.IncomingMessage`.
+once. The `response` argument will be an instance of [http.IncomingMessage][].
 -->
 
 このリクエストに対するレスポンスを受信した時に生成されます。
 このイベントは一回だけ生成されます。
-`response` 引数は `http.IncomingMessage` のインスタンスです。
+`response` 引数は [http.IncomingMessage][] のインスタンスです。
 
 <!--
 Options:
@@ -1446,12 +1450,13 @@ Once a socket is assigned to this request and is connected
 ## http.IncomingMessage
 
 <!--
-An `IncomingMessage` object is created by `http.Server` or `http.ClientRequest`
-and passed as the first argument to the `'request'` and `'response'` event
-respectively. It may be used to access response status, headers and data.
+An `IncomingMessage` object is created by [http.Server][] or
+[http.ClientRequest][] and passed as the first argument to the `'request'`
+and `'response'` event respectively. It may be used to access response status,
+headers and data.
 -->
 
-`IncomingMessage` オブジェクトは `http.Server` または `http.ClientRequest()`
+`IncomingMessage` オブジェクトは [http.Server][] または [http.ClientRequest][]
 によって作成され、`'request'` および `'response'` イベントそれぞれの
 最初の引数として渡されます。
 それはステータス、ヘッダ、およびデータにアクセスするために使われます。
@@ -1469,12 +1474,12 @@ following additional events, methods, and properties.
 `function () { }`
 
 <!--
-Indicates that the underlaying connection was terminated before
-`response.end()` was called or able to flush.
+Indicates that the underlaying connection was closed.
+Just like `'end'`, this event occurs only once per response.
 -->
 
-`response.end()` が呼ばれたりフラッシュ可能になる前に、
 下層の接続が切断されたことを示します。
+`'end'` と同様、このイベントはレスポンス毎に一度だけ生成されます。
 
 <!--
 Just like `'end'`, this event occurs only once per response. See
@@ -1551,10 +1556,10 @@ Calls `message.connection.setTimeout(msecs, callback)`.
 ### message.method
 
 <!--
-**Only valid for request obtained from `http.Server`.**
+**Only valid for request obtained from [http.Server][].**
 -->
 
-** `http.Server` から得たリクエストでのみ有効です **
+** [http.Server][] から得たリクエストでのみ有効です **
 
 <!--
 The request method as a string. Read only. Example:
@@ -1567,10 +1572,10 @@ The request method as a string. Read only. Example:
 ### message.url
 
 <!--
-**Only valid for request obtained from `http.Server`.**
+**Only valid for request obtained from [http.Server][].**
 -->
 
-** `http.Server` から得たリクエストでのみ有効です **
+** [http.Server][] から得たリクエストでのみ有効です **
 
 <!--
 Request URL string. This contains only the URL that is
@@ -1655,21 +1660,29 @@ HTTPS では `request.connection.verifyPeer()` と
 `request.connection.getPeerCertificate()` で
 クライアントの認証の詳細を取得できます。
 
-[Agent]: #http_class_http_agent
 ['checkContinue']: #http_event_checkcontinue
+['listening']: net.html#net_event_listening
+[Agent]: #http_class_http_agent
 [Buffer]: buffer.html#buffer_buffer
 [EventEmitter]: events.html#events_class_events_eventemitter
+[Readable Stream]: stream.html#stream_readable_stream
+[Writable Stream]: stream.html#stream_writable_stream
 [global Agent]: #http_http_globalagent
+[http.ClientRequest]: #http_class_http_clientrequest
+[http.IncomingMessage]: #http_http_incomingmessage
+[http.ServerResponse]: #http_class_http_serverresponse
+[http.Server]: #http_class_http_server
 [http.request()]: #http_http_request_options_callback
-[http.IncomingMessage]: #http_class_http_incomingmessage
-['listening']: net.html#net_event_listening
+[http.request()]: #http_http_request_options_callback
 [net.Server.close()]: net.html#net_server_close_callback
 [net.Server.listen(path)]: net.html#net_server_listen_path_callback
 [net.Server.listen(port)]: net.html#net_server_listen_port_host_backlog_callback
-[Readable Stream]: stream.html#stream_readable_stream
+[response.end()]: #http_response_end_data_encoding
+[response.write()]: #http_response_write_chunk_encoding
+[response.writeContinue()]: #http_response_writecontinue
+[response.writeHead()]: #http_response_writehead_statuscode_reasonphrase_headers
 [socket.setKeepAlive()]: net.html#net_socket_setkeepalive_enable_initialdelay
 [socket.setNoDelay()]: net.html#net_socket_setnodelay_nodelay
 [socket.setTimeout()]: net.html#net_socket_settimeout_timeout_callback
 [stream.setEncoding()]: stream.html#stream_stream_setencoding_encoding
 [url.parse()]: url.html#url_url_parse_urlstr_parsequerystring_slashesdenotehost
-[Writable Stream]: stream.html#stream_writable_stream

@@ -214,11 +214,9 @@ The `connectListener` parameter will be added as an listener for the
 
 <!--
 This class is used to create a TCP or UNIX server.
-A server is a `net.Socket` that can listen for new incoming connections.
 -->
 
 このクラスは TCP または UNIX ドメインのサーバを作成するために使われます。
-サーバは `net.Scoket` であり、新たに到着する接続を待ち受けることができます。
 
 ### server.listen(port, [host], [backlog], [callback])
 

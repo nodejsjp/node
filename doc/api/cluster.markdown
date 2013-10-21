@@ -13,12 +13,12 @@ processes to handle the load.
 ユーザは時々 Node プロセスのクラスを起動して負荷を分散したくなります。
 
 <!--
-The cluster module allows you to easily create a network of processes that
+The cluster module allows you to easily create child processes that
 all share server ports.
 -->
 
-クラスタモジュールは、サーバポートを共有するプロセスのネットワークを
-簡単に構築することを可能にします。
+クラスタモジュールは、サーバポートを共有する複数の子プロセスを簡単に
+構築することを可能にします。
 
     var cluster = require('cluster');
     var http = require('http');
@@ -91,7 +91,7 @@ arguments and passes the request to the master process.  If the master
 process already has a listening server matching the worker's
 requirements, then it passes the handle to the worker.  If it does not
 already have a listening server matching that requirement, then it will
-create one, and pass the handle to the child.
+create one, and pass the handle to the worker.
 -->
 
 ワーカが `server.listen(...)` を呼び出すと、引数がシリアライズされて
@@ -99,7 +99,7 @@ create one, and pass the handle to the child.
 マスタプロセスは、ワーカのリクエストにマッチするリスニングサーバが既に
 存在すればそのハンドルをワーカに渡します。
 リクエストにマッチするリスニングサーバが存在しなければ、それが作成されて
-子プロセスに渡されます。
+ワーカに渡されます。
 
 <!--
 This causes potentially surprising behavior in three edge cases:
@@ -175,7 +175,7 @@ the worker pool for your application's needs.
 
 <!--
 * {Object}
-  * `exec` {String} file path to worker file.  (Default=`__filename`)
+  * `exec` {String} file path to worker file.  (Default=`process.argv[1]`)
   * `args` {Array} string arguments passed to worker.
     (Default=`process.argv.slice(2)`)
   * `silent` {Boolean} whether or not to send output to parent's stdio.
@@ -184,19 +184,32 @@ the worker pool for your application's needs.
 
 * {Object}
   * `exec` {String} ワーカで実行するファイルへのパス.
-    (デフォルトは `__filename`)
+    (デフォルトは `process.argv[1]`)
   * `args` {Array} ワーカに渡される引数となる文字列。
     (デフォルトは `process.argv.slice(2)`)
   * `silent` {Boolean} 出力を親プロセスに送るかどうか。
     (デフォルトは `false`)
 
 <!--
-All settings set by the `.setupMaster` is stored in this settings object.
+After calling `.setupMaster()` (or `.fork()`) this settings object will contain
+the settings, including the default values.
+-->
+
+`.setupMaster()` (または `.fork()`) が呼び出された後、この `settings`
+オブジェクトはデフォルト値を含む設定オブジェクトを持ちます。
+
+<!--
+It is effectively frozen after being set, because `.setupMaster()` can
+only be called once.
+-->
+
+`.setupMaster()` は一度しか呼び出せないため、それは設定された後で事実上
+凍結されます。
+
+<!--
 This object is not supposed to be changed or set manually, by you.
 -->
 
-`cluster.setupMaster()` によってセットされた全ての情報は設定オブジェクトに
-保存されます。
 このオブジェクトはあなたによって変更されることを想定していません。
 
 ## cluster.isMaster
@@ -218,15 +231,10 @@ undefined, then `isMaster` is `true`.
 * {Boolean}
 
 <!--
-This boolean flag is true if the process is a worker forked from a master.
-If the `process.env.NODE_UNIQUE_ID` is set to a value, then
-`isWorker` is `true`.
+True if the process is not a master (it is the negation of `cluster.isMaster`).
 -->
 
-現在のプロセスがマスタからフォークされたワーカの場合、
-この論理値型のフラグは `true` です。
-`process.env.NODE_UNIQUE_ID` に値が設定されていると、
-`isWorker` は `true` になります。
+このプロセスがマスタでなければ `true` (これは `cluster.isMaster` の否定です)。
 
 ## Event: 'fork'
 
@@ -262,18 +270,16 @@ This can be used to log worker activity, and create you own timeout.
 * `worker` {Worker object}
 
 <!--
-After forking a new worker, the worker should respond with a online message.
-When the master receives a online message it will emit such event.
+After forking a new worker, the worker should respond with an online message.
+When the master receives an online message it will emit this event.
 The difference between 'fork' and 'online' is that fork is emitted when the
-master tries to fork a worker, and 'online' is emitted when the worker is
-being executed.
+master forks a worker, and 'online' is emitted when the worker is running.
 -->
 
 新しいワーカをフォークした後、ワーカはオンラインメッセージを応答します。
 マスタがオンラインメッセージを受信すると、このイベントが生成されます。
-`'fork'` と `'online'` の違いは、`'fork'` はマスタがワーカのフォークを
-試みた時点で生成されるのに対し、`'online'` はワーカの実行が開始されてから
-生成される点です。
+`'fork'` と `'online'` の違いは、`'fork'` はマスタがワーカをフォークした時点で
+生成されるのに対し、`'online'` はワーカが実行されてから生成される点です。
 
     cluster.on('online', function(worker) {
       console.log("Yay, the worker responded after it was forked");
@@ -285,15 +291,13 @@ being executed.
 * `address` {Object}
 
 <!--
-When calling `listen()` from a worker, a 'listening' event is automatically assigned
-to the server instance. When the server is listening a message is send to the master
-where the 'listening' event is emitted.
+After calling `listen()` from a worker, when the 'listening' event is emitted on
+the server, a listening event will also be emitted on `cluster` in the master.
 -->
 
-ワーカが `net.Server.listen()` を呼び出すと、`'listening'` イベントは自動的に
-`net.Server` インスタンスに割り当てられます。
-`net.Server` が `'listening'` メッセージをマスタに送信すると、
-`'listening'` イベントが生成されます。
+ワーカが `net.Server.listen()` を呼び出した後、(net や http などの) サーバでは
+`'listening'` イベントが生成され、マスタの `cluster` でも `'listening'`
+イベントが生成されます。
 
 <!--
 The event handler is executed with two arguments, the `worker` contains the worker
@@ -312,30 +316,47 @@ on more than one address.
       console.log("A worker is now connected to " + address.address + ":" + address.port);
     });
 
+<!--
+The `addressType` is one of:
+-->
+
+`addressType` は以下のいずれかです:
+
+<!--
+* `4' (TCPv4)
+* `6` (TCPv6)
+* `-1` (unix domain socket)
+* `"udp4"` or `"udp6"` (UDP v4 or v6)
+-->
+
+* `4' (TCPv4)
+* `6` (TCPv6)
+* `-1` (unix ドメインソケット)
+* `"udp4"` または `"udp6"` (UDP v4 または v6)
+
 ## Event: 'disconnect'
 
 * `worker` {Worker object}
 
 <!--
-When a workers IPC channel has disconnected this event is emitted.
-This will happen when the worker dies, usually after calling
-`.kill()`.
+Emitted after the worker IPC channel has disconnected. This can occur when a
+worker exits gracefully, is killed, or is disconnected manually (such as with
+worker.disconnect()).
 -->
 
-ワーカの IPC チャネルが切断された場合に生成されます。
-それはワーカが終了した場合や、`.kill()` を呼び出した後に発生します。
+ワーカとの IPC チャネルが切断された後で生成されます。
+それはワーカが自然に終了したり、殺されたり、あるいは (`worker.disconnect()`
+により) 手動で切断された場合に発生します。
 
 <!--
-When calling `.disconnect()`, there may be a delay between the
-`disconnect` and `exit` events.  This event can be used to detect if
-the process is stuck in a cleanup or if there are long-living
-connections.
+There may be a delay between the `disconnect` and `exit` events.  These events
+can be used to detect if the process is stuck in a cleanup or if there are
+long-living connections.
 -->
 
-`.disconnect()` を呼び出した後、`'disconnect'` と `'exit'` の間には
-遅延があるかもしれません。このイベントはプロセスがクリーンナップで
-行き詰まったり、長時間生きている接続がないかを検出することに
-使用できます。
+`'disconnect'` と `'exit'` の間には遅延があるかもしれません。
+このイベントはプロセスがクリーンナップで行き詰まったり、長時間生きている接続が
+ないかを検出することに使用できます。
 
     cluster.on('disconnect', function(worker) {
       console.log('The worker #' + worker.id + ' has disconnected');
@@ -357,38 +378,38 @@ connections.
 
 <!--
 When any of the workers die the cluster module will emit the 'exit' event.
-This can be used to restart the worker by calling `fork()` again.
 -->
 
 どのワーカが死んだ場合でも、クラスタモジュールは `'exit'` イベントを
 生成します。
-これは `fork()` を呼び出してワーカを再開する場合に使用することができます。
+
+<!--
+This can be used to restart the worker by calling `.fork()` again.
+-->
+
+これは `.fork()` を呼び出してワーカを再開する場合に使用することができます。
 
     cluster.on('exit', function(worker, code, signal) {
-      var exitCode = worker.process.exitCode;
-      console.log('worker ' + worker.process.pid + ' died ('+exitCode+'). restarting...');
+      console.log('worker %d died (%s). restarting...',
+        worker.process.pid, signal || code);
       cluster.fork();
     });
 
+See [child_process event: 'exit'](child_process.html#child_process_event_exit).
+
 ## Event: 'setup'
 
-* `worker` {Worker object}
-
 <!--
-When the `.setupMaster()` function has been executed this event emits.
-If `.setupMaster()` was not executed before `fork()` this function will
-call `.setupMaster()` with no arguments.
+Emitted the first time that `.setupMaster()` is called.
 -->
 
-`setupMaster()` が実行された時、このイベントが生成されます。
-`fork()` の前に`setupMaster()` が呼ばれなかった場合、
-この関数は引数無しで `setupMaster()` を呼び出します。
+`setupMaster()` が最初に呼ばれた時に生成されます。
 
 ## cluster.setupMaster([settings])
 
 <!--
 * `settings` {Object}
-  * `exec` {String} file path to worker file.  (Default=`__filename`)
+  * `exec` {String} file path to worker file.  (Default=`process.argv[1]`)
   * `args` {Array} string arguments passed to worker.
     (Default=`process.argv.slice(2)`)
   * `silent` {Boolean} whether or not to send output to parent's stdio.
@@ -397,19 +418,43 @@ call `.setupMaster()` with no arguments.
 
 * `settings` {Object}
   * `exec` {String} ワーカで実行するファイルへのパス.
-    (デフォルトは `__filename`)
+    (デフォルトは `process.argv[1]`)
   * `args` {Array} ワーカに渡される引数となる文字列。
     (デフォルトは `process.argv.slice(2)`)
   * `silent` {Boolean} 出力を親プロセスに送るかどうか。
     (デフォルトは `false`)
 
 <!--
-`setupMaster` is used to change the default 'fork' behavior. The new settings
-are effective immediately and permanently, they cannot be changed later on.
+`setupMaster` is used to change the default 'fork' behavior. Once called,
+the settings will be present in `cluster.settings`.
 -->
 
 `setupMaster()` は 'fork' のデフォルト動作を変更するために使われます。
-新しい設定は即時かつ永続的に有効で、後から変更することはできません。
+一度呼び出されると、その設定は `cluster.settings` に反映されます。
+
+<!--
+Note that:
+-->
+
+注意事項:
+
+<!--
+* Only the first call to `.setupMaster()` has any effect, subsequent calls are
+  ignored
+* That because of the above, the *only* attribute of a worker that may be
+  customized per-worker is the `env` passed to `.fork()`
+* `.fork()` calls `.setupMaster()` internally to establish the defaults, so to
+  have any effect, `.setupMaster()` must be called *before* any calls to
+  `.fork()`
+-->
+
+* `.setupMaster()` の最初の呼び出しだけ効果があります。
+  その後の呼び出しは無視されます。
+* 上記のため、ワーカごとにカスタマイズできる属性は `.fork()` に渡すことのできる
+  `env` *だけ* です。
+* `.fork()` はデフォルト値を反映するために内部で `.setupMaster()`
+  を呼び出すため、`.setupMaster()` が効果を持つには `.fork()` よりも前に
+  呼び出す必要があります。
 
 <!--
 Example:
@@ -425,48 +470,69 @@ Example:
     });
     cluster.fork();
 
+<!--
+This can only be called from the master process.
+-->
+
+これはマスタプロセスからのみ、呼び出すことができます。
+
 ## cluster.fork([env])
 
 <!--
-* `env` {Object} Key/value pairs to add to child process environment.
+* `env` {Object} Key/value pairs to add to worker process environment.
 * return {Worker object}
 -->
 
-* `env` {Object} 子プロセスの環境に加えられるキーと値のペア。
+* `env` {Object} ワーカプロセスの環境に加えられるキーと値のペア。
 * return {Worker object}
 
 <!--
-Spawn a new worker process. This can only be called from the master process.
+Spawn a new worker process.
 -->
 
 新しいワーカプロセスを起動します。
+
+<!--
+This can only be called from the master process.
+-->
+
 これはマスタプロセスからのみ呼び出すことができます。
 
 ## cluster.disconnect([callback])
 
 <!--
-* `callback` {Function} called when all workers are disconnected and handlers are closed
+* `callback` {Function} called when all workers are disconnected and handles are
+  closed
 -->
 
 * `callback` {Function} 全てのワーカが切断し、ハンドルがクローズされると
   呼び出されます。
 
 <!--
-When calling this method, all workers will commit a graceful suicide. When they are
-disconnected all internal handlers will be closed, allowing the master process to
-die graceful if no other event is waiting.
+Calls `.disconnect()` on each worker in `cluster.workers`.
 -->
 
-このメソッドを呼び出すと、全てのワーカは強制的でない終了に向かいます。
-それらの内部的なハンドルが全てクローズされると、
-他に待機しているイベントがなければ、
-マスタプロセスを非強制的に終了することができます。
+`cluster.workers` 内の各ワーカに対して `.disconnect()` を呼び出します。
+
+<!--
+When they are disconnected all internal handles will be closed, allowing the
+master process to die gracefully if no other event is waiting.
+-->
+
+ワーカとの接続が切断して内部的なハンドルが全てクローズされると、
+他に待機しているイベントがなければ、マスタプロセスは自然に終了します。
 
 <!--
 The method takes an optional callback argument which will be called when finished.
 -->
 
 このメソッドはオプションの引数としてコールバックを受け取ります。
+
+<!--
+This can only be called from the master process.
+-->
+
+これはマスタプロセスからのみ呼び出すことができます。
 
 ## cluster.worker
 
@@ -502,6 +568,14 @@ process.
 `id` をキーとしてアクティブなワーカオブジェクトを保存しているハッシュです。
 これは全てのワーカに対して繰り返しを行うことを容易にします。
 マスタプロセスでのみ利用可能です。
+
+<!--
+A worker is removed from cluster.workers just before the `'disconnect'` or
+`'exit'` event is emitted.
+-->
+
+ワーカは `'disconnect'` や `'exit'` が生成される前に `cluster.worker` から
+削除されます。
 
     // Go through all workers
     function eachWorker(callback) {
@@ -560,30 +634,60 @@ cluster.workers
 
 <!--
 All workers are created using `child_process.fork()`, the returned object
-from this function is stored in process.
-
-See: [Child Process module](child_process.html)
+from this function is stored as `.process`. In a worker, the global `process`
+is stored.
 -->
 
 全てのワーカは `child_process.fork()` によって作成されます。
-その戻り値が `process` に設定されます。
+その戻り値は `.process` に設定されます。
+ワーカでは、グローバルの `process` に設定されます。
 
-参照: [Child Process module](child_process.html)
+<!--
+See: [Child Process module](
+child_process.html#child_process_child_process_fork_modulepath_args_options)
+-->
+
+参照: [Child Process module](
+child_process.html#child_process_child_process_fork_modulepath_args_options)
+
+<!--
+Note that workers will call `process.exit(0)` if the `'disconnect'` event occurs
+on `process` and `.suicide` is not `true`. This protects against accidental
+disconnection.
+-->
+
+`process` で `'disconnect'` イベントが生成されるとワーカが `process.exit(0)`
+を呼び出し、`.suicide` が `true` にならないことに注意してください。
+これは偶発的な切断を防ぎます。
 
 ### worker.suicide
 
 * {Boolean}
 
 <!--
-This property is a boolean. It is set when a worker dies after calling
-`.kill()` or immediately after calling the `.disconnect()` method.
-Until then it is `undefined`.
+Set by calling `.kill()` or `.disconnect()`, until then it is `undefined`.
 -->
 
-このプロパティは論理値型です。
-これはワーカが `.kill()` を呼び出して終了するか、
-`.disconnect()` メソッドを呼び出した後に設定されます。
+`.kill()` または `.disconnect()` によって設定されます。
 それまでは `undefined` です。
+
+<!--
+The boolean `worker.suicide` lets you distinguish between voluntary and accidental
+exit, the master may choose not to respawn a worker based on this value.
+-->
+
+真偽値の `worker.suicide` は、ワーカが自発的に終了したのか偶発的に終了したのかを
+区別します。
+マスタはこの値に基づいて、ワーカを再起動しないことを選ぶことができます。
+
+    cluster.on('exit', function(worker, code, signal) {
+      if (worker.suicide === true) {
+        console.log('Oh, it was just suicide\' – no need to worry').
+      }
+    });
+
+    // kill worker
+    worker.kill();
 
 ### worker.send(message, [sendHandle])
 
@@ -593,17 +697,24 @@ Until then it is `undefined`.
 <!--
 This function is equal to the send methods provided by
 `child_process.fork()`.  In the master you should use this function to
-send a message to a specific worker.  However in a worker you can also use
-`process.send(message)`, since this is the same function.
-
-This example will echo back all messages from the master:
+send a message to a specific worker.
 -->
 
 この関数は `child_process.fork()` が返すオブジェクトの `send()`
-メソッドと同じです．
+メソッドと同じです。
 マスタは特定のワーカにメッセージを送信するためにこの関数を
 使用することができます。
-しかし、ワーカでは `process.send(message)` を使うこともできます。
+
+<!--
+In a worker you can also use `process.send(message)`, it is the same function.
+-->
+
+ワーカでは `process.send(message)` を使うこともできます。
+それは同じ関数です。
+
+<!--
+This example will echo back all messages from the master:
+-->
 
 この例はマスタからのメッセージをエコーバックします。
 
@@ -627,71 +738,115 @@ This example will echo back all messages from the master:
 * `signal` {String} ワーカプロセスに送られるシグナルの名前です。
 
 <!--
-This function will kill the worker, and inform the master to not spawn a
-new worker.  The boolean `suicide` lets you distinguish between voluntary
-and accidental exit.
+This function will kill the worker. In the master, it does this by disconnecting
+the `worker.process`, and once disconnected, killing with `signal`. In the
+worker, it does it by disconnecting the channel, and then exiting with code `0`.
 -->
 
-この関数はワーカを終了し、マスタに新しいワーカを起動しないように伝えます。
-boolean の `suicide` により、自発的かアクシデントによる終了かを識別できます。
-
-    cluster.on('exit', function(worker, code, signal) {
-      if (worker.suicide === true) {
-        console.log('Oh, it was just suicide\' – no need to worry').
-      }
-    });
-
-    // kill worker
-    worker.kill();
+この関数はワーカを終了します。
+マスタでは、これは `worker.process` と切断することによって行われます。
+そして切断されると、`signal` によってワーカを殺します。
+ワーカでは、これはチャネルの切断によって行われ、コード `0` で終了します。
 
 <!--
-This method is aliased as `worker.destroy()` for backwards
-compatibility.
+Causes `.suicide` to be set.
+-->
+
+`.suicide` が設定される原因となります。
+
+<!--
+This method is aliased as `worker.destroy()` for backwards compatibility.
 -->
 
 後方互換性のため、このメソッドには `worker.destroy()` という別名があります。
 
+<!--
+Note that in a worker, `process.kill()` exists, but it is not this function,
+it is [kill](process.html#process_process_kill_pid_signal).
+-->
+
+ワーカでは、`process.kill()` は存在するものの、それは関数ではないことに
+注意してください。
+[kill](process.html#process_process_kill_pid_signal) を参照してください。
+
 ### worker.disconnect()
 
 <!--
-When calling this function the worker will no longer accept new connections, but
-they will be handled by any other listening worker. Existing connection will be
-allowed to exit as usual. When no more connections exist, the IPC channel to the worker
-will close allowing it to die graceful. When the IPC channel is closed the `disconnect`
-event will emit, this is then followed by the `exit` event, there is emitted when
-the worker finally die.
+In a worker, this function will close all servers, wait for the 'close' event on
+those servers, and then disconnect the IPC channel.
 -->
 
-この関数を呼び出すと、そのワーカはそれ以上新しい接続
-(それらは他のワーカによって扱われます) を受け付けなくなります。
-既存の接続は通常通りに
-コネクションが無くなると、ワーカを正常に終了するために IPC チャネルは
-閉じられます。
-IPC チャネルが閉じられると `'disconnect'` イベントが生成され、
-その後ワーカが終了すると `'exit'` イベントが生成されます。
+ワーカでは、この関数は全てのサーバをクローズし、それらのサーバの `'close'`
+イベントを待機し、そして IPC チャネルを切断します。
 
 <!--
-Because there might be long living connections, it is useful to implement a timeout.
-This example ask the worker to disconnect and after 2 seconds it will destroy the
-server. An alternative would be to execute `worker.kill()` after 2 seconds, but
-that would normally not allow the worker to do any cleanup if needed.
+In the master, an internal message is sent to the worker causing it to call
+`.disconnect()` on itself.
 -->
 
-長時間にわたる接続があるかもしれないため、これはタイムアウトを実装するために
-有益です。
-この例はワーカが IPC チャネルを閉じた後、2 秒でサーバから終了されます。
-他の方法として `worker.kill()` を呼び出してから
-2 秒後とすることもできますが、その場合はワーカが必要なクリーンナップを
-行えないかもしれません。
+マスタでは、ワーカが自分の `.disconnect()` を呼び出すことになる内部メッセージを
+ワーカに送ります。
+
+<!--
+Causes `.suicide` to be set.
+-->
+
+`.suicide` が設定される原因となります。
+
+<!--
+Note that after a server is closed, it will no longer accept new connections,
+but connections may be accepted by any other listening worker. Existing
+connections will be allowed to close as usual. When no more connections exist,
+see [server.close()](net.html#net_event_close), the IPC channel to the worker
+will close allowing it to die gracefully.
+-->
+
+サーバがクローズした後、それはもう新たな接続を受け付けなくなりますが、
+他のワーカによって接続は受け付けられることに注意してください。
+既存のコネクションは通常通りクローズすることができます。
+コネクションが無くなると ([server.close()](net.html#net_event_close) 参照)、
+ワーカが自然に終了できるように IPC チャネルはクローズされます。
+
+<!--
+The above applies *only* to server connections, client connections are not
+automatically closed by workers, and disconnect does not wait for them to close
+before exiting.
+-->
+
+上記はサーバ側のコネクションにのみ適用されます。
+クライアント側のコネクションはワーカによって自動的にクローズされることはなく、
+終了する前にそれらがクローズすることを待つこともありません。
+
+<!--
+Note that in a worker, `process.disconnect` exists, but it is not this function,
+it is [disconnect](child_process.html#child_process_child_disconnect).
+-->
+
+ワーカでは、`process.disconnect` は存在しますが、それはここで説明した関数では
+ありません。それは
+[disconnect](child_process.html#child_process_child_disconnect) です。
+
+<!--
+Because long living server connections may block workers from disconnecting, it
+may be useful to send a message, so application specific actions may be taken to
+close them. It also may be useful to implement a timeout, killing a worker if
+the `disconnect` event has not been emitted after some time.
+-->
+
+長時間生きているサーバ側のコネクションはワーカが切断することを妨げるため、
+それらをクローズするためにアプリケーション固有のメッセージを送ることは有用です。
+加えて、一定の時間が経過しても `'disconnect'` イベントが発生しなかった場合に
+ワーカを強制終了する実装も有用です。
 
     if (cluster.isMaster) {
       var worker = cluster.fork();
       var timeout;
 
       worker.on('listening', function(address) {
+        worker.send('shutdown');
         worker.disconnect();
         timeout = setTimeout(function() {
-          worker.send('force kill');
+          worker.kill();
         }, 2000);
       });
 
@@ -702,18 +857,14 @@ that would normally not allow the worker to do any cleanup if needed.
     } else if (cluster.isWorker) {
       var net = require('net');
       var server = net.createServer(function(socket) {
-        // connection never end
+        // connections never end
       });
 
       server.listen(8000);
 
-      server.on('close', function() {
-        // cleanup
-      });
-
       process.on('message', function(msg) {
-        if (msg === 'force kill') {
-          server.close();
+        if(msg === 'shutdown') {
+          // initiate graceful close of any connections to server
         }
       });
     }
@@ -724,16 +875,20 @@ that would normally not allow the worker to do any cleanup if needed.
 
 <!--
 This event is the same as the one provided by `child_process.fork()`.
-In the master you should use this event, however in a worker you can also use
-`process.on('message')`
-
-As an example, here is a cluster that keeps count of the number of requests
-in the master process using the message system:
 -->
 
 このイベントは `child_process.fork()` が提供するものと同じです。
-マスタではこのイベントを使うべきですが、ワーカでは `process.on('message')`
-を使うこともできます。
+
+<!--
+In a worker you can also use `process.on('message')`.
+-->
+
+ワーカでは、`process.on('message')` を使うこともできます。
+
+<!--
+As an example, here is a cluster that keeps count of the number of requests
+in the master process using the message system:
+-->
 
 メッセージシステムを使用してクラスタ全体のリクエスト数を
 マスタプロセスで保持する例です:
@@ -781,42 +936,48 @@ in the master process using the message system:
 ### Event: 'online'
 
 <!--
-Same as the `cluster.on('online')` event, but emits only when the state change
-on the specified worker.
+Similar to the `cluster.on('online')` event, but specific to this worker.
 -->
 
-`cluster.on('online')` と同様ですが，特定のワーカの状態が変化した場合のみ
-イベントを生成します。
+`cluster.on('online')` と同様ですが、このワーカに特化しています。
 
     cluster.fork().on('online', function() {
       // Worker is online
     });
+
+<!--
+It is not emitted in the worker.
+-->
+
+このイベントはワーカでは生成されません。
 
 ### Event: 'listening'
 
 * `address` {Object}
 
 <!--
-Same as the `cluster.on('listening')` event, but emits only when the state change
-on the specified worker.
+Similar to the `cluster.on('listening')` event, but specific to this worker.
 -->
 
-`cluster.on('listening')` と同様ですが、特定のワーカの状態が変化した場合のみ
-イベントを生成します。
+`cluster.on('listening')` と同様ですが、このワーカに特化しています。
 
     cluster.fork().on('listening', function(address) {
       // Worker is listening
     });
 
+<!--
+It is not emitted in the worker.
+-->
+
+このイベントはワーカでは生成されません。
+
 ### Event: 'disconnect'
 
 <!--
-Same as the `cluster.on('disconnect')` event, but emits only when the state change
-on the specified worker.
+Similar to the `cluster.on('disconnect')` event, but specfic to this worker.
 -->
 
-`cluster.on('disconnect')` と同じですが、指定されたワーカの状態が
-変更された場合のみ生成されます。
+`cluster.on('disconnect')` と同様ですが、このワーカに特化しています。
 
     cluster.fork().on('disconnect', function() {
       // Worker has disconnected
@@ -835,13 +996,10 @@ on the specified worker.
   (例: `'SIGHUP'`)。
 
 <!--
-Emitted by the individual worker instance, when the underlying child process
-is terminated.  See [child_process event: 'exit'](child_process.html#child_process_event_exit).
+Similar to the `cluster.on('exit')` event, but specific to this worker.
 -->
 
-子プロセスが終了すると、ワーカのインスタンスによって生成されます。
-[child_process event: 'exit'](child_process.html#child_process_event_exit)
-を参照してください。
+`cluster.on('exit')` と同様ですが、このワーカに特化しています。
 
     var worker = cluster.fork();
     worker.on('exit', function(code, signal) {
@@ -853,3 +1011,17 @@ is terminated.  See [child_process event: 'exit'](child_process.html#child_proce
         console.log("worker success!");
       }
     });
+
+### Event: 'error'
+
+<!--
+This event is the same as the one provided by `child_process.fork()`.
+-->
+
+このイベントは `child_process.fork()` が提供するものと同じです。
+
+<!--
+In a worker you can also use `process.on('error')`.
+-->
+
+ワーカでは `process.on('error')` を使うこともできます。

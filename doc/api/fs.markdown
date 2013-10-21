@@ -1207,6 +1207,26 @@ Then call the `callback` argument with either true or false.  Example:
       util.debug(exists ? "it's there" : "no passwd!");
     });
 
+<!--
+`fs.exists()` is an anachronism and exists only for historical reasons.
+There should almost never be a reason to use it in your own code.
+-->
+
+`fs.exists()` は時代錯誤で、存在する理由は歴史的経緯だけです。
+あなたのコードでこれを使うべき理由があってはいけません。
+
+<!--
+In particular, checking if a file exists before opening it is an anti-pattern
+that leaves you vulnerable to race conditions: another process may remove the
+file between the calls to `fs.exists()` and `fs.open()`.  Just open the file
+and handle the error when it's not there.
+-->
+
+とりわけ、ファイルをオープンする前に存在をチェックするのは、
+あなたのコードを競合条件に対して脆弱にするアンチパターンです:
+`fs.exists()` と `fs.open()` の間に別のプロセスがファイルを
+削除するかもしれません。
+単純にファイルをオープンして、それが存在しない時はエラーを処理してください。
 
 ## fs.existsSync(path)
 
