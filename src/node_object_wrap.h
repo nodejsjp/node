@@ -22,22 +22,13 @@
 #ifndef SRC_NODE_OBJECT_WRAP_H_
 #define SRC_NODE_OBJECT_WRAP_H_
 
-#include "node.h"
 #include "v8.h"
 #include <assert.h>
-
-// Explicitly instantiate some template classes, so we're sure they will be
-// present in the binary / shared object. There isn't much doubt that they will
-// be, but MSVC tends to complain about these things.
-#ifdef _MSC_VER
-  template class NODE_EXTERN v8::Persistent<v8::Object>;
-  template class NODE_EXTERN v8::Persistent<v8::FunctionTemplate>;
-#endif
 
 
 namespace node {
 
-class NODE_EXTERN ObjectWrap {
+class ObjectWrap {
  public:
   ObjectWrap() {
     refs_ = 0;
@@ -45,7 +36,8 @@ class NODE_EXTERN ObjectWrap {
 
 
   virtual ~ObjectWrap() {
-    if (persistent().IsEmpty()) return;
+    if (persistent().IsEmpty())
+      return;
     assert(persistent().IsNearDeath());
     persistent().ClearWeak();
     persistent().Dispose();
@@ -56,7 +48,11 @@ class NODE_EXTERN ObjectWrap {
   static inline T* Unwrap(v8::Handle<v8::Object> handle) {
     assert(!handle.IsEmpty());
     assert(handle->InternalFieldCount() > 0);
-    return static_cast<T*>(handle->GetAlignedPointerFromInternalField(0));
+    // Cast to ObjectWrap before casting to T.  A direct cast from void
+    // to T won't work right when T has more than one base class.
+    void* ptr = handle->GetAlignedPointerFromInternalField(0);
+    ObjectWrap* wrap = static_cast<ObjectWrap*>(ptr);
+    return static_cast<T*>(wrap);
   }
 
 
@@ -113,7 +109,8 @@ class NODE_EXTERN ObjectWrap {
     assert(!persistent().IsEmpty());
     assert(!persistent().IsWeak());
     assert(refs_ > 0);
-    if (--refs_ == 0) MakeWeak();
+    if (--refs_ == 0)
+      MakeWeak();
   }
 
   int refs_;  // ro

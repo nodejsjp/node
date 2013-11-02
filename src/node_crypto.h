@@ -25,11 +25,14 @@
 #include "node.h"
 #include "node_crypto_clienthello.h"  // ClientHelloParser
 #include "node_crypto_clienthello-inl.h"
-#include "node_object_wrap.h"
 
 #ifdef OPENSSL_NPN_NEGOTIATED
 #include "node_buffer.h"
 #endif
+
+#include "env.h"
+#include "weak-object.h"
+#include "weak-object-inl.h"
 
 #include "v8.h"
 
@@ -56,12 +59,16 @@ extern X509_STORE* root_cert_store;
 // Forward declaration
 class Connection;
 
-class SecureContext : ObjectWrap {
+class SecureContext : public WeakObject {
  public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
-  SSL_CTX* ctx_;
+  inline Environment* env() const {
+    return env_;
+  }
+
   X509_STORE* ca_store_;
+  SSL_CTX* ctx_;
 
   static const int kMaxSessionSize = 10 * 1024;
 
@@ -85,9 +92,11 @@ class SecureContext : ObjectWrap {
   static void GetTicketKeys(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SetTicketKeys(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  SecureContext() : ObjectWrap() {
-    ctx_ = NULL;
-    ca_store_ = NULL;
+  SecureContext(Environment* env, v8::Local<v8::Object> wrap)
+      : WeakObject(env->isolate(), wrap),
+        ca_store_(NULL),
+        ctx_(NULL),
+        env_(env) {
   }
 
   void FreeCTXMem() {
@@ -112,6 +121,7 @@ class SecureContext : ObjectWrap {
   }
 
  private:
+  Environment* const env_;
 };
 
 template <class Base>
@@ -122,9 +132,11 @@ class SSLWrap {
     kServer
   };
 
-  SSLWrap(SecureContext* sc, Kind kind) : kind_(kind),
-                                          next_sess_(NULL),
-                                          session_callbacks_(false) {
+  SSLWrap(Environment* env, SecureContext* sc, Kind kind)
+      : env_(env),
+        kind_(kind),
+        next_sess_(NULL),
+        session_callbacks_(false) {
     ssl_ = SSL_new(sc->ctx_);
     assert(ssl_ != NULL);
   }
@@ -172,6 +184,7 @@ class SSLWrap {
   static void GetCurrentCipher(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void ReceivedShutdown(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void EndParser(const v8::FunctionCallbackInfo<v8::Value>& args);
+  static void Renegotiate(const v8::FunctionCallbackInfo<v8::Value>& args);
 
 #ifdef OPENSSL_NPN_NEGOTIATED
   static void GetNegotiatedProto(
@@ -189,6 +202,11 @@ class SSLWrap {
                                      void* arg);
 #endif  // OPENSSL_NPN_NEGOTIATED
 
+  inline Environment* env() const {
+    return env_;
+  }
+
+  Environment* const env_;
   Kind kind_;
   SSL_SESSION* next_sess_;
   SSL* ssl_;
@@ -203,9 +221,9 @@ class SSLWrap {
   friend class SecureContext;
 };
 
-class Connection : public SSLWrap<Connection>, public ObjectWrap {
+class Connection : public SSLWrap<Connection>, public WeakObject {
  public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
 #ifdef OPENSSL_NPN_NEGOTIATED
   v8::Persistent<v8::Object> npnProtos_;
@@ -256,16 +274,15 @@ class Connection : public SSLWrap<Connection>, public ObjectWrap {
   void ClearError();
   void SetShutdownFlags();
 
-  static Connection* Unwrap(v8::Local<v8::Object> object) {
-    Connection* conn = ObjectWrap::Unwrap<Connection>(object);
-    conn->ClearError();
-    return conn;
-  }
-
-  Connection(SecureContext* sc, SSLWrap<Connection>::Kind kind)
-      : SSLWrap<Connection>(sc, kind),
+  Connection(Environment* env,
+             v8::Local<v8::Object> wrap,
+             SecureContext* sc,
+             SSLWrap<Connection>::Kind kind)
+      : SSLWrap<Connection>(env, sc, kind),
+        WeakObject(env->isolate(), wrap),
+        bio_read_(NULL),
+        bio_write_(NULL),
         hello_offset_(0) {
-    bio_read_ = bio_write_ = NULL;
     hello_parser_.Start(SSLWrap<Connection>::OnClientHello,
                         OnClientHelloParseEnd,
                         this);
@@ -293,9 +310,9 @@ class Connection : public SSLWrap<Connection>, public ObjectWrap {
   friend class SecureContext;
 };
 
-class CipherBase : public ObjectWrap {
+class CipherBase : public WeakObject {
  public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
  protected:
   enum CipherKind {
@@ -320,13 +337,18 @@ class CipherBase : public ObjectWrap {
   static void Final(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SetAutoPadding(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  explicit CipherBase(CipherKind kind) : cipher_(NULL),
-                                         initialised_(false),
-                                         kind_(kind) {
+  CipherBase(v8::Isolate* isolate,
+             v8::Local<v8::Object> wrap,
+             CipherKind kind)
+      : WeakObject(isolate, wrap),
+        cipher_(NULL),
+        initialised_(false),
+        kind_(kind) {
   }
 
   ~CipherBase() {
-    if (!initialised_) return;
+    if (!initialised_)
+      return;
     EVP_CIPHER_CTX_cleanup(&ctx_);
   }
 
@@ -337,9 +359,9 @@ class CipherBase : public ObjectWrap {
   CipherKind kind_;
 };
 
-class Hmac : public ObjectWrap {
+class Hmac : public WeakObject {
  public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
  protected:
   void HmacInit(const char* hash_type, const char* key, int key_len);
@@ -351,11 +373,15 @@ class Hmac : public ObjectWrap {
   static void HmacUpdate(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void HmacDigest(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  Hmac() : md_(NULL), initialised_(false) {
+  Hmac(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
+      : WeakObject(isolate, wrap),
+        md_(NULL),
+        initialised_(false) {
   }
 
   ~Hmac() {
-    if (!initialised_) return;
+    if (!initialised_)
+      return;
     HMAC_CTX_cleanup(&ctx_);
   }
 
@@ -365,9 +391,9 @@ class Hmac : public ObjectWrap {
   bool initialised_;
 };
 
-class Hash : public ObjectWrap {
+class Hash : public WeakObject {
  public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
   bool HashInit(const char* hash_type);
   bool HashUpdate(const char* data, int len);
@@ -377,11 +403,15 @@ class Hash : public ObjectWrap {
   static void HashUpdate(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void HashDigest(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  Hash() : md_(NULL), initialised_(false) {
+  Hash(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
+      : WeakObject(isolate, wrap),
+        md_(NULL),
+        initialised_(false) {
   }
 
   ~Hash() {
-    if (!initialised_) return;
+    if (!initialised_)
+      return;
     EVP_MD_CTX_cleanup(&mdctx_);
   }
 
@@ -391,16 +421,17 @@ class Hash : public ObjectWrap {
   bool initialised_;
 };
 
-class Sign : public ObjectWrap {
+class Sign : public WeakObject {
  public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
   void SignInit(const char* sign_type);
   bool SignUpdate(const char* data, int len);
-  bool SignFinal(unsigned char** md_value,
-                 unsigned int *md_len,
-                 const char* key_pem,
-                 int key_pem_len);
+  bool SignFinal(const char* key_pem,
+                 int key_pem_len,
+                 const char* passphrase,
+                 unsigned char** sig,
+                 unsigned int *sig_len);
 
  protected:
   static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -408,11 +439,15 @@ class Sign : public ObjectWrap {
   static void SignUpdate(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SignFinal(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  Sign() : md_(NULL), initialised_(false) {
+  Sign(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
+      : WeakObject(isolate, wrap),
+        md_(NULL),
+        initialised_(false) {
   }
 
   ~Sign() {
-    if (!initialised_) return;
+    if (!initialised_)
+      return;
     EVP_MD_CTX_cleanup(&mdctx_);
   }
 
@@ -422,9 +457,9 @@ class Sign : public ObjectWrap {
   bool initialised_;
 };
 
-class Verify : public ObjectWrap {
+class Verify : public WeakObject {
  public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
   void VerifyInit(const char* verify_type);
   bool VerifyUpdate(const char* data, int len);
@@ -439,11 +474,15 @@ class Verify : public ObjectWrap {
   static void VerifyUpdate(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void VerifyFinal(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  Verify() : md_(NULL), initialised_(false) {
+  Verify(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
+      : WeakObject(isolate, wrap),
+        md_(NULL),
+        initialised_(false) {
   }
 
   ~Verify() {
-    if (!initialised_) return;
+    if (!initialised_)
+      return;
     EVP_MD_CTX_cleanup(&mdctx_);
   }
 
@@ -453,9 +492,9 @@ class Verify : public ObjectWrap {
   bool initialised_;
 };
 
-class DiffieHellman : public ObjectWrap {
+class DiffieHellman : public WeakObject {
  public:
-  static void Initialize(v8::Handle<v8::Object> target);
+  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
   bool Init(int primeLength);
   bool Init(const char* p, int p_len);
@@ -474,7 +513,10 @@ class DiffieHellman : public ObjectWrap {
   static void SetPublicKey(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SetPrivateKey(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  DiffieHellman() : ObjectWrap(), initialised_(false), dh(NULL) {
+  DiffieHellman(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
+      : WeakObject(isolate, wrap),
+        initialised_(false),
+        dh(NULL) {
   }
 
   ~DiffieHellman() {
@@ -490,6 +532,27 @@ class DiffieHellman : public ObjectWrap {
   DH* dh;
 };
 
+class Certificate : public WeakObject {
+ public:
+  static void Initialize(v8::Handle<v8::Object> target);
+
+  v8::Handle<v8::Value> CertificateInit(const char* sign_type);
+  bool VerifySpkac(const char* data, unsigned int len);
+  const char* ExportPublicKey(const char* data, int len);
+  const char* ExportChallenge(const char* data, int len);
+
+ protected:
+  static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
+  static void VerifySpkac(const v8::FunctionCallbackInfo<v8::Value>& args);
+  static void ExportPublicKey(const v8::FunctionCallbackInfo<v8::Value>& args);
+  static void ExportChallenge(const v8::FunctionCallbackInfo<v8::Value>& args);
+
+  Certificate(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
+    : WeakObject(isolate, wrap) {
+  }
+};
+
+bool EntropySource(unsigned char* buffer, size_t length);
 void InitCrypto(v8::Handle<v8::Object> target);
 
 }  // namespace crypto

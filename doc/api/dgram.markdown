@@ -138,7 +138,7 @@ Emitted when an error occurs.
 ### socket.send(buf, offset, length, port, address, [callback])
 
 <!--
-* `buf` Buffer object.  Message to be sent
+* `buf` Buffer object or string.  Message to be sent
 * `offset` Integer. Offset in the buffer where the message starts.
 * `length` Integer. Number of bytes in the message.
 * `port` Integer. destination port
@@ -147,13 +147,13 @@ Emitted when an error occurs.
   Optional.
 -->
 
-* `buf` Buffer object.  送信されるメッセージ
-* `offset` Integer. メッセージの開始位置となるバッファ内のオフセット
-* `length` Integer. メッセージのバイト長
-* `port` Integer. 接続先のポート番号
-* `address` String. 接続先の IP
-* `callback` Function. メッセージの配信が完了した後にコールバックされる、
-  Optional.
+* `buf` Buffer オブジェクトまたは文字列。送信されるメッセージ
+* `offset` Integer。メッセージの開始位置となるバッファ内のオフセット
+* `length` Integer。メッセージのバイト長
+* `port` Integer。接続先のポート番号
+* `address` String。接続先の IP
+* `callback` 関数。メッセージの配信が完了した後にコールバックされる、
+  任意。
 
 <!--
 For UDP sockets, the destination port and IP address must be specified.  A string
@@ -177,6 +177,19 @@ DNS ルックアップは送信を少なくとも次の機会まで遅らせる�
 ソケットが以前に `bind` の呼び出しによってバインドされていない場合は、
 ランダムなポート番号が「全てのインタフェース」アドレスに対してバインドされます
 (`udp4` ソケットでは 0.0.0.0、`udp6` では ::0)。
+
+<!--
+With consideration for multi-byte characters, `offset` and `length` will
+be calculated with respect to
+[byte length](buffer.html#buffer_class_method_buffer_bytelength_string_encoding)
+and not the character position.
+-->
+
+マルチバイト文字を考慮してください。
+`offset` および `length` は文字の位置ではなく、
+[バイト位置](buffer.html#buffer_class_method_buffer_bytelength_string_encoding)
+に関係します。
+
 <!--
 Example of sending a UDP packet to a random port on `localhost`;
 -->

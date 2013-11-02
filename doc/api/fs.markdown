@@ -384,17 +384,17 @@ Synchronous link(2).
 <!--
 Asynchronous symlink(2). No arguments other than a possible exception are given
 to the completion callback.
-`type` argument can be either `'dir'`, `'file'`, or `'junction'` (default is `'file'`).  It is only 
-used on Windows (ignored on other platforms).
+The `type` argument can be set to `'dir'`, `'file'`, or `'junction'` (default
+is `'file'`) and is only available on Windows (ignored on other platforms).
 Note that Windows junction points require the destination path to be absolute.  When using
 `'junction'`, the `destination` argument will automatically be normalized to absolute path.
 -->
 
 非同期の symlink(2)。
 完了コールバックには発生し得る例外以外に引数が渡されることはありません。
-`type` 引数は `'dir'`、`'file'`、または `'junction`' (デフォルトは `'file'`)
-です。
-これは Windows でのみ使われます (他のプラットフォームでは無視されます)。
+`type` 引数に指定出来るのは `'dir'`、`'file'`、または `'junction`'
+(デフォルトは `'file'`) で、これは Windows でのみ有効です
+(他のプラットフォームでは無視されます)。
 Windows のジャンクションポイントは対象に絶対パスを要求することに
 注意してください。
 `'junction'` を使うと、`destination` 引数は自動的に絶対パスに正規化されます。
@@ -1294,6 +1294,26 @@ Then call the `callback` argument with either true or false.  Example:
       util.debug(exists ? "it's there" : "no passwd!");
     });
 
+<!--
+`fs.exists()` is an anachronism and exists only for historical reasons.
+There should almost never be a reason to use it in your own code.
+-->
+
+`fs.exists()` は時代錯誤で、存在する理由は歴史的経緯だけです。
+あなたのコードでこれを使うべき理由があってはいけません。
+
+<!--
+In particular, checking if a file exists before opening it is an anti-pattern
+that leaves you vulnerable to race conditions: another process may remove the
+file between the calls to `fs.exists()` and `fs.open()`.  Just open the file
+and handle the error when it's not there.
+-->
+
+とりわけ、ファイルをオープンする前に存在をチェックするのは、
+あなたのコードを競合条件に対して脆弱にするアンチパターンです:
+`fs.exists()` と `fs.open()` の間に別のプロセスがファイルを
+削除するかもしれません。
+単純にファイルをオープンして、それが存在しない時はエラーを処理してください。
 
 ## fs.existsSync(path)
 

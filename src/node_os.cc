@@ -46,6 +46,7 @@ namespace node {
 namespace os {
 
 using v8::Array;
+using v8::Context;
 using v8::FunctionCallbackInfo;
 using v8::Handle;
 using v8::HandleScope;
@@ -114,7 +115,8 @@ static void GetOSRelease(const FunctionCallbackInfo<Value>& args) {
   OSVERSIONINFO info;
 
   info.dwOSVersionInfoSize = sizeof(info);
-  if (GetVersionEx(&info) == 0) return;
+  if (GetVersionEx(&info) == 0)
+    return;
 
   snprintf(release,
            sizeof(release),
@@ -135,7 +137,8 @@ static void GetCPUInfo(const FunctionCallbackInfo<Value>& args) {
   int count, i;
 
   int err = uv_cpu_info(&cpu_infos, &count);
-  if (err) return;
+  if (err)
+    return;
 
   Local<Array> cpus = Array::New();
   for (i = 0; i < count; i++) {
@@ -171,7 +174,8 @@ static void GetCPUInfo(const FunctionCallbackInfo<Value>& args) {
 static void GetFreeMemory(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
   double amount = uv_get_free_memory();
-  if (amount < 0) return;
+  if (amount < 0)
+    return;
   args.GetReturnValue().Set(amount);
 }
 
@@ -179,7 +183,8 @@ static void GetFreeMemory(const FunctionCallbackInfo<Value>& args) {
 static void GetTotalMemory(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
   double amount = uv_get_total_memory();
-  if (amount < 0) return;
+  if (amount < 0)
+    return;
   args.GetReturnValue().Set(amount);
 }
 
@@ -188,7 +193,8 @@ static void GetUptime(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
   double uptime;
   int err = uv_uptime(&uptime);
-  if (err == 0) args.GetReturnValue().Set(uptime);
+  if (err == 0)
+    args.GetReturnValue().Set(uptime);
 }
 
 
@@ -275,9 +281,9 @@ static void GetInterfaceAddresses(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void Initialize(Handle<Object> target) {
-  HandleScope scope(node_isolate);
-
+void Initialize(Handle<Object> target,
+                Handle<Value> unused,
+                Handle<Context> context) {
   NODE_SET_METHOD(target, "getEndianness", GetEndianness);
   NODE_SET_METHOD(target, "getHostname", GetHostname);
   NODE_SET_METHOD(target, "getLoadAvg", GetLoadAvg);
@@ -293,4 +299,4 @@ void Initialize(Handle<Object> target) {
 }  // namespace os
 }  // namespace node
 
-NODE_MODULE(node_os, node::os::Initialize)
+NODE_MODULE_CONTEXT_AWARE(node_os, node::os::Initialize)

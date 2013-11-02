@@ -24,7 +24,7 @@
 
 #define NODE_MAJOR_VERSION 0
 #define NODE_MINOR_VERSION 11
-#define NODE_PATCH_VERSION 7
+#define NODE_PATCH_VERSION 8
 
 #define NODE_VERSION_IS_RELEASE 1
 
@@ -64,6 +64,6 @@
  * an API is broken in the C++ side, including in v8 or
  * other dependencies.
  */
-#define NODE_MODULE_VERSION 0x000C /* v0.12 */
+#define NODE_MODULE_VERSION 13 /* v0.12 */
 
 #endif  /* SRC_NODE_VERSION_H_ */

@@ -42,41 +42,58 @@ The contents of `circle.js`:
 
 <!--
 The module `circle.js` has exported the functions `area()` and
-`circumference()`.  To export an object, add to the special `exports`
-object.
+`circumference()`.  To add functions and objects to the root of your module,
+you can add them to the special `exports` object.
 -->
 
 `circle.js` モジュールは `area()` と `circumference()` を公開しています。
-オブジェクトを公開するには、 `exports` という特別なオブジェクトに加えます。
+関数やオブジェクトをモジュールのルートに加えるには、
+`exports` という特別なオブジェクトに加えます。
 
 <!--
-Note that `exports` is a reference to `module.exports` making it suitable
-for augmentation only. If you are exporting a single item such as a
-constructor you will want to use `module.exports` directly instead.
+Variables local to the module will be private, as though the module was wrapped
+in a function. In this example the variable `PI` is private to `circle.js`.
 -->
 
-`exports` は `module.exports` を参照しているに過ぎないことに注意してください。
-もしコンストラクタなど単一の項目を公開する場合は、`module.exports` を直接
-使いたくなるでしょう。
-
-    function MyConstructor (opts) {
-      //...
-    }
-
-    // BROKEN: Does not modify exports
-    exports = MyConstructor;
-
-    // exports the constructor properly
-    module.exports = MyConstructor;
-
-<!--
-Variables
-local to the module will be private. In this example the variable `PI` is
-private to `circle.js`.
--->
-
-モジュールのローカル変数はプライベートです。
+モジュールのローカル変数は関数に包まれているかのようにプライベートになります。
 この例の場合、変数 `PI` は `circle.js` のプライベート変数です。
+
+<!--
+If you want the root of your module's export to be a function (such as a
+constructor) or if you want to export a complete object in one assignment
+instead of building it one property at a time, assign it to `module.exports`
+instead of `exports`.
+-->
+
+モジュールのルートとして関数 (たとえばコンストラクタ) を後悔したり、
+プロパティを一つずつ代入するのではなく、完全なオブジェクトを一度に
+公開したければ、`exports` の代わりに `module.exports`に代入します。
+
+<!--
+Below, `bar.js` makes use of the `square` module, which exports a constructor:
+-->
+
+以下では、`bar.js` は `square` モジュールが公開するコンストラクタを
+使用しています。
+
+    var square = require('./square.js');
+    var mySquare = square(2);
+    console.log('The area of my square is ' + mySquare.area());
+
+<!--
+The `square` module is defined in `square.js`:
+-->
+
+`square.js` モジュールは `square.js` で定義されています。
+
+    // assigning to exports will not modify module, must use module.exports
+    module.exports = function(width) {
+      return {
+        area: function() {
+          return width * width;
+        }
+      };
+    }
 
 <!--
 The module system is implemented in the `require("module")` module.
@@ -379,32 +396,42 @@ would resolve to different files.
 
 <!--
 In each module, the `module` free variable is a reference to the object
-representing the current module.  In particular
-`module.exports` is accessible via the `exports` module-global.
-`module` isn't actually a global but rather local to each module.
+representing the current module.  For convenience, `module.exports` is
+also accessible via the `exports` module-global. `module` isn't actually
+a global but rather local to each module.
 -->
 
 どのモジュールでも、`module` 自由変数は現在のモジュールを表現するオブジェクトを
 参照します。
-特に `module.exports` は `exports` オブジェクトを通じて参照することもできます。
-`module` は実際はグローバルではなく、各モジュールにローカルです。
+利便性のため、`module.exports` は `exports` オブジェクトを通じて
+参照することもできます。
+`module` は実際はグローバルではなく、各モジュールのローカル変数です。
 
 ### module.exports
 
 * {Object}
 
+<!--
 The `module.exports` object is created by the Module system. Sometimes this is not
-acceptable, many want their module to be an instance of some class. To do this
-assign the desired export object to `module.exports`. For example suppose we
-were making a module called `a.js`
+acceptable; many want their module to be an instance of some class. To do this
+assign the desired export object to `module.exports`. Note that assigning the
+desired object to `exports` will simply rebind the local `exports` variable,
+which is probably not what you want to do.
 -->
 
 `module.exports` オブジェクトはモジュールシステムによって作成されます。
-時々これは受け入れられず、多くのモジュールは何らかのクラスの
-インスタンスであることを望みます。
-それには公開したいオブジェクトを `module.exports` に割り当てます。
-例えば `a.js` と呼ばれるモジュールを作るとしたら
+時々これは受け入れらません;
+多くの人々は、モジュールが何らかのクラスのインスタンスであることを望みます。
+それには、公開したいオブジェクトを `module.exports` に割り当てます。
+望ましいオブジェクトを `exports` へ代入することは、ローカル変数 `exports` への
+再代入に過ぎずないことに注意すべきです。
+それはおそらく、やりたかったことではないでしょう。
 
+<!--
+For example suppose we were making a module called `a.js`
+-->
+
+例えば `a.js` と呼ばれるモジュールを作るとしたら
 
     var EventEmitter = require('events').EventEmitter;
 
@@ -447,6 +474,43 @@ y.js:
     var x = require('./x');
     console.log(x.a);
 
+#### exports alias
+
+<!--
+The `exports` variable that is available within a module starts as a reference
+to `module.exports`. As with any variable, if you assign a new value to it, it
+is no longer bound to the previous value.
+-->
+
+モジュール内で利用出来る `exports` 変数は、最初は `module.exports`
+への参照です。
+他の変数と同様、それに新しい値を割り当てると元の値はもはや束縛されません。
+
+<!--
+To illustrate the behaviour, imagine this hypothetical implementation of
+`require()`:
+-->
+
+その振る舞いを示すために、この仮定の実装を想像してください。
+
+    function require(...) {
+      // ...
+      function (module, exports) {
+        // Your module code here
+        exports = some_func;        // re-assigns exports, exports is no longer
+                                    // a shortcut, and nothing is exported.
+        module.exports = some_func; // makes your module export 0
+      } (module, module.exports);
+      return module;
+    }
+
+<!--
+As a guideline, if the relationship between `exports` and `module.exports`
+seems like magic to you, ignore `exports` and only use `module.exports`.
+-->
+
+ガイドラインとして、もし `exports` と `module.exports` の間の関係が魔法のように
+見えるなら、`exports` を無視して `module.exports` だけを使うようにしてください。
 
 ### module.require(id)
 

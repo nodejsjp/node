@@ -1486,7 +1486,7 @@ SimpleProtocol.prototype._read = function(n) {
     strings using the specified encoding.  Default=null
   * `objectMode` {Boolean} Whether this stream should behave
     as a stream of objects. Meaning that stream.read(n) returns
-    a single value instead of a Buffer of size n
+    a single value instead of a Buffer of size n.  Default=false
 -->
 
 * `options` {Object} (任意)
@@ -1497,7 +1497,7 @@ SimpleProtocol.prototype._read = function(n) {
     デコードされます。デフォルトは `null`。
   * `objectMode` {Boolean} このストリームがオブジェクトストリームとして
     振る舞うべきかどうか。これは `stream.read(n)` がサイズ n のバッファではなく
-    一つの値を返すことを意味します。
+    一つの値を返すことを意味します。デフォルトは `false`。
 
 <!--
 In classes that extend the Readable class, make sure to call the
@@ -2645,6 +2645,7 @@ modify them.
 [`_read(size)`]: #stream_readable_read_size_1
 [`_read()`]: #stream_readable_read_size_1
 [_read]: #stream_readable_read_size_1
+[`writable.write(chunk)`]: #stream_writable_write_chunk_encoding_callback
 [`write(chunk, encoding, callback)`]: #stream_writable_write_chunk_encoding_callback
 [`write()`]: #stream_writable_write_chunk_encoding_callback
 [`stream.write(chunk)`]: #stream_writable_write_chunk_encoding_callback
@@ -2689,6 +2690,7 @@ modify them.
 [`_read(size)`]: #stream_readable_read_size_1
 [`_read()`]: #stream_readable_read_size_1
 [_read]: #stream_readable_read_size_1
+[`writable.write(chunk)`]: #stream_writable_write_chunk_encoding_callback
 [`write(chunk, encoding, callback)`]: #stream_writable_write_chunk_encoding_callback
 [`write()`]: #stream_writable_write_chunk_encoding_callback
 [`stream.write(chunk)`]: #stream_writable_write_chunk_encoding_callback

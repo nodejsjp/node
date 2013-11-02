@@ -10,6 +10,94 @@ It is an instance of [EventEmitter][].
 `process` はグローバルオブジェクトで、どこからでもアクセスすることができます。
 それは [EventEmitter][] のインスタンスです。
 
+## Exit Codes
+
+<!--
+Node will normally exit with a `0` status code when no more async
+operations are pending.  The following status codes are used in other
+cases:
+-->
+
+未完了の非同期な操作が無くなると、Node はステータスコード `0` で正常に
+終了します。その他のケースでは、以下のステータスコードが使われます。
+
+<!--
+* `1` **Uncaught Fatal Exception** - There was an uncaught exception,
+  and it was not handled by a domain or an `uncaughtException` event
+  handler.
+* `2` - Unused (reserved by Bash for builtin misuse)
+* `3` **Internal JavaScript Parse Error** - The JavaScript source code
+  internal in Node's bootstrapping process caused a parse error.  This
+  is extremely rare, and generally can only happen during development
+  of Node itself.
+* `4` **Internal JavaScript Evaluation Failure** - The JavaScript
+  source code internal in Node's bootstrapping process failed to
+  return a function value when evaluated.  This is extremely rare, and
+  generally can only happen during development of Node itself.
+* `5` **Fatal Error** - There was a fatal unrecoverable error in V8.
+  Typically a message will be printed to stderr with the prefix `FATAL
+  ERROR`.
+* `6` **Non-function Internal Exception Handler** - There was an
+  uncaught exception, but the internal fatal exception handler
+  function was somehow set to a non-function, and could not be called.
+* `7` **Internal Exception Handler Run-Time Failure** - There was an
+  uncaught exception, and the internal fatal exception handler
+  function itself threw an error while attempting to handle it.  This
+  can happen, for example, if a `process.on('uncaughtException')` or
+  `domain.on('error')` handler throws an error.
+* `8` - Unused.  In previous versions of Node, exit code 8 sometimes
+  indicated an uncaught exception.
+* `9` - **Invalid Argument** - Either an unknown option was specified,
+  or an option requiring a value was provided without a value.
+* `10` **Internal JavaScript Run-Time Failure** - The JavaScript
+  source code internal in Node's bootstrapping process threw an error
+  when the bootstrapping function was called.  This is extremely rare,
+  and generally can only happen during development of Node itself.
+* `12` **Invalid Debug Argument** - The `--debug` and/or `--debug-brk`
+  options were set, but an invalid port number was chosen.
+* `>128` **Signal Exits** - If Node receives a fatal signal such as
+  `SIGKILL` or `SIGHUP`, then its exit code will be `128` plus the
+  value of the signal code.  This is a standard Unix practice, since
+  exit codes are defined to be 7-bit integers, and signal exits set
+  the high-order bit, and then contain the value of the signal code.
+-->
+
+* `1` **捕捉されなかった致命的な例外** - 捕捉されなかった例外があり、
+  それがドメインや `uncaughtException` イベントハンドラによって
+  処理されなかった。
+* `2` - 未使用 (Bashに組み込まれた誤用のために予約)。
+* `3` **内部的な JavaScript のパースエラー** - Node がプロセスを
+  ブートストラップする内部用の JavaScript ソースコードでパースエラーが
+  発生した。
+  これはきわめてまれで、通常 Node 自身を開発している時にしか起こりません。
+* `4` **内部的な JavaScript の評価失敗 ** - Node がプロセスを
+  ブートストラップする内部用の JavaScript ソースコードが評価された際、
+  関数を返すことに失敗した。
+  これはきわめてまれで、通常 Node 自身を開発している時にしか起こりません。
+* `5` **致命的なエラー** - 致命的で回復不可能なエラーが V8 で発生した。
+  通常、標準エラー出力に接頭辞 `FATAL ERROR` とともにメッセージが出力されます。
+* `6` **内部的エラーハンドラが関数ではない** - 捕捉されない例外が発生したが、
+  内部的な例外ハンドラにどういうわけか関数ではないものが設定されていて
+  呼び出せなかった。
+* `7` **内部的なエラーハンドラが実行時に失敗** - 捕捉されない例外が発生し、
+  それを処理していた内部的な例外ハンドラ自身も例外をスローした。
+  これはたとえば、`process.on('uncaughtException')` または
+  `domain.on('error')` のハンドラが例外をスローした場合に発生します。
+* `8` - 未使用。以前のバージョンの Node では、終了コード 8 は捕捉されない例外を
+  示すことがありました。
+* `9` **不正な引数** - 未知のオプションが指定された、あるいは値が必須の
+  オプションが値無しで指定された。
+* `10` **内部的な JavaScript の実行時失敗** - Node がプロセスを
+  ブートストラップする内部用の JavaScript ソースコードが評価された際、
+  例外をスローした。
+  これはきわめてまれで、通常 Node 自身を開発している時にしか起こりません。
+* `12` **不正なデバッグ引数** - `--debug` または `--debug-brk` が指定されたが、
+  不正なポート番号が選ばれた。
+* `>128` **シグナルによる終了** - Node が `SIGKILL` や `SIGHUP`
+  などの致命的なシグナルを受け取ると、終了コードは `128` にシグナルコードを
+  加えた値になります。
+  これは終了コードが 7bit 整数で定義された時からの Unix の標準的な慣習で、
+  シグナルによる終了は最上位のビットを設定し、シグナルコードの値を含みます。
 
 ## Event: 'exit'
 
@@ -115,15 +203,15 @@ You have been warned.
 ## Signal Events
 
 <!--type=event-->
-<!--name=SIGINT, SIGUSR1, etc.-->
+<!--name=SIGINT, SIGHUP, etc.-->
 
 <!--
 Emitted when the processes receives a signal. See sigaction(2) for a list of
-standard POSIX signal names such as SIGINT, SIGUSR1, etc.
+standard POSIX signal names such as SIGINT, SIGHUP, etc.
 -->
 
 プロセスがシグナルを受信した場合に生成されます。
-SIGINT、SIGUSR1、その他の POSIX 標準シグナル名の一覧について は sigaction(2) を参照してください。
+SIGINT、SIGHUP、その他の POSIX 標準シグナル名の一覧について は sigaction(2) を参照してください。
 
 <!--
 Example of listening for `SIGINT`:
@@ -145,6 +233,13 @@ programs.
 
 多くの端末プログラムで簡単に `SIGINT` を送る方法は `Control-C` を押すことです。
 
+<!--
+Note: SIGUSR1 is reserved by node.js to kickstart the debugger.  It's possible
+to install a listener but that won't stop the debugger from starting.
+-->
+
+注意: `SIGUSR1` は Node.js がデバッガを起動するために予約されています。
+リスナを登録することは出来ますが、デバッガの起動を止めることは出来ません。
 
 ## process.stdout
 
@@ -415,6 +510,26 @@ The shell that executed node should see the exit code as 1.
 -->
 
 node を実行したシェルで終了コードが 1 であることを見ることができるでしょう。
+
+
+## process.exitCode
+
+<!--
+A number which will be the process exit code, when the process either
+exits gracefully, or is exited via `process.exit()` without specifying
+a code.
+-->
+
+プロセスが正常終了する場合や、`process.exit()` でコードが指定されなかった
+場合に、終了コードとなる数値。
+
+<!--
+Specifying a code to `process.exit(code)` will override any previous
+setting of `process.exitCode`.
+-->
+
+`process.exit(code)` でコードが指定されると、以前 `process.exitCode` に
+設定された値は上書きされます。
 
 
 ## process.getgid()
@@ -691,14 +806,14 @@ JavaScript で表現したオブジェクトを保持します。
 <!--
 Send a signal to a process. `pid` is the process id and `signal` is the
 string describing the signal to send.  Signal names are strings like
-'SIGINT' or 'SIGUSR1'.  If omitted, the signal will be 'SIGTERM'.
+'SIGINT' or 'SIGHUP'.  If omitted, the signal will be 'SIGTERM'.
 See kill(2) for more information.
 -->
 
 プロセスにシグナルを送ります。
 `pid` はプロセス ID で `signal` は送信されるシグナルを文字列で記述したものです。
-シグナルの名前は 'SIGINT' や 'SIGUSR1' のような文字列です。
-省略すると、シグナルは 'SIGTERM' となります。
+シグナルの名前は `'SIGINT'` や `'SIGHUP'` のような文字列です。
+省略すると、シグナルは `'SIGTERM'` となります。
 詳細は kill(2) を参照してください。
 
 <!--
@@ -728,6 +843,12 @@ Example of sending a signal to yourself:
 
     process.kill(process.pid, 'SIGHUP');
 
+<!--
+Note: SIGUSR1 is reserved by node.js.  It can be used to kickstart the
+debugger.
+-->
+
+注意: SIGUSR1 は Node.js によって予約されています。それはデバッガを起動します。
 
 ## process.pid
 

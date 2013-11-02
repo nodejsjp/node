@@ -614,12 +614,24 @@ with new data as it is streamed.
 
 <!--
 Calculates the signature on all the updated data passed through the
+<<<<<<< HEAD
 sign.  `private_key` is a string containing the PEM encoded private
 key for signing.
 -->
 
 署名オブジェクトに渡された全ての更新データで署名を計算します。
 `private_key` は PEM でエンコードされた秘密鍵を内容とする文字列です。
+=======
+sign.
+
+`private_key` can be an object or a string. If `private_key` is a string, it is
+treated as the key with no passphrase.
+
+`private_key`:
+
+* `key` : A string holding the PEM encoded private key
+* `passphrase` : A string of passphrase for the private key
+>>>>>>> v0.11.8
 
 <!--
 Returns the signature in `output_format` which can be `'binary'`,
@@ -977,6 +989,26 @@ Usage is otherwise identical to `crypto.randomBytes`.
 -->
 
 他の使い方は `crypto.randomBytes` と同じです。
+
+## Class: Certificate
+
+The class used for working with signed public key & challenges. The most
+common usage for this series of functions is when dealing with the `<keygen>`
+element. http://www.openssl.org/docs/apps/spkac.html
+
+Returned by `crypto.Certificate`.
+
+### Certificate.verifySpkac(spkac)
+
+Returns true of false based on the validity of the SPKAC.
+
+### Certificate.exportChallenge(spkac)
+
+Exports the encoded public key from the supplied SPKAC.
+
+### Certificate.exportPublicKey(spkac)
+
+Exports the encoded challenge associated with the SPKAC.
 
 ## crypto.DEFAULT_ENCODING
 
