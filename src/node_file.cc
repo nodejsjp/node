@@ -24,6 +24,9 @@
 #include "node_buffer.h"
 #include "node_internals.h"
 #include "node_stat_watcher.h"
+
+#include "env.h"
+#include "env-inl.h"
 #include "req_wrap.h"
 #include "string_bytes.h"
 
@@ -42,6 +45,7 @@
 namespace node {
 
 using v8::Array;
+using v8::Context;
 using v8::Function;
 using v8::FunctionCallbackInfo;
 using v8::FunctionTemplate;
@@ -51,7 +55,6 @@ using v8::Integer;
 using v8::Local;
 using v8::Number;
 using v8::Object;
-using v8::Persistent;
 using v8::String;
 using v8::Value;
 
@@ -63,13 +66,15 @@ using v8::Value;
 
 class FSReqWrap: public ReqWrap<uv_fs_t> {
  public:
-  explicit FSReqWrap(const char* syscall, char* data = NULL)
-    : syscall_(syscall)
-    , data_(data) {
+  FSReqWrap(Environment* env, const char* syscall, char* data = NULL)
+    : ReqWrap<uv_fs_t>(env),
+      syscall_(syscall),
+      data_(data) {
   }
 
   void ReleaseEarly() {
-    if (data_ == NULL) return;
+    if (data_ == NULL)
+      return;
     delete[] data_;
     data_ = NULL;
   }
@@ -80,9 +85,6 @@ class FSReqWrap: public ReqWrap<uv_fs_t> {
   const char* syscall_;
   char* data_;
 };
-
-
-static Cached<String> oncomplete_sym;
 
 
 #define ASSERT_OFFSET(a) \
@@ -96,17 +98,19 @@ static Cached<String> oncomplete_sym;
 #define GET_OFFSET(a) ((a)->IsNumber() ? (a)->IntegerValue() : -1)
 #define GET_TRUNCATE_LENGTH(a) ((a)->IntegerValue())
 
-static inline int IsInt64(double x) {
+static inline bool IsInt64(double x) {
   return x == static_cast<double>(static_cast<int64_t>(x));
 }
 
 
 static void After(uv_fs_t *req) {
-  HandleScope scope(node_isolate);
-
   FSReqWrap* req_wrap = static_cast<FSReqWrap*>(req->data);
   assert(&req_wrap->req_ == req);
   req_wrap->ReleaseEarly();  // Free memory that's no longer used now.
+
+  Environment* env = req_wrap->env();
+  Context::Scope context_scope(env->context());
+  HandleScope handle_scope(env->isolate());
 
   // there is always at least one argument. "error"
   int argc = 1;
@@ -168,7 +172,8 @@ static void After(uv_fs_t *req) {
       case UV_FS_STAT:
       case UV_FS_LSTAT:
       case UV_FS_FSTAT:
-        argv[1] = BuildStatsObject(static_cast<const uv_stat_t*>(req->ptr));
+        argv[1] = BuildStatsObject(env,
+                                   static_cast<const uv_stat_t*>(req->ptr));
         break;
 
       case UV_FS_READLINK:
@@ -209,7 +214,7 @@ static void After(uv_fs_t *req) {
     }
   }
 
-  MakeCallback(req_wrap->object(), oncomplete_sym, argc, argv);
+  MakeCallback(env, req_wrap->object(), env->oncomplete_string(), argc, argv);
 
   uv_fs_req_cleanup(&req_wrap->req_);
   delete req_wrap;
@@ -227,27 +232,32 @@ struct fs_req_wrap {
 };
 
 
-#define ASYNC_CALL(func, callback, ...)                           \
-  FSReqWrap* req_wrap = new FSReqWrap(#func);                     \
-  int err = uv_fs_ ## func(uv_default_loop(), &req_wrap->req_,    \
-      __VA_ARGS__, After);                                        \
-  req_wrap->object()->Set(oncomplete_sym, callback);              \
-  req_wrap->Dispatched();                                         \
-  if (err < 0) {                                                  \
-    uv_fs_t* req = &req_wrap->req_;                               \
-    req->result = err;                                            \
-    req->path = NULL;                                             \
-    After(req);                                                   \
-  }                                                               \
+#define ASYNC_CALL(func, callback, ...)                                       \
+  Environment* env = Environment::GetCurrent(args.GetIsolate());              \
+  FSReqWrap* req_wrap = new FSReqWrap(env, #func);                            \
+  int err = uv_fs_ ## func(env->event_loop(),                                 \
+                           &req_wrap->req_,                                   \
+                           __VA_ARGS__,                                       \
+                           After);                                            \
+  req_wrap->object()->Set(env->oncomplete_string(), callback);                \
+  req_wrap->Dispatched();                                                     \
+  if (err < 0) {                                                              \
+    uv_fs_t* req = &req_wrap->req_;                                           \
+    req->result = err;                                                        \
+    req->path = NULL;                                                         \
+    After(req);                                                               \
+  }                                                                           \
   args.GetReturnValue().Set(req_wrap->persistent());
 
-#define SYNC_CALL(func, path, ...)                                \
-  fs_req_wrap req_wrap;                                           \
-  int err = uv_fs_ ## func(uv_default_loop(),                     \
-                           &req_wrap.req,                         \
-                           __VA_ARGS__,                           \
-                           NULL);                                 \
-  if (err < 0) return ThrowUVException(err, #func, NULL, path);   \
+#define SYNC_CALL(func, path, ...)                                            \
+  fs_req_wrap req_wrap;                                                       \
+  Environment* env = Environment::GetCurrent(args.GetIsolate());              \
+  int err = uv_fs_ ## func(env->event_loop(),                                 \
+                           &req_wrap.req,                                     \
+                           __VA_ARGS__,                                       \
+                           NULL);                                             \
+  if (err < 0)                                                                \
+    return ThrowUVException(err, #func, NULL, path);                          \
 
 #define SYNC_REQ req_wrap.req
 
@@ -271,47 +281,16 @@ static void Close(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-static Persistent<Function> stats_constructor;
+Local<Object> BuildStatsObject(Environment* env, const uv_stat_t* s) {
+  // If you hit this assertion, you forgot to enter the v8::Context first.
+  assert(env->context() == env->isolate()->GetCurrentContext());
 
-static Cached<String> dev_symbol;
-static Cached<String> ino_symbol;
-static Cached<String> mode_symbol;
-static Cached<String> nlink_symbol;
-static Cached<String> uid_symbol;
-static Cached<String> gid_symbol;
-static Cached<String> rdev_symbol;
-static Cached<String> size_symbol;
-static Cached<String> blksize_symbol;
-static Cached<String> blocks_symbol;
-static Cached<String> atime_symbol;
-static Cached<String> mtime_symbol;
-static Cached<String> ctime_symbol;
-static Cached<String> birthtime_symbol;
+  HandleScope handle_scope(env->isolate());
 
-Local<Object> BuildStatsObject(const uv_stat_t* s) {
-  HandleScope scope(node_isolate);
-
-  if (dev_symbol.IsEmpty()) {
-    dev_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "dev");
-    ino_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "ino");
-    mode_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "mode");
-    nlink_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "nlink");
-    uid_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "uid");
-    gid_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "gid");
-    rdev_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "rdev");
-    size_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "size");
-    blksize_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "blksize");
-    blocks_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "blocks");
-    atime_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "atime");
-    mtime_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "mtime");
-    ctime_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "ctime");
-    birthtime_symbol = FIXED_ONE_BYTE_STRING(node_isolate, "birthtime");
+  Local<Object> stats = env->stats_constructor_function()->NewInstance();
+  if (stats.IsEmpty()) {
+    return Local<Object>();
   }
-
-  Local<Function> constructor =
-      PersistentToLocal(node_isolate, stats_constructor);
-  Local<Object> stats = constructor->NewInstance();
-  if (stats.IsEmpty()) return Local<Object>();
 
   // The code below is very nasty-looking but it prevents a segmentation fault
   // when people run JS code like the snippet below. It's apparently more
@@ -327,8 +306,9 @@ Local<Object> BuildStatsObject(const uv_stat_t* s) {
 #define X(name)                                                               \
   {                                                                           \
     Local<Value> val = Integer::New(s->st_##name, node_isolate);              \
-    if (val.IsEmpty()) return Local<Object>();                                \
-    stats->Set(name##_symbol, val);                                           \
+    if (val.IsEmpty())                                                        \
+      return Local<Object>();                                                 \
+    stats->Set(env->name ## _string(), val);                                  \
   }
   X(dev)
   X(mode)
@@ -344,8 +324,9 @@ Local<Object> BuildStatsObject(const uv_stat_t* s) {
 #define X(name)                                                               \
   {                                                                           \
     Local<Value> val = Number::New(static_cast<double>(s->st_##name));        \
-    if (val.IsEmpty()) return Local<Object>();                                \
-    stats->Set(name##_symbol, val);                                           \
+    if (val.IsEmpty())                                                        \
+      return Local<Object>();                                                 \
+    stats->Set(env->name ## _string(), val);                                  \
   }
   X(ino)
   X(size)
@@ -359,8 +340,9 @@ Local<Object> BuildStatsObject(const uv_stat_t* s) {
     double msecs = static_cast<double>(s->st_##rec.tv_sec) * 1000;            \
     msecs += static_cast<double>(s->st_##rec.tv_nsec / 1000000);              \
     Local<Value> val = v8::Date::New(msecs);                                  \
-    if (val.IsEmpty()) return Local<Object>();                                \
-    stats->Set(name##_symbol, val);                                           \
+    if (val.IsEmpty())                                                        \
+      return Local<Object>();                                                 \
+    stats->Set(env->name ## _string(), val);                                  \
   }
   X(atime, atim)
   X(mtime, mtim)
@@ -368,14 +350,16 @@ Local<Object> BuildStatsObject(const uv_stat_t* s) {
   X(birthtime, birthtim)
 #undef X
 
-  return scope.Close(stats);
+  return handle_scope.Close(stats);
 }
 
 static void Stat(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  if (args.Length() < 1) return TYPE_ERROR("path required");
-  if (!args[0]->IsString()) return TYPE_ERROR("path must be a string");
+  if (args.Length() < 1)
+    return TYPE_ERROR("path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
 
   String::Utf8Value path(args[0]);
 
@@ -384,15 +368,17 @@ static void Stat(const FunctionCallbackInfo<Value>& args) {
   } else {
     SYNC_CALL(stat, *path, *path)
     args.GetReturnValue().Set(
-        BuildStatsObject(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)));
+        BuildStatsObject(env, static_cast<const uv_stat_t*>(SYNC_REQ.ptr)));
   }
 }
 
 static void LStat(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  if (args.Length() < 1) return TYPE_ERROR("path required");
-  if (!args[0]->IsString()) return TYPE_ERROR("path must be a string");
+  if (args.Length() < 1)
+    return TYPE_ERROR("path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
 
   String::Utf8Value path(args[0]);
 
@@ -401,7 +387,7 @@ static void LStat(const FunctionCallbackInfo<Value>& args) {
   } else {
     SYNC_CALL(lstat, *path, *path)
     args.GetReturnValue().Set(
-        BuildStatsObject(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)));
+        BuildStatsObject(env, static_cast<const uv_stat_t*>(SYNC_REQ.ptr)));
   }
 }
 
@@ -419,7 +405,7 @@ static void FStat(const FunctionCallbackInfo<Value>& args) {
   } else {
     SYNC_CALL(fstat, 0, fd)
     args.GetReturnValue().Set(
-        BuildStatsObject(static_cast<const uv_stat_t*>(SYNC_REQ.ptr)));
+        BuildStatsObject(env, static_cast<const uv_stat_t*>(SYNC_REQ.ptr)));
   }
 }
 
@@ -427,10 +413,14 @@ static void Symlink(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   int len = args.Length();
-  if (len < 1) return TYPE_ERROR("dest path required");
-  if (len < 2) return TYPE_ERROR("src path required");
-  if (!args[0]->IsString()) return TYPE_ERROR("dest path must be a string");
-  if (!args[1]->IsString()) return TYPE_ERROR("src path must be a string");
+  if (len < 1)
+    return TYPE_ERROR("dest path required");
+  if (len < 2)
+    return TYPE_ERROR("src path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("dest path must be a string");
+  if (!args[1]->IsString())
+    return TYPE_ERROR("src path must be a string");
 
   String::Utf8Value dest(args[0]);
   String::Utf8Value path(args[1]);
@@ -458,10 +448,14 @@ static void Link(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   int len = args.Length();
-  if (len < 1) return TYPE_ERROR("dest path required");
-  if (len < 2) return TYPE_ERROR("src path required");
-  if (!args[0]->IsString()) return TYPE_ERROR("dest path must be a string");
-  if (!args[1]->IsString()) return TYPE_ERROR("src path must be a string");
+  if (len < 1)
+    return TYPE_ERROR("dest path required");
+  if (len < 2)
+    return TYPE_ERROR("src path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("dest path must be a string");
+  if (!args[1]->IsString())
+    return TYPE_ERROR("src path must be a string");
 
   String::Utf8Value orig_path(args[0]);
   String::Utf8Value new_path(args[1]);
@@ -476,8 +470,10 @@ static void Link(const FunctionCallbackInfo<Value>& args) {
 static void ReadLink(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  if (args.Length() < 1) return TYPE_ERROR("path required");
-  if (!args[0]->IsString()) return TYPE_ERROR("path must be a string");
+  if (args.Length() < 1)
+    return TYPE_ERROR("path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
 
   String::Utf8Value path(args[0]);
 
@@ -495,10 +491,14 @@ static void Rename(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   int len = args.Length();
-  if (len < 1) return TYPE_ERROR("old path required");
-  if (len < 2) return TYPE_ERROR("new path required");
-  if (!args[0]->IsString()) return TYPE_ERROR("old path must be a string");
-  if (!args[1]->IsString()) return TYPE_ERROR("new path must be a string");
+  if (len < 1)
+    return TYPE_ERROR("old path required");
+  if (len < 2)
+    return TYPE_ERROR("new path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("old path must be a string");
+  if (!args[1]->IsString())
+    return TYPE_ERROR("new path must be a string");
 
   String::Utf8Value old_path(args[0]);
   String::Utf8Value new_path(args[1]);
@@ -564,8 +564,10 @@ static void Fsync(const FunctionCallbackInfo<Value>& args) {
 static void Unlink(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  if (args.Length() < 1) return TYPE_ERROR("path required");
-  if (!args[0]->IsString()) return TYPE_ERROR("path must be a string");
+  if (args.Length() < 1)
+    return TYPE_ERROR("path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
 
   String::Utf8Value path(args[0]);
 
@@ -579,8 +581,10 @@ static void Unlink(const FunctionCallbackInfo<Value>& args) {
 static void RMDir(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  if (args.Length() < 1) return TYPE_ERROR("path required");
-  if (!args[0]->IsString()) return TYPE_ERROR("path must be a string");
+  if (args.Length() < 1)
+    return TYPE_ERROR("path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
 
   String::Utf8Value path(args[0]);
 
@@ -611,8 +615,10 @@ static void MKDir(const FunctionCallbackInfo<Value>& args) {
 static void ReadDir(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  if (args.Length() < 1) return TYPE_ERROR("path required");
-  if (!args[0]->IsString()) return TYPE_ERROR("path must be a string");
+  if (args.Length() < 1)
+    return TYPE_ERROR("path required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
 
   String::Utf8Value path(args[0]);
 
@@ -645,12 +651,18 @@ static void Open(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   int len = args.Length();
-  if (len < 1) return TYPE_ERROR("path required");
-  if (len < 2) return TYPE_ERROR("flags required");
-  if (len < 3) return TYPE_ERROR("mode required");
-  if (!args[0]->IsString()) return TYPE_ERROR("path must be a string");
-  if (!args[1]->IsInt32()) return TYPE_ERROR("flags must be an int");
-  if (!args[2]->IsInt32()) return TYPE_ERROR("mode must be an int");
+  if (len < 1)
+    return TYPE_ERROR("path required");
+  if (len < 2)
+    return TYPE_ERROR("flags required");
+  if (len < 3)
+    return TYPE_ERROR("mode required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
+  if (!args[1]->IsInt32())
+    return TYPE_ERROR("flags must be an int");
+  if (!args[2]->IsInt32())
+    return TYPE_ERROR("mode must be an int");
 
   String::Utf8Value path(args[0]);
   int flags = args[1]->Int32Value();
@@ -719,7 +731,8 @@ static void WriteBuffer(const FunctionCallbackInfo<Value>& args) {
 //             if null, write from the current position
 // 3 enc       encoding of string
 static void WriteString(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  HandleScope handle_scope(args.GetIsolate());
 
   if (!args[0]->IsInt32())
     return ThrowTypeError("First argument must be file descriptor");
@@ -749,19 +762,20 @@ static void WriteString(const FunctionCallbackInfo<Value>& args) {
 
   if (!cb->IsFunction()) {
     SYNC_CALL(write, NULL, fd, buf, len, pos)
-    if (must_free) delete[] buf;
+    if (must_free)
+      delete[] buf;
     return args.GetReturnValue().Set(SYNC_RESULT);
   }
 
-  FSReqWrap* req_wrap = new FSReqWrap("write", must_free ? buf : NULL);
-  int err = uv_fs_write(uv_default_loop(),
+  FSReqWrap* req_wrap = new FSReqWrap(env, "write", must_free ? buf : NULL);
+  int err = uv_fs_write(env->event_loop(),
                         &req_wrap->req_,
                         fd,
                         buf,
                         len,
                         pos,
                         After);
-  req_wrap->object()->Set(oncomplete_sym, cb);
+  req_wrap->object()->Set(env->oncomplete_string(), cb);
   req_wrap->Dispatched();
   if (err < 0) {
     uv_fs_t* req = &req_wrap->req_;
@@ -882,12 +896,18 @@ static void Chown(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   int len = args.Length();
-  if (len < 1) return TYPE_ERROR("path required");
-  if (len < 2) return TYPE_ERROR("uid required");
-  if (len < 3) return TYPE_ERROR("gid required");
-  if (!args[0]->IsString()) return TYPE_ERROR("path must be a string");
-  if (!args[1]->IsUint32()) return TYPE_ERROR("uid must be an unsigned int");
-  if (!args[2]->IsUint32()) return TYPE_ERROR("gid must be an unsigned int");
+  if (len < 1)
+    return TYPE_ERROR("path required");
+  if (len < 2)
+    return TYPE_ERROR("uid required");
+  if (len < 3)
+    return TYPE_ERROR("gid required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
+  if (!args[1]->IsUint32())
+    return TYPE_ERROR("uid must be an unsigned int");
+  if (!args[2]->IsUint32())
+    return TYPE_ERROR("gid must be an unsigned int");
 
   String::Utf8Value path(args[0]);
   uv_uid_t uid = static_cast<uv_uid_t>(args[1]->Uint32Value());
@@ -908,12 +928,18 @@ static void FChown(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   int len = args.Length();
-  if (len < 1) return TYPE_ERROR("fd required");
-  if (len < 2) return TYPE_ERROR("uid required");
-  if (len < 3) return TYPE_ERROR("gid required");
-  if (!args[0]->IsInt32()) return TYPE_ERROR("fd must be an int");
-  if (!args[1]->IsUint32()) return TYPE_ERROR("uid must be an unsigned int");
-  if (!args[2]->IsUint32()) return TYPE_ERROR("gid must be an unsigned int");
+  if (len < 1)
+    return TYPE_ERROR("fd required");
+  if (len < 2)
+    return TYPE_ERROR("uid required");
+  if (len < 3)
+    return TYPE_ERROR("gid required");
+  if (!args[0]->IsInt32())
+    return TYPE_ERROR("fd must be an int");
+  if (!args[1]->IsUint32())
+    return TYPE_ERROR("uid must be an unsigned int");
+  if (!args[2]->IsUint32())
+    return TYPE_ERROR("gid must be an unsigned int");
 
   int fd = args[0]->Int32Value();
   uv_uid_t uid = static_cast<uv_uid_t>(args[1]->Uint32Value());
@@ -931,12 +957,18 @@ static void UTimes(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   int len = args.Length();
-  if (len < 1) return TYPE_ERROR("path required");
-  if (len < 2) return TYPE_ERROR("atime required");
-  if (len < 3) return TYPE_ERROR("mtime required");
-  if (!args[0]->IsString()) return TYPE_ERROR("path must be a string");
-  if (!args[1]->IsNumber()) return TYPE_ERROR("atime must be a number");
-  if (!args[2]->IsNumber()) return TYPE_ERROR("mtime must be a number");
+  if (len < 1)
+    return TYPE_ERROR("path required");
+  if (len < 2)
+    return TYPE_ERROR("atime required");
+  if (len < 3)
+    return TYPE_ERROR("mtime required");
+  if (!args[0]->IsString())
+    return TYPE_ERROR("path must be a string");
+  if (!args[1]->IsNumber())
+    return TYPE_ERROR("atime must be a number");
+  if (!args[2]->IsNumber())
+    return TYPE_ERROR("mtime must be a number");
 
   const String::Utf8Value path(args[0]);
   const double atime = static_cast<double>(args[1]->NumberValue());
@@ -953,12 +985,18 @@ static void FUTimes(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   int len = args.Length();
-  if (len < 1) return TYPE_ERROR("fd required");
-  if (len < 2) return TYPE_ERROR("atime required");
-  if (len < 3) return TYPE_ERROR("mtime required");
-  if (!args[0]->IsInt32()) return TYPE_ERROR("fd must be an int");
-  if (!args[1]->IsNumber()) return TYPE_ERROR("atime must be a number");
-  if (!args[2]->IsNumber()) return TYPE_ERROR("mtime must be a number");
+  if (len < 1)
+    return TYPE_ERROR("fd required");
+  if (len < 2)
+    return TYPE_ERROR("atime required");
+  if (len < 3)
+    return TYPE_ERROR("mtime required");
+  if (!args[0]->IsInt32())
+    return TYPE_ERROR("fd must be an int");
+  if (!args[1]->IsNumber())
+    return TYPE_ERROR("atime must be a number");
+  if (!args[2]->IsNumber())
+    return TYPE_ERROR("mtime must be a number");
 
   const int fd = args[0]->Int32Value();
   const double atime = static_cast<double>(args[1]->NumberValue());
@@ -972,8 +1010,15 @@ static void FUTimes(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void File::Initialize(Handle<Object> target) {
-  HandleScope scope(node_isolate);
+void InitFs(Handle<Object> target,
+            Handle<Value> unused,
+            Handle<Context> context) {
+  Environment* env = Environment::GetCurrent(context);
+
+  // Initialize the stats object
+  Local<Function> constructor = FunctionTemplate::New()->GetFunction();
+  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Stats"), constructor);
+  env->set_stats_constructor_function(constructor);
 
   NODE_SET_METHOD(target, "close", Close);
   NODE_SET_METHOD(target, "open", Open);
@@ -1005,23 +1050,10 @@ void File::Initialize(Handle<Object> target) {
 
   NODE_SET_METHOD(target, "utimes", UTimes);
   NODE_SET_METHOD(target, "futimes", FUTimes);
-}
-
-void InitFs(Handle<Object> target) {
-  HandleScope scope(node_isolate);
-
-  // Initialize the stats object
-  Local<Function> constructor = FunctionTemplate::New()->GetFunction();
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Stats"), constructor);
-  stats_constructor.Reset(node_isolate, constructor);
-
-  File::Initialize(target);
-
-  oncomplete_sym = FIXED_ONE_BYTE_STRING(node_isolate, "oncomplete");
 
   StatWatcher::Initialize(target);
 }
 
 }  // end namespace node
 
-NODE_MODULE(node_fs, node::InitFs)
+NODE_MODULE_CONTEXT_AWARE(node_fs, node::InitFs)

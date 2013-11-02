@@ -25,6 +25,7 @@
 namespace node {
 namespace uv {
 
+using v8::Context;
 using v8::FunctionCallbackInfo;
 using v8::FunctionTemplate;
 using v8::Handle;
@@ -38,14 +39,16 @@ using v8::Value;
 void ErrName(const FunctionCallbackInfo<Value>& args) {
   v8::HandleScope handle_scope(node_isolate);
   int err = args[0]->Int32Value();
-  if (err >= 0) return ThrowError("err >= 0");
+  if (err >= 0)
+    return ThrowError("err >= 0");
   const char* name = uv_err_name(err);
   args.GetReturnValue().Set(OneByteString(node_isolate, name));
 }
 
 
-void Initialize(Handle<Object> target) {
-  v8::HandleScope handle_scope(node_isolate);
+void Initialize(Handle<Object> target,
+                Handle<Value> unused,
+                Handle<Context> context) {
   target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "errname"),
               FunctionTemplate::New(ErrName)->GetFunction());
 #define V(name, _)                                                            \
@@ -59,4 +62,4 @@ void Initialize(Handle<Object> target) {
 }  // namespace uv
 }  // namespace node
 
-NODE_MODULE(node_uv, node::uv::Initialize)
+NODE_MODULE_CONTEXT_AWARE(node_uv, node::uv::Initialize)

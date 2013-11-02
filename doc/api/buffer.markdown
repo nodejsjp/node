@@ -1119,6 +1119,14 @@ Fが与えられなかった場合はバッファ全体を埋めます。
     var b = new Buffer(50);
     b.fill("h");
 
+### buf.toArrayBuffer()
+
+<!--
+Creates a new `ArrayBuffer` with the copied memory of the buffer instance.
+-->
+
+バッファインスタンスのメモリをコピーした新しい `ArrayBuffer` を作成します。
+
 ## buffer.INSPECT_MAX_BYTES
 
 * Number, Default: 50

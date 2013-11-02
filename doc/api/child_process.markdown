@@ -123,6 +123,15 @@ Note that the child process stdio streams might still be open.
 しれないことに注意してください。
 
 <!--
+Also, note that node establishes signal handlers for `'SIGINT'` and `'SIGTERM`',
+so it will not terminate due to receipt of those signals, it will exit.
+-->
+
+また、Node が 'SIGINT'` および `'SIGTERM`' に対するシグナルハンドラを
+確立するため、子プロセスがそれらのシグナルを受けとって終了しても、
+`signal` にはそれらのシグナルの名前が設定されないことに注意してください。
+
+<!--
 See `waitpid(2)`.
 -->
 
@@ -154,17 +163,15 @@ might share the same stdio streams.
 ### Event: 'disconnect'
 
 <!--
-This event is emitted after using the `.disconnect()` method in the parent or
-in the child. After disconnecting it is no longer possible to send messages.
-An alternative way to check if you can send messages is to see if the
-`child.connected` property is `true`.
+This event is emitted after calling the `.disconnect()` method in the parent
+or in the child. After disconnecting it is no longer possible to send messages,
+and the `.connected` property is false.
 -->
 
-このイベントは、親プロセスまたは子プロセスで `disconnect()` メソッドが
+このイベントは、親プロセスまたは子プロセスで `.disconnect()` メソッドが
 呼び出された場合に生成されます。
-この後では、プロセス間でのメッセージ送信はもうできません。
-メッセージを送信できるかを調べるには、`child.connected` プロパティが `true`
-かチェックしてください。
+切断の後では、プロセス間でメッセージを送信することはできず、
+`.connected` プロパティは `false` になります。
 
 ### Event: 'message'
 
@@ -252,6 +259,20 @@ Example:
 
     console.log('Spawned child pid: ' + grep.pid);
     grep.stdin.end();
+
+### child.connected
+
+<!--
+* {Boolean} Set to false after `.disconnect' is called
+-->
+
+* {Boolean} `.disconnect' が呼び出されると `false` に設定される
+
+<!--
+If `.connected` is false, it is no longer possible to send messages.
+-->
+
+`.connected` が `false` の場合、メッセージを送信することはできません。
 
 ### child.kill([signal])
 
@@ -443,7 +464,7 @@ a `message` event instead of `connection` and use `server.bind` instead of
 `dgram` サーバのワークフローも同じです。
 `connection` イベントの代わりに `message` イベントを監視し、
 `server.listen` の代わりに `server.bind` を使用してください
-(現在は UNIX プラットフォームでのみサポートされています)。
+(現時点では UNIX プラットフォームでのみサポートされています)。
 
 #### Example: sending socket object
 
@@ -502,22 +523,30 @@ It is also recommended not to use `.maxConnections` in this condition.
 ### child.disconnect()
 
 <!--
-To close the IPC connection between parent and child use the
-`child.disconnect()` method. This allows the child to exit gracefully since
-there is no IPC channel keeping it alive. When calling this method the
-`disconnect` event will be emitted in both parent and child, and the
-`connected` flag will be set to `false`. Please note that you can also call
-`process.disconnect()` in the child process.
+Close the IPC channel between parent and child, allowing the child to exit
+gracefully once there are no other connections keeping it alive. After calling
+this method the `.connected` flag will be set to `false` in both the parent and
+child, and it is no longer possible to send messages.
 -->
 
-親プロセスと子プロセス間の IPC コネクションをクローズするには
-`child.disconnect()` メソッドを使用します。
-これは、子プロセスが IPC チャネルを保持しないことにより、強制的ではない
-終了を可能にします。
-このメソッドを呼び出すと親プロセスと子プロセスの両方で `'disconnect'`
-イベントが生成され、`connected` フラグが `false` に設定されます。
-子プロセスで `process.disconnect()` を呼び出すことも可能であることに
-注意してください。
+親プロセスと子プロセス間の IPC コネクションをクローズし、
+他の接続を持たない子プロセスが自然に終了することを可能にします。
+このメソッドを呼び出すと、親プロセスと子プロセスの両方で `.connected` は
+`false` に設定され、メッセージを送信することはできなくなります。
+
+<!--
+The 'disconnect' event will be emitted when there are no messages in the process
+of being received, most likely immediately.
+-->
+
+プロセスが受信するメッセージがなければ、おそらくはすぐに `'disconnect'`
+イベントが生成されます。
+
+<!--
+Note that you can also call `process.disconnect()` in the child process.
+-->
+
+子プロセスでも `process.disconnect()` を呼び出せることに注意してください。
 
 ## child_process.spawn(command, [args], [options])
 
@@ -854,7 +883,7 @@ See also: `child_process.exec()` and `child_process.fork()`
      understand the `-c` switch on UNIX or `/s /c` on Windows. On Windows,
      command line parsing should be compatible with `cmd.exe`.)
   * `timeout` {Number} (Default: 0)
-  * `maxBuffer` {Number} (Default: 200*1024)
+  * `maxBuffer` {Number} (Default: `200*1024`)
   * `killSignal` {String} (Default: 'SIGTERM')
 * `callback` {Function} called with the output when process terminates
   * `error` {Error}
@@ -986,7 +1015,7 @@ leaner than `child_process.exec`. It has the same options.
 これは `child_process.exec` より若干効率的で、同じオプションを持ちます。
 
 
-## child\_process.fork(modulePath, [args], [options])
+## child_process.fork(modulePath, [args], [options])
 
 <!--
 * `modulePath` {String} The module to run in the child
@@ -996,6 +1025,8 @@ leaner than `child_process.exec`. It has the same options.
   * `env` {Object} Environment key-value pairs
   * `encoding` {String} (Default: 'utf8')
   * `execPath` {String} Executable used to create the child process
+  * `silent` {Boolean} If true, prevent stdout and stderr in the spawned node
+    process from being associated with the parent's (default is false)
 * Return: ChildProcess object
 -->
 
@@ -1004,8 +1035,10 @@ leaner than `child_process.exec`. It has the same options.
 * `options` {Object}
   * `cwd` {String} 子プロセスのカレントワーキングディレクトリ
   * `env` {Object} 環境変数として与えるキー・値のペア
-  * `encoding` {String} (Default: 'utf8')
+  * `encoding` {String} (デフォルト: 'utf8')
   * `execPath` {String} 子プロセスの作成に使われる実行ファイル
+  * `silent` {Boolean} `true` の場合、起動された子プロセスの標準入力と標準出力が
+    親プロセスに関連づけられるのを抑止します (デフォルトは `false`)。
 * Return: ChildProcess object
 
 <!--
@@ -1019,25 +1052,6 @@ instance, the returned object has a communication channel built-in. See
 返されるオブジェクトは通常の ChildProcess の全てのメソッドに加えて、
 組み込みの通信チャネルを持ちます。
 詳細は `child.send(message, [sendHandle])` を参照してください。
-
-<!--
-By default the spawned Node process will have the stdout, stderr associated
-with the parent's. To change this behavior set the `silent` property in the
-`options` object to `true`.
--->
-
-デフォルトでは、起動された Node プロセスは親プロセスに関連づけられた標準出力と
-標準エラー出力を持ちます。これを変更するには `options` オブジェクトの
-`silent` プロパティを `true` に設定します。
-
-<!--
-The child process does not automatically exit once it's done, you need to call
-`process.exit()` explicitly. This limitation may be lifted in the future.
--->
-
-子プロセスは自動的に終了するわけではないので、
-明示的に `process.exit()` を呼び出す必要があります。
-この制限は将来取り除かれるかもしれません。
 
 <!--
 These child Nodes are still whole new instances of V8. Assume at least 30ms

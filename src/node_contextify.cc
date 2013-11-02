@@ -22,6 +22,12 @@
 #include "node.h"
 #include "node_internals.h"
 #include "node_watchdog.h"
+#include "env.h"
+#include "env-inl.h"
+#include "util.h"
+#include "util-inl.h"
+#include "weak-object.h"
+#include "weak-object-inl.h"
 
 namespace node {
 
@@ -33,6 +39,7 @@ using v8::External;
 using v8::Function;
 using v8::FunctionCallbackInfo;
 using v8::FunctionTemplate;
+using v8::Handle;
 using v8::HandleScope;
 using v8::Integer;
 using v8::Isolate;
@@ -51,20 +58,26 @@ using v8::Value;
 
 class ContextifyContext {
  private:
+  Environment* const env_;
   Persistent<Object> sandbox_;
-  Persistent<Object> proxy_global_;
   Persistent<Context> context_;
-  static Persistent<Function> data_wrapper_ctor;
+  Persistent<Object> proxy_global_;
+  int references_;
 
  public:
-  explicit ContextifyContext(Local<Object> sandbox) :
-      sandbox_(node_isolate, sandbox) {
-    HandleScope scope(node_isolate);
-    Local<Context> v8_context = CreateV8Context();
-    context_.Reset(node_isolate, v8_context);
-    proxy_global_.Reset(node_isolate, v8_context->Global());
-    sandbox_.MakeWeak(this, SandboxFreeCallback);
+  explicit ContextifyContext(Environment* env, Local<Object> sandbox)
+      : env_(env),
+        sandbox_(env->isolate(), sandbox),
+        context_(env->isolate(), CreateV8Context(env)),
+        proxy_global_(env->isolate(), context()->Global()),
+        // Wait for sandbox_, proxy_global_, and context_ to die
+        references_(3) {
+    sandbox_.MakeWeak(this, WeakCallback);
     sandbox_.MarkIndependent();
+    context_.MakeWeak(this, WeakCallback);
+    context_.MarkIndependent();
+    proxy_global_.MakeWeak(this, WeakCallback);
+    proxy_global_.MarkIndependent();
   }
 
 
@@ -75,21 +88,104 @@ class ContextifyContext {
   }
 
 
+  inline Environment* env() const {
+    return env_;
+  }
+
+
+  inline Local<Context> context() const {
+    return PersistentToLocal(env()->isolate(), context_);
+  }
+
+
+  // XXX(isaacs): This function only exists because of a shortcoming of
+  // the V8 SetNamedPropertyHandler function.
+  //
+  // It does not provide a way to intercept Object.defineProperty(..)
+  // calls.  As a result, these properties are not copied onto the
+  // contextified sandbox when a new global property is added via either
+  // a function declaration or a Object.defineProperty(global, ...) call.
+  //
+  // Note that any function declarations or Object.defineProperty()
+  // globals that are created asynchronously (in a setTimeout, callback,
+  // etc.) will happen AFTER the call to copy properties, and thus not be
+  // caught.
+  //
+  // The way to properly fix this is to add some sort of a
+  // Object::SetNamedDefinePropertyHandler() function that takes a callback,
+  // which receives the property name and property descriptor as arguments.
+  //
+  // Luckily, such situations are rare, and asynchronously-added globals
+  // weren't supported by Node's VM module until 0.12 anyway.  But, this
+  // should be fixed properly in V8, and this copy function should be
+  // removed once there is a better way.
+  void CopyProperties() {
+    HandleScope scope(node_isolate);
+
+    Local<Context> context = PersistentToLocal(env()->isolate(), context_);
+    Local<Object> global = context->Global()->GetPrototype()->ToObject();
+    Local<Object> sandbox = PersistentToLocal(env()->isolate(), sandbox_);
+
+    Local<Function> clone_property_method;
+
+    Local<Array> names = global->GetOwnPropertyNames();
+    int length = names->Length();
+    for (int i = 0; i < length; i++) {
+      Local<String> key = names->Get(i)->ToString();
+      bool has = sandbox->HasOwnProperty(key);
+      if (!has) {
+        // Could also do this like so:
+        //
+        // PropertyAttribute att = global->GetPropertyAttributes(key_v);
+        // Local<Value> val = global->Get(key_v);
+        // sandbox->ForceSet(key_v, val, att);
+        //
+        // However, this doesn't handle ES6-style properties configured with
+        // Object.defineProperty, and that's exactly what we're up against at
+        // this point.  ForceSet(key,val,att) only supports value properties
+        // with the ES3-style attribute flags (DontDelete/DontEnum/ReadOnly),
+        // which doesn't faithfully capture the full range of configurations
+        // that can be done using Object.defineProperty.
+        if (clone_property_method.IsEmpty()) {
+          Local<String> code = FIXED_ONE_BYTE_STRING(node_isolate,
+              "(function cloneProperty(source, key, target) {\n"
+              "  try {\n"
+              "    var desc = Object.getOwnPropertyDescriptor(source, key);\n"
+              "    if (desc.value === source) desc.value = target;\n"
+              "    Object.defineProperty(target, key, desc);\n"
+              "  } catch (e) {\n"
+              "   // Catch sealed properties errors\n"
+              "  }\n"
+              "})");
+
+          Local<String> fname = FIXED_ONE_BYTE_STRING(node_isolate,
+              "binding:script");
+          Local<Script> script = Script::Compile(code, fname);
+          clone_property_method = Local<Function>::Cast(script->Run());
+          assert(clone_property_method->IsFunction());
+        }
+        Local<Value> args[] = { global, key, sandbox };
+        clone_property_method->Call(global, ARRAY_SIZE(args), args);
+      }
+    }
+  }
+
+
   // This is an object that just keeps an internal pointer to this
   // ContextifyContext.  It's passed to the NamedPropertyHandler.  If we
   // pass the main JavaScript context object we're embedded in, then the
   // NamedPropertyHandler will store a reference to it forever and keep it
   // from getting gc'd.
-  Local<Value> CreateDataWrapper() {
+  Local<Value> CreateDataWrapper(Environment* env) {
     HandleScope scope(node_isolate);
-    Local<Function> ctor = PersistentToLocal(node_isolate, data_wrapper_ctor);
-    Local<Object> wrapper = ctor->NewInstance();
-    NODE_WRAP(wrapper, this);
+    Local<Object> wrapper =
+        env->script_data_constructor_function()->NewInstance();
+    Wrap<ContextifyContext>(wrapper, this);
     return scope.Close(wrapper);
   }
 
 
-  Local<Context> CreateV8Context() {
+  Local<Context> CreateV8Context(Environment* env) {
     HandleScope scope(node_isolate);
     Local<FunctionTemplate> function_template = FunctionTemplate::New();
     function_template->SetHiddenPrototype(true);
@@ -104,19 +200,17 @@ class ContextifyContext {
                                              GlobalPropertyQueryCallback,
                                              GlobalPropertyDeleterCallback,
                                              GlobalPropertyEnumeratorCallback,
-                                             CreateDataWrapper());
+                                             CreateDataWrapper(env));
     object_template->SetAccessCheckCallbacks(GlobalPropertyNamedAccessCheck,
                                              GlobalPropertyIndexedAccessCheck);
     return scope.Close(Context::New(node_isolate, NULL, object_template));
   }
 
 
-  static void Init(Local<Object> target) {
-    HandleScope scope(node_isolate);
-
+  static void Init(Environment* env, Local<Object> target) {
     Local<FunctionTemplate> function_template = FunctionTemplate::New();
     function_template->InstanceTemplate()->SetInternalFieldCount(1);
-    data_wrapper_ctor.Reset(node_isolate, function_template->GetFunction());
+    env->set_script_data_constructor_function(function_template->GetFunction());
 
     NODE_SET_METHOD(target, "makeContext", MakeContext);
     NODE_SET_METHOD(target, "isContext", IsContext);
@@ -124,7 +218,8 @@ class ContextifyContext {
 
 
   static void MakeContext(const FunctionCallbackInfo<Value>& args) {
-    HandleScope scope(node_isolate);
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
+    HandleScope handle_scope(args.GetIsolate());
 
     if (!args[0]->IsObject()) {
       return ThrowTypeError("sandbox argument must be an object.");
@@ -137,7 +232,7 @@ class ContextifyContext {
     // Don't allow contextifying a sandbox multiple times.
     assert(sandbox->GetHiddenValue(hidden_name).IsEmpty());
 
-    ContextifyContext* context = new ContextifyContext(sandbox);
+    ContextifyContext* context = new ContextifyContext(env, sandbox);
     Local<External> hidden_context = External::New(context);
     sandbox->SetHiddenValue(hidden_name, hidden_context);
   }
@@ -159,10 +254,13 @@ class ContextifyContext {
   }
 
 
-  static void SandboxFreeCallback(Isolate* isolate,
-                                  Persistent<Object>* target,
-                                  ContextifyContext* context) {
-    delete context;
+  template <class T>
+  static void WeakCallback(Isolate* isolate,
+                           Persistent<T>* target,
+                           ContextifyContext* context) {
+    target->ClearWeak();
+    if (--context->references_ == 0)
+      delete context;
   }
 
 
@@ -177,18 +275,6 @@ class ContextifyContext {
     Local<External> context_external = context_external_v.As<External>();
 
     return static_cast<ContextifyContext*>(context_external->Value());
-  }
-
-  static Local<Context> V8ContextFromContextifiedSandbox(
-      const Local<Object>& sandbox) {
-    ContextifyContext* contextify_context =
-        ContextFromContextifiedSandbox(sandbox);
-    if (contextify_context == NULL) {
-      ThrowTypeError("sandbox argument must have been converted to a context.");
-      return Local<Context>();
-    }
-
-    return PersistentToLocal(node_isolate, contextify_context->context_);
   }
 
 
@@ -213,8 +299,8 @@ class ContextifyContext {
       const PropertyCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
 
-    Local<Object> data = args.Data()->ToObject();
-    ContextifyContext* ctx = ObjectWrap::Unwrap<ContextifyContext>(data);
+    ContextifyContext* ctx =
+        Unwrap<ContextifyContext>(args.Data().As<Object>());
 
     Local<Object> sandbox = PersistentToLocal(node_isolate, ctx->sandbox_);
     Local<Value> rv = sandbox->GetRealNamedProperty(property);
@@ -237,8 +323,8 @@ class ContextifyContext {
       const PropertyCallbackInfo<Value>& args) {
     HandleScope scope(node_isolate);
 
-    Local<Object> data = args.Data()->ToObject();
-    ContextifyContext* ctx = ObjectWrap::Unwrap<ContextifyContext>(data);
+    ContextifyContext* ctx =
+        Unwrap<ContextifyContext>(args.Data().As<Object>());
 
     PersistentToLocal(node_isolate, ctx->sandbox_)->Set(property, value);
   }
@@ -249,8 +335,8 @@ class ContextifyContext {
       const PropertyCallbackInfo<Integer>& args) {
     HandleScope scope(node_isolate);
 
-    Local<Object> data = args.Data()->ToObject();
-    ContextifyContext* ctx = ObjectWrap::Unwrap<ContextifyContext>(data);
+    ContextifyContext* ctx =
+        Unwrap<ContextifyContext>(args.Data().As<Object>());
 
     Local<Object> sandbox = PersistentToLocal(node_isolate, ctx->sandbox_);
     Local<Object> proxy_global = PersistentToLocal(node_isolate,
@@ -270,8 +356,8 @@ class ContextifyContext {
       const PropertyCallbackInfo<Boolean>& args) {
     HandleScope scope(node_isolate);
 
-    Local<Object> data = args.Data()->ToObject();
-    ContextifyContext* ctx = ObjectWrap::Unwrap<ContextifyContext>(data);
+    ContextifyContext* ctx =
+        Unwrap<ContextifyContext>(args.Data().As<Object>());
 
     bool success = PersistentToLocal(node_isolate,
                                      ctx->sandbox_)->Delete(property);
@@ -287,37 +373,34 @@ class ContextifyContext {
       const PropertyCallbackInfo<Array>& args) {
     HandleScope scope(node_isolate);
 
-    Local<Object> data = args.Data()->ToObject();
-    ContextifyContext* ctx = ObjectWrap::Unwrap<ContextifyContext>(data);
+    ContextifyContext* ctx =
+        Unwrap<ContextifyContext>(args.Data().As<Object>());
 
     Local<Object> sandbox = PersistentToLocal(node_isolate, ctx->sandbox_);
     args.GetReturnValue().Set(sandbox->GetPropertyNames());
   }
 };
 
-class ContextifyScript : ObjectWrap {
+class ContextifyScript : public WeakObject {
  private:
   Persistent<Script> script_;
 
  public:
-  static Persistent<FunctionTemplate> script_tmpl;
-
-  static void Init(Local<Object> target) {
+  static void Init(Environment* env, Local<Object> target) {
     HandleScope scope(node_isolate);
     Local<String> class_name =
         FIXED_ONE_BYTE_STRING(node_isolate, "ContextifyScript");
 
-    script_tmpl.Reset(node_isolate, FunctionTemplate::New(New));
-    Local<FunctionTemplate> lscript_tmpl =
-        PersistentToLocal(node_isolate, script_tmpl);
-    lscript_tmpl->InstanceTemplate()->SetInternalFieldCount(1);
-    lscript_tmpl->SetClassName(class_name);
-    NODE_SET_PROTOTYPE_METHOD(lscript_tmpl, "runInContext", RunInContext);
-    NODE_SET_PROTOTYPE_METHOD(lscript_tmpl,
+    Local<FunctionTemplate> script_tmpl = FunctionTemplate::New(New);
+    script_tmpl->InstanceTemplate()->SetInternalFieldCount(1);
+    script_tmpl->SetClassName(class_name);
+    NODE_SET_PROTOTYPE_METHOD(script_tmpl, "runInContext", RunInContext);
+    NODE_SET_PROTOTYPE_METHOD(script_tmpl,
                               "runInThisContext",
                               RunInThisContext);
 
-    target->Set(class_name, lscript_tmpl->GetFunction());
+    target->Set(class_name, script_tmpl->GetFunction());
+    env->set_script_context_constructor_template(script_tmpl);
   }
 
 
@@ -329,8 +412,8 @@ class ContextifyScript : ObjectWrap {
       return ThrowError("Must call vm.Script as a constructor.");
     }
 
-    ContextifyScript *contextify_script = new ContextifyScript();
-    contextify_script->Wrap(args.Holder());
+    ContextifyScript* contextify_script =
+        new ContextifyScript(args.GetIsolate(), args.This());
 
     TryCatch try_catch;
     Local<String> code = args[0]->ToString();
@@ -357,15 +440,16 @@ class ContextifyScript : ObjectWrap {
   }
 
 
-  static bool InstanceOf(const Local<Value>& value) {
+  static bool InstanceOf(Environment* env, const Local<Value>& value) {
     return !value.IsEmpty() &&
-        PersistentToLocal(node_isolate, script_tmpl)->HasInstance(value);
+           env->script_context_constructor_template()->HasInstance(value);
   }
 
 
   // args: [options]
   static void RunInThisContext(const FunctionCallbackInfo<Value>& args) {
-    HandleScope scope(node_isolate);
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
+    HandleScope handle_scope(args.GetIsolate());
 
     // Assemble arguments
     TryCatch try_catch;
@@ -377,7 +461,7 @@ class ContextifyScript : ObjectWrap {
     }
 
     // Do the eval within this context
-    EvalMachine(timeout, display_errors, args, try_catch);
+    EvalMachine(env, timeout, display_errors, args, try_catch);
   }
 
   // args: sandbox, [options]
@@ -398,16 +482,21 @@ class ContextifyScript : ObjectWrap {
     }
 
     // Get the context from the sandbox
-    Local<Context> context =
-        ContextifyContext::V8ContextFromContextifiedSandbox(sandbox);
-    if (try_catch.HasCaught()) {
-      try_catch.ReThrow();
-      return;
+    ContextifyContext* contextify_context =
+        ContextifyContext::ContextFromContextifiedSandbox(sandbox);
+    if (contextify_context == NULL) {
+      return ThrowTypeError(
+          "sandbox argument must have been converted to a context.");
     }
 
     // Do the eval within the context
-    Context::Scope context_scope(context);
-    EvalMachine(timeout, display_errors, args, try_catch);
+    Context::Scope context_scope(contextify_context->context());
+    EvalMachine(contextify_context->env(),
+                timeout,
+                display_errors,
+                args,
+                try_catch);
+    contextify_context->CopyProperties();
   }
 
   static int64_t GetTimeoutArg(const FunctionCallbackInfo<Value>& args,
@@ -475,17 +564,18 @@ class ContextifyScript : ObjectWrap {
   }
 
 
-  static void EvalMachine(const int64_t timeout,
+  static void EvalMachine(Environment* env,
+                          const int64_t timeout,
                           const bool display_errors,
                           const FunctionCallbackInfo<Value>& args,
                           TryCatch& try_catch) {
-    if (!ContextifyScript::InstanceOf(args.This())) {
+    if (!ContextifyScript::InstanceOf(env, args.This())) {
       return ThrowTypeError(
           "Script methods can only be called on script instances.");
     }
 
     ContextifyScript* wrapped_script =
-        ObjectWrap::Unwrap<ContextifyScript>(args.This());
+        Unwrap<ContextifyScript>(args.This());
     Local<Script> script = PersistentToLocal(node_isolate,
                                              wrapped_script->script_);
 
@@ -515,21 +605,25 @@ class ContextifyScript : ObjectWrap {
   }
 
 
+  ContextifyScript(Isolate* isolate, Local<Object> object)
+      : WeakObject(isolate, object) {
+  }
+
+
   ~ContextifyScript() {
     script_.Dispose();
   }
 };
 
 
-Persistent<Function> ContextifyContext::data_wrapper_ctor;
-Persistent<FunctionTemplate> ContextifyScript::script_tmpl;
-
-void InitContextify(Local<Object> target) {
-  HandleScope scope(node_isolate);
-  ContextifyContext::Init(target);
-  ContextifyScript::Init(target);
+void InitContextify(Handle<Object> target,
+                    Handle<Value> unused,
+                    Handle<Context> context) {
+  Environment* env = Environment::GetCurrent(context);
+  ContextifyContext::Init(env, target);
+  ContextifyScript::Init(env, target);
 }
 
 }  // namespace node
 
-NODE_MODULE(node_contextify, node::InitContextify);
+NODE_MODULE_CONTEXT_AWARE(node_contextify, node::InitContextify);

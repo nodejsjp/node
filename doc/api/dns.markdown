@@ -38,26 +38,26 @@ resolves the IP addresses which are returned.
       console.log('addresses: ' + JSON.stringify(addresses));
 
       addresses.forEach(function (a) {
-        dns.reverse(a, function (err, domains) {
+        dns.reverse(a, function (err, hostnames) {
           if (err) {
             throw err;
           }
 
-          console.log('reverse for ' + a + ': ' + JSON.stringify(domains));
+          console.log('reverse for ' + a + ': ' + JSON.stringify(hostnames));
         });
       });
     });
 
-## dns.lookup(domain, [family], callback)
+## dns.lookup(hostname, [family], callback)
 
 <!--
-Resolves a domain (e.g. `'google.com'`) into the first found A (IPv4) or
+Resolves a hostname (e.g. `'google.com'`) into the first found A (IPv4) or
 AAAA (IPv6) record.
 The `family` can be the integer `4` or `6`. Defaults to `null` that indicates
 both Ip v4 and v6 address family.
 -->
 
-ドメイン (例 `'google.com'`) を解決して最初に見つかった
+ホスト名 (例 `'google.com'`) を解決して最初に見つかった
 A (IPv4) または AAAA (IPv6) レコードにします。
 `family` は整数の `4` または `6` を指定することができます。
 デフォルトは `null` で、IP v4 と v6 の両方をアドレスファミリーを意味します。
@@ -77,27 +77,27 @@ necessarily the value initially passed to `lookup`).
 <!--
 On error, `err` is an `Error` object, where `err.code` is the error code.
 Keep in mind that `err.code` will be set to `'ENOENT'` not only when
-the domain does not exist but also when the lookup fails in other ways
+the hostname does not exist but also when the lookup fails in other ways
 such as no available file descriptors.
 -->
 
 エラー時、`err` は `Error` オブジェクトで、`err.code` はエラーコードです。
-`err.code` が `'ENOENT'` に設定されるのはドメインが存在しない場合だけではなく、
+`err.code` が `'ENOENT'` に設定されるのはホスト名が存在しない場合だけではなく、
 ファイル記述子が使えないなどルックアップが失敗した場合もあることに
 注意してください。
 
 
-## dns.resolve(domain, [rrtype], callback)
+## dns.resolve(hostname, [rrtype], callback)
 
 <!--
-Resolves a domain (e.g. `'google.com'`) into an array of the record types
+Resolves a hostname (e.g. `'google.com'`) into an array of the record types
 specified by rrtype. Valid rrtypes are `'A'` (IPV4 addresses, default),
 `'AAAA'` (IPV6 addresses), `'MX'` (mail exchange records), `'TXT'` (text
 records), `'SRV'` (SRV records), `'PTR'` (used for reverse IP lookups),
 `'NS'` (name server records) and `'CNAME'` (canonical name records).
 -->
 
-ドメイン (例 `'google.com'`) を解決して `rrtype` で指定されたレコードタイプの配列にします。
+ホスト名 (例 `'google.com'`) を解決して `rrtype` で指定されたレコードタイプの配列にします。
 妥当な `rrtype` は `'A'` (IPV4アドレス)、`'AAAA'` (IPV6アドレス)、
 `'MX'` (mail exchangeレコード), `'TXT'` (テキストレコード)、
 `'SRV'` (SRVレコード)、`'PTR'` (IP を逆引きでルックアップするために使われる)、
@@ -122,7 +122,7 @@ one of the error codes listed below.
 `err.errno` は後述するエラーコードのいずれかです。
 
 
-## dns.resolve4(domain, callback)
+## dns.resolve4(hostname, callback)
 
 <!--
 The same as `dns.resolve()`, but only for IPv4 queries (`A` records).
@@ -134,7 +134,7 @@ The same as `dns.resolve()`, but only for IPv4 queries (`A` records).
 `addresses` は IPv4 アドレスの配列です (例<br />
 `['74.125.79.104', '74.125.79.105', '74.125.79.106']`)
 
-## dns.resolve6(domain, callback)
+## dns.resolve6(hostname, callback)
 
 <!--
 The same as `dns.resolve4()` except for IPv6 queries (an `AAAA` query).
@@ -143,7 +143,7 @@ The same as `dns.resolve4()` except for IPv6 queries (an `AAAA` query).
 IPv6 (`AAAA` レコード) を問い合わせることを除いて `dns.resolve4()` と同じです。
 
 
-## dns.resolveMx(domain, callback)
+## dns.resolveMx(hostname, callback)
 
 <!--
 The same as `dns.resolve()`, but only for mail exchange queries (`MX` records).
@@ -159,71 +159,71 @@ attribute (e.g. `[{'priority': 10, 'exchange': 'mx.example.com'},...]`).
 `addresses` は MX レコードの配列で、それぞれは priority と exchange の属性を持ちます
 (例 `[{'priority': 10, 'exchange': 'mx.example.com'},...]`)。
 
-## dns.resolveTxt(domain, callback)
+## dns.resolveTxt(hostname, callback)
 
 <!--
 The same as `dns.resolve()`, but only for text queries (`TXT` records).
-`addresses` is an array of the text records available for `domain` (e.g.,
+`addresses` is an array of the text records available for `hostname` (e.g.,
 `['v=spf1 ip4:0.0.0.0 ~all']`).
 -->
 
 `dns.resolve()` と同じですが、テキスト (`TXT` レコード) だけを問い合わせます。
-`addresses` は `domain` で利用可能なテキストレコードの配列です。
+`addresses` は `hostname` で利用可能なテキストレコードの配列です。
 (例、`['v=spf1 ip4:0.0.0.0 ~all']`)
 
-## dns.resolveSrv(domain, callback)
+## dns.resolveSrv(hostname, callback)
 
 <!--
 The same as `dns.resolve()`, but only for service records (`SRV` records).
-`addresses` is an array of the SRV records available for `domain`. Properties
+`addresses` is an array of the SRV records available for `hostname`. Properties
 of SRV records are priority, weight, port, and name (e.g.,
 `[{'priority': 10, {'weight': 5, 'port': 21223, 'name': 'service.example.com'}, ...]`).
 -->
 
 `dns.resolve()` と同じですが、サービスレコード (`SRV` レコード) だけを問い合わせます。
-`addresses` は `domain` で利用可能な SRV レコードの配列です。
+`addresses` は `hostname` で利用可能な SRV レコードの配列です。
 SRV レコードのプロパティは priority、weight、port、そして name です
 (例 `[{'priority': 10, {'weight': 5, 'port': 21223, 'name': 'service.example.com'}, ...]`)。
 
-## dns.resolveNs(domain, callback)
+## dns.resolveNs(hostname, callback)
 
 <!--
 The same as `dns.resolve()`, but only for name server records (`NS` records).
-`addresses` is an array of the name server records available for `domain`
+`addresses` is an array of the name server records available for `hostname`
 (e.g., `['ns1.example.com', 'ns2.example.com']`).
 -->
 
 `dns.resolve()` と同じですが、ネームサーバレコード (`NS` レコード) 
 だけを問い合わせます。
-`address` は `domain` で利用可能なネームサーバレコードの配列です
+`address` は `hostname` で利用可能なネームサーバレコードの配列です
 (例 `['ns1.example.com', 'ns2.example.com']`)。
 
-## dns.resolveCname(domain, callback)
+## dns.resolveCname(hostname, callback)
 
 <!--
 The same as `dns.resolve()`, but only for canonical name records (`CNAME`
 records). `addresses` is an array of the canonical name records available for
-`domain` (e.g., `['bar.example.com']`).
+`hostname` (e.g., `['bar.example.com']`).
 -->
 
 `dns.resolve()` と同じですが、別名レコード (`CNAME` レコード) 
 だけを問い合わせます。
 `address` は `domain` で利用可能な別名レコードの配列です
-`domain` (e.g., `['bar.example.com']`)。
+`hostname` (e.g., `['bar.example.com']`)。
 
 ## dns.reverse(ip, callback)
 
 <!--
-Reverse resolves an ip address to an array of domain names.
+Reverse resolves an ip address to an array of hostnames.
 -->
 
-IP アドレスからドメイン名の配列へ逆引きで解決します。
+IP アドレスからホスト名の配列へ逆引きで解決します。
 
 <!--
-The callback has arguments `(err, domains)`.
+The callback has arguments `(err, hostnames)`.
 -->
 
-コールバックは引数 `(err, domains)` を持ちます。
+コールバックは引数 `(err, hostname)` を持ちます。
 
 <!--
 On error, `err` is an `Error` object, where `err.code` is
@@ -281,7 +281,7 @@ Each DNS query can return one of the following error codes:
 - `dns.NOTIMP`: DNS server does not implement requested operation.
 - `dns.REFUSED`: DNS server refused query.
 - `dns.BADQUERY`: Misformatted DNS query.
-- `dns.BADNAME`: Misformatted domain name.
+- `dns.BADNAME`: Misformatted hostname.
 - `dns.BADFAMILY`: Unsupported address family.
 - `dns.BADRESP`: Misformatted DNS reply.
 - `dns.CONNREFUSED`: Could not contact DNS servers.
@@ -307,7 +307,7 @@ Each DNS query can return one of the following error codes:
 - `dns.NOTIMP`: DNS サーバは要求された操作を実装していない。
 - `dns.REFUSED`: DNS サーバが問い合わせを拒否した。
 - `dns.BADQUERY`: DNS 問い合わせのフォーマットが不正。
-- `dns.BADNAME`: ドメイン名のフォーマットが不正。
+- `dns.BADNAME`: ホスト名のフォーマットが不正。
 - `dns.BADFAMILY`: サポートされないアドレスファミリー。
 - `dns.BADRESP`: DNS 応答のフォーマットが不正。
 - `dns.CONNREFUSED`: DNS サーバに接続できない。
