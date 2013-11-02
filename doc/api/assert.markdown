@@ -42,7 +42,7 @@ Tests shallow, coercive equality with the equal comparison operator ( `==` ).
 Tests shallow, coercive non-equality with the not equal comparison operator ( `!=` ).
 -->
 
-`==` 演算子を強制して浅い非同値性をテストします。
+`!=` 演算子を強制して浅い非同値性をテストします。
 
 ## assert.deepEqual(actual, expected, [message])
 
