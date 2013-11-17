@@ -195,12 +195,14 @@ Returned by `crypto.createHash`.
 Updates the hash content with the given `data`, the encoding of which
 is given in `input_encoding` and can be `'utf8'`, `'ascii'` or
 `'binary'`.  If no encoding is provided, then a buffer is expected.
+If `data` is a `Buffer` then `input_encoding` is ignored.
 -->
 
 与えられた `data` でハッシュの内容を更新します。
 そのエンコーディングは `input_encoding` で与えられ、`'utf8'`、`'ascii'`、
 または `'binary'` を指定することができます。
 エンコーディングが与えられなかった場合はバッファが期待されます。
+もし `data` が `Buffer` なら、`input_encoding` は無視されます。
 
 <!--
 This can be called many times with new data as it is streamed.
@@ -399,11 +401,13 @@ methods are also supported.
 Updates the cipher with `data`, the encoding of which is given in
 `input_encoding` and can be `'utf8'`, `'ascii'` or `'binary'`.  If no
 encoding is provided, then a buffer is expected.
+If `data` is a `Buffer` then `input_encoding` is ignored.
 -->
 
 `data` で暗号を更新します。
 `input_encoding` で与えられるエンコーディングは `'utf8'`、`'ascii'`、`'binary'` のいずれかです。
 エンコーディングが与えられなかった場合はバッファが期待されます。
+もし `data` が `Buffer` なら、`input_encoding` は無視されます。
 
 The `output_encoding` specifies the output format of the enciphered
 data, and can be `'binary'`, `'base64'` or `'hex'`.  If no encoding is
@@ -512,11 +516,13 @@ plain-text data on the the readable side.  The legacy `update` and
 Updates the decipher with `data`, which is encoded in `'binary'`,
 `'base64'` or `'hex'`.  If no encoding is provided, then a buffer is
 expected.
+If `data` is a `Buffer` then `input_encoding` is ignored.
 -->
 
 `'binary'`、`'base64'` または `'hex'` のいずれかでエンコードされた復号を
 `data` で更新します。
 エンコーディングが与えられなかった場合はバッファが期待されます。
+もし `data` が `Buffer` なら、`input_encoding` は無視されます。
 
 <!--
 The `output_decoding` specifies in what format to return the
