@@ -136,42 +136,60 @@ Emitted when an error occurs.
 * `buf` Buffer object.  Message to be sent
 * `offset` Integer. Offset in the buffer where the message starts.
 * `length` Integer. Number of bytes in the message.
-* `port` Integer. destination port
-* `address` String. destination IP
-* `callback` Function. Callback when message is done being delivered.
-  Optional.
+* `port` Integer. Destination port.
+* `address` String. Destination hostname or IP address.
+* `callback` Function. Called when the message has been sent. Optional.
 -->
 
-* `buf` Buffer object.  送信されるメッセージ
-* `offset` Integer. メッセージの開始位置となるバッファ内のオフセット
-* `length` Integer. メッセージのバイト長
-* `port` Integer. 接続先のポート番号
-* `address` String. 接続先の IP
-* `callback` Function. メッセージの配信が完了した後にコールバックされる、
-  Optional.
+* `buf` Buffer オブジェクト送信されるメッセージ。
+* `offset` 整数。メッセージの開始位置となるバッファ内のオフセット。
+* `length` 整数。メッセージのバイト長。
+* `port` 整数。接続先のポート番号。
+* `address` 文字列。接続先のホスト名または IP アドレス。
+* `callback` 関数。メッセージが送信されるとコールバックされる。任意。
 
 <!--
-For UDP sockets, the destination port and IP address must be specified.  A string
-may be supplied for the `address` parameter, and it will be resolved with DNS.  An
-optional callback may be specified to detect any DNS errors and when `buf` may be
-re-used.  Note that DNS lookups will delay the time that a send takes place, at
-least until the next tick.  The only way to know for sure that a send has taken place
-is to use the callback.
-
-If the socket has not been previously bound with a call to `bind`, it's
-assigned a random port number and bound to the "all interfaces" address
-(0.0.0.0 for `udp4` sockets, ::0 for `udp6` sockets).
+For UDP sockets, the destination port and address must be specified.  A string
+may be supplied for the `address` parameter, and it will be resolved with DNS.
 -->
 
-UDP ソケット用です。相手先のポートと IP アドレスは必ず指定しなければなりません。
+UDP ソケットに対しては、相手先のポートとアドレスは必ず指定しなければなりません。
 `address` パラメータに文字列を提供すると、それは DNS によって解決されます。
-DNS エラーと `buf` が再利用可能になった時のためにオプションのコールバックを指定することができます。
-DNS ルックアップは送信を少なくとも次の機会まで遅らせることに注意してください。
-送信が行われたことを確実に知る唯一の手段はコールバックを使うことです。
+
+<!--
+If the address is omitted or is an empty string, `'0.0.0.0'` or `'::0'` is used
+instead.  Depending on the network configuration, those defaults may or may not
+work; it's best to be explicit about the destination address.
+-->
+
+アドレスが省略された場合や空文字列だった場合は、代わりに `'0.0.0.0'` または
+`'::0'` が使われます。ネットワークの構成によっては、これらのデフォルト値は
+動作したりしなかったりします; 相手先のアドレスは明示的に指定することが最適です。
+
+<!--
+If the socket has not been previously bound with a call to `bind`, it gets
+assigned a random port number and is bound to the "all interfaces" address
+(`'0.0.0.0'` for `udp4` sockets, `'::0'` for `udp6` sockets.)
+-->
 
 ソケットが以前に `bind` の呼び出しによってバインドされていない場合は、
 ランダムなポート番号が「全てのインタフェース」アドレスに対してバインドされます
 (`udp4` ソケットでは 0.0.0.0、`udp6` では ::0)。
+
+<!--
+An optional callback may be specified to detect DNS errors or for determining
+when it's safe to reuse the `buf` object.  Note that DNS lookups delay the time
+to send for at least one tick.  The only way to know for sure that the datagram
+has been sent is by using a callback.
+-->
+
+DNS におけるエラー検出と、`buf` が再利用可能になったことを安全に知るために、
+オプションのコールバックを指定することができます。
+DNS ルックアップは送信を少なくとも次のイベントループまで遅らせることに
+注意してください。
+データグラムの送信が行われたことを確実に知る唯一の手段は、
+コールバックを使うことです。
+
 <!--
 Example of sending a UDP packet to a random port on `localhost`;
 -->

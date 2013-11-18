@@ -1401,7 +1401,7 @@ SimpleProtocol.prototype._read = function(n) {
     strings using the specified encoding.  Default=null
   * `objectMode` {Boolean} Whether this stream should behave
     as a stream of objects. Meaning that stream.read(n) returns
-    a single value instead of a Buffer of size n
+    a single value instead of a Buffer of size n.  Default=false
 -->
 
 * `options` {Object} (任意)
@@ -1411,7 +1411,7 @@ SimpleProtocol.prototype._read = function(n) {
     デコードされます。デフォルトは `null`。
   * `objectMode` {Boolean} このストリームがオブジェクトストリームとして
     振る舞うべきかどうか。これは `stream.read(n)` がサイズ n のバッファではなく
-    一つの値を返すことを意味します。
+    一つの値を返すことを意味します。デフォルトは `false` です。
 
 <!--
 In classes that extend the Readable class, make sure to call the

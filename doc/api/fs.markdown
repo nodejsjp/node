@@ -373,8 +373,8 @@ Synchronous link(2).
 <!--
 Asynchronous symlink(2). No arguments other than a possible exception are given
 to the completion callback.
-`type` argument can be either `'dir'`, `'file'`, or `'junction'` (default is `'file'`).  It is only 
-used on Windows (ignored on other platforms).
+The `type` argument can be set to `'dir'`, `'file'`, or `'junction'` (default
+is `'file'`) and is only available on Windows (ignored on other platforms).
 Note that Windows junction points require the destination path to be absolute.  When using
 `'junction'`, the `destination` argument will automatically be normalized to absolute path.
 -->
@@ -382,8 +382,8 @@ Note that Windows junction points require the destination path to be absolute.  
 非同期の symlink(2)。
 完了コールバックには発生し得る例外以外に引数が渡されることはありません。
 `type` 引数は `'dir'`、`'file'`、または `'junction`' (デフォルトは `'file'`)
-です。
-これは Windows でのみ使われます (他のプラットフォームでは無視されます)。
+に設定することができ、Windows でのみ利用可能です
+(他のプラットフォームでは無視されます)。
 Windows のジャンクションポイントは対象に絶対パスを要求することに
 注意してください。
 `'junction'` を使うと、`destination` 引数は自動的に絶対パスに正規化されます。
