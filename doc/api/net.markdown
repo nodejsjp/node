@@ -333,9 +333,9 @@ Listening on a file descriptor is not supported on Windows.
 
 <!--
 This function is asynchronous.  When the server has been bound,
-['listening'](#event_listening_) event will be emitted.
+['listening'][] event will be emitted.
 the last parameter `callback` will be added as an listener for the
-['listening'](#event_listening_) event.
+['listening'][] event.
 -->
 
 この関数は非同期です。
@@ -557,20 +557,24 @@ Construct a new socket object.
 `options` は以下のデフォルト値を持つオブジェクトです。
 
     { fd: null
-      type: null
-      allowHalfOpen: false
+      allowHalfOpen: false,
+      readable: false,
+      writable: false
     }
 
 <!--
-`fd` allows you to specify the existing file descriptor of socket. `type`
-specified underlying protocol. It can be `'tcp4'`, `'tcp6'`, or `'unix'`.
+`fd` allows you to specify the existing file descriptor of socket.
+Set `readable` and/or `writable` to `true` to allow reads and/or writes on this
+socket (NOTE: Works only when `fd` is passed).
 About `allowHalfOpen`, refer to `createServer()` and `'end'` event.
 -->
 
 `fd` に既存のソケットのファイル記述子を指定することができます。
-`type` にはプロトコルを指定することができます。
-指定できるのは `'tcp4'`、`'tcp6'` または `'unix'` のいずれかです。
-`allowHalfOpen` については `createServer()` および `'end'` イベントを参照してください。
+`readable` および `writable` に `true` を設定すると、
+ソケットへの読み込みまたは書き込みが可能になります
+(注意: `fd` が渡された場合のみ作用します)。
+`allowHalfOpen` については `createServer()` および `'end'`
+イベントを参照してください。
 
 ### socket.connect(port, [host], [connectListener])
 ### socket.connect(path, [connectListener])

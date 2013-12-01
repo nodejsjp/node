@@ -23,12 +23,12 @@
 #include "node_buffer.h"
 #include "node_http_parser.h"
 
+#include "base-object.h"
+#include "base-object-inl.h"
 #include "env.h"
 #include "env-inl.h"
 #include "util.h"
 #include "util-inl.h"
-#include "weak-object.h"
-#include "weak-object-inl.h"
 #include "v8.h"
 
 #include <stdlib.h>  // free()
@@ -77,7 +77,7 @@ const uint32_t kOnMessageComplete = 3;
 
 #define HTTP_CB(name)                                                         \
   static int name(http_parser* p_) {                                          \
-    Parser* self = container_of(p_, Parser, parser_);                         \
+    Parser* self = CONTAINER_OF(p_, Parser, parser_);                         \
     return self->name##_();                                                   \
   }                                                                           \
   int name##_()
@@ -85,7 +85,7 @@ const uint32_t kOnMessageComplete = 3;
 
 #define HTTP_DATA_CB(name)                                                    \
   static int name(http_parser* p_, const char* at, size_t length) {           \
-    Parser* self = container_of(p_, Parser, parser_);                         \
+    Parser* self = CONTAINER_OF(p_, Parser, parser_);                         \
     return self->name##_(at, length);                                         \
   }                                                                           \
   int name##_(const char* at, size_t length)
@@ -163,13 +163,13 @@ struct StringPtr {
 };
 
 
-class Parser : public WeakObject {
+class Parser : public BaseObject {
  public:
   Parser(Environment* env, Local<Object> wrap, enum http_parser_type type)
-      : WeakObject(env->isolate(), wrap),
-        env_(env),
+      : BaseObject(env, wrap),
         current_buffer_len_(0),
         current_buffer_data_(NULL) {
+    MakeWeak<Parser>(this);
     Init(type);
   }
 
@@ -230,7 +230,7 @@ class Parser : public WeakObject {
 
 
   HTTP_CB(on_headers_complete) {
-    Local<Object> obj = weak_object(node_isolate);
+    Local<Object> obj = object();
     Local<Value> cb = obj->Get(kOnHeadersComplete);
 
     if (!cb->IsFunction())
@@ -291,7 +291,7 @@ class Parser : public WeakObject {
   HTTP_DATA_CB(on_body) {
     HandleScope scope(node_isolate);
 
-    Local<Object> obj = weak_object(node_isolate);
+    Local<Object> obj = object();
     Local<Value> cb = obj->Get(kOnBody);
 
     if (!cb->IsFunction())
@@ -320,7 +320,7 @@ class Parser : public WeakObject {
     if (num_fields_)
       Flush();  // Flush trailing HTTP headers.
 
-    Local<Object> obj = weak_object(node_isolate);
+    Local<Object> obj = object();
     Local<Value> cb = obj->Get(kOnMessageComplete);
 
     if (!cb->IsFunction())
@@ -338,8 +338,8 @@ class Parser : public WeakObject {
 
 
   static void New(const FunctionCallbackInfo<Value>& args) {
-    Environment* env = Environment::GetCurrent(args.GetIsolate());
     HandleScope handle_scope(args.GetIsolate());
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
     http_parser_type type =
         static_cast<http_parser_type>(args[0]->Int32Value());
     assert(type == HTTP_REQUEST || type == HTTP_RESPONSE);
@@ -446,8 +446,8 @@ class Parser : public WeakObject {
 
 
   static void Reinitialize(const FunctionCallbackInfo<Value>& args) {
-    Environment* env = Environment::GetCurrent(args.GetIsolate());
     HandleScope handle_scope(args.GetIsolate());
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
 
     http_parser_type type =
         static_cast<http_parser_type>(args[0]->Int32Value());
@@ -462,8 +462,8 @@ class Parser : public WeakObject {
 
   template <bool should_pause>
   static void Pause(const FunctionCallbackInfo<Value>& args) {
-    Environment* env = Environment::GetCurrent(args.GetIsolate());
     HandleScope handle_scope(args.GetIsolate());
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
     Parser* parser = Unwrap<Parser>(args.This());
     // Should always be called from the same context.
     assert(env == parser->env());
@@ -491,7 +491,7 @@ class Parser : public WeakObject {
   void Flush() {
     HandleScope scope(node_isolate);
 
-    Local<Object> obj = weak_object(node_isolate);
+    Local<Object> obj = object();
     Local<Value> cb = obj->Get(kOnHeaders);
 
     if (!cb->IsFunction())
@@ -522,12 +522,6 @@ class Parser : public WeakObject {
   }
 
 
-  inline Environment* env() const {
-    return env_;
-  }
-
-
-  Environment* const env_;
   http_parser parser_;
   StringPtr fields_[32];  // header fields
   StringPtr values_[32];  // header values

@@ -31,8 +31,10 @@
 #endif
 
 #include "env.h"
-#include "weak-object.h"
-#include "weak-object-inl.h"
+#include "async-wrap.h"
+#include "async-wrap-inl.h"
+#include "base-object.h"
+#include "base-object-inl.h"
 
 #include "v8.h"
 
@@ -59,13 +61,13 @@ extern X509_STORE* root_cert_store;
 // Forward declaration
 class Connection;
 
-class SecureContext : public WeakObject {
+class SecureContext : public BaseObject {
  public:
-  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
-
-  inline Environment* env() const {
-    return env_;
+  ~SecureContext() {
+    FreeCTXMem();
   }
+
+  static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
   X509_STORE* ca_store_;
   SSL_CTX* ctx_;
@@ -82,6 +84,7 @@ class SecureContext : public WeakObject {
   static void AddCRL(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void AddRootCerts(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SetCiphers(const v8::FunctionCallbackInfo<v8::Value>& args);
+  static void SetECDHCurve(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SetOptions(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SetSessionIdContext(
       const v8::FunctionCallbackInfo<v8::Value>& args);
@@ -93,10 +96,10 @@ class SecureContext : public WeakObject {
   static void SetTicketKeys(const v8::FunctionCallbackInfo<v8::Value>& args);
 
   SecureContext(Environment* env, v8::Local<v8::Object> wrap)
-      : WeakObject(env->isolate(), wrap),
+      : BaseObject(env, wrap),
         ca_store_(NULL),
-        ctx_(NULL),
-        env_(env) {
+        ctx_(NULL) {
+    MakeWeak<SecureContext>(this);
   }
 
   void FreeCTXMem() {
@@ -115,15 +118,10 @@ class SecureContext : public WeakObject {
       assert(ca_store_ == NULL);
     }
   }
-
-  ~SecureContext() {
-    FreeCTXMem();
-  }
-
- private:
-  Environment* const env_;
 };
 
+// SSLWrap implicitly depends on the inheriting class' handle having an
+// internal pointer to the Base class.
 template <class Base>
 class SSLWrap {
  public:
@@ -202,7 +200,7 @@ class SSLWrap {
                                      void* arg);
 #endif  // OPENSSL_NPN_NEGOTIATED
 
-  inline Environment* env() const {
+  inline Environment* ssl_env() const {
     return env_;
   }
 
@@ -221,8 +219,19 @@ class SSLWrap {
   friend class SecureContext;
 };
 
-class Connection : public SSLWrap<Connection>, public WeakObject {
+// Connection inherits from AsyncWrap because SSLWrap makes calls to
+// MakeCallback, but SSLWrap doesn't store the handle itself. Instead it
+// assumes that any args.This() called will be the handle from Connection.
+class Connection : public SSLWrap<Connection>, public AsyncWrap {
  public:
+  ~Connection() {
+#ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
+    sniObject_.Dispose();
+    sniContext_.Dispose();
+    servername_.Dispose();
+#endif
+  }
+
   static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
 #ifdef OPENSSL_NPN_NEGOTIATED
@@ -279,22 +288,15 @@ class Connection : public SSLWrap<Connection>, public WeakObject {
              SecureContext* sc,
              SSLWrap<Connection>::Kind kind)
       : SSLWrap<Connection>(env, sc, kind),
-        WeakObject(env->isolate(), wrap),
+        AsyncWrap(env, wrap),
         bio_read_(NULL),
         bio_write_(NULL),
         hello_offset_(0) {
+    MakeWeak<Connection>(this);
     hello_parser_.Start(SSLWrap<Connection>::OnClientHello,
                         OnClientHelloParseEnd,
                         this);
     enable_session_callbacks();
-  }
-
-  ~Connection() {
-#ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
-    sniObject_.Dispose();
-    sniContext_.Dispose();
-    servername_.Dispose();
-#endif
   }
 
  private:
@@ -310,8 +312,14 @@ class Connection : public SSLWrap<Connection>, public WeakObject {
   friend class SecureContext;
 };
 
-class CipherBase : public WeakObject {
+class CipherBase : public BaseObject {
  public:
+  ~CipherBase() {
+    if (!initialised_)
+      return;
+    EVP_CIPHER_CTX_cleanup(&ctx_);
+  }
+
   static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
  protected:
@@ -337,19 +345,14 @@ class CipherBase : public WeakObject {
   static void Final(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SetAutoPadding(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  CipherBase(v8::Isolate* isolate,
+  CipherBase(Environment* env,
              v8::Local<v8::Object> wrap,
              CipherKind kind)
-      : WeakObject(isolate, wrap),
+      : BaseObject(env, wrap),
         cipher_(NULL),
         initialised_(false),
         kind_(kind) {
-  }
-
-  ~CipherBase() {
-    if (!initialised_)
-      return;
-    EVP_CIPHER_CTX_cleanup(&ctx_);
+    MakeWeak<CipherBase>(this);
   }
 
  private:
@@ -359,8 +362,14 @@ class CipherBase : public WeakObject {
   CipherKind kind_;
 };
 
-class Hmac : public WeakObject {
+class Hmac : public BaseObject {
  public:
+  ~Hmac() {
+    if (!initialised_)
+      return;
+    HMAC_CTX_cleanup(&ctx_);
+  }
+
   static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
  protected:
@@ -373,16 +382,11 @@ class Hmac : public WeakObject {
   static void HmacUpdate(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void HmacDigest(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  Hmac(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
-      : WeakObject(isolate, wrap),
+  Hmac(Environment* env, v8::Local<v8::Object> wrap)
+      : BaseObject(env, wrap),
         md_(NULL),
         initialised_(false) {
-  }
-
-  ~Hmac() {
-    if (!initialised_)
-      return;
-    HMAC_CTX_cleanup(&ctx_);
+    MakeWeak<Hmac>(this);
   }
 
  private:
@@ -391,8 +395,14 @@ class Hmac : public WeakObject {
   bool initialised_;
 };
 
-class Hash : public WeakObject {
+class Hash : public BaseObject {
  public:
+  ~Hash() {
+    if (!initialised_)
+      return;
+    EVP_MD_CTX_cleanup(&mdctx_);
+  }
+
   static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
   bool HashInit(const char* hash_type);
@@ -403,16 +413,11 @@ class Hash : public WeakObject {
   static void HashUpdate(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void HashDigest(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  Hash(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
-      : WeakObject(isolate, wrap),
+  Hash(Environment* env, v8::Local<v8::Object> wrap)
+      : BaseObject(env, wrap),
         md_(NULL),
         initialised_(false) {
-  }
-
-  ~Hash() {
-    if (!initialised_)
-      return;
-    EVP_MD_CTX_cleanup(&mdctx_);
+    MakeWeak<Hash>(this);
   }
 
  private:
@@ -421,8 +426,14 @@ class Hash : public WeakObject {
   bool initialised_;
 };
 
-class Sign : public WeakObject {
+class Sign : public BaseObject {
  public:
+  ~Sign() {
+    if (!initialised_)
+      return;
+    EVP_MD_CTX_cleanup(&mdctx_);
+  }
+
   static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
   void SignInit(const char* sign_type);
@@ -439,16 +450,11 @@ class Sign : public WeakObject {
   static void SignUpdate(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SignFinal(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  Sign(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
-      : WeakObject(isolate, wrap),
+  Sign(Environment* env, v8::Local<v8::Object> wrap)
+      : BaseObject(env, wrap),
         md_(NULL),
         initialised_(false) {
-  }
-
-  ~Sign() {
-    if (!initialised_)
-      return;
-    EVP_MD_CTX_cleanup(&mdctx_);
+    MakeWeak<Sign>(this);
   }
 
  private:
@@ -457,8 +463,14 @@ class Sign : public WeakObject {
   bool initialised_;
 };
 
-class Verify : public WeakObject {
+class Verify : public BaseObject {
  public:
+  ~Verify() {
+    if (!initialised_)
+      return;
+    EVP_MD_CTX_cleanup(&mdctx_);
+  }
+
   static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
   void VerifyInit(const char* verify_type);
@@ -474,16 +486,11 @@ class Verify : public WeakObject {
   static void VerifyUpdate(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void VerifyFinal(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  Verify(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
-      : WeakObject(isolate, wrap),
+  Verify(Environment* env, v8::Local<v8::Object> wrap)
+      : BaseObject(env, wrap),
         md_(NULL),
         initialised_(false) {
-  }
-
-  ~Verify() {
-    if (!initialised_)
-      return;
-    EVP_MD_CTX_cleanup(&mdctx_);
+    MakeWeak<Verify>(this);
   }
 
  private:
@@ -492,8 +499,14 @@ class Verify : public WeakObject {
   bool initialised_;
 };
 
-class DiffieHellman : public WeakObject {
+class DiffieHellman : public BaseObject {
  public:
+  ~DiffieHellman() {
+    if (dh != NULL) {
+      DH_free(dh);
+    }
+  }
+
   static void Initialize(Environment* env, v8::Handle<v8::Object> target);
 
   bool Init(int primeLength);
@@ -513,16 +526,11 @@ class DiffieHellman : public WeakObject {
   static void SetPublicKey(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void SetPrivateKey(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  DiffieHellman(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
-      : WeakObject(isolate, wrap),
+  DiffieHellman(Environment* env, v8::Local<v8::Object> wrap)
+      : BaseObject(env, wrap),
         initialised_(false),
         dh(NULL) {
-  }
-
-  ~DiffieHellman() {
-    if (dh != NULL) {
-      DH_free(dh);
-    }
+    MakeWeak<DiffieHellman>(this);
   }
 
  private:
@@ -532,7 +540,7 @@ class DiffieHellman : public WeakObject {
   DH* dh;
 };
 
-class Certificate : public WeakObject {
+class Certificate : public AsyncWrap {
  public:
   static void Initialize(v8::Handle<v8::Object> target);
 
@@ -547,8 +555,9 @@ class Certificate : public WeakObject {
   static void ExportPublicKey(const v8::FunctionCallbackInfo<v8::Value>& args);
   static void ExportChallenge(const v8::FunctionCallbackInfo<v8::Value>& args);
 
-  Certificate(v8::Isolate* isolate, v8::Local<v8::Object> wrap)
-    : WeakObject(isolate, wrap) {
+  Certificate(Environment* env, v8::Local<v8::Object> wrap)
+      : AsyncWrap(env, wrap) {
+    MakeWeak<Certificate>(this);
   }
 };
 

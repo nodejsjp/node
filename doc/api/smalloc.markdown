@@ -176,6 +176,16 @@ careful. Cryptic errors may arise in applications that are difficult to trace.
 
 `dispose()` は `Buffer` をサポートしません。もし渡されると例外をスローします。
 
+## smalloc.hasExternalData(obj)
+
+* `obj` {Object}
+
+<!--
+Returns `true` if the `obj` has externally allocated memory.
+-->
+
+`obj` が外部に割り当てられたメモリを持つなら `true` を返します。
+
 ## smalloc.kMaxLength
 
 <!--

@@ -119,6 +119,9 @@ void UDPWrap::Initialize(Handle<Object> target,
   NODE_SET_PROTOTYPE_METHOD(t, "ref", HandleWrap::Ref);
   NODE_SET_PROTOTYPE_METHOD(t, "unref", HandleWrap::Unref);
 
+
+  AsyncWrap::AddMethods<UDPWrap>(t);
+
   target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "UDP"), t->GetFunction());
   env->set_udp_constructor_function(t->GetFunction());
 }
@@ -126,8 +129,8 @@ void UDPWrap::Initialize(Handle<Object> target,
 
 void UDPWrap::New(const FunctionCallbackInfo<Value>& args) {
   assert(args.IsConstructCall());
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
   new UDPWrap(env, args.This());
 }
 
@@ -240,8 +243,8 @@ void UDPWrap::DropMembership(const FunctionCallbackInfo<Value>& args) {
 
 
 void UDPWrap::DoSend(const FunctionCallbackInfo<Value>& args, int family) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   UDPWrap* wrap = Unwrap<UDPWrap>(args.This());
 
@@ -333,8 +336,8 @@ void UDPWrap::RecvStop(const FunctionCallbackInfo<Value>& args) {
 
 
 void UDPWrap::GetSockName(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   struct sockaddr_storage address;
   UDPWrap* wrap = Unwrap<UDPWrap>(args.This());
@@ -361,11 +364,10 @@ void UDPWrap::OnSend(uv_udp_send_t* req, int status) {
   SendWrap* req_wrap = static_cast<SendWrap*>(req->data);
   if (req_wrap->have_callback()) {
     Environment* env = req_wrap->env();
-    Context::Scope context_scope(env->context());
     HandleScope handle_scope(env->isolate());
-    Local<Object> req_wrap_obj = req_wrap->object();
+    Context::Scope context_scope(env->context());
     Local<Value> arg = Integer::New(status, node_isolate);
-    MakeCallback(env, req_wrap_obj, env->oncomplete_string(), 1, &arg);
+    req_wrap->MakeCallback(env->oncomplete_string(), 1, &arg);
   }
   delete req_wrap;
 }
@@ -398,32 +400,28 @@ void UDPWrap::OnRecv(uv_udp_t* handle,
   UDPWrap* wrap = static_cast<UDPWrap*>(handle->data);
   Environment* env = wrap->env();
 
-  Context::Scope context_scope(env->context());
   HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   Local<Object> wrap_obj = wrap->object();
   Local<Value> argv[] = {
     Integer::New(nread, node_isolate),
     wrap_obj,
-    Undefined(),
-    Undefined()
+    Undefined(env->isolate()),
+    Undefined(env->isolate())
   };
 
   if (nread < 0) {
     if (buf->base != NULL)
       free(buf->base);
-    MakeCallback(env,
-                 wrap_obj,
-                 env->onmessage_string(),
-                 ARRAY_SIZE(argv),
-                 argv);
+    wrap->MakeCallback(env->onmessage_string(), ARRAY_SIZE(argv), argv);
     return;
   }
 
   char* base = static_cast<char*>(realloc(buf->base, nread));
   argv[2] = Buffer::Use(env, base, nread);
   argv[3] = AddressToJS(env, addr);
-  MakeCallback(env, wrap_obj, env->onmessage_string(), ARRAY_SIZE(argv), argv);
+  wrap->MakeCallback(env->onmessage_string(), ARRAY_SIZE(argv), argv);
 }
 
 

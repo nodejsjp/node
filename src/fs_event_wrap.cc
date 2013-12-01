@@ -19,6 +19,8 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#include "async-wrap.h"
+#include "async-wrap-inl.h"
 #include "env.h"
 #include "env-inl.h"
 #include "util.h"
@@ -76,9 +78,6 @@ FSEventWrap::~FSEventWrap() {
 void FSEventWrap::Initialize(Handle<Object> target,
                              Handle<Value> unused,
                              Handle<Context> context) {
-  Environment* env = Environment::GetCurrent(context);
-  HandleScope handle_scope(env->isolate());
-
   Local<FunctionTemplate> t = FunctionTemplate::New(New);
   t->InstanceTemplate()->SetInternalFieldCount(1);
   t->SetClassName(FIXED_ONE_BYTE_STRING(node_isolate, "FSEvent"));
@@ -92,6 +91,7 @@ void FSEventWrap::Initialize(Handle<Object> target,
 
 void FSEventWrap::New(const FunctionCallbackInfo<Value>& args) {
   assert(args.IsConstructCall());
+  HandleScope handle_scope(args.GetIsolate());
   Environment* env = Environment::GetCurrent(args.GetIsolate());
   new FSEventWrap(env, args.This());
 }
@@ -108,12 +108,15 @@ void FSEventWrap::Start(const FunctionCallbackInfo<Value>& args) {
 
   String::Utf8Value path(args[0]);
 
-  int err = uv_fs_event_init(wrap->env()->event_loop(), &wrap->handle_);
+  unsigned int flags = 0;
+  if (args[2]->IsTrue())
+    flags |= UV_FS_EVENT_RECURSIVE;
 
+  int err = uv_fs_event_init(wrap->env()->event_loop(), &wrap->handle_);
   if (err == 0) {
     wrap->initialized_ = true;
 
-    err = uv_fs_event_start(&wrap->handle_, OnEvent, *path, 0);
+    err = uv_fs_event_start(&wrap->handle_, OnEvent, *path, flags);
 
     if (err == 0) {
       // Check for persistent argument
@@ -134,8 +137,8 @@ void FSEventWrap::OnEvent(uv_fs_event_t* handle, const char* filename,
   FSEventWrap* wrap = static_cast<FSEventWrap*>(handle->data);
   Environment* env = wrap->env();
 
-  Context::Scope context_scope(env->context());
   HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   assert(wrap->persistent().IsEmpty() == false);
 
@@ -172,11 +175,7 @@ void FSEventWrap::OnEvent(uv_fs_event_t* handle, const char* filename,
     argv[2] = OneByteString(node_isolate, filename);
   }
 
-  MakeCallback(env,
-               wrap->object(),
-               env->onchange_string(),
-               ARRAY_SIZE(argv),
-               argv);
+  wrap->MakeCallback(env->onchange_string(), ARRAY_SIZE(argv), argv);
 }
 
 

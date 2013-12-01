@@ -19,6 +19,8 @@
 // OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
 // USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+#include "async-wrap.h"
+#include "async-wrap-inl.h"
 #include "env.h"
 #include "env-inl.h"
 #include "handle_wrap.h"
@@ -75,8 +77,8 @@ class TimerWrap : public HandleWrap {
     // Therefore we assert that we are not trying to call this as a
     // normal function.
     assert(args.IsConstructCall());
-    Environment* env = Environment::GetCurrent(args.GetIsolate());
     HandleScope handle_scope(args.GetIsolate());
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
     new TimerWrap(env, args.This());
   }
 
@@ -135,15 +137,15 @@ class TimerWrap : public HandleWrap {
   static void OnTimeout(uv_timer_t* handle, int status) {
     TimerWrap* wrap = static_cast<TimerWrap*>(handle->data);
     Environment* env = wrap->env();
-    Context::Scope context_scope(env->context());
     HandleScope handle_scope(env->isolate());
+    Context::Scope context_scope(env->context());
     Local<Value> argv[1] = { Integer::New(status, node_isolate) };
-    MakeCallback(env, wrap->object(), kOnTimeout, ARRAY_SIZE(argv), argv);
+    wrap->MakeCallback(kOnTimeout, ARRAY_SIZE(argv), argv);
   }
 
   static void Now(const FunctionCallbackInfo<Value>& args) {
-    Environment* env = Environment::GetCurrent(args.GetIsolate());
     HandleScope handle_scope(args.GetIsolate());
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
     uv_update_time(env->event_loop());
     double now = static_cast<double>(uv_now(env->event_loop()));
     args.GetReturnValue().Set(now);
