@@ -24,9 +24,10 @@
 #include "node_crypto.h"
 #include "node_crypto_bio.h"
 #include "node_crypto_groups.h"
-#include "node_root_certs.h"
 #include "tls_wrap.h"  // TLSCallbacks
 
+#include "async-wrap.h"
+#include "async-wrap-inl.h"
 #include "env.h"
 #include "env-inl.h"
 #include "string_bytes.h"
@@ -102,6 +103,11 @@ struct ClearErrorOnReturn {
 
 static uv_rwlock_t* locks;
 
+const char* root_certs[] = {
+#include "node_root_certs.h"  // NOLINT(build/include_order)
+  NULL
+};
+
 X509_STORE* root_cert_store;
 
 // Just to generate static methods
@@ -117,6 +123,8 @@ template int SSLWrap<TLSCallbacks>::NewSessionCallback(SSL* s,
 template void SSLWrap<TLSCallbacks>::OnClientHello(
     void* arg,
     const ClientHelloParser::ClientHello& hello);
+
+#ifdef OPENSSL_NPN_NEGOTIATED
 template int SSLWrap<TLSCallbacks>::AdvertiseNextProtoCallback(
     SSL* s,
     const unsigned char** data,
@@ -129,6 +137,7 @@ template int SSLWrap<TLSCallbacks>::SelectNextProtoCallback(
     const unsigned char* in,
     unsigned int inlen,
     void* arg);
+#endif
 
 
 static void crypto_threadid_cb(CRYPTO_THREADID* tid) {
@@ -220,6 +229,7 @@ void SecureContext::Initialize(Environment* env, Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "addCRL", SecureContext::AddCRL);
   NODE_SET_PROTOTYPE_METHOD(t, "addRootCerts", SecureContext::AddRootCerts);
   NODE_SET_PROTOTYPE_METHOD(t, "setCiphers", SecureContext::SetCiphers);
+  NODE_SET_PROTOTYPE_METHOD(t, "setECDHCurve", SecureContext::SetECDHCurve);
   NODE_SET_PROTOTYPE_METHOD(t, "setOptions", SecureContext::SetOptions);
   NODE_SET_PROTOTYPE_METHOD(t, "setSessionIdContext",
                                SecureContext::SetSessionIdContext);
@@ -237,6 +247,7 @@ void SecureContext::Initialize(Environment* env, Handle<Object> target) {
 
 
 void SecureContext::New(const FunctionCallbackInfo<Value>& args) {
+  HandleScope handle_scope(args.GetIsolate());
   Environment* env = Environment::GetCurrent(args.GetIsolate());
   new SecureContext(env, args.This());
 }
@@ -614,6 +625,33 @@ void SecureContext::SetCiphers(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+void SecureContext::SetECDHCurve(const FunctionCallbackInfo<Value>& args) {
+  HandleScope scope(node_isolate);
+
+  SecureContext* sc = Unwrap<SecureContext>(args.This());
+
+  if (args.Length() != 1 || !args[0]->IsString())
+    return ThrowTypeError("First argument should be a string");
+
+  String::Utf8Value curve(args[0]);
+
+  int nid = OBJ_sn2nid(*curve);
+
+  if (nid == NID_undef)
+    return ThrowTypeError("First argument should be a valid curve name");
+
+  EC_KEY* ecdh = EC_KEY_new_by_curve_name(nid);
+
+  if (ecdh == NULL)
+    return ThrowTypeError("First argument should be a valid curve name");
+
+  SSL_CTX_set_options(sc->ctx_, SSL_OP_SINGLE_ECDH_USE);
+  SSL_CTX_set_tmp_ecdh(sc->ctx_, ecdh);
+
+  EC_KEY_free(ecdh);
+}
+
+
 void SecureContext::SetOptions(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
@@ -828,8 +866,6 @@ SSL_SESSION* SSLWrap<Base>::GetSessionCallback(SSL* s,
                                                unsigned char* key,
                                                int len,
                                                int* copy) {
-  HandleScope scope(node_isolate);
-
   Base* w = static_cast<Base*>(SSL_get_app_data(s));
 
   *copy = 0;
@@ -842,10 +878,10 @@ SSL_SESSION* SSLWrap<Base>::GetSessionCallback(SSL* s,
 
 template <class Base>
 int SSLWrap<Base>::NewSessionCallback(SSL* s, SSL_SESSION* sess) {
-  HandleScope scope(node_isolate);
-
   Base* w = static_cast<Base*>(SSL_get_app_data(s));
-  Environment* env = w->env();
+  Environment* env = w->ssl_env();
+  HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   if (!w->session_callbacks_)
     return 0;
@@ -866,11 +902,7 @@ int SSLWrap<Base>::NewSessionCallback(SSL* s, SSL_SESSION* sess) {
                                       reinterpret_cast<char*>(sess->session_id),
                                       sess->session_id_length);
   Local<Value> argv[] = { session, buff };
-  MakeCallback(env,
-               w->weak_object(node_isolate),
-               env->onnewsession_string(),
-               ARRAY_SIZE(argv),
-               argv);
+  w->MakeCallback(env->onnewsession_string(), ARRAY_SIZE(argv), argv);
 
   return 0;
 }
@@ -879,10 +911,10 @@ int SSLWrap<Base>::NewSessionCallback(SSL* s, SSL_SESSION* sess) {
 template <class Base>
 void SSLWrap<Base>::OnClientHello(void* arg,
                                   const ClientHelloParser::ClientHello& hello) {
-  HandleScope scope(node_isolate);
-
   Base* w = static_cast<Base*>(arg);
-  Environment* env = w->env();
+  Environment* env = w->ssl_env();
+  HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   Local<Object> hello_obj = Object::New();
   Local<Object> buff = Buffer::New(
@@ -901,11 +933,7 @@ void SSLWrap<Base>::OnClientHello(void* arg,
   hello_obj->Set(env->tls_ticket_string(), Boolean::New(hello.has_ticket()));
 
   Local<Value> argv[] = { hello_obj };
-  MakeCallback(env,
-               w->weak_object(node_isolate),
-               env->onclienthello_string(),
-               ARRAY_SIZE(argv),
-               argv);
+  w->MakeCallback(env->onclienthello_string(), ARRAY_SIZE(argv), argv);
 }
 
 
@@ -916,7 +944,7 @@ void SSLWrap<Base>::GetPeerCertificate(
   HandleScope scope(node_isolate);
 
   Base* w = Unwrap<Base>(args.This());
-  Environment* env = w->env();
+  Environment* env = w->ssl_env();
 
   Local<Object> info = Object::New();
   X509* peer_cert = SSL_get_peer_certificate(w->ssl_);
@@ -1109,7 +1137,7 @@ void SSLWrap<Base>::LoadSession(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   Base* w = Unwrap<Base>(args.This());
-  Environment* env = w->env();
+  Environment* env = w->ssl_env();
 
   if (args.Length() >= 1 && Buffer::HasInstance(args[0])) {
     ssize_t slen = Buffer::Length(args[0]);
@@ -1258,7 +1286,7 @@ void SSLWrap<Base>::GetCurrentCipher(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
   Base* w = Unwrap<Base>(args.This());
-  Environment* env = w->env();
+  Environment* env = w->ssl_env();
 
   OPENSSL_CONST SSL_CIPHER* c = SSL_get_current_cipher(w->ssl_);
   if (c == NULL)
@@ -1280,6 +1308,9 @@ int SSLWrap<Base>::AdvertiseNextProtoCallback(SSL* s,
                                               unsigned int* len,
                                               void* arg) {
   Base* w = static_cast<Base*>(arg);
+  Environment* env = w->env();
+  HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   if (w->npn_protos_.IsEmpty()) {
     // No initialization - no NPN protocols
@@ -1303,6 +1334,9 @@ int SSLWrap<Base>::SelectNextProtoCallback(SSL* s,
                                            unsigned int inlen,
                                            void* arg) {
   Base* w = static_cast<Base*>(arg);
+  Environment* env = w->env();
+  HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   // Release old protocol handler if present
   w->selected_npn_proto_.Dispose();
@@ -1432,8 +1466,7 @@ int Connection::HandleBIOError(BIO *bio, const char* func, int rv) {
     HandleScope scope(node_isolate);
     Local<Value> exception =
         Exception::Error(OneByteString(node_isolate, ssl_error_buf));
-    weak_object(node_isolate)->Set(
-        FIXED_ONE_BYTE_STRING(node_isolate, "error"), exception);
+    object()->Set(FIXED_ONE_BYTE_STRING(node_isolate, "error"), exception);
 
     DEBUG_PRINT("[%p] BIO: %s failed: (%d) %s\n",
                 ssl_,
@@ -1476,8 +1509,7 @@ int Connection::HandleSSLError(const char* func,
   } else if (err == SSL_ERROR_ZERO_RETURN) {
     Local<Value> exception =
         Exception::Error(FIXED_ONE_BYTE_STRING(node_isolate, "ZERO_RETURN"));
-    weak_object(node_isolate)->Set(
-        FIXED_ONE_BYTE_STRING(node_isolate, "error"), exception);
+    object()->Set(FIXED_ONE_BYTE_STRING(node_isolate, "error"), exception);
     return rv;
 
   } else if (err == SSL_ERROR_SYSCALL && ss == kIgnoreSyscall) {
@@ -1501,8 +1533,7 @@ int Connection::HandleSSLError(const char* func,
       BIO_get_mem_ptr(bio, &mem);
       Local<Value> exception =
           Exception::Error(OneByteString(node_isolate, mem->data, mem->length));
-      weak_object(node_isolate)->Set(
-          FIXED_ONE_BYTE_STRING(node_isolate, "error"), exception);
+      object()->Set(FIXED_ONE_BYTE_STRING(node_isolate, "error"), exception);
       BIO_free_all(bio);
     }
 
@@ -1519,7 +1550,7 @@ void Connection::ClearError() {
 
   // We should clear the error in JS-land
   Local<String> error_key = FIXED_ONE_BYTE_STRING(node_isolate, "error");
-  Local<Value> error = weak_object(node_isolate)->Get(error_key);
+  Local<Value> error = object()->Get(error_key);
   assert(error->BooleanValue() == false);
 #endif  // NDEBUG
 }
@@ -1533,13 +1564,13 @@ void Connection::SetShutdownFlags() {
   if (flags & SSL_SENT_SHUTDOWN) {
     Local<String> sent_shutdown_key =
         FIXED_ONE_BYTE_STRING(node_isolate, "sentShutdown");
-    weak_object(node_isolate)->Set(sent_shutdown_key, True(node_isolate));
+    object()->Set(sent_shutdown_key, True(node_isolate));
   }
 
   if (flags & SSL_RECEIVED_SHUTDOWN) {
     Local<String> received_shutdown_key =
         FIXED_ONE_BYTE_STRING(node_isolate, "receivedShutdown");
-    weak_object(node_isolate)->Set(received_shutdown_key, True(node_isolate));
+    object()->Set(received_shutdown_key, True(node_isolate));
   }
 }
 
@@ -1644,10 +1675,8 @@ int Connection::SelectSNIContextCallback_(SSL *s, int *ad, void* arg) {
     if (!conn->sniObject_.IsEmpty()) {
       conn->sniContext_.Dispose();
 
-      Local<Object> sni_object =
-          PersistentToLocal(node_isolate, conn->sniObject_);
       Local<Value> arg = PersistentToLocal(node_isolate, conn->servername_);
-      Local<Value> ret = MakeCallback(env, sni_object, "onselect", 1, &arg);
+      Local<Value> ret = conn->MakeCallback(env->onselect_string(), 1, &arg);
 
       // If ret is SecureContext
       Local<FunctionTemplate> secure_context_constructor_template =
@@ -1710,7 +1739,7 @@ void Connection::New(const FunctionCallbackInfo<Value>& args) {
 #ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
   if (is_server) {
     SSL_CTX_set_tlsext_servername_callback(sc->ctx_, SelectSNIContextCallback_);
-  } else {
+  } else if (args[2]->IsString()) {
     const String::Utf8Value servername(args[2]);
     SSL_set_tlsext_host_name(conn->ssl_, *servername);
   }
@@ -1762,19 +1791,15 @@ void Connection::SSLInfoCallback(const SSL *ssl_, int where, int ret) {
   SSL* ssl = const_cast<SSL*>(ssl_);
   Connection* conn = static_cast<Connection*>(SSL_get_app_data(ssl));
   Environment* env = conn->env();
-  Context::Scope context_scope(env->context());
   HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   if (where & SSL_CB_HANDSHAKE_START) {
-    MakeCallback(env,
-                 conn->weak_object(node_isolate),
-                 env->onhandshakestart_string());
+    conn->MakeCallback(env->onhandshakestart_string(), 0, NULL);
   }
 
   if (where & SSL_CB_HANDSHAKE_DONE) {
-    MakeCallback(env,
-                 conn->weak_object(node_isolate),
-                 env->onhandshakedone_string());
+    conn->MakeCallback(env->onhandshakedone_string(), 0, NULL);
   }
 }
 
@@ -2087,8 +2112,10 @@ void CipherBase::Initialize(Environment* env, Handle<Object> target) {
 
 void CipherBase::New(const FunctionCallbackInfo<Value>& args) {
   assert(args.IsConstructCall() == true);
+  HandleScope handle_scope(args.GetIsolate());
   CipherKind kind = args[0]->IsTrue() ? kCipher : kDecipher;
-  new CipherBase(args.GetIsolate(), args.This(), kind);
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  new CipherBase(env, args.This(), kind);
 }
 
 
@@ -2222,8 +2249,8 @@ bool CipherBase::Update(const char* data,
 
 
 void CipherBase::Update(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   CipherBase* cipher = Unwrap<CipherBase>(args.This());
 
@@ -2291,8 +2318,8 @@ bool CipherBase::Final(unsigned char** out, int *out_len) {
 
 
 void CipherBase::Final(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   CipherBase* cipher = Unwrap<CipherBase>(args.This());
 
@@ -2329,7 +2356,9 @@ void Hmac::Initialize(Environment* env, v8::Handle<v8::Object> target) {
 
 
 void Hmac::New(const FunctionCallbackInfo<Value>& args) {
-  new Hmac(args.GetIsolate(), args.This());
+  HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  new Hmac(env, args.This());
 }
 
 
@@ -2466,7 +2495,8 @@ void Hash::New(const FunctionCallbackInfo<Value>& args) {
 
   const String::Utf8Value hash_type(args[0]);
 
-  Hash* hash = new Hash(args.GetIsolate(), args.This());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  Hash* hash = new Hash(env, args.This());
   if (!hash->HashInit(*hash_type)) {
     return ThrowError("Digest method not supported");
   }
@@ -2565,7 +2595,9 @@ void Sign::Initialize(Environment* env, v8::Handle<v8::Object> target) {
 
 
 void Sign::New(const FunctionCallbackInfo<Value>& args) {
-  new Sign(args.GetIsolate(), args.This());
+  HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  new Sign(env, args.This());
 }
 
 
@@ -2746,7 +2778,9 @@ void Verify::Initialize(Environment* env, v8::Handle<v8::Object> target) {
 
 
 void Verify::New(const FunctionCallbackInfo<Value>& args) {
-  new Verify(args.GetIsolate(), args.This());
+  HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  new Verify(env, args.This());
 }
 
 
@@ -3006,8 +3040,8 @@ void DiffieHellman::DiffieHellmanGroup(
     const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
-  DiffieHellman* diffieHellman =
-      new DiffieHellman(args.GetIsolate(), args.This());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  DiffieHellman* diffieHellman = new DiffieHellman(env, args.This());
 
   if (args.Length() != 1 || !args[0]->IsString()) {
     return ThrowError("No group name given");
@@ -3034,8 +3068,9 @@ void DiffieHellman::DiffieHellmanGroup(
 void DiffieHellman::New(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
   DiffieHellman* diffieHellman =
-      new DiffieHellman(args.GetIsolate(), args.This());
+      new DiffieHellman(env, args.This());
   bool initialized = false;
 
   if (args.Length() > 0) {
@@ -3286,80 +3321,147 @@ bool DiffieHellman::VerifyContext() {
 }
 
 
-// TODO(bnoordhuis) Turn into proper RAII class.
-struct pbkdf2_req {
-  uv_work_t work_req;
-  Environment* env;
-  int err;
-  char* pass;
-  size_t passlen;
-  char* salt;
-  size_t saltlen;
-  size_t iter;
-  char* key;
-  size_t keylen;
-  Persistent<Object> obj;
+class PBKDF2Request : public AsyncWrap {
+ public:
+  PBKDF2Request(Environment* env,
+                Local<Object> object,
+                ssize_t passlen,
+                char* pass,
+                ssize_t saltlen,
+                char* salt,
+                ssize_t iter,
+                ssize_t keylen)
+      : AsyncWrap(env, object),
+        error_(0),
+        passlen_(passlen),
+        pass_(pass),
+        saltlen_(saltlen),
+        salt_(salt),
+        keylen_(keylen),
+        key_(static_cast<char*>(malloc(keylen))),
+        iter_(iter) {
+    if (key() == NULL)
+      FatalError("node::PBKDF2Request()", "Out of Memory");
+  }
+
+  ~PBKDF2Request() {
+    persistent().Dispose();
+  }
+
+  uv_work_t* work_req() {
+    return &work_req_;
+  }
+
+  inline ssize_t passlen() const {
+    return passlen_;
+  }
+
+  inline char* pass() const {
+    return pass_;
+  }
+
+  inline ssize_t saltlen() const {
+    return saltlen_;
+  }
+
+  inline char* salt() const {
+    return salt_;
+  }
+
+  inline ssize_t keylen() const {
+    return keylen_;
+  }
+
+  inline char* key() const {
+    return key_;
+  }
+
+  inline ssize_t iter() const {
+    return iter_;
+  }
+
+  inline void release() {
+    free(pass_);
+    passlen_ = 0;
+    free(salt_);
+    saltlen_ = 0;
+    free(key_);
+    keylen_ = 0;
+  }
+
+  inline int error() const {
+    return error_;
+  }
+
+  inline void set_error(int err) {
+    error_ = err;
+  }
+
+  // TODO(trevnorris): Make private and make work with CONTAINER_OF macro.
+  uv_work_t work_req_;
+
+ private:
+  int error_;
+  ssize_t passlen_;
+  char* pass_;
+  ssize_t saltlen_;
+  char* salt_;
+  ssize_t keylen_;
+  char* key_;
+  ssize_t iter_;
 };
 
 
-void EIO_PBKDF2(pbkdf2_req* req) {
-  req->err = PKCS5_PBKDF2_HMAC_SHA1(
-    req->pass,
-    req->passlen,
-    (unsigned char*)req->salt,
-    req->saltlen,
-    req->iter,
-    req->keylen,
-    (unsigned char*)req->key);
-  memset(req->pass, 0, req->passlen);
-  memset(req->salt, 0, req->saltlen);
+void EIO_PBKDF2(PBKDF2Request* req) {
+  req->set_error(PKCS5_PBKDF2_HMAC_SHA1(
+    req->pass(),
+    req->passlen(),
+    reinterpret_cast<unsigned char*>(req->salt()),
+    req->saltlen(),
+    req->iter(),
+    req->keylen(),
+    reinterpret_cast<unsigned char*>(req->key())));
+  memset(req->pass(), 0, req->passlen());
+  memset(req->salt(), 0, req->saltlen());
 }
 
 
 void EIO_PBKDF2(uv_work_t* work_req) {
-  pbkdf2_req* req = container_of(work_req, pbkdf2_req, work_req);
+  PBKDF2Request* req = CONTAINER_OF(work_req, PBKDF2Request, work_req_);
   EIO_PBKDF2(req);
 }
 
 
-void EIO_PBKDF2After(pbkdf2_req* req, Local<Value> argv[2]) {
-  if (req->err) {
+void EIO_PBKDF2After(PBKDF2Request* req, Local<Value> argv[2]) {
+  if (req->error()) {
     argv[0] = Undefined(node_isolate);
-    argv[1] = Encode(req->key, req->keylen, BUFFER);
-    memset(req->key, 0, req->keylen);
+    argv[1] = Encode(req->key(), req->keylen(), BUFFER);
+    memset(req->key(), 0, req->keylen());
   } else {
     argv[0] = Exception::Error(
         FIXED_ONE_BYTE_STRING(node_isolate, "PBKDF2 error"));
     argv[1] = Undefined(node_isolate);
   }
-
-  delete[] req->pass;
-  delete[] req->salt;
-  delete[] req->key;
-  delete req;
 }
 
 
 void EIO_PBKDF2After(uv_work_t* work_req, int status) {
   assert(status == 0);
-  pbkdf2_req* req = container_of(work_req, pbkdf2_req, work_req);
-  Environment* env = req->env;
-  Context::Scope context_scope(env->context());
+  PBKDF2Request* req = CONTAINER_OF(work_req, PBKDF2Request, work_req_);
+  Environment* env = req->env();
   HandleScope handle_scope(env->isolate());
-  // Create a new Local that's associated with the current HandleScope.
-  // PersistentToLocal() returns a handle that gets zeroed when we call
-  // Dispose() so don't use that.
-  Local<Object> obj = Local<Object>::New(node_isolate, req->obj);
-  req->obj.Dispose();
+  Context::Scope context_scope(env->context());
   Local<Value> argv[2];
   EIO_PBKDF2After(req, argv);
-  MakeCallback(env, obj, "ondone", ARRAY_SIZE(argv), argv);
+  req->MakeCallback(env->ondone_string(), ARRAY_SIZE(argv), argv);
+  req->release();
+  delete req;
 }
 
 
 void PBKDF2(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   const char* type_error = NULL;
   char* pass = NULL;
@@ -3370,7 +3472,8 @@ void PBKDF2(const FunctionCallbackInfo<Value>& args) {
   ssize_t pass_written = -1;
   ssize_t salt_written = -1;
   ssize_t iter = -1;
-  pbkdf2_req* req = NULL;
+  PBKDF2Request* req = NULL;
+  Local<Object> obj;
 
   if (args.Length() != 4 && args.Length() != 5) {
     type_error = "Bad parameter";
@@ -3384,7 +3487,10 @@ void PBKDF2(const FunctionCallbackInfo<Value>& args) {
     goto err;
   }
 
-  pass = new char[passlen];
+  pass = static_cast<char*>(malloc(passlen));
+  if (pass == NULL) {
+    FatalError("node::PBKDF2()", "Out of Memory");
+  }
   pass_written = DecodeWrite(pass, passlen, args[0], BINARY);
   assert(pass_written == passlen);
 
@@ -3395,7 +3501,10 @@ void PBKDF2(const FunctionCallbackInfo<Value>& args) {
     goto err;
   }
 
-  salt = new char[saltlen];
+  salt = static_cast<char*>(malloc(saltlen));
+  if (salt == NULL) {
+    FatalError("node::PBKDF2()", "Out of Memory");
+  }
   salt_written = DecodeWrite(salt, saltlen, args[1], BINARY);
   assert(salt_written == saltlen);
 
@@ -3421,26 +3530,13 @@ void PBKDF2(const FunctionCallbackInfo<Value>& args) {
     goto err;
   }
 
-  req = new pbkdf2_req;
-  req->env = env;
-  req->err = 0;
-  req->pass = pass;
-  req->passlen = passlen;
-  req->salt = salt;
-  req->saltlen = saltlen;
-  req->iter = iter;
-  req->key = new char[keylen];
-  req->keylen = keylen;
+  obj = Object::New();
+  req = new PBKDF2Request(env, obj, passlen, pass, saltlen, salt, iter, keylen);
 
   if (args[4]->IsFunction()) {
-    Local<Object> obj = Object::New();
-    obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "ondone"), args[4]);
-    if (env->in_domain()) {
-      obj->Set(env->domain_string(), env->domain_array()->Get(0));
-    }
-    req->obj.Reset(node_isolate, obj);
+    obj->Set(env->ondone_string(), args[4]);
     uv_queue_work(env->event_loop(),
-                  &req->work_req,
+                  req->work_req(),
                   EIO_PBKDF2,
                   EIO_PBKDF2After);
   } else {
@@ -3455,92 +3551,134 @@ void PBKDF2(const FunctionCallbackInfo<Value>& args) {
   return;
 
  err:
-  delete[] salt;
-  delete[] pass;
+  free(salt);
+  free(pass);
   return ThrowTypeError(type_error);
 }
 
 
-// TODO(bnoordhuis) Turn into proper RAII class.
-struct RandomBytesRequest {
-  ~RandomBytesRequest();
-  Environment* env_;
-  Persistent<Object> obj_;
-  unsigned long error_;  // openssl error code or zero
+// Only instantiate within a valid HandleScope.
+class RandomBytesRequest : public AsyncWrap {
+ public:
+  RandomBytesRequest(Environment* env, Local<Object> object, size_t size)
+      : AsyncWrap(env, object),
+        error_(0),
+        size_(size),
+        data_(static_cast<char*>(malloc(size))) {
+    if (data() == NULL)
+      FatalError("node::RandomBytesRequest()", "Out of Memory");
+  }
+
+  ~RandomBytesRequest() {
+    persistent().Dispose();
+  }
+
+  uv_work_t* work_req() {
+    return &work_req_;
+  }
+
+  inline size_t size() const {
+    return size_;
+  }
+
+  inline char* data() const {
+    return data_;
+  }
+
+  inline void release() {
+    free(data_);
+    size_ = 0;
+  }
+
+  inline void return_memory(char** d, size_t* len) {
+    *d = data_;
+    data_ = NULL;
+    *len = size_;
+    size_ = 0;
+  }
+
+  inline unsigned long error() const {
+    return error_;
+  }
+
+  inline void set_error(unsigned long err) {
+    error_ = err;
+  }
+
+  // TODO(trevnorris): Make private and make work with CONTAINER_OF macro.
   uv_work_t work_req_;
+
+ private:
+  unsigned long error_;
   size_t size_;
   char* data_;
 };
 
 
-RandomBytesRequest::~RandomBytesRequest() {
-  obj_.Dispose();
-}
-
-
 template <bool pseudoRandom>
 void RandomBytesWork(uv_work_t* work_req) {
-  RandomBytesRequest* req = container_of(work_req,
+  RandomBytesRequest* req = CONTAINER_OF(work_req,
                                          RandomBytesRequest,
                                          work_req_);
   int r;
 
   if (pseudoRandom == true) {
-    r = RAND_pseudo_bytes(reinterpret_cast<unsigned char*>(req->data_),
-                          req->size_);
+    r = RAND_pseudo_bytes(reinterpret_cast<unsigned char*>(req->data()),
+                          req->size());
   } else {
-    r = RAND_bytes(reinterpret_cast<unsigned char*>(req->data_), req->size_);
+    r = RAND_bytes(reinterpret_cast<unsigned char*>(req->data()), req->size());
   }
 
   // RAND_bytes() returns 0 on error. RAND_pseudo_bytes() returns 0 when the
   // result is not cryptographically strong - but that's not an error.
   if (r == 0 && pseudoRandom == false) {
-    req->error_ = ERR_get_error();
+    req->set_error(ERR_get_error());
   } else if (r == -1) {
-    req->error_ = static_cast<unsigned long>(-1);
+    req->set_error(static_cast<unsigned long>(-1));
   }
 }
 
 
 // don't call this function without a valid HandleScope
 void RandomBytesCheck(RandomBytesRequest* req, Local<Value> argv[2]) {
-  if (req->error_) {
+  if (req->error()) {
     char errmsg[256] = "Operation not supported";
 
-    if (req->error_ != static_cast<unsigned long>(-1))
-      ERR_error_string_n(req->error_, errmsg, sizeof errmsg);
+    if (req->error() != static_cast<unsigned long>(-1))
+      ERR_error_string_n(req->error(), errmsg, sizeof errmsg);
 
     argv[0] = Exception::Error(OneByteString(node_isolate, errmsg));
     argv[1] = Null(node_isolate);
+    req->release();
   } else {
+    char* data = NULL;
+    size_t size;
+    req->return_memory(&data, &size);
     argv[0] = Null(node_isolate);
-    argv[1] = Buffer::Use(req->data_, req->size_);
-    req->data_ = NULL;
+    argv[1] = Buffer::Use(data, size);
   }
-  free(req->data_);
 }
 
 
 void RandomBytesAfter(uv_work_t* work_req, int status) {
   assert(status == 0);
-  RandomBytesRequest* req = container_of(work_req,
+  RandomBytesRequest* req = CONTAINER_OF(work_req,
                                          RandomBytesRequest,
                                          work_req_);
-  Environment* env = req->env_;
-  Context::Scope context_scope(env->context());
+  Environment* env = req->env();
   HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
   Local<Value> argv[2];
   RandomBytesCheck(req, argv);
-  Local<Object> obj = PersistentToLocal(node_isolate, req->obj_);
-  MakeCallback(env, obj, "ondone", ARRAY_SIZE(argv), argv);
+  req->MakeCallback(env->ondone_string(), ARRAY_SIZE(argv), argv);
   delete req;
 }
 
 
 template <bool pseudoRandom>
 void RandomBytes(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   // maybe allow a buffer to write to? cuts down on object creation
   // when generating random data in a loop
@@ -3553,34 +3691,19 @@ void RandomBytes(const FunctionCallbackInfo<Value>& args) {
     return ThrowTypeError("size > Buffer::kMaxLength");
   }
 
-  RandomBytesRequest* req = new RandomBytesRequest();
-  req->env_ = env;
-  req->error_ = 0;
-  req->size_ = size;
-  req->data_ = static_cast<char*>(malloc(size));
-
-  if (req->data_ == NULL) {
-    delete req;
-    V8::LowMemoryNotification();
-    return ThrowError("Out of memory");
-  }
+  Local<Object> obj = Object::New();
+  RandomBytesRequest* req = new RandomBytesRequest(env, obj, size);
 
   if (args[1]->IsFunction()) {
-    Local<Object> obj = Object::New();
     obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "ondone"), args[1]);
-    if (env->in_domain()) {
-      obj->Set(env->domain_string(), env->domain_array()->Get(0));
-    }
-    req->obj_.Reset(node_isolate, obj);
-
     uv_queue_work(env->event_loop(),
-                  &req->work_req_,
+                  req->work_req(),
                   RandomBytesWork<pseudoRandom>,
                   RandomBytesAfter);
     args.GetReturnValue().Set(obj);
   } else {
     Local<Value> argv[2];
-    RandomBytesWork<pseudoRandom>(&req->work_req_);
+    RandomBytesWork<pseudoRandom>(req->work_req());
     RandomBytesCheck(req, argv);
     delete req;
 
@@ -3664,7 +3787,9 @@ void Certificate::Initialize(Handle<Object> target) {
 
 
 void Certificate::New(const FunctionCallbackInfo<Value>& args) {
-  new Certificate(args.GetIsolate(), args.This());
+  HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  new Certificate(env, args.This());
 }
 
 

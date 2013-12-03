@@ -1169,10 +1169,14 @@ no-op, not an error.
 Watch for changes on `filename`, where `filename` is either a file or a
 directory.  The returned object is a [fs.FSWatcher](#fs_class_fs_fswatcher).
 
-The second argument is optional. The `options` if provided should be an object
-containing a boolean member `persistent`, which indicates whether the process
-should continue to run as long as files are being watched. The default is
-`{ persistent: true }`.
+The second argument is optional. The `options` if provided should be an object.
+The supported boolean members are `persistent` and `recursive`. `persistent`
+indicates whether the process should continue to run as long as files are being
+watched. `recursive` indicates whether all subdirectories should be watched, or
+only the current directory. This applies when a directory is specified, and only
+on supported platforms (See Caveats below).
+
+The default is `{ persistent: true, recursive: false }`.
 
 The listener callback gets two arguments `(event, filename)`.  `event` is either
 'rename' or 'change', and `filename` is the name of the file which triggered
@@ -1184,11 +1188,15 @@ the event.
 戻り値のオブジェクトは [fs.FSWatcher](#fs.FSWatcher) です。
 
 第 2 引数はオプションです。
-もし指定されるなら、`options` は boolean の `persistent` プロパティを
-持つオブジェクトであるべきです。
+もし指定されるなら、`options` はオブジェクトであるべきです。
+サポートされる `boolean` のメンバは `persistent` と `recursive` です。
 `persistent` はファイルが監視されている間、
 プロセスが実行し続けることを示します。
-デフォルトは `{ persistent: true }` です。
+`recursive` は監視対象が全てのサブディレクトリか、
+そのディレクトリだけかを示します。
+これは、ディレクトリが指定された場合で、サポートされるプラットフォームの場合のみ
+適用されます (後述の「Caveats」を参照してください)。
+デフォルトは `{ persistent: true, recursive: false }` です。
 
 リスナーコールバックは二つの引数 `(event, filename)` を与えられます。
 `event` は `'rename'` または `'change'`、そして `filename` はイベントを
@@ -1206,6 +1214,16 @@ unavailable in some situations.
 `fs.watch` API はプラットフォーム間で 100% 完全ではありmせんし、
 いくつかのシチュエーションで利用不可能です。
 
+<!--
+The recursive option is currently supported on OS X. Only FSEvents supports this
+type of file watching so it is unlikely any additional platforms will be added
+soon.
+-->
+
+`recursive` オプションは OS X でのみサポートされます。
+FSEventsだけがこのタイプのファイル監視をサポートしているので、
+他のプラットフォームがすぐに追加される見込みはありません。
+
 #### Availability
 
 <!--type=misc-->
@@ -1220,13 +1238,15 @@ to be notified of filesystem changes.
 
 <!--
 * On Linux systems, this uses `inotify`.
-* On BSD systems (including OS X), this uses `kqueue`.
+* On BSD systems, this uses `kqueue`.
+* On OS X, this uses `kqueue` for files and 'FSEvents' for directories.
 * On SunOS systems (including Solaris and SmartOS), this uses `event ports`.
 * On Windows systems, this feature depends on `ReadDirectoryChangesW`.
 -->
 
 * Linux システムでは `inotify` が使われます。
-* BSD システム (OS X を含みます) では `kqueue` が使われます。
+* BSD システム では `kqueue` が使われます。
+* OSX では、ファイルには `kqueue`、ディレクトリには 'FSEvents' が使われます。
 * SunOS システム (Solaris および SmartOS を含みます) では `event ports`
   が使われます。
 * Windows システムでは、この機能は `ReadDirectoryChangesW` に依存します。

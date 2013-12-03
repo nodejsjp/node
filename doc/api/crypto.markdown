@@ -195,12 +195,14 @@ Returned by `crypto.createHash`.
 Updates the hash content with the given `data`, the encoding of which
 is given in `input_encoding` and can be `'utf8'`, `'ascii'` or
 `'binary'`.  If no encoding is provided, then a buffer is expected.
+If `data` is a `Buffer` then `input_encoding` is ignored.
 -->
 
 与えられた `data` でハッシュの内容を更新します。
 そのエンコーディングは `input_encoding` で与えられ、`'utf8'`、`'ascii'`、
 または `'binary'` を指定することができます。
 エンコーディングが与えられなかった場合はバッファが期待されます。
+もし `data` が `Buffer` なら、`input_encoding` は無視されます。
 
 <!--
 This can be called many times with new data as it is streamed.
@@ -399,11 +401,13 @@ methods are also supported.
 Updates the cipher with `data`, the encoding of which is given in
 `input_encoding` and can be `'utf8'`, `'ascii'` or `'binary'`.  If no
 encoding is provided, then a buffer is expected.
+If `data` is a `Buffer` then `input_encoding` is ignored.
 -->
 
 `data` で暗号を更新します。
 `input_encoding` で与えられるエンコーディングは `'utf8'`、`'ascii'`、`'binary'` のいずれかです。
 エンコーディングが与えられなかった場合はバッファが期待されます。
+もし `data` が `Buffer` なら、`input_encoding` は無視されます。
 
 The `output_encoding` specifies the output format of the enciphered
 data, and can be `'binary'`, `'base64'` or `'hex'`.  If no encoding is
@@ -512,11 +516,13 @@ plain-text data on the the readable side.  The legacy `update` and
 Updates the decipher with `data`, which is encoded in `'binary'`,
 `'base64'` or `'hex'`.  If no encoding is provided, then a buffer is
 expected.
+If `data` is a `Buffer` then `input_encoding` is ignored.
 -->
 
 `'binary'`、`'base64'` または `'hex'` のいずれかでエンコードされた復号を
 `data` で更新します。
 エンコーディングが与えられなかった場合はバッファが期待されます。
+もし `data` が `Buffer` なら、`input_encoding` は無視されます。
 
 <!--
 The `output_decoding` specifies in what format to return the
@@ -952,7 +958,7 @@ Synchronous PBKDF2 function.  Returns derivedKey or throws error.
 Generates cryptographically strong pseudo-random data. Usage:
 -->
 
-暗号学的で、強い疑似乱数データを生成します。使用法:
+暗号理論的に強い疑似乱数データを生成します。使用法:
 
     // async
     crypto.randomBytes(256, function(ex, buf) {
@@ -966,7 +972,20 @@ Generates cryptographically strong pseudo-random data. Usage:
       console.log('Have %d bytes of random data: %s', buf.length, buf);
     } catch (ex) {
       // handle error
+      // most likely, entropy sources are drained
     }
+
+<!--
+NOTE: Will throw error or invoke callback with error, if there is not enough
+accumulated entropy to generate cryptographically strong data. In other words,
+`crypto.randomBytes` without callback will not block even if all entropy sources
+are drained.
+-->
+
+注意: もし暗号理論的に強いデータを生成するために十分な累積エントロピーが
+なければ、エラーがスローされるか、エラーと共にコールバックが呼ばれます。
+言い換えると、コールバックを渡さずに `crypto.randomBytes()` を呼び出しても、
+全てのエントロピー源が枯渇するまでブロックするわけではありません。
 
 ## crypto.pseudoRandomBytes(size, [callback])
 
@@ -978,7 +997,7 @@ function should never be used where unpredictability is important,
 such as in the generation of encryption keys.
 -->
 
-暗号学的では *ない*、強い疑似乱数データを生成します。
+暗号理論的では *ない*、強い疑似乱数データを生成します。
 返されるデータは十分に長ければユニークですが、
 必ずしも予測不可能ではありません。
 この理由のため、この関数の出力を暗号化キーの生成など、予測不可能であることが
@@ -992,23 +1011,45 @@ Usage is otherwise identical to `crypto.randomBytes`.
 
 ## Class: Certificate
 
+<!--
 The class used for working with signed public key & challenges. The most
 common usage for this series of functions is when dealing with the `<keygen>`
 element. http://www.openssl.org/docs/apps/spkac.html
+-->
 
+このクラスは「signed public key & challenges (SPKAC)」のために使われます。
+この一連の関数の主な用途は、`<keygen>` 要素の取り扱いです。
+http://www.openssl.org/docs/apps/spkac.html
+
+<!--
 Returned by `crypto.Certificate`.
+-->
+
+`crypto.Certificate` を返します。
 
 ### Certificate.verifySpkac(spkac)
 
+<!--
 Returns true of false based on the validity of the SPKAC.
+-->
+
+妥当なSPKAC かどうかを `true` または `false` で返します。
 
 ### Certificate.exportChallenge(spkac)
 
+<!--
 Exports the encoded public key from the supplied SPKAC.
+-->
+
+与えられた SPKAC からエンコードされた公開鍵を取り出します。
 
 ### Certificate.exportPublicKey(spkac)
 
+<!--
 Exports the encoded challenge associated with the SPKAC.
+-->
+
+与えられた SPKAC からエンコードされたチャレンジを取り出します。
 
 ## crypto.DEFAULT_ENCODING
 

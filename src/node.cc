@@ -35,15 +35,13 @@
 #include "node_crypto.h"
 #endif
 
-#if defined HAVE_DTRACE || defined HAVE_ETW || defined HAVE_SYSTEMTAP
+#if defined HAVE_DTRACE || defined HAVE_ETW
 #include "node_dtrace.h"
 #endif
 
-#if HAVE_SYSTEMTAP
-#include "node_provider.h"
-#endif
-
 #include "ares.h"
+#include "async-wrap.h"
+#include "async-wrap-inl.h"
 #include "env.h"
 #include "env-inl.h"
 #include "handle_wrap.h"
@@ -184,6 +182,7 @@ void ArrayBufferAllocator::Free(void* data, size_t length) {
 
 
 static void CheckImmediate(uv_check_t* handle, int status) {
+  HandleScope scope(node_isolate);
   Environment* env = Environment::from_immediate_check_handle(handle);
   Context::Scope context_scope(env->context());
   MakeCallback(env, env->process_object(), env->immediate_callback_string());
@@ -845,83 +844,78 @@ Local<Value> WinapiErrnoException(int errorno,
 #endif
 
 
-void SetupDomainUse(const FunctionCallbackInfo<Value>& args) {
+void SetupAsyncListener(const FunctionCallbackInfo<Value>& args) {
+  HandleScope handle_scope(args.GetIsolate());
   Environment* env = Environment::GetCurrent(args.GetIsolate());
 
-  if (env->using_domains())
-    return;
-  env->set_using_domains(true);
+  assert(args[0]->IsObject());
+  assert(args[1]->IsFunction());
+  assert(args[2]->IsFunction());
+  assert(args[3]->IsFunction());
+  assert(args[4]->IsFunction());
+  assert(args[5]->IsFunction());
 
-  HandleScope scope(node_isolate);
-  Local<Object> process_object = env->process_object();
+  env->set_async_listener_run_function(args[1].As<Function>());
+  env->set_async_listener_load_function(args[2].As<Function>());
+  env->set_async_listener_unload_function(args[3].As<Function>());
+  env->set_async_listener_push_function(args[4].As<Function>());
+  env->set_async_listener_strip_function(args[5].As<Function>());
 
-  Local<String> tick_callback_function_key =
-      FIXED_ONE_BYTE_STRING(node_isolate, "_tickDomainCallback");
-  Local<Function> tick_callback_function =
-      process_object->Get(tick_callback_function_key).As<Function>();
-
-  if (!tick_callback_function->IsFunction()) {
-    fprintf(stderr, "process._tickDomainCallback assigned to non-function\n");
-    abort();
-  }
-
-  process_object->Set(FIXED_ONE_BYTE_STRING(node_isolate, "_tickCallback"),
-                      tick_callback_function);
-  env->set_tick_callback_function(tick_callback_function);
-
-  if (!args[0]->IsArray()) {
-    fprintf(stderr, "_setupDomainUse first argument must be an array\n");
-    abort();
-  }
-  env->set_domain_array(args[0].As<Array>());
-
-  if (!args[1]->IsObject()) {
-    fprintf(stderr, "_setupDomainUse second argument must be an object\n");
-    abort();
-  }
-
-  Local<Object> domain_flag_obj = args[1].As<Object>();
-  Environment::DomainFlag* domain_flag = env->domain_flag();
-  domain_flag_obj->SetIndexedPropertiesToExternalArrayData(
-      domain_flag->fields(),
+  Local<Object> async_listener_flag_obj = args[0].As<Object>();
+  Environment::AsyncListener* async_listener = env->async_listener();
+  async_listener_flag_obj->SetIndexedPropertiesToExternalArrayData(
+      async_listener->fields(),
       kExternalUnsignedIntArray,
-      domain_flag->fields_count());
+      async_listener->fields_count());
+
+  // Do a little housekeeping.
+  env->process_object()->Delete(
+      FIXED_ONE_BYTE_STRING(args.GetIsolate(), "_setupAsyncListener"));
 }
 
 
-Handle<Value> MakeDomainCallback(Environment* env,
-                                 const Handle<Object> object,
-                                 const Handle<Function> callback,
-                                 int argc,
-                                 Handle<Value> argv[]) {
+void SetupNextTick(const FunctionCallbackInfo<Value>& args) {
+  HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+
+  assert(args[0]->IsObject() && args[1]->IsFunction());
+
+  // Values use to cross communicate with processNextTick.
+  Local<Object> tick_info_obj = args[0].As<Object>();
+  tick_info_obj->SetIndexedPropertiesToExternalArrayData(
+      env->tick_info()->fields(),
+      kExternalUnsignedIntArray,
+      env->tick_info()->fields_count());
+
+  env->set_tick_callback_function(args[1].As<Function>());
+
+  // Do a little housekeeping.
+  env->process_object()->Delete(
+      FIXED_ONE_BYTE_STRING(args.GetIsolate(), "_setupNextTick"));
+}
+
+
+Handle<Value> MakeCallback(Environment* env,
+                           Handle<Object> object,
+                           const Handle<Function> callback,
+                           int argc,
+                           Handle<Value> argv[]) {
   // If you hit this assertion, you forgot to enter the v8::Context first.
   assert(env->context() == env->isolate()->GetCurrentContext());
 
-  // TODO(trevnorris) Hook for long stack traces to be made here.
-
-  Local<Value> domain_v = object->Get(env->domain_string());
-  Local<Object> domain;
+  Local<Object> process = env->process_object();
 
   TryCatch try_catch;
   try_catch.SetVerbose(true);
 
-  bool has_domain = domain_v->IsObject();
-  if (has_domain) {
-    domain = domain_v.As<Object>();
+  // TODO(trevnorris): This is sucky for performance. Fix it.
+  bool has_async_queue = object->Has(env->async_queue_string());
+  if (has_async_queue) {
+    Local<Value> argv[] = { object };
+    env->async_listener_load_function()->Call(process, ARRAY_SIZE(argv), argv);
 
-    if (domain->Get(env->disposed_string())->IsTrue()) {
-      // domain has been disposed of.
+    if (try_catch.HasCaught())
       return Undefined(node_isolate);
-    }
-
-    Local<Function> enter =
-        domain->Get(env->enter_string()).As<Function>();
-    assert(enter->IsFunction());
-    enter->Call(domain, 0, NULL);
-
-    if (try_catch.HasCaught()) {
-      return Undefined(node_isolate);
-    }
   }
 
   Local<Value> ret = callback->Call(object, argc, argv);
@@ -930,23 +924,15 @@ Handle<Value> MakeDomainCallback(Environment* env,
     return Undefined(node_isolate);
   }
 
-  if (has_domain) {
-    Local<Function> exit =
-        domain->Get(env->exit_string()).As<Function>();
-    assert(exit->IsFunction());
-    exit->Call(domain, 0, NULL);
+  if (has_async_queue) {
+    Local<Value> val = object.As<Value>();
+    env->async_listener_unload_function()->Call(process, 1, &val);
 
-    if (try_catch.HasCaught()) {
+    if (try_catch.HasCaught())
       return Undefined(node_isolate);
-    }
   }
 
   Environment::TickInfo* tick_info = env->tick_info();
-
-  if (tick_info->last_threw() == 1) {
-    tick_info->set_last_threw(0);
-    return ret;
-  }
 
   if (tick_info->in_tick()) {
     return ret;
@@ -960,73 +946,7 @@ Handle<Value> MakeDomainCallback(Environment* env,
   tick_info->set_in_tick(true);
 
   // process nextTicks after call
-  Local<Object> process_object = env->process_object();
-  Local<Function> tick_callback_function = env->tick_callback_function();
-  tick_callback_function->Call(process_object, 0, NULL);
-
-  tick_info->set_in_tick(false);
-
-  if (try_catch.HasCaught()) {
-    tick_info->set_last_threw(true);
-    return Undefined(node_isolate);
-  }
-
-  return ret;
-}
-
-
-Handle<Value> MakeCallback(Environment* env,
-                           const Handle<Object> object,
-                           const Handle<Function> callback,
-                           int argc,
-                           Handle<Value> argv[]) {
-  // If you hit this assertion, you forgot to enter the v8::Context first.
-  assert(env->context() == env->isolate()->GetCurrentContext());
-
-  // TODO(trevnorris) Hook for long stack traces to be made here.
-  Local<Object> process_object = env->process_object();
-
-  if (env->using_domains())
-    return MakeDomainCallback(env, object, callback, argc, argv);
-
-  TryCatch try_catch;
-  try_catch.SetVerbose(true);
-
-  Local<Value> ret = callback->Call(object, argc, argv);
-
-  if (try_catch.HasCaught()) {
-    return Undefined(node_isolate);
-  }
-
-  Environment::TickInfo* tick_info = env->tick_info();
-
-  if (tick_info->in_tick() == 1) {
-    return ret;
-  }
-
-  if (tick_info->length() == 0) {
-    tick_info->set_index(0);
-    return ret;
-  }
-
-  tick_info->set_in_tick(true);
-
-  // lazy load no domain next tick callbacks
-  Local<Function> tick_callback_function = env->tick_callback_function();
-  if (tick_callback_function.IsEmpty()) {
-    Local<String> tick_callback_function_key =
-        FIXED_ONE_BYTE_STRING(node_isolate, "_tickCallback");
-    tick_callback_function =
-        process_object->Get(tick_callback_function_key).As<Function>();
-    if (!tick_callback_function->IsFunction()) {
-      fprintf(stderr, "process._tickCallback assigned to non-function\n");
-      abort();
-    }
-    env->set_tick_callback_function(tick_callback_function);
-  }
-
-  // process nextTicks after call
-  tick_callback_function->Call(process_object, 0, NULL);
+  env->tick_callback_function()->Call(process, 0, NULL);
 
   tick_info->set_in_tick(false);
 
@@ -1045,15 +965,8 @@ Handle<Value> MakeCallback(Environment* env,
                            uint32_t index,
                            int argc,
                            Handle<Value> argv[]) {
-  // If you hit this assertion, you forgot to enter the v8::Context first.
-  assert(env->context() == env->isolate()->GetCurrentContext());
-
   Local<Function> callback = object->Get(index).As<Function>();
   assert(callback->IsFunction());
-
-  if (env->using_domains()) {
-    return MakeDomainCallback(env, object, callback, argc, argv);
-  }
 
   return MakeCallback(env, object, callback, argc, argv);
 }
@@ -1064,16 +977,8 @@ Handle<Value> MakeCallback(Environment* env,
                            const Handle<String> symbol,
                            int argc,
                            Handle<Value> argv[]) {
-  // If you hit this assertion, you forgot to enter the v8::Context first.
-  assert(env->context() == env->isolate()->GetCurrentContext());
-
   Local<Function> callback = object->Get(symbol).As<Function>();
   assert(callback->IsFunction());
-
-  if (env->using_domains()) {
-    return MakeDomainCallback(env, object, callback, argc, argv);
-  }
-
   return MakeCallback(env, object, callback, argc, argv);
 }
 
@@ -1083,8 +988,6 @@ Handle<Value> MakeCallback(Environment* env,
                            const char* method,
                            int argc,
                            Handle<Value> argv[]) {
-  // If you hit this assertion, you forgot to enter the v8::Context first.
-  assert(env->context() == env->isolate()->GetCurrentContext());
   Local<String> method_string = OneByteString(node_isolate, method);
   return MakeCallback(env, object, method_string, argc, argv);
 }
@@ -1123,19 +1026,6 @@ Handle<Value> MakeCallback(const Handle<Object> object,
   Context::Scope context_scope(context);
   HandleScope handle_scope(env->isolate());
   return handle_scope.Close(MakeCallback(env, object, callback, argc, argv));
-}
-
-
-Handle<Value> MakeDomainCallback(const Handle<Object> object,
-                                 const Handle<Function> callback,
-                                 int argc,
-                                 Handle<Value> argv[]) {
-  Local<Context> context = object->CreationContext();
-  Environment* env = Environment::GetCurrent(context);
-  Context::Scope context_scope(context);
-  HandleScope handle_scope(env->isolate());
-  return handle_scope.Close(
-      MakeDomainCallback(env, object, callback, argc, argv));
 }
 
 
@@ -1360,7 +1250,7 @@ static void GetActiveRequests(const FunctionCallbackInfo<Value>& args) {
   int i = 0;
 
   QUEUE_FOREACH(q, &req_wrap_queue) {
-    ReqWrap<uv_req_t>* w = container_of(q, ReqWrap<uv_req_t>, req_wrap_queue_);
+    ReqWrap<uv_req_t>* w = CONTAINER_OF(q, ReqWrap<uv_req_t>, req_wrap_queue_);
     if (w->persistent().IsEmpty())
       continue;
     ary->Set(i++, w->object());
@@ -1382,7 +1272,7 @@ void GetActiveHandles(const FunctionCallbackInfo<Value>& args) {
   Local<String> owner_sym = FIXED_ONE_BYTE_STRING(node_isolate, "owner");
 
   QUEUE_FOREACH(q, &handle_wrap_queue) {
-    HandleWrap* w = container_of(q, HandleWrap, handle_wrap_queue_);
+    HandleWrap* w = CONTAINER_OF(q, HandleWrap, handle_wrap_queue_);
     if (w->persistent().IsEmpty() || (w->flags_ & HandleWrap::kUnref))
       continue;
     Local<Object> object = w->object();
@@ -1758,8 +1648,8 @@ static void Uptime(const FunctionCallbackInfo<Value>& args) {
 
 
 void MemoryUsage(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   size_t rss;
   int err = uv_resident_set_memory(&rss);
@@ -1838,8 +1728,8 @@ typedef void (UV_DYNAMIC* extInit)(Handle<Object> exports);
 // when two contexts try to load the same shared object. Maybe have a shadow
 // cache that's a plain C list or hash table that's shared across contexts?
 void DLOpen(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
   char symbol[1024], *base, *pos;
   uv_lib_t lib;
   int r;
@@ -2008,8 +1898,8 @@ void OnMessage(Handle<Message> message, Handle<Value> error) {
 
 
 static void Binding(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   Local<String> module = args[0]->ToString();
   String::Utf8Value module_v(module);
@@ -2291,6 +2181,7 @@ static void DebugEnd(const FunctionCallbackInfo<Value>& args);
 
 void NeedImmediateCallbackGetter(Local<String> property,
                                  const PropertyCallbackInfo<Value>& info) {
+  HandleScope handle_scope(info.GetIsolate());
   Environment* env = Environment::GetCurrent(info.GetIsolate());
   const uv_check_t* immediate_check_handle = env->immediate_check_handle();
   bool active = uv_is_active(
@@ -2303,8 +2194,8 @@ static void NeedImmediateCallbackSetter(
     Local<String> property,
     Local<Value> value,
     const PropertyCallbackInfo<void>& info) {
-  Environment* env = Environment::GetCurrent(info.GetIsolate());
   HandleScope handle_scope(info.GetIsolate());
+  Environment* env = Environment::GetCurrent(info.GetIsolate());
 
   uv_check_t* immediate_check_handle = env->immediate_check_handle();
   bool active = uv_is_active(
@@ -2351,12 +2242,16 @@ void StopProfilerIdleNotifier(Environment* env) {
 
 
 void StartProfilerIdleNotifier(const FunctionCallbackInfo<Value>& args) {
-  StartProfilerIdleNotifier(Environment::GetCurrent(args.GetIsolate()));
+  HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  StartProfilerIdleNotifier(env);
 }
 
 
 void StopProfilerIdleNotifier(const FunctionCallbackInfo<Value>& args) {
-  StopProfilerIdleNotifier(Environment::GetCurrent(args.GetIsolate()));
+  HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  StopProfilerIdleNotifier(env);
 }
 
 
@@ -2372,7 +2267,6 @@ void SetupProcessObject(Environment* env,
                         int exec_argc,
                         const char* const* exec_argv) {
   HandleScope scope(node_isolate);
-  int i, j;
 
   Local<Object> process = env->process_object();
 
@@ -2422,22 +2316,25 @@ void SetupProcessObject(Environment* env,
 
 #if HAVE_OPENSSL
   // Stupid code to slice out the version string.
-  int c, l = strlen(OPENSSL_VERSION_TEXT);
-  for (i = j = 0; i < l; i++) {
-    c = OPENSSL_VERSION_TEXT[i];
-    if ('0' <= c && c <= '9') {
-      for (j = i + 1; j < l; j++) {
-        c = OPENSSL_VERSION_TEXT[j];
-        if (c == ' ')
-          break;
+  {  // NOLINT(whitespace/braces)
+    size_t i, j, k;
+    int c;
+    for (i = j = 0, k = sizeof(OPENSSL_VERSION_TEXT) - 1; i < k; ++i) {
+      c = OPENSSL_VERSION_TEXT[i];
+      if ('0' <= c && c <= '9') {
+        for (j = i + 1; j < k; ++j) {
+          c = OPENSSL_VERSION_TEXT[j];
+          if (c == ' ')
+            break;
+        }
+        break;
       }
-      break;
     }
+    READONLY_PROPERTY(
+        versions,
+        "openssl",
+        OneByteString(node_isolate, &OPENSSL_VERSION_TEXT[i], j - i));
   }
-  READONLY_PROPERTY(
-      versions,
-      "openssl",
-      OneByteString(node_isolate, &OPENSSL_VERSION_TEXT[i], j - i));
 #endif
 
   // process.arch
@@ -2574,7 +2471,8 @@ void SetupProcessObject(Environment* env,
 
   NODE_SET_METHOD(process, "binding", Binding);
 
-  NODE_SET_METHOD(process, "_setupDomainUse", SetupDomainUse);
+  NODE_SET_METHOD(process, "_setupAsyncListener", SetupAsyncListener);
+  NODE_SET_METHOD(process, "_setupNextTick", SetupNextTick);
 
   // values use to cross communicate with processNextTick
   Local<Object> tick_info_obj = Object::New();
@@ -2656,7 +2554,7 @@ void Load(Environment* env) {
   // Add a reference to the global object
   Local<Object> global = env->context()->Global();
 
-#if defined HAVE_DTRACE || defined HAVE_ETW || defined HAVE_SYSTEMTAP
+#if defined HAVE_DTRACE || defined HAVE_ETW
   InitDTrace(global);
 #endif
 
@@ -2680,37 +2578,37 @@ void Load(Environment* env) {
 
 static void PrintHelp();
 
-static void ParseDebugOpt(const char* arg) {
-  const char *p = 0;
+static bool ParseDebugOpt(const char* arg) {
+  const char* port = NULL;
 
-  if (strstr(arg, "--debug-port=") == arg) {
-    p = 1 + strchr(arg, '=');
-    debug_port = atoi(p);
-  } else {
+  if (!strcmp(arg, "--debug")) {
     use_debug_agent = true;
-    if (!strcmp(arg, "--debug-brk")) {
-      debug_wait_connect = true;
-      return;
-    } else if (!strcmp(arg, "--debug")) {
-      return;
-    } else if (strstr(arg, "--debug-brk=") == arg) {
-      debug_wait_connect = true;
-      p = 1 + strchr(arg, '=');
-      debug_port = atoi(p);
-    } else if (strstr(arg, "--debug=") == arg) {
-      p = 1 + strchr(arg, '=');
-      debug_port = atoi(p);
+  } else if (!strncmp(arg, "--debug=", sizeof("--debug=") - 1)) {
+    use_debug_agent = true;
+    port = arg + sizeof("--debug=") - 1;
+  } else if (!strcmp(arg, "--debug-brk")) {
+    use_debug_agent = true;
+    debug_wait_connect = true;
+  } else if (!strncmp(arg, "--debug-brk=", sizeof("--debug-brk=") - 1)) {
+    use_debug_agent = true;
+    debug_wait_connect = true;
+    port = arg + sizeof("--debug-brk=") - 1;
+  } else if (!strncmp(arg, "--debug-port=", sizeof("--debug-port=") - 1)) {
+    port = arg + sizeof("--debug-port=") - 1;
+  } else {
+    return false;
+  }
+
+  if (port != NULL) {
+    debug_port = atoi(port);
+    if (debug_port < 1024 || debug_port > 65535) {
+      fprintf(stderr, "Debug port must be in range 1024 to 65535.\n");
+      PrintHelp();
+      exit(12);
     }
   }
-  if (p && debug_port > 1024 && debug_port <  65536)
-      return;
 
-  fprintf(stderr, "Bad debug option.\n");
-  if (p)
-    fprintf(stderr, "Debug port must be in range 1025 to 65535.\n");
-
-  PrintHelp();
-  exit(12);
+  return true;
 }
 
 static void PrintHelp() {
@@ -2783,8 +2681,8 @@ static void ParseArgs(int* argc,
     const char* const arg = argv[index];
     unsigned int args_consumed = 1;
 
-    if (strstr(arg, "--debug") == arg) {
-      ParseDebugOpt(arg);
+    if (ParseDebugOpt(arg)) {
+      // Done, consumed by ParseDebugOpt().
     } else if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
       printf("%s\n", NODE_VERSION);
       exit(0);
@@ -2868,6 +2766,7 @@ static void EnableDebug(bool wait_connect) {
   assert(debugger_running == false);
   Isolate* isolate = node_isolate;  // TODO(bnoordhuis) Multi-isolate support.
   Isolate::Scope isolate_scope(isolate);
+  HandleScope handle_scope(isolate);
   v8::Debug::SetDebugMessageDispatchHandler(DispatchMessagesDebugAgentCallback,
                                             false);
   debugger_running = v8::Debug::EnableAgent("node " NODE_VERSION,
@@ -2886,7 +2785,6 @@ static void EnableDebug(bool wait_connect) {
     return;  // Still starting up.
 
   Context::Scope context_scope(env->context());
-  HandleScope handle_scope(env->isolate());
   Local<Object> message = Object::New();
   message->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "cmd"),
                FIXED_ONE_BYTE_STRING(env->isolate(), "NODE_DEBUG_ENABLED"));
@@ -3176,8 +3074,6 @@ void Init(int* argc,
     V8::SetFlagsFromString(expose_debug_as, sizeof(expose_debug_as) - 1);
   }
 
-  const char typed_arrays_flag[] = "--harmony_typed_arrays";
-  V8::SetFlagsFromString(typed_arrays_flag, sizeof(typed_arrays_flag) - 1);
   V8::SetArrayBufferAllocator(&ArrayBufferAllocator::the_singleton);
 
   // Fetch a reference to the main isolate, so we have a reference to it
@@ -3259,8 +3155,8 @@ void AtExit(void (*cb)(void* arg), void* arg) {
 
 void EmitExit(Environment* env) {
   // process.emit('exit')
-  Context::Scope context_scope(env->context());
   HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
   Local<Object> process_object = env->process_object();
   process_object->Set(FIXED_ONE_BYTE_STRING(node_isolate, "_exiting"),
                       True(node_isolate));
@@ -3353,8 +3249,11 @@ int Start(int argc, char** argv) {
     Locker locker(node_isolate);
     Environment* env =
         CreateEnvironment(node_isolate, argc, argv, exec_argc, exec_argv);
+    // This Context::Scope is here so EnableDebug() can look up the current
+    // environment with Environment::GetCurrentChecked().
+    // TODO(bnoordhuis) Reorder the debugger initialization logic so it can
+    // be removed.
     Context::Scope context_scope(env->context());
-    HandleScope handle_scope(env->isolate());
     uv_run(env->event_loop(), UV_RUN_DEFAULT);
     EmitExit(env);
     RunAtExit(env);

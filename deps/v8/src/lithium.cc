@@ -229,7 +229,7 @@ void LPointerMap::PrintTo(StringStream* stream) {
     if (i != 0) stream->Add(";");
     pointer_operands_[i]->PrintTo(stream);
   }
-  stream->Add("} @%d", position());
+  stream->Add("}");
 }
 
 
@@ -422,6 +422,7 @@ Representation LChunk::LookupLiteralRepresentation(
 LChunk* LChunk::NewChunk(HGraph* graph) {
   DisallowHandleAllocation no_handles;
   DisallowHeapAllocation no_gc;
+  graph->DisallowAddingNewValues();
   int values = graph->GetMaximumValueID();
   CompilationInfo* info = graph->info();
   if (values > LUnallocated::kMaxVirtualRegisters) {
@@ -487,6 +488,14 @@ void LChunk::set_allocated_double_registers(BitVector* allocated_registers) {
     }
     iterator.Advance();
   }
+}
+
+
+LInstruction* LChunkBuilder::CheckElideControlInstruction(
+    HControlInstruction* instr) {
+  HBasicBlock* successor;
+  if (!instr->KnownSuccessorBlock(&successor)) return NULL;
+  return new(zone()) LGoto(successor);
 }
 
 

@@ -111,6 +111,8 @@ void PipeWrap::Initialize(Handle<Object> target,
   NODE_SET_PROTOTYPE_METHOD(t, "setPendingInstances", SetPendingInstances);
 #endif
 
+  AsyncWrap::AddMethods<PipeWrap>(t);
+
   target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Pipe"), t->GetFunction());
   env->set_pipe_constructor_template(t);
 }
@@ -121,8 +123,8 @@ void PipeWrap::New(const FunctionCallbackInfo<Value>& args) {
   // Therefore we assert that we are not trying to call this as a
   // normal function.
   assert(args.IsConstructCall());
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
   new PipeWrap(env, args.This(), args[0]->IsTrue());
 }
 
@@ -179,8 +181,8 @@ void PipeWrap::OnConnection(uv_stream_t* handle, int status) {
   assert(&pipe_wrap->handle_ == reinterpret_cast<uv_pipe_t*>(handle));
 
   Environment* env = pipe_wrap->env();
-  Context::Scope context_scope(env->context());
   HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   // We should not be getting this callback if someone as already called
   // uv_close() on the handle.
@@ -192,11 +194,7 @@ void PipeWrap::OnConnection(uv_stream_t* handle, int status) {
   };
 
   if (status != 0) {
-    MakeCallback(env,
-                 pipe_wrap->object(),
-                 env->onconnection_string(),
-                 ARRAY_SIZE(argv),
-                 argv);
+    pipe_wrap->MakeCallback(env->onconnection_string(), ARRAY_SIZE(argv), argv);
     return;
   }
 
@@ -212,11 +210,7 @@ void PipeWrap::OnConnection(uv_stream_t* handle, int status) {
 
   // Successful accept. Call the onconnection callback in JavaScript land.
   argv[1] = client_obj;
-  MakeCallback(env,
-               pipe_wrap->object(),
-               env->onconnection_string(),
-               ARRAY_SIZE(argv),
-               argv);
+  pipe_wrap->MakeCallback(env->onconnection_string(), ARRAY_SIZE(argv), argv);
 }
 
 // TODO(bnoordhuis) Maybe share this with TCPWrap?
@@ -226,8 +220,8 @@ void PipeWrap::AfterConnect(uv_connect_t* req, int status) {
   assert(req_wrap->env() == wrap->env());
   Environment* env = wrap->env();
 
-  Context::Scope context_scope(env->context());
   HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   // The wrap and request objects should still be there.
   assert(req_wrap->persistent().IsEmpty() == false);
@@ -251,11 +245,7 @@ void PipeWrap::AfterConnect(uv_connect_t* req, int status) {
     Boolean::New(writable)
   };
 
-  MakeCallback(env,
-               req_wrap_obj,
-               env->oncomplete_string(),
-               ARRAY_SIZE(argv),
-               argv);
+  req_wrap->MakeCallback(env->oncomplete_string(), ARRAY_SIZE(argv), argv);
 
   delete req_wrap;
 }
@@ -276,8 +266,8 @@ void PipeWrap::Open(const FunctionCallbackInfo<Value>& args) {
 
 
 void PipeWrap::Connect(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   PipeWrap* wrap = Unwrap<PipeWrap>(args.This());
 

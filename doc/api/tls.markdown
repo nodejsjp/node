@@ -205,9 +205,9 @@ automatically set as a listener for the [secureConnection][] event.  The
     conjunction with the `honorCipherOrder` option described below to
     prioritize the non-CBC cipher.
 
-    Defaults to `AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`.
+    Defaults to `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH`.
     Consult the [OpenSSL cipher list format documentation] for details on the
-    format. ECDH (Elliptic Curve Diffie-Hellman) ciphers are not yet supported.
+    format.
 
 
     `AES128-GCM-SHA256` is used when node.js is linked against OpenSSL 1.0.1
@@ -216,6 +216,17 @@ automatically set as a listener for the [secureConnection][] event.  The
     **NOTE**: Previous revisions of this section suggested `AES256-SHA` as an
     acceptable cipher. Unfortunately, `AES256-SHA` is a CBC cipher and therefore
     susceptible to BEAST attacks. Do *not* use it.
+
+  - `ecdhCurve`: A string describing a named curve to use for ECDH ciphers or
+    false to disable all ECDH ciphers.
+
+    This is required to support ECDH (Elliptic Curve Diffie-Hellman) ciphers.
+    ECDH ciphers are a newer alternative to RSA. The advantages of ECDH over
+    RSA is that it offers [Forward secrecy]. Forward secrecy means that for an
+    attacker it won't be possible to decrypt your previous data exchanges if
+    they get access to your private key.
+
+    Defaults to `prime256v1`. Consult [RFC 4492] for more details.
 
   - `handshakeTimeout`: Abort the connection if the SSL/TLS handshake does not
     finish in this many milliseconds. The default is 120 seconds.
@@ -291,9 +302,9 @@ automatically set as a listener for the [secureConnection][] event.  The
     [BEAST 攻撃]を抑制するために、このオプションと以下に示す `honorCipherOrder`
     を共に使って、非 CBC 暗号を優先することを推奨します。
 
-    デフォルトは `AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH` です。
+    デフォルトは
+    `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH` です。
     詳細は [OpenSSL 暗号リストフォーマットのドキュメント] を参照してください。
-    ECDH (Elliptic Curve Diffie-Hellman) 暗号はまだサポートされていません。
 
     `AES128-GCM-SHA256` は、Node.js が OpenSSL 1.0.1 以降とリンクされていて、
     クライアントが TLS 1.2 をサポートしている場合に使われます。
@@ -303,6 +314,17 @@ automatically set as a listener for the [secureConnection][] event.  The
     受け入れ可能な暗号であるかのように示していました。
     残念ながら、`AES256-SHA` は CBC 暗号であり、したがって BEAST
     攻撃には弱いです。
+
+  - `ecdhCurve`: ECDH 暗号で使用する曲線を説明する名前、または全ての
+    ECDH 暗号を無効にする `false`。
+
+    これは ECDH (Elliptic Curve Diffie-Hellman) 暗号では必須です。
+    ECDH 暗号は RSA の新たな代替です。
+    RSA を ECDH で置き換えるメリットは、[Forward secrecy] を提供することです。
+    Forward secrecy は、攻撃者があなたの秘密鍵を取得したとしても、
+    彼らがそれ以前に取得したデータを解読出来ないことを意味します。
+
+    デフォルトは `prime256v1` です。より詳細は [RFC 4492] を参照してください。
 
   - `handshakeTimeout`: SSL/TLS ハンドシェークがこの時間 (ミリ秒)
     以内に終了しなかった場合は接続をアボートします。
@@ -1165,6 +1187,8 @@ The numeric representation of the local port.
 [SSL_METHODS]: http://www.openssl.org/docs/ssl/ssl.html#DEALING_WITH_PROTOCOL_METHODS
 [tls.Server]: #tls_class_tls_server
 [SSL_CTX_set_timeout]: http://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html
+[RFC 4492]: http://www.rfc-editor.org/rfc/rfc4492.txt
+[Forward secrecy]: http://en.wikipedia.org/wiki/Perfect_forward_secrecy
 -->
 
 [OpenSSL 暗号リストフォーマットのドキュメント]: http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT
@@ -1182,3 +1206,5 @@ The numeric representation of the local port.
 [SSL_METHODS]: http://www.openssl.org/docs/ssl/ssl.html#DEALING_WITH_PROTOCOL_METHODS
 [tls.Server]: #tls_class_tls_server
 [SSL_CTX_set_timeout]: http://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html
+[RFC 4492]: http://www.rfc-editor.org/rfc/rfc4492.txt
+[Forward secrecy]: http://en.wikipedia.org/wiki/Perfect_forward_secrecy

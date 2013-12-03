@@ -22,12 +22,12 @@
 #include "node.h"
 #include "node_internals.h"
 #include "node_watchdog.h"
+#include "base-object.h"
+#include "base-object-inl.h"
 #include "env.h"
 #include "env-inl.h"
 #include "util.h"
 #include "util-inl.h"
-#include "weak-object.h"
-#include "weak-object-inl.h"
 
 namespace node {
 
@@ -218,8 +218,8 @@ class ContextifyContext {
 
 
   static void MakeContext(const FunctionCallbackInfo<Value>& args) {
-    Environment* env = Environment::GetCurrent(args.GetIsolate());
     HandleScope handle_scope(args.GetIsolate());
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
 
     if (!args[0]->IsObject()) {
       return ThrowTypeError("sandbox argument must be an object.");
@@ -381,7 +381,7 @@ class ContextifyContext {
   }
 };
 
-class ContextifyScript : public WeakObject {
+class ContextifyScript : public BaseObject {
  private:
   Persistent<Script> script_;
 
@@ -412,8 +412,9 @@ class ContextifyScript : public WeakObject {
       return ThrowError("Must call vm.Script as a constructor.");
     }
 
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
     ContextifyScript* contextify_script =
-        new ContextifyScript(args.GetIsolate(), args.This());
+        new ContextifyScript(env, args.This());
 
     TryCatch try_catch;
     Local<String> code = args[0]->ToString();
@@ -448,8 +449,8 @@ class ContextifyScript : public WeakObject {
 
   // args: [options]
   static void RunInThisContext(const FunctionCallbackInfo<Value>& args) {
-    Environment* env = Environment::GetCurrent(args.GetIsolate());
     HandleScope handle_scope(args.GetIsolate());
+    Environment* env = Environment::GetCurrent(args.GetIsolate());
 
     // Assemble arguments
     TryCatch try_catch;
@@ -605,8 +606,9 @@ class ContextifyScript : public WeakObject {
   }
 
 
-  ContextifyScript(Isolate* isolate, Local<Object> object)
-      : WeakObject(isolate, object) {
+  ContextifyScript(Environment* env, Local<Object> object)
+      : BaseObject(env, object) {
+    MakeWeak<ContextifyScript>(this);
   }
 
 

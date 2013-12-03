@@ -67,7 +67,7 @@ using v8::Value;
 class FSReqWrap: public ReqWrap<uv_fs_t> {
  public:
   FSReqWrap(Environment* env, const char* syscall, char* data = NULL)
-    : ReqWrap<uv_fs_t>(env),
+    : ReqWrap<uv_fs_t>(env, Object::New()),
       syscall_(syscall),
       data_(data) {
   }
@@ -109,8 +109,8 @@ static void After(uv_fs_t *req) {
   req_wrap->ReleaseEarly();  // Free memory that's no longer used now.
 
   Environment* env = req_wrap->env();
-  Context::Scope context_scope(env->context());
   HandleScope handle_scope(env->isolate());
+  Context::Scope context_scope(env->context());
 
   // there is always at least one argument. "error"
   int argc = 1;
@@ -214,7 +214,7 @@ static void After(uv_fs_t *req) {
     }
   }
 
-  MakeCallback(env, req_wrap->object(), env->oncomplete_string(), argc, argv);
+  req_wrap->MakeCallback(env->oncomplete_string(), argc, argv);
 
   uv_fs_req_cleanup(&req_wrap->req_);
   delete req_wrap;
@@ -731,8 +731,8 @@ static void WriteBuffer(const FunctionCallbackInfo<Value>& args) {
 //             if null, write from the current position
 // 3 enc       encoding of string
 static void WriteString(const FunctionCallbackInfo<Value>& args) {
-  Environment* env = Environment::GetCurrent(args.GetIsolate());
   HandleScope handle_scope(args.GetIsolate());
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
 
   if (!args[0]->IsInt32())
     return ThrowTypeError("First argument must be file descriptor");
