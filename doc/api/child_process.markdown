@@ -82,6 +82,17 @@ Emitted when:
 3. 何らかの理由で子プロセスにメッセージを送信することが失敗した。
 
 <!--
+Note that the `exit`-event may or may not fire after an error has occured. If
+you are listening on both events to fire a function, remember to guard against
+calling your function twice.
+-->
+
+`exit` イベントはエラーが発生した後に生成されるかもしれないし、
+されないかもしれないことに注意してください。
+もし両方のイベントを同じ関数で監視した場合、その関数は2回の呼び出しに
+対処することを忘れないでください。
+
+<!--
 See also [`ChildProcess#kill()`](#child_process_child_kill_signal) and
 [`ChildProcess#send()`](#child_process_child_send_message_sendhandle).
 -->
@@ -1017,6 +1028,8 @@ leaner than `child_process.exec`. It has the same options.
   * `env` {Object} Environment key-value pairs
   * `encoding` {String} (Default: 'utf8')
   * `execPath` {String} Executable used to create the child process
+  * `execArgv` {Array} List of string arguments passed to the executable
+    (Default: `process.execArgv`)
   * `silent` {Boolean} If true, prevent stdout and stderr in the spawned node
     process from being associated with the parent's (default is false)
 * Return: ChildProcess object
@@ -1029,6 +1042,8 @@ leaner than `child_process.exec`. It has the same options.
   * `env` {Object} 環境変数として与えるキー・値のペア
   * `encoding` {String} (デフォルト: 'utf8')
   * `execPath` {String} 子プロセスの作成に使われる実行ファイル
+  * `execArgv` {Array} node 実行可能ファイルに渡される文字列引数の配列。
+    (デフォルトは `process.execArgv`)
   * `silent` {Boolean} `true` の場合、起動された子プロセスの標準入力と標準出力が
     親プロセスに関連づけられるのを抑止します (デフォルトは `false`)。
 * Return: ChildProcess object

@@ -182,7 +182,7 @@ changed to
 
 `'/tmp/echo.sock'` へのソケットに接続するには、2 行目をこのように変更します。
 
-    var client = net.connect({path: '/tmp/echo.sock'},
+    var client = net.connect({path: '/tmp/echo.sock'});
 
 ## net.connect(port, [host], [connectListener])
 ## net.createConnection(port, [host], [connectListener])
@@ -554,19 +554,21 @@ Construct a new socket object.
 `options` は以下のデフォルト値を持つオブジェクトです。
 
     { fd: null
-      type: null
-      allowHalfOpen: false
+      allowHalfOpen: false,
+      readable: false,
+      writable: false
     }
 
 <!--
-`fd` allows you to specify the existing file descriptor of socket. `type`
-specified underlying protocol. It can be `'tcp4'`, `'tcp6'`, or `'unix'`.
+`fd` allows you to specify the existing file descriptor of socket.
+Set `readable` and/or `writable` to `true` to allow reads and/or writes on this
+socket (NOTE: Works only when `fd` is passed).
 About `allowHalfOpen`, refer to `createServer()` and `'end'` event.
 -->
 
 `fd` に既存のソケットのファイル記述子を指定することができます。
-`type` にはプロトコルを指定することができます。
-指定できるのは `'tcp4'`、`'tcp6'` または `'unix'` のいずれかです。
+`readable` および `writable` を `true` にすると、このソケットを読み込みまたは
+書き出し可能にすることが出来ます (注意: `fd` が渡され場合のみ効果があります)。
 `allowHalfOpen` については `createServer()` および `'end'` イベントを参照してください。
 
 ### socket.connect(port, [host], [connectListener])

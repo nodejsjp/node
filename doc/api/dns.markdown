@@ -6,7 +6,7 @@
 Use `require('dns')` to access this module. All methods in the dns module
 use C-Ares except for `dns.lookup` which uses `getaddrinfo(3)` in a thread
 pool. C-Ares is much faster than `getaddrinfo` but the system resolver is
-more constant with how other programs operate. When a user does
+more consistent with how other programs operate. When a user does
 `net.connect(80, 'google.com')` or `http.get({ host: 'google.com' })` the
 `dns.lookup` method is used. Users who need to do a large number of lookups
 quickly should use the methods that go through C-Ares.
@@ -16,7 +16,7 @@ quickly should use the methods that go through C-Ares.
 dns モジュールの全てのメソッドは C-Ares を使用します。
 ただし、`dns.lookup` はスレッドプール上で `getaddrinfo(3)` を使用します。
 C-Ares は `getaddrinfo` よりずっと速いものの、
-他のシステムと連携するにはシステムリゾルバの方が安定しています。
+他のシステムと連携するにはシステムリゾルバの方が一貫しています。
 ユーザが `net.connect(80, 'google.com')` または
 `http.get({ host: 'google.com' })` を行った時、`dns.lookup`
 メソッドが使われます。

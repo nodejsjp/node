@@ -929,7 +929,7 @@ for (var i = 0; i < 100; i ++) {
   writer.write('hello, #' + i + '!\n');
 }
 writer.end('this is the end\n');
-write.on('finish', function() {
+writer.on('finish', function() {
   console.error('all writes are now complete.');
 });
 ```
@@ -988,6 +988,14 @@ writer.on('unpipe', function(src) {
 reader.pipe(writer);
 reader.unpipe(writer);
 ```
+
+#### Event: 'error'
+
+<!--
+Emitted if there was an error when writing or piping data.
+-->
+
+データの書き込み中またはパイプ中にエラーが発生した場合に生成されます。
 
 ### Class: stream.Duplex
 

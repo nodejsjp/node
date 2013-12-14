@@ -194,14 +194,16 @@ Returned by `crypto.createHash`.
 <!--
 Updates the hash content with the given `data`, the encoding of which
 is given in `input_encoding` and can be `'utf8'`, `'ascii'` or
-`'binary'`.  If no encoding is provided, then a buffer is expected.
-If `data` is a `Buffer` then `input_encoding` is ignored.
+`'binary'`.  If no encoding is provided and the input is a string an
+encoding of `'binary'` is enforced. If `data` is a `Buffer` then
+`input_encoding` is ignored.
 -->
 
 与えられた `data` でハッシュの内容を更新します。
 そのエンコーディングは `input_encoding` で与えられ、`'utf8'`、`'ascii'`、
 または `'binary'` を指定することができます。
-エンコーディングが与えられなかった場合はバッファが期待されます。
+`data` が文字列でエンコーディングが与えられなかった場合は、エンコーディングは
+`'binary'` が強制されます。
 もし `data` が `Buffer` なら、`input_encoding` は無視されます。
 
 <!--
@@ -409,6 +411,7 @@ If `data` is a `Buffer` then `input_encoding` is ignored.
 エンコーディングが与えられなかった場合はバッファが期待されます。
 もし `data` が `Buffer` なら、`input_encoding` は無視されます。
 
+<!--
 The `output_encoding` specifies the output format of the enciphered
 data, and can be `'binary'`, `'base64'` or `'hex'`.  If no encoding is
 provided, then a buffer is returned.
@@ -960,7 +963,20 @@ Generates cryptographically strong pseudo-random data. Usage:
       console.log('Have %d bytes of random data: %s', buf.length, buf);
     } catch (ex) {
       // handle error
+      // most likely, entropy sources are drained
     }
+
+<!--
+NOTE: Will throw error or invoke callback with error, if there is not enough
+accumulated entropy to generate cryptographically strong data. In other words,
+`crypto.randomBytes` without callback will not block even if all entropy sources
+are drained.
+-->
+
+注意: もし暗号理論的に強いデータを生成するために十分な累積エントロピーが
+なければ、エラーがスローされるか、エラーと共にコールバックが呼ばれます。
+言い換えると、コールバックを渡さずに `crypto.randomBytes()` を呼び出しても、
+全てのエントロピー源が枯渇するまでブロックするわけではありません。
 
 ## crypto.pseudoRandomBytes(size, [callback])
 
