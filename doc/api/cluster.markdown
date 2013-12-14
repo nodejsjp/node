@@ -175,6 +175,8 @@ the worker pool for your application's needs.
 
 <!--
 * {Object}
+  * `execArgv` {Array} list of string arguments passed to the node executable. 
+    (Default=`process.execArgv`)
   * `exec` {String} file path to worker file.  (Default=`process.argv[1]`)
   * `args` {Array} string arguments passed to worker.
     (Default=`process.argv.slice(2)`)
@@ -183,7 +185,9 @@ the worker pool for your application's needs.
 -->
 
 * {Object}
-  * `exec` {String} ワーカで実行するファイルへのパス.
+  * `execArgv` {Array} node 実行可能ファイルに渡される文字列引数の配列。
+    (デフォルトは `process.execArgv`)
+  * `exec` {String} ワーカで実行するファイルへのパス。
     (デフォルトは `process.argv[1]`)
   * `args` {Array} ワーカに渡される引数となる文字列。
     (デフォルトは `process.argv.slice(2)`)

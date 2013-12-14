@@ -759,6 +759,15 @@ See kill(2) for more information.
 詳細は kill(2) を参照してください。
 
 <!--
+Will throw an error if target does not exist, and as a special case, a signal of
+`0` can be used to test for the existence of a process.
+-->
+
+対象が存在しなければエラーがスローされます。
+特別なケースとして、プロセスが存在するかどうかテストするためにシグナル
+`0` を使うことが出来ます。
+
+<!--
 Note that just because the name of this function is `process.kill`, it is
 really just a signal sender, like the `kill` system call.  The signal sent
 may do something other than kill the target process.
@@ -786,12 +795,12 @@ Example of sending a signal to yourself:
     process.kill(process.pid, 'SIGHUP');
 
 <!--
-Note: SIGUSR1 is reserved by node.js.  It can be used to kickstart the
-debugger.
+Note: When SIGUSR1 is received by Node.js it starts the debugger, see
+[Signal Events](#process_signal_events).
 -->
 
-注意: SIGUSR1はnode.jsによって予約されています。
-それはデバッガを開始するために使われます。
+注意: SIGUSR1はnode.jsによって受信され、デバッガを起動します。
+詳細は [Signal Events](#process_signal_events) を参照してください。
 
 ## process.pid
 

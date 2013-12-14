@@ -481,6 +481,28 @@ Indicates that the underlying connection was terminated before
 [response.end()][] が呼び出されたりフラッシュされる前に、
 下層の接続が切断されたことを示します。
 
+### Event: 'finish'
+
+`function () { }`
+
+<!--
+Emitted when the response has been sent. More specifically, this event is
+emitted when the last segment of the response headers and body have been
+handed off to the operating system for transmission over the network. It
+does not imply that the client has received anything yet.
+-->
+
+レスポンスが送信されると生成されます。
+より詳しくは、このイベントはレスポンスヘッダおよびボディの最後のセグメントが
+ネットワークに転送されるためOSに渡された時に生成されます。
+これはクライアントが何かを受信したことを意味しません。
+
+<!--
+After this event, no more events will be emitted on the response object.
+-->
+
+このイベントの後、レスポンス上ではどんなイベントも生成されません。
+
 ### response.writeContinue()
 
 <!--
@@ -809,7 +831,7 @@ followed by `response.end()`.
 `response.write(data, encoding)` に続けて `response.end()` を呼び出すのと等価です。
 
 
-## http.request(options, callback)
+## http.request(options, [callback])
 
 <!--
 Node maintains several connections per server to make HTTP requests.
@@ -875,6 +897,14 @@ Options:
   - `Agent` オブジェクト: 明示的に渡された `Agent` を使用します。
   - `false`: Agent によるコネクションプーリングを使用しません。
      Connection:close の場合のデフォルトです。
+
+<!--
+The optional `callback` parameter will be added as a one time listener for
+the ['response'][] event.
+-->
+
+オプションの `callback` 引数は、['response'][] イベントへの
+一回限りのリスナとして追加されます。
 
 <!--
 `http.request()` returns an instance of the [http.ClientRequest][]
@@ -969,7 +999,7 @@ There are a few special headers that should be noted.
 * Authorization ヘッダの送信は、`auth` オプションによるベーシック認証を
   上書きします。
 
-## http.get(options, callback)
+## http.get(options, [callback])
 
 <!--
 Since most requests are GET requests without bodies, Node provides this
@@ -1662,6 +1692,7 @@ HTTPS では `request.connection.verifyPeer()` と
 
 ['checkContinue']: #http_event_checkcontinue
 ['listening']: net.html#net_event_listening
+['response']: #http_event_response
 [Agent]: #http_class_http_agent
 [Buffer]: buffer.html#buffer_buffer
 [EventEmitter]: events.html#events_class_events_eventemitter
