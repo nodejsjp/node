@@ -74,7 +74,8 @@ TLSCallbacks::TLSCallbacks(Environment* env,
       pending_write_item_(NULL),
       started_(false),
       established_(false),
-      shutdown_(false) {
+      shutdown_(false),
+      eof_(false) {
   node::Wrap<TLSCallbacks>(object(), this);
 
   // Initialize queue for clearIn writes
@@ -141,32 +142,19 @@ void TLSCallbacks::InitSSL() {
   SSL_set_app_data(ssl_, this);
   SSL_set_info_callback(ssl_, SSLInfoCallback);
 
-  if (is_server()) {
-    SSL_set_accept_state(ssl_);
-
-#ifdef OPENSSL_NPN_NEGOTIATED
-    // Server should advertise NPN protocols
-    SSL_CTX_set_next_protos_advertised_cb(
-        sc_->ctx_,
-        SSLWrap<TLSCallbacks>::AdvertiseNextProtoCallback,
-        this);
-#endif  // OPENSSL_NPN_NEGOTIATED
-
 #ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
+  if (is_server()) {
     SSL_CTX_set_tlsext_servername_callback(sc_->ctx_, SelectSNIContextCallback);
     SSL_CTX_set_tlsext_servername_arg(sc_->ctx_, this);
+  }
 #endif  // SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
+
+  InitNPN(sc_, this);
+
+  if (is_server()) {
+    SSL_set_accept_state(ssl_);
   } else if (is_client()) {
     SSL_set_connect_state(ssl_);
-
-#ifdef OPENSSL_NPN_NEGOTIATED
-    // Client should select protocol from list of advertised
-    // If server supports NPN
-    SSL_CTX_set_next_proto_select_cb(
-        sc_->ctx_,
-        SSLWrap<TLSCallbacks>::SelectNextProtoCallback,
-        this);
-#endif  // OPENSSL_NPN_NEGOTIATED
   } else {
     // Unexpected
     abort();
@@ -276,12 +264,17 @@ void TLSCallbacks::EncOut() {
     return;
   }
 
-  char* data = NodeBIO::FromBIO(enc_out_)->Peek(&write_size_);
-  assert(write_size_ != 0);
+  char* data[kSimultaneousBufferCount];
+  size_t size[ARRAY_SIZE(data)];
+  size_t count = ARRAY_SIZE(data);
+  write_size_ = NodeBIO::FromBIO(enc_out_)->PeekMultiple(data, size, &count);
+  assert(write_size_ != 0 && count != 0);
 
   write_req_.data = this;
-  uv_buf_t buf = uv_buf_init(data, write_size_);
-  int r = uv_write(&write_req_, wrap()->stream(), &buf, 1, EncOutCb);
+  uv_buf_t buf[ARRAY_SIZE(data)];
+  for (size_t i = 0; i < count; i++)
+    buf[i] = uv_buf_init(data[i], size[i]);
+  int r = uv_write(&write_req_, wrap()->stream(), buf, count, EncOutCb);
 
   // Ignore errors, this should be already handled in js
   if (!r) {
@@ -381,6 +374,13 @@ void TLSCallbacks::ClearOut() {
       wrap()->MakeCallback(env()->onread_string(), ARRAY_SIZE(argv), argv);
     }
   } while (read > 0);
+
+  int flags = SSL_get_shutdown(ssl_);
+  if (!eof_ && flags & SSL_RECEIVED_SHUTDOWN) {
+    eof_ = true;
+    Local<Value> arg = Integer::New(UV_EOF, node_isolate);
+    wrap()->MakeCallback(env()->onread_string(), 1, &arg);
+  }
 
   if (read == -1) {
     int err;
@@ -521,6 +521,14 @@ void TLSCallbacks::DoRead(uv_stream_t* handle,
   if (nread < 0)  {
     // Error should be emitted only after all data was read
     ClearOut();
+
+    // Ignore EOF if received close_notify
+    if (nread == UV_EOF) {
+      if (eof_)
+        return;
+      eof_ = true;
+    }
+
     HandleScope handle_scope(env()->isolate());
     Context::Scope context_scope(env()->context());
     Local<Value> arg = Integer::New(nread, node_isolate);
@@ -672,6 +680,7 @@ int TLSCallbacks::SelectSNIContextCallback(SSL* s, int* ad, void* arg) {
     p->sni_context_.Reset(node_isolate, ctx);
 
     SecureContext* sc = Unwrap<SecureContext>(ctx.As<Object>());
+    InitNPN(sc, p);
     SSL_set_SSL_CTX(s, sc->ctx_);
   }
 

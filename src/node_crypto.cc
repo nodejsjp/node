@@ -113,6 +113,8 @@ X509_STORE* root_cert_store;
 // Just to generate static methods
 template class SSLWrap<TLSCallbacks>;
 template void SSLWrap<TLSCallbacks>::AddMethods(Handle<FunctionTemplate> t);
+template void SSLWrap<TLSCallbacks>::InitNPN(SecureContext* sc,
+                                             TLSCallbacks* base);
 template SSL_SESSION* SSLWrap<TLSCallbacks>::GetSessionCallback(
     SSL* s,
     unsigned char* key,
@@ -850,14 +852,33 @@ void SSLWrap<Base>::AddMethods(Handle<FunctionTemplate> t) {
   NODE_SET_PROTOTYPE_METHOD(t, "isInitFinished", IsInitFinished);
   NODE_SET_PROTOTYPE_METHOD(t, "verifyError", VerifyError);
   NODE_SET_PROTOTYPE_METHOD(t, "getCurrentCipher", GetCurrentCipher);
-  NODE_SET_PROTOTYPE_METHOD(t, "receivedShutdown", ReceivedShutdown);
   NODE_SET_PROTOTYPE_METHOD(t, "endParser", EndParser);
   NODE_SET_PROTOTYPE_METHOD(t, "renegotiate", Renegotiate);
+  NODE_SET_PROTOTYPE_METHOD(t, "shutdown", Shutdown);
 
 #ifdef OPENSSL_NPN_NEGOTIATED
   NODE_SET_PROTOTYPE_METHOD(t, "getNegotiatedProtocol", GetNegotiatedProto);
   NODE_SET_PROTOTYPE_METHOD(t, "setNPNProtocols", SetNPNProtocols);
 #endif  // OPENSSL_NPN_NEGOTIATED
+}
+
+
+template <class Base>
+void SSLWrap<Base>::InitNPN(SecureContext* sc, Base* base) {
+  if (base->is_server()) {
+#ifdef OPENSSL_NPN_NEGOTIATED
+    // Server should advertise NPN protocols
+    SSL_CTX_set_next_protos_advertised_cb(sc->ctx_,
+                                          AdvertiseNextProtoCallback,
+                                          base);
+#endif  // OPENSSL_NPN_NEGOTIATED
+  } else {
+#ifdef OPENSSL_NPN_NEGOTIATED
+    // Client should select protocol from list of advertised
+    // If server supports NPN
+    SSL_CTX_set_next_proto_select_cb(sc->ctx_, SelectNextProtoCallback, base);
+#endif  // OPENSSL_NPN_NEGOTIATED
+  }
 }
 
 
@@ -1066,6 +1087,17 @@ void SSLWrap<Base>::GetPeerCertificate(
       info->Set(env->ext_key_usage_string(), ext_key_usage);
     }
 
+    if (ASN1_INTEGER* serial_number = X509_get_serialNumber(peer_cert)) {
+      if (BIGNUM* bn = ASN1_INTEGER_to_BN(serial_number, NULL)) {
+        if (char* buf = BN_bn2hex(bn)) {
+          info->Set(env->serial_number_string(),
+                    OneByteString(node_isolate, buf));
+          OPENSSL_free(buf);
+        }
+        BN_free(bn);
+      }
+    }
+
     X509_free(peer_cert);
   }
 
@@ -1175,15 +1207,6 @@ void SSLWrap<Base>::IsSessionReused(const FunctionCallbackInfo<Value>& args) {
 
 
 template <class Base>
-void SSLWrap<Base>::ReceivedShutdown(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
-  Base* w = Unwrap<Base>(args.This());
-  bool yes = SSL_get_shutdown(w->ssl_) == SSL_RECEIVED_SHUTDOWN;
-  args.GetReturnValue().Set(yes);
-}
-
-
-template <class Base>
 void SSLWrap<Base>::EndParser(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
   Base* w = Unwrap<Base>(args.This());
@@ -1202,6 +1225,17 @@ void SSLWrap<Base>::Renegotiate(const FunctionCallbackInfo<Value>& args) {
 
   bool yes = SSL_renegotiate(w->ssl_) == 1;
   args.GetReturnValue().Set(yes);
+}
+
+
+template <class Base>
+void SSLWrap<Base>::Shutdown(const FunctionCallbackInfo<Value>& args) {
+  HandleScope scope(node_isolate);
+
+  Base* w = Unwrap<Base>(args.This());
+
+  int rv = SSL_shutdown(w->ssl_);
+  args.GetReturnValue().Set(rv);
 }
 
 
@@ -1587,7 +1621,6 @@ void Connection::Initialize(Environment* env, Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "clearPending", Connection::ClearPending);
   NODE_SET_PROTOTYPE_METHOD(t, "encPending", Connection::EncPending);
   NODE_SET_PROTOTYPE_METHOD(t, "start", Connection::Start);
-  NODE_SET_PROTOTYPE_METHOD(t, "shutdown", Connection::Shutdown);
   NODE_SET_PROTOTYPE_METHOD(t, "close", Connection::Close);
 
   SSLWrap<Connection>::AddMethods(t);
@@ -1684,6 +1717,7 @@ int Connection::SelectSNIContextCallback_(SSL *s, int *ad, void* arg) {
       if (secure_context_constructor_template->HasInstance(ret)) {
         conn->sniContext_.Reset(node_isolate, ret);
         SecureContext* sc = Unwrap<SecureContext>(ret.As<Object>());
+        InitNPN(sc, conn);
         SSL_set_SSL_CTX(s, sc->ctx_);
       } else {
         return SSL_TLSEXT_ERR_NOACK;
@@ -1719,22 +1753,7 @@ void Connection::New(const FunctionCallbackInfo<Value>& args) {
   if (is_server)
     SSL_set_info_callback(conn->ssl_, SSLInfoCallback);
 
-#ifdef OPENSSL_NPN_NEGOTIATED
-  if (is_server) {
-    // Server should advertise NPN protocols
-    SSL_CTX_set_next_protos_advertised_cb(
-        sc->ctx_,
-        SSLWrap<Connection>::AdvertiseNextProtoCallback,
-        conn);
-  } else {
-    // Client should select protocol from advertised
-    // If server supports NPN
-    SSL_CTX_set_next_proto_select_cb(
-        sc->ctx_,
-        SSLWrap<Connection>::SelectNextProtoCallback,
-        conn);
-  }
-#endif
+  InitNPN(sc, conn);
 
 #ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
   if (is_server) {
@@ -2036,22 +2055,6 @@ void Connection::Start(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void Connection::Shutdown(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
-
-  Connection* conn = Unwrap<Connection>(args.This());
-
-  if (conn->ssl_ == NULL) {
-    return args.GetReturnValue().Set(false);
-  }
-
-  int rv = SSL_shutdown(conn->ssl_);
-  conn->HandleSSLError("SSL_shutdown", rv, kZeroIsNotAnError, kIgnoreSyscall);
-  conn->SetShutdownFlags();
-  args.GetReturnValue().Set(rv);
-}
-
-
 void Connection::Close(const FunctionCallbackInfo<Value>& args) {
   HandleScope scope(node_isolate);
 
@@ -2104,6 +2107,8 @@ void CipherBase::Initialize(Environment* env, Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "update", Update);
   NODE_SET_PROTOTYPE_METHOD(t, "final", Final);
   NODE_SET_PROTOTYPE_METHOD(t, "setAutoPadding", SetAutoPadding);
+  NODE_SET_PROTOTYPE_METHOD(t, "getAuthTag", GetAuthTag);
+  NODE_SET_PROTOTYPE_METHOD(t, "setAuthTag", SetAuthTag);
 
   target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "CipherBase"),
               t->GetFunction());
@@ -2232,12 +2237,85 @@ void CipherBase::InitIv(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+bool CipherBase::IsAuthenticatedMode() const {
+  // check if this cipher operates in an AEAD mode that we support.
+  if (!cipher_)
+    return false;
+  int mode = EVP_CIPHER_mode(cipher_);
+  return mode == EVP_CIPH_GCM_MODE;
+}
+
+
+bool CipherBase::GetAuthTag(char** out, unsigned int* out_len) const {
+  // only callable after Final and if encrypting.
+  if (initialised_ || kind_ != kCipher || !auth_tag_)
+    return false;
+  *out_len = auth_tag_len_;
+  *out = new char[auth_tag_len_];
+  memcpy(*out, auth_tag_, auth_tag_len_);
+  return true;
+}
+
+
+void CipherBase::GetAuthTag(const FunctionCallbackInfo<Value>& args) {
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+  HandleScope handle_scope(args.GetIsolate());
+  CipherBase* cipher = Unwrap<CipherBase>(args.This());
+
+  char* out = NULL;
+  unsigned int out_len = 0;
+
+  if (cipher->GetAuthTag(&out, &out_len)) {
+    Local<Object> buf = Buffer::Use(env, out, out_len);
+    args.GetReturnValue().Set(buf);
+  } else {
+    ThrowError("Attempting to get auth tag in unsupported state");
+  }
+}
+
+
+bool CipherBase::SetAuthTag(const char* data, unsigned int len) {
+  if (!initialised_ || !IsAuthenticatedMode() || kind_ != kDecipher)
+    return false;
+  delete[] auth_tag_;
+  auth_tag_len_ = len;
+  auth_tag_ = new char[len];
+  memcpy(auth_tag_, data, len);
+  return true;
+}
+
+
+void CipherBase::SetAuthTag(const FunctionCallbackInfo<Value>& args) {
+  HandleScope handle_scope(args.GetIsolate());
+
+  Local<Object> buf = args[0].As<Object>();
+  if (!buf->IsObject() || !Buffer::HasInstance(buf))
+    return ThrowTypeError("Argument must be a Buffer");
+
+  CipherBase* cipher = Unwrap<CipherBase>(args.This());
+
+  if (!cipher->SetAuthTag(Buffer::Data(buf), Buffer::Length(buf)))
+    ThrowError("Attempting to set auth tag in unsupported state");
+}
+
+
 bool CipherBase::Update(const char* data,
                         int len,
                         unsigned char** out,
                         int* out_len) {
   if (!initialised_)
     return 0;
+
+  // on first update:
+  if (kind_ == kDecipher && IsAuthenticatedMode() && auth_tag_ != NULL) {
+    EVP_CIPHER_CTX_ctrl(&ctx_,
+                        EVP_CTRL_GCM_SET_TAG,
+                        auth_tag_len_,
+                        reinterpret_cast<unsigned char*>(auth_tag_));
+    delete[] auth_tag_;
+    auth_tag_ = NULL;
+  }
+
   *out_len = len + EVP_CIPHER_CTX_block_size(&ctx_);
   *out = new unsigned char[*out_len];
   return EVP_CipherUpdate(&ctx_,
@@ -2310,6 +2388,21 @@ bool CipherBase::Final(unsigned char** out, int *out_len) {
 
   *out = new unsigned char[EVP_CIPHER_CTX_block_size(&ctx_)];
   bool r = EVP_CipherFinal_ex(&ctx_, *out, out_len);
+
+  if (r && kind_ == kCipher) {
+    delete[] auth_tag_;
+    auth_tag_ = NULL;
+    if (IsAuthenticatedMode()) {
+      auth_tag_len_ = EVP_GCM_TLS_TAG_LEN;  // use default tag length
+      auth_tag_ = new char[auth_tag_len_];
+      memset(auth_tag_, 0, auth_tag_len_);
+      EVP_CIPHER_CTX_ctrl(&ctx_,
+                          EVP_CTRL_GCM_GET_TAG,
+                          auth_tag_len_,
+                          reinterpret_cast<unsigned char*>(auth_tag_));
+    }
+  }
+
   EVP_CIPHER_CTX_cleanup(&ctx_);
   initialised_ = false;
 
@@ -3959,7 +4052,6 @@ void Certificate::ExportChallenge(const FunctionCallbackInfo<Value>& args) {
 void InitCryptoOnce() {
   SSL_library_init();
   OpenSSL_add_all_algorithms();
-  OpenSSL_add_all_digests();
   SSL_load_error_strings();
   ERR_load_crypto_strings();
 
@@ -3967,7 +4059,7 @@ void InitCryptoOnce() {
   CRYPTO_set_locking_callback(crypto_lock_cb);
   CRYPTO_THREADID_set_callback(crypto_threadid_cb);
 
-  // Turn off compression. Saves memory and protects against BEAST attacks.
+  // Turn off compression. Saves memory and protects against CRIME attacks.
 #if !defined(OPENSSL_NO_COMP)
 #if OPENSSL_VERSION_NUMBER < 0x00908000L
   STACK_OF(SSL_COMP)* comp_methods = SSL_COMP_get_compression_method();

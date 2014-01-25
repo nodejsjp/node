@@ -1001,6 +1001,16 @@ If `tlsSocket.authorized === false` then the error can be found in
 同様に NPN が使われている場合は `tlsSocket.npnProtocol`
 から合意されたプロトコルをチェックすることが出来ます。
 
+### tlsSocket.encrypted
+
+<!--
+Static boolean value, always `true`. May be used to distinguish TLS sockets
+from regular ones.
+-->
+
+静的な論理値で、常に `true` です。
+TLS ソケットを通常のソケットと区別したい場合に使うことが出来ます。
+
 ### tlsSocket.authorized
 
 <!--
@@ -1054,7 +1064,8 @@ Example:
          CN: 'localhost' },
       valid_from: 'Nov 11 09:52:22 2009 GMT',
       valid_to: 'Nov  6 09:52:22 2029 GMT',
-      fingerprint: '2A:7A:C2:DD:E5:F9:CC:53:72:35:99:7A:02:5A:71:38:52:EC:8A:DF' }
+      fingerprint: '2A:7A:C2:DD:E5:F9:CC:53:72:35:99:7A:02:5A:71:38:52:EC:8A:DF',
+      serialNumber: 'B9B0D332A1AA5635' }
 
 <!--
 If the peer does not provide a certificate, it returns `null` or an empty

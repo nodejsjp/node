@@ -123,10 +123,12 @@ TCP ソケットの場合、`options` 引数は以下を指定したオブジェ
 
   - `family` : IP スタックのバージョン。デフォルトは `4` です。
 
-For UNIX domain sockets, `options` argument should be an object which specifies:
+<!--
+For local domain sockets, `options` argument should be an object which
+specifies:
 -->
 
-UNIX ドメインソケットの場合、`options` 引数は以下を指定したオブジェクトです。
+ローカルドメインソケットの場合、`options` 引数は以下を指定したオブジェクトです。
 
 <!--
   - `path`: Path the client should connect to (Required).
@@ -185,7 +187,7 @@ changed to
 
 `'/tmp/echo.sock'` へのソケットに接続するには、2 行目をこのように変更します。
 
-    var client = net.connect({path: '/tmp/echo.sock'},
+    var client = net.connect({path: '/tmp/echo.sock'});
 
 ## net.connect(port, [host], [connectListener])
 ## net.createConnection(port, [host], [connectListener])
@@ -216,10 +218,10 @@ The `connectListener` parameter will be added as an listener for the
 ## Class: net.Server
 
 <!--
-This class is used to create a TCP or UNIX server.
+This class is used to create a TCP or local server.
 -->
 
-このクラスは TCP または UNIX ドメインのサーバを作成するために使われます。
+このクラスは TCP またはローカルのサーバを作成するために使われます。
 
 ### server.listen(port, [host], [backlog], [callback])
 
@@ -286,11 +288,15 @@ would be to wait a second and then try again. This can be done with
 
 ### server.listen(path, [callback])
 
+* `path` {String}
+* `callback` {Function}
+
 <!--
-Start a UNIX socket server listening for connections on the given `path`.
+Start a local socket server listening for connections on the given `path`.
 -->
 
-与えられた `path` へのコネクションを待ち受けるする UNIX ドメインソケットのサーバを開始します。
+与えられた `path` へのコネクションを待ち受けるするローカルドメインソケットの
+サーバを開始します。
 
 <!--
 This function is asynchronous.  When the server has been bound,
@@ -301,6 +307,40 @@ will be added as an listener for the ['listening'][] event.
 この関数は非同期です。
 サーバがバインドされると、['listening'][] イベントが生成されます。
 最後の引数 `callback` は ['listening'][] のリスナとして加えられます。
+
+<!--
+On UNIX, the local domain is usually known as the UNIX domain. The path is a
+filesystem path name. It is subject to the same naming conventions and
+permissions checks as would be done on file creation, will be visible in the
+filesystem, and will *persist until unlinked*.
+-->
+
+UNIX では、ローカルドメインは通常 UNIX ドメインとして知られています。
+パスはファイルシステムのパス名です。
+それはファイルが作成されるのと同様に命名規則と認可のチェックが行われ、
+ファイルシステム上で見ることが出来て、アンリンクされるまで持続されます。
+
+<!--
+On Windows, the local domain is implemented using a named pipe. The path *must*
+refer to an entry in `\\?\pipe\` or `\\.\pipe\`. Any characters are permitted,
+but the latter may do some processing of pipe names, such as resolving `..`
+sequences. Despite appearances, the pipe name space is flat.  Pipes will *not
+persist*, they are removed when the last reference to them is closed. Do not
+forget javascript string escaping requires paths to be specified with
+double-backslashes, such as:
+-->
+
+Windows では、ローカルドメインは名前付きパイプを使って実装されます。
+パスは `\\?\pipe\` または `\\.\pipe\` のエントリを参照しなければ *なりません。*
+どんな文字も許されていますが、後者は `..` のシーケンスを解決するなど、
+パイプ名を処理する必要があるかも知れません。
+見た目と異なり、パイプの名前空間はフラットです。
+パイプは *持続的ではなく*、最後の参照がクローズされると削除されます。
+JavaScript の文字列では、パスを指定するためにバックスラッシュを重ねて
+エスケープする必要があることを忘れないでください。
+
+    net.createServer().listen(
+        path.join('\\\\?\\pipe', process.cwd(), 'myctl'))
 
 ### server.listen(handle, [callback])
 
@@ -531,13 +571,13 @@ following this event.  See example in discussion of `server.listen`.
 ## Class: net.Socket
 
 <!--
-This object is an abstraction of a TCP or UNIX socket.  `net.Socket`
+This object is an abstraction of a TCP or local socket.  `net.Socket`
 instances implement a duplex Stream interface.  They can be created by the
 user and used as a client (with `connect()`) or they can be created by Node
 and passed to the user through the `'connection'` event of a server.
 -->
 
-このオブジェクトは TCP または UNIX ドメインのソケットを抽象化したものです。
+このオブジェクトは TCP またはローカルのソケットを抽象化したものです。
 `net.Socket` のインスタンスは双方向のストリームインタフェースを実装します。
 それらはユーザによって (`connect()` によって) 作成されてクライアントとして使われるか、
 Node によって作成されてサーバの `'connection'` イベントを通じてユーザに渡されます。

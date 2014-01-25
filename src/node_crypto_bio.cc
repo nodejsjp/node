@@ -96,6 +96,33 @@ char* NodeBIO::Peek(size_t* size) {
 }
 
 
+size_t NodeBIO::PeekMultiple(char** out, size_t* size, size_t* count) {
+  Buffer* pos = read_head_;
+  size_t max = *count;
+  size_t total = 0;
+
+  size_t i;
+  for (i = 0; i < max; i++) {
+    size[i] = pos->write_pos_ - pos->read_pos_;
+    total += size[i];
+    out[i] = pos->data_ + pos->read_pos_;
+
+    /* Don't get past write head */
+    if (pos == write_head_)
+      break;
+    else
+      pos = pos->next_;
+  }
+
+  if (i == max)
+    *count = i;
+  else
+    *count = i + 1;
+
+  return total;
+}
+
+
 int NodeBIO::Write(BIO* bio, const char* data, int len) {
   BIO_clear_retry_flags(bio);
 
@@ -196,17 +223,17 @@ void NodeBIO::TryMoveReadHead() {
   // inside the buffer, respectively. When they're equal - its safe to reset
   // them, because both reader and writer will continue doing their stuff
   // from new (zero) positions.
-  if (read_head_->read_pos_ != read_head_->write_pos_)
-    return;
+  while (read_head_->read_pos_ != 0 &&
+         read_head_->read_pos_ == read_head_->write_pos_) {
+    // Reset positions
+    read_head_->read_pos_ = 0;
+    read_head_->write_pos_ = 0;
 
-  // Reset positions
-  read_head_->read_pos_ = 0;
-  read_head_->write_pos_ = 0;
-
-  // Move read_head_ forward, just in case if there're still some data to
-  // read in the next buffer.
-  if (read_head_ != write_head_)
-    read_head_ = read_head_->next_;
+    // Move read_head_ forward, just in case if there're still some data to
+    // read in the next buffer.
+    if (read_head_ != write_head_)
+      read_head_ = read_head_->next_;
+  }
 }
 
 
@@ -370,8 +397,13 @@ void NodeBIO::Commit(size_t size) {
   // Allocate new buffer if write head is full,
   // and there're no other place to go
   TryAllocateForWrite();
-  if (write_head_->write_pos_ == kBufferLength)
+  if (write_head_->write_pos_ == kBufferLength) {
     write_head_ = write_head_->next_;
+
+    // Additionally, since we're moved to the next buffer, read head
+    // may be moved as well.
+    TryMoveReadHead();
+  }
 }
 
 

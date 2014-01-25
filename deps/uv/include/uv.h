@@ -71,12 +71,15 @@ extern "C" {
   XX(EAI_ADDRFAMILY, "address family not supported")                          \
   XX(EAI_AGAIN, "temporary failure")                                          \
   XX(EAI_BADFLAGS, "bad ai_flags value")                                      \
+  XX(EAI_BADHINTS, "invalid value for hints")                                 \
   XX(EAI_CANCELED, "request canceled")                                        \
   XX(EAI_FAIL, "permanent failure")                                           \
   XX(EAI_FAMILY, "ai_family not supported")                                   \
   XX(EAI_MEMORY, "out of memory")                                             \
   XX(EAI_NODATA, "no address")                                                \
   XX(EAI_NONAME, "unknown node or service")                                   \
+  XX(EAI_OVERFLOW, "argument buffer overflow")                                \
+  XX(EAI_PROTOCOL, "resolved protocol is unknown")                            \
   XX(EAI_SERVICE, "service not available for socket type")                    \
   XX(EAI_SOCKTYPE, "socket type not supported")                               \
   XX(EAI_SYSTEM, "system error")                                              \
@@ -268,6 +271,12 @@ UV_EXTERN uv_loop_t* uv_default_loop(void);
  *    pending events.
  */
 UV_EXTERN int uv_run(uv_loop_t*, uv_run_mode mode);
+
+/*
+ * This function checks whether the reference count, the number of active
+ * handles or requests left in the event loop, is non-zero.
+ */
+UV_EXTERN int uv_loop_alive(const uv_loop_t* loop);
 
 /*
  * This function will stop the event loop by forcing uv_run to end
@@ -669,6 +678,18 @@ UV_EXTERN int uv_write2(uv_write_t* req,
                         unsigned int nbufs,
                         uv_stream_t* send_handle,
                         uv_write_cb cb);
+
+/*
+ * Same as `uv_write()`, but won't queue write request if it can't be completed
+ * immediately.
+ * Will return either:
+ * - positive number of bytes written
+ * - zero - if queued write is needed
+ * - negative error code
+ */
+UV_EXTERN int uv_try_write(uv_stream_t* handle,
+                           const uv_buf_t bufs[],
+                           unsigned int nbufs);
 
 /* uv_write_t is a subclass of uv_req_t */
 struct uv_write_s {

@@ -1399,7 +1399,7 @@ instances of [Date][MDN-Date] object and to compare the values of
 these objects you should use appropriate methods. For most general
 uses [getTime()][MDN-Date-getTime] will return the number of
 milliseconds elapsed since _1 January 1970 00:00:00 UTC_ and this
-integer should be sufficient for any comparison, however there
+integer should be sufficient for any comparison, however there are
 additional methods which can be used for displaying fuzzy information.
 More details can be found in the [MDN JavaScript Reference][MDN-Date]
 page.
@@ -1409,7 +1409,7 @@ page.
 オブジェクトであり、その値を比較するには適切な方法があるということに
 注意してください。もっとも一般的に使われる [getTime()][MDN-Date-getTime] は
 _1970年 1月 1日_ からの経過時間をミリ秒単位で返します。
-それは比較には十分ですが、曖昧な情報を表示するには別の方法を使ってください。
+それは比較には十分ですが、曖昧な情報を表示するには別の方法があります。
 より詳しい情報は [MDN JavaScript Reference][MDN-Date] で探すことができます。
 
 [MDN-Date]: https://developer.mozilla.org/en/JavaScript/Reference/Global_Objects/Date

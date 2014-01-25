@@ -177,7 +177,12 @@
           ],
           'conditions': [
             [ 'node_shared_openssl=="false"', {
-              'dependencies': [ './deps/openssl/openssl.gyp:openssl' ],
+              'dependencies': [
+                './deps/openssl/openssl.gyp:openssl',
+
+                # For tests
+                './deps/openssl/openssl.gyp:openssl-cli'
+              ],
             }]]
         }, {
           'defines': [ 'HAVE_OPENSSL=0' ]
@@ -318,6 +323,12 @@
             # rather than gyp's preferred "solaris"
             'PLATFORM="sunos"',
           ],
+        }],
+        [
+          'OS=="linux" and node_shared_v8=="false"', {
+            'ldflags': [
+              '-Wl,--whole-archive <(PRODUCT_DIR)/obj.target/deps/v8/tools/gyp/libv8_base.<(target_arch).a -Wl,--no-whole-archive',
+            ],
         }],
       ],
       'msvs_settings': {

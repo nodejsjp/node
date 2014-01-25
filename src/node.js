@@ -341,7 +341,7 @@
       var item, before, i;
 
       asyncStack.push(asyncQueue);
-      asyncQueue = queue;
+      asyncQueue = queue.slice();
       // Since the async listener callback is required, the number of
       // objects in the asyncQueue implies the number of async listeners
       // there are to be processed.
@@ -363,12 +363,13 @@
     // Unload one level of the async stack. Returns true if there are
     // still listeners somewhere in the stack.
     function unloadAsyncQueue(context) {
+      var queue = context._asyncQueue;
       var item, after, i;
 
       // Run "after" callbacks.
       inAsyncTick = true;
-      for (i = 0; i < asyncQueue.length; i++) {
-        item = asyncQueue[i];
+      for (i = 0; i < queue.length; i++) {
+        item = queue[i];
         if (!item.callbacks)
           continue;
         after = item.callbacks.after;
@@ -603,6 +604,8 @@
         }
         if (hasQueue)
           _unloadAsyncQueue(tock);
+        if (1e4 < tickInfo[kIndex])
+          tickDone();
       }
 
       tickDone();
@@ -828,7 +831,8 @@
         err = process._kill(pid, 0);
       } else {
         sig = sig || 'SIGTERM';
-        if (startup.lazyConstants()[sig]) {
+        if (startup.lazyConstants()[sig] &&
+            sig.slice(0, 3) === 'SIG') {
           err = process._kill(pid, startup.lazyConstants()[sig]);
         } else {
           throw new Error('Unknown signal: ' + sig);
