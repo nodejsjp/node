@@ -194,14 +194,16 @@ Returned by `crypto.createHash`.
 <!--
 Updates the hash content with the given `data`, the encoding of which
 is given in `input_encoding` and can be `'utf8'`, `'ascii'` or
-`'binary'`.  If no encoding is provided, then a buffer is expected.
-If `data` is a `Buffer` then `input_encoding` is ignored.
+`'binary'`.  If no encoding is provided and the input is a string an
+encoding of `'binary'` is enforced. If `data` is a `Buffer` then
+`input_encoding` is ignored.
 -->
 
 与えられた `data` でハッシュの内容を更新します。
 そのエンコーディングは `input_encoding` で与えられ、`'utf8'`、`'ascii'`、
 または `'binary'` を指定することができます。
-エンコーディングが与えられなかった場合はバッファが期待されます。
+入力が文字列でエンコーディングが与えられなかった場合、エンコーディングは
+`'binary'` が強制されます。
 もし `data` が `Buffer` なら、`input_encoding` は無視されます。
 
 <!--
@@ -464,6 +466,19 @@ must call this before `cipher.final`.
 `0x0` を使う場合に便利です。
 `cipher.final()` の前に呼び出す必要があります。
 
+### cipher.getAuthTag()
+
+<!--
+For authenticated encryption modes (currently supported: GCM), this
+method returns a `Buffer` that represents the _authentication tag_ that
+has been computed from the given data. Should be called after
+encryption has been completed using the `final` method!
+-->
+
+認証された暗号モード (現在サポートされているもの: GCM) では、
+このメソッドは与えられたデータから計算された _認証タグ_ を表現する
+`Buffer` を返します。
+`final()` メソッドを使った暗号化が完了した後に呼び出されるべきです！
 
 ## crypto.createDecipher(algorithm, password)
 
@@ -570,6 +585,23 @@ the ciphers block size. You must call this before streaming data to
 入力データの長さが暗号ブロックサイズの倍数の場合のみ動作します。
 `decipher.update()` の前に呼び出す必要があります。
 
+### decipher.setAuthTag(buffer)
+
+<!--
+For authenticated encryption modes (currently supported: GCM), this
+method must be used to pass in the received _authentication tag_.
+If no tag is provided or if the ciphertext has been tampered with,
+`final` will throw, thus indicating that the ciphertext should
+be discarded due to failed authentication.
+-->
+
+認証された暗号モード (現在サポートされているもの: GCM) に対して、
+このメソッドは受け取った認証タグを渡すために使われなければなりません。
+タグが提供されなかった場合や暗号文が改竄された場合は、
+`final` がスローされ、その暗号文は認証が失敗したために破棄されなければ
+ならないことが示されます。
+
+
 ## crypto.createSign(algorithm)
 
 <!--
@@ -620,24 +652,28 @@ with new data as it is streamed.
 
 <!--
 Calculates the signature on all the updated data passed through the
-<<<<<<< HEAD
-sign.  `private_key` is a string containing the PEM encoded private
-key for signing.
+sign.
 -->
 
 署名オブジェクトに渡された全ての更新データで署名を計算します。
-`private_key` は PEM でエンコードされた秘密鍵を内容とする文字列です。
-=======
-sign.
 
+<!--
 `private_key` can be an object or a string. If `private_key` is a string, it is
 treated as the key with no passphrase.
+-->
+
+`private_key` はオブジェクトまたは文字列です。
+`private_key` が文字列なら、それはパスフレーズのない鍵とみなされます。
 
 `private_key`:
 
+<!--
 * `key` : A string holding the PEM encoded private key
 * `passphrase` : A string of passphrase for the private key
->>>>>>> v0.11.8
+-->
+
+* `key` : PEM でエンコードされた秘密鍵を保持する文字列
+* `passphrase` : 秘密鍵のパスフレーズを表す文字列
 
 <!--
 Returns the signature in `output_format` which can be `'binary'`,

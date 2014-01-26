@@ -102,16 +102,21 @@ cases:
 ## Event: 'exit'
 
 <!--
-Emitted when the process is about to exit.  This is a good hook to perform
-constant time checks of the module's state (like for unit tests).  The main
-event loop will no longer be run after the 'exit' callback finishes, so
-timers may not be scheduled.
+Emitted when the process is about to exit. There is no way to prevent the
+exiting of the event loop at this point, and once all `exit` listeners have
+finished running the process will exit. Therefore you **must** only perform
+**synchronous** operations in this handler. This is a good hook to perform
+checks on the module's state (like for unit tests). The callback takes one
+argument, the code the process is exiting with.
 -->
 
 プロセスが終了しようとしている時に生成されます。
-これは (ユニットテストのように) モジュールの状態を一定の時間でチェックするのに適したフックとなります。
-メインのイベントループは 'exit' コールバックが終了するともはや動作しないので、
-タイマーはスケジュールされないかもしれません。
+この位置からイベントループを抜けることを防ぐ方法はなく、全ての `'exit'`
+リスナーの実行が完了すると、プロセスは終了します。
+従って、このハンドラでできることは **同期** 操作 **だけ** です。
+これは (ユニットテストのように) モジュールの状態をチェックするのに適した
+フックとなります。
+コールバックはプロセスの終了コードを唯一の引数として呼び出されます。
 
 <!--
 Example of listening for `exit`:
@@ -119,11 +124,12 @@ Example of listening for `exit`:
 
 `exit` を監視する例:
 
-    process.on('exit', function() {
+    process.on('exit', function(code) {
+      // do *NOT* do this
       setTimeout(function() {
         console.log('This will not run');
       }, 0);
-      console.log('About to exit.');
+      console.log('About to exit with code:', code);
     });
 
 ## Event: 'uncaughtException'
@@ -874,14 +880,23 @@ See kill(2) for more information.
 詳細は kill(2) を参照してください。
 
 <!--
+Will throw an error if target does not exist, and as a special case, a signal of
+`0` can be used to test for the existence of a process.
+-->
+
+対象が存在しない場合はエラーがスローされます。
+特殊なケースとして、プロセスが存在することを確認するためにシグナル
+`0` を使うことが出来ます。
+
+<!--
 Note that just because the name of this function is `process.kill`, it is
 really just a signal sender, like the `kill` system call.  The signal sent
 may do something other than kill the target process.
 -->
 
-この関数の名前が `process.kill` であるとおり、
-これは `kill` システムコールのように本当にシグナルを送信することに注意してください。
-対象のプロセスを殺すだけでなく、他のシグナルも送信されます。
+この関数の名前が `process.kill` であるとおり、これは `kill`
+システムコールのように単にシグナルを送信することに注意してください。
+対象のプロセスを殺すためだけでなく、他のシグナルも送信できます。
 
 <!--
 Example of sending a signal to yourself:
@@ -901,11 +916,12 @@ Example of sending a signal to yourself:
     process.kill(process.pid, 'SIGHUP');
 
 <!--
-Note: SIGUSR1 is reserved by node.js.  It can be used to kickstart the
-debugger.
+Note: When SIGUSR1 is received by Node.js it starts the debugger, see
+[Signal Events](#process_signal_events).
 -->
 
-注意: SIGUSR1 は Node.js によって予約されています。それはデバッガを起動します。
+注意: SIGUSR1 が Node.js によって受け取られると、それはデバッガを起動します。
+[Signal Events](#process_signal_events) を参照してください。
 
 ## process.pid
 

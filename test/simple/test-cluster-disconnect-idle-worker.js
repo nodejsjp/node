@@ -29,6 +29,4 @@ if (cluster.isMaster) {
   cluster.disconnect(common.mustCall(function() {
     assert.deepEqual(Object.keys(cluster.workers), []);
   }));
-} else {
-  setTimeout(assert.fail, 1e6);
 }

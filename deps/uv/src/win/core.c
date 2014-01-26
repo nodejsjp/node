@@ -256,10 +256,15 @@ static void uv_poll_ex(uv_loop_t* loop, int block) {
 }
 
 
-static int uv__loop_alive(uv_loop_t* loop) {
+static int uv__loop_alive(const uv_loop_t* loop) {
   return loop->active_handles > 0 ||
          !QUEUE_EMPTY(&loop->active_reqs) ||
          loop->endgame_handles != NULL;
+}
+
+
+int uv_loop_alive(const uv_loop_t* loop) {
+    return uv__loop_alive(loop);
 }
 
 
@@ -273,6 +278,9 @@ int uv_run(uv_loop_t *loop, uv_run_mode mode) {
     poll = &uv_poll;
 
   r = uv__loop_alive(loop);
+  if (!r)
+    uv_update_time(loop);
+
   while (r != 0 && loop->stop_flag == 0) {
     uv_update_time(loop);
     uv_process_timers(loop);

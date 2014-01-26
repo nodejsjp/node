@@ -2,6 +2,7 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
+import collections
 import copy
 import ntpath
 import os
@@ -20,6 +21,16 @@ import gyp.MSVSUserFile as MSVSUserFile
 import gyp.MSVSUtil as MSVSUtil
 import gyp.MSVSVersion as MSVSVersion
 from gyp.common import GypError
+
+# TODO: Remove once bots are on 2.7, http://crbug.com/241769
+def _import_OrderedDict():
+  import collections
+  try:
+    return collections.OrderedDict
+  except AttributeError:
+    import gyp.ordered_dict
+    return gyp.ordered_dict.OrderedDict
+OrderedDict = _import_OrderedDict()
 
 
 # Regular expression for validating Visual Studio GUIDs.  If the GUID
@@ -84,6 +95,46 @@ cached_username = None
 
 
 cached_domain = None
+
+
+# Based on http://code.activestate.com/recipes/576694/.
+class OrderedSet(collections.MutableSet):
+  def __init__(self, iterable=None):
+    self.end = end = []
+    end += [None, end, end]         # sentinel node for doubly linked list
+    self.map = {}                   # key --> [key, prev, next]
+    if iterable is not None:
+      self |= iterable
+
+  def __len__(self):
+    return len(self.map)
+
+  def discard(self, key):
+    if key in self.map:
+      key, prev, next = self.map.pop(key)
+      prev[2] = next
+      next[1] = prev
+
+  def __contains__(self, key):
+    return key in self.map
+
+  def add(self, key):
+    if key not in self.map:
+      end = self.end
+      curr = end[1]
+      curr[2] = end[1] = self.map[key] = [key, curr, end]
+
+  def update(self, iterable):
+    for i in iterable:
+      if i not in self:
+        self.add(i)
+
+  def __iter__(self):
+    end = self.end
+    curr = end[2]
+    while curr is not end:
+      yield curr[0]
+      curr = curr[2]
 
 
 # TODO(gspencer): Switch the os.environ calls to be
@@ -179,7 +230,6 @@ def _ConvertSourcesToFilterHierarchy(sources, prefix=None, excluded=None,
   if not prefix: prefix = []
   result = []
   excluded_result = []
-  folders = dict()
   # Gather files into the final result, excluded, or folders.
   for s in sources:
     if len(s) == 1:
@@ -189,22 +239,16 @@ def _ConvertSourcesToFilterHierarchy(sources, prefix=None, excluded=None,
       else:
         result.append(filename)
     else:
-      if not folders.get(s[0]):
-        folders[s[0]] = []
-      folders[s[0]].append(s[1:])
+      contents = _ConvertSourcesToFilterHierarchy([s[1:]], prefix + [s[0]],
+                                                  excluded=excluded,
+                                                  list_excluded=list_excluded)
+      contents = MSVSProject.Filter(s[0], contents=contents)
+      result.append(contents)
   # Add a folder for excluded files.
   if excluded_result and list_excluded:
     excluded_folder = MSVSProject.Filter('_excluded_files',
                                          contents=excluded_result)
     result.append(excluded_folder)
-  # Populate all the folders.
-  for f in folders:
-    contents = _ConvertSourcesToFilterHierarchy(folders[f], prefix=prefix + [f],
-                                                excluded=excluded,
-                                                list_excluded=list_excluded)
-    contents = MSVSProject.Filter(f, contents=contents)
-    result.append(contents)
-
   return result
 
 
@@ -415,13 +459,13 @@ def _AddAccumulatedActionsToMSVS(p, spec, actions_dict):
         dicts describing the actions attached to that input file.
   """
   for primary_input in actions_dict:
-    inputs = set()
-    outputs = set()
+    inputs = OrderedSet()
+    outputs = OrderedSet()
     descriptions = []
     commands = []
     for action in actions_dict[primary_input]:
-      inputs.update(set(action['inputs']))
-      outputs.update(set(action['outputs']))
+      inputs.update(OrderedSet(action['inputs']))
+      outputs.update(OrderedSet(action['outputs']))
       descriptions.append(action['description'])
       commands.append(action['command'])
     # Add the custom build step for one input file.
@@ -477,8 +521,8 @@ def _RuleInputsAndOutputs(rule, trigger_file):
   """
   raw_inputs = _FixPaths(rule.get('inputs', []))
   raw_outputs = _FixPaths(rule.get('outputs', []))
-  inputs = set()
-  outputs = set()
+  inputs = OrderedSet()
+  outputs = OrderedSet()
   inputs.add(trigger_file)
   for i in raw_inputs:
     inputs.add(_RuleExpandPath(i, trigger_file))
@@ -549,16 +593,16 @@ def _GenerateExternalRules(rules, output_dir, spec,
   mk_file.write('OutDirCygwin:=$(shell cygpath -u "$(OutDir)")\n')
   mk_file.write('IntDirCygwin:=$(shell cygpath -u "$(IntDir)")\n')
   # Gather stuff needed to emit all: target.
-  all_inputs = set()
-  all_outputs = set()
-  all_output_dirs = set()
+  all_inputs = OrderedSet()
+  all_outputs = OrderedSet()
+  all_output_dirs = OrderedSet()
   first_outputs = []
   for rule in rules:
     trigger_files = _FindRuleTriggerFiles(rule, sources)
     for tf in trigger_files:
       inputs, outputs = _RuleInputsAndOutputs(rule, tf)
-      all_inputs.update(set(inputs))
-      all_outputs.update(set(outputs))
+      all_inputs.update(OrderedSet(inputs))
+      all_outputs.update(OrderedSet(outputs))
       # Only use one target from each rule as the dependency for
       # 'all' so we don't try to build each rule multiple times.
       first_outputs.append(list(outputs)[0])
@@ -799,8 +843,8 @@ def _AdjustSourcesForRules(spec, rules, sources, excluded_sources):
       trigger_files = _FindRuleTriggerFiles(rule, sources)
       for trigger_file in trigger_files:
         inputs, outputs = _RuleInputsAndOutputs(rule, trigger_file)
-        inputs = set(_FixPaths(inputs))
-        outputs = set(_FixPaths(outputs))
+        inputs = OrderedSet(_FixPaths(inputs))
+        outputs = OrderedSet(_FixPaths(outputs))
         inputs.remove(_FixPath(trigger_file))
         sources.update(inputs)
         if not spec.get('msvs_external_builder'):
@@ -817,7 +861,7 @@ def _FilterActionsFromExcluded(excluded_sources, actions_to_add):
   Returns:
     excluded_sources with files that have actions attached removed.
   """
-  must_keep = set(_FixPaths(actions_to_add.keys()))
+  must_keep = OrderedSet(_FixPaths(actions_to_add.keys()))
   return [s for s in excluded_sources if s not in must_keep]
 
 
@@ -900,9 +944,7 @@ def _GenerateMSVSProject(project, options, version, generator_flags):
     generator_flags: dict of generator-specific flags.
   """
   spec = project.spec
-  vcproj_dir = os.path.dirname(project.path)
-  if vcproj_dir and not os.path.exists(vcproj_dir):
-    os.makedirs(vcproj_dir)
+  gyp.common.EnsureDirExists(project.path)
 
   platforms = _GetUniquePlatforms(spec)
   p = MSVSProject.Writer(project.path, version, spec['target_name'],
@@ -965,7 +1007,7 @@ def _GetUniquePlatforms(spec):
     The MSVSUserFile object created.
   """
   # Gather list of unique platforms.
-  platforms = set()
+  platforms = OrderedSet()
   for configuration in spec['configurations']:
     platforms.add(_ConfigPlatform(spec['configurations'][configuration]))
   platforms = list(platforms)
@@ -1152,7 +1194,7 @@ def _GetLibraries(spec):
   # in libraries that are assumed to be in the default library path).
   # Also remove duplicate entries, leaving only the last duplicate, while
   # preserving order.
-  found = set()
+  found = OrderedSet()
   unique_libraries_list = []
   for entry in reversed(libraries):
     library = re.sub('^\-l', '', entry)
@@ -1331,8 +1373,7 @@ def _GetMSVSAttributes(spec, config, config_type):
 
 
 def _AddNormalizedSources(sources_set, sources_array):
-  sources = [_NormalizedSource(s) for s in sources_array]
-  sources_set.update(set(sources))
+  sources_set.update(_NormalizedSource(s) for s in sources_array)
 
 
 def _PrepareListOfSources(spec, generator_flags, gyp_file):
@@ -1350,9 +1391,9 @@ def _PrepareListOfSources(spec, generator_flags, gyp_file):
     A pair of (list of sources, list of excluded sources).
     The sources will be relative to the gyp file.
   """
-  sources = set()
+  sources = OrderedSet()
   _AddNormalizedSources(sources, spec.get('sources', []))
-  excluded_sources = set()
+  excluded_sources = OrderedSet()
   # Add in the gyp file.
   if not generator_flags.get('standalone'):
     sources.add(gyp_file)
@@ -1362,7 +1403,7 @@ def _PrepareListOfSources(spec, generator_flags, gyp_file):
     inputs = a['inputs']
     inputs = [_NormalizedSource(i) for i in inputs]
     # Add all inputs to sources and excluded sources.
-    inputs = set(inputs)
+    inputs = OrderedSet(inputs)
     sources.update(inputs)
     if not spec.get('msvs_external_builder'):
       excluded_sources.update(inputs)
@@ -1391,7 +1432,7 @@ def _AdjustSourcesAndConvertToFilterHierarchy(
                path of excluded IDL file)
   """
   # Exclude excluded sources coming into the generator.
-  excluded_sources.update(set(spec.get('sources_excluded', [])))
+  excluded_sources.update(OrderedSet(spec.get('sources_excluded', [])))
   # Add excluded sources into sources for good measure.
   sources.update(excluded_sources)
   # Convert to proper windows form.
@@ -1411,6 +1452,11 @@ def _AdjustSourcesAndConvertToFilterHierarchy(
   sources = [i.split('\\') for i in sources]
   sources = _ConvertSourcesToFilterHierarchy(sources, excluded=fully_excluded,
                                              list_excluded=list_excluded)
+
+  # Prune filters with a single child to flatten ugly directory structures
+  # such as ../../src/modules/module1 etc.
+  while len(sources) == 1 and isinstance(sources[0], MSVSProject.Filter):
+    sources = sources[0].contents
 
   return sources, excluded_sources, excluded_idl
 
@@ -1479,7 +1525,7 @@ def _GetExcludedFilesFromBuild(spec, excluded_sources, excluded_idl):
 
 def _AddToolFilesToMSVS(p, spec):
   # Add in tool files (rules).
-  tool_files = set()
+  tool_files = OrderedSet()
   for _, config in spec['configurations'].iteritems():
     for f in config.get('msvs_tool_files', []):
       tool_files.add(f)
@@ -3051,9 +3097,7 @@ def _GenerateMSBuildProject(project, options, version, generator_flags):
   spec = project.spec
   configurations = spec['configurations']
   project_dir, project_file_name = os.path.split(project.path)
-  msbuildproj_dir = os.path.dirname(project.path)
-  if msbuildproj_dir and not os.path.exists(msbuildproj_dir):
-    os.makedirs(msbuildproj_dir)
+  gyp.common.EnsureDirExists(project.path)
   # Prepare list of sources and excluded sources.
   gyp_path = _NormalizedSource(project.build_file)
   relative_path_of_gyp_file = gyp.common.RelativePath(gyp_path, project_dir)
@@ -3202,16 +3246,16 @@ def _GenerateActionsForMSBuild(spec, actions_to_add):
   Returns:
     A pair of (action specification, the sources handled by this action).
   """
-  sources_handled_by_action = set()
+  sources_handled_by_action = OrderedSet()
   actions_spec = []
   for primary_input, actions in actions_to_add.iteritems():
-    inputs = set()
-    outputs = set()
+    inputs = OrderedSet()
+    outputs = OrderedSet()
     descriptions = []
     commands = []
     for action in actions:
-      inputs.update(set(action['inputs']))
-      outputs.update(set(action['outputs']))
+      inputs.update(OrderedSet(action['inputs']))
+      outputs.update(OrderedSet(action['outputs']))
       descriptions.append(action['description'])
       cmd = action['command']
       # For most actions, add 'call' so that actions that invoke batch files

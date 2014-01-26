@@ -111,6 +111,7 @@ namespace node {
   V(rdev_string, "rdev")                                                      \
   V(rename_string, "rename")                                                  \
   V(rss_string, "rss")                                                        \
+  V(serial_number_string, "serialNumber")                                     \
   V(servername_string, "servername")                                          \
   V(session_id_string, "sessionId")                                           \
   V(should_keep_alive_string, "shouldKeepAlive")                              \
@@ -118,6 +119,7 @@ namespace node {
   V(smalloc_p_string, "_smalloc_p")                                           \
   V(sni_context_string, "sni_context")                                        \
   V(status_code_string, "statusCode")                                         \
+  V(status_message_string, "statusMessage")                                   \
   V(subject_string, "subject")                                                \
   V(subjectaltname_string, "subjectaltname")                                  \
   V(syscall_string, "syscall")                                                \

@@ -236,6 +236,8 @@ values are `"rr"` and `"none"`.
 
 <!--
 * {Object}
+  * `execArgv` {Array} list of string arguments passed to the node executable. 
+    (Default=`process.execArgv`)
   * `exec` {String} file path to worker file.  (Default=`process.argv[1]`)
   * `args` {Array} string arguments passed to worker.
     (Default=`process.argv.slice(2)`)
@@ -244,12 +246,14 @@ values are `"rr"` and `"none"`.
 -->
 
 * {Object}
-  * `exec` {String} ワーカで実行するファイルへのパス.
-    (デフォルトは `process.argv[1]`)
-  * `args` {Array} ワーカに渡される引数となる文字列。
-    (デフォルトは `process.argv.slice(2)`)
-  * `silent` {Boolean} 出力を親プロセスに送るかどうか。
-    (デフォルトは `false`)
+  * `execArgv` {Array} node 実行ファイルに渡される引数を表す、文字列の配列
+    (デフォルトは `process.execArgv`)。
+  * `exec` {String} ワーカで実行するファイルへのパス
+    (デフォルトは `process.argv[1]`)。
+  * `args` {Array} ワーカに渡される引数となる文字列
+    (デフォルトは `process.argv.slice(2)`)。
+  * `silent` {Boolean} 出力を親プロセスに送るかどうか
+    (デフォルトは `false`)。
 
 <!--
 After calling `.setupMaster()` (or `.fork()`) this settings object will contain

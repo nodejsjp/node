@@ -165,7 +165,9 @@ ArrayBufferAllocator ArrayBufferAllocator::the_singleton;
 void* ArrayBufferAllocator::Allocate(size_t length) {
   if (length > kMaxLength)
     return NULL;
-  return new char[length];
+  char* data = new char[length];
+  memset(data, 0, length);
+  return data;
 }
 
 
@@ -1174,8 +1176,15 @@ static void ReportException(Handle<Value> er, Handle<Message> message) {
 
   DisplayExceptionLine(message);
 
-  Local<Value> trace_value(
-      er->ToObject()->Get(FIXED_ONE_BYTE_STRING(node_isolate, "stack")));
+  Local<Value> trace_value;
+
+  if (er->IsUndefined() || er->IsNull()) {
+    trace_value = Undefined(node_isolate);
+  } else {
+    trace_value =
+        er->ToObject()->Get(FIXED_ONE_BYTE_STRING(node_isolate, "stack"));
+  }
+
   String::Utf8Value trace(trace_value);
 
   // range errors have a trace member set to undefined

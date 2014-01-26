@@ -519,6 +519,29 @@ Indicates that the underlying connection was terminated before
 [response.end()][] が呼び出されたりフラッシュされる前に、
 下層の接続が切断されたことを示します。
 
+### Event: 'finish'
+
+`function () { }`
+
+<!--
+Emitted when the response has been sent. More specifically, this event is
+emitted when the last segment of the response headers and body have been
+handed off to the operating system for transmission over the network. It
+does not imply that the client has received anything yet.
+-->
+
+レスポンスが送信されると生成されます。
+より詳しくいうと、このイベントはレスポンスヘッダおよびボディの
+最後のセグメントがネットワーク上へ転送するためにオペレーティングシステムに
+渡されると生成されます。
+それはクライアントが何かを受信したことを意味しません。
+
+<!--
+After this event, no more events will be emitted on the response object.
+-->
+
+このイベントの後、レスポンスオブジェクトはどんなイベントも生成しません。
+
 ### response.writeContinue()
 
 <!--
@@ -878,7 +901,7 @@ followed by `response.end()`.
 `response.write(data, encoding)` に続けて `response.end()` を呼び出すのと等価です。
 
 
-## http.request(options, callback)
+## http.request(options, [callback])
 
 <!--
 Node maintains several connections per server to make HTTP requests.
@@ -958,6 +981,14 @@ Options:
   - `keepAliveMsecs`: {Integer} HTTP キープアライブが使用された場合、
   ソケットの接続を維持するために TCP キープアライブパケットを送信する間隔です。
   `keepAlive` が `true` に設定された場合だけ関係があります。
+
+<!--
+The optional `callback` parameter will be added as a one time listener for
+the ['response'][] event.
+-->
+
+オプションの `callback` 引数は、['response'][] イベントの
+一回限りのリスナとして加えられます。
 
 <!--
 `http.request()` returns an instance of the [http.ClientRequest][]
@@ -1052,7 +1083,7 @@ There are a few special headers that should be noted.
 * Authorization ヘッダの送信は、`auth` オプションによるベーシック認証を
   上書きします。
 
-## http.get(options, callback)
+## http.get(options, [callback])
 
 <!--
 Since most requests are GET requests without bodies, Node provides this
@@ -1384,7 +1415,7 @@ The request implements the [Writable Stream][] interface. This is an
 リクエストは [Writable  Stream][] インタフェースを実装します。
 これは以下のイベントを持つ [EventEmitter][] です。
 
-### Event 'response'
+### Event: 'response'
 
 `function (response) { }`
 
@@ -1901,6 +1932,21 @@ The 3-digit HTTP response status code. E.G. `404`.
 
 3 桁の数字によるレスポンスのステータスコードです。例えば `404`。
 
+### message.statusMessage
+
+<!--
+**Only valid for response obtained from `http.ClientRequest`.**
+-->
+
+** `http.ClientRequest` から得たレスポンスでのみ有効です **
+
+<!--
+The HTTP response status message (reason phrase). E.G. `OK` or `Internal Server Error`.
+-->
+
+HTTP レスポンスのステータスメッセージ (reason phrase)。
+例: `OK` や `Internal Server Error`。
+
 ### message.socket
 
 <!--
@@ -1921,6 +1967,7 @@ HTTPS では `request.connection.verifyPeer()` と
 
 ['checkContinue']: #http_event_checkcontinue
 ['listening']: net.html#net_event_listening
+['response']: #http_event_response
 [Agent]: #http_class_http_agent
 [Buffer]: buffer.html#buffer_buffer
 [EventEmitter]: events.html#events_class_events_eventemitter
