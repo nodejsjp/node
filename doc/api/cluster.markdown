@@ -246,7 +246,7 @@ True if the process is not a master (it is the negation of `cluster.isMaster`).
 
 <!--
 When a new worker is forked the cluster module will emit a 'fork' event.
-This can be used to log worker activity, and create you own timeout.
+This can be used to log worker activity, and create your own timeout.
 -->
 
 新しいワーカがフォークされると、クラスタモジュールは `'fork'` イベントを

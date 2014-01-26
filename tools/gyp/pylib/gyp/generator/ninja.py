@@ -1037,15 +1037,21 @@ class NinjaWriter:
           self.GypPathToNinja, arch)
       ldflags = env_ldflags + ldflags
     elif self.flavor == 'win':
-      manifest_name = self.GypPathToUniqueOutput(
+      manifest_base_name = self.GypPathToUniqueOutput(
           self.ComputeOutputFileName(spec))
-      ldflags, manifest_files = self.msvs_settings.GetLdflags(config_name,
-          self.GypPathToNinja, self.ExpandSpecial, manifest_name, is_executable)
+      ldflags, intermediate_manifest, manifest_files = \
+          self.msvs_settings.GetLdflags(config_name, self.GypPathToNinja,
+                                        self.ExpandSpecial, manifest_base_name,
+                                        output, is_executable,
+                                        self.toplevel_build)
       ldflags = env_ldflags + ldflags
       self.WriteVariableList(ninja_file, 'manifests', manifest_files)
+      implicit_deps = implicit_deps.union(manifest_files)
+      if intermediate_manifest:
+        self.WriteVariableList(
+            ninja_file, 'intermediatemanifest', [intermediate_manifest])
       command_suffix = _GetWinLinkRuleNameSuffix(
-          self.msvs_settings.IsEmbedManifest(config_name),
-          self.msvs_settings.IsLinkIncremental(config_name))
+          self.msvs_settings.IsEmbedManifest(config_name))
       def_file = self.msvs_settings.GetDefFile(self.GypPathToNinja)
       if def_file:
         implicit_deps.add(def_file)
@@ -1090,16 +1096,27 @@ class NinjaWriter:
       extra_bindings.append(('lib',
                             gyp.common.EncodePOSIXShellArgument(output)))
       if self.flavor == 'win':
-        extra_bindings.append(('dll', output))
+        extra_bindings.append(('binary', output))
         if '/NOENTRY' not in ldflags:
           self.target.import_lib = output + '.lib'
           extra_bindings.append(('implibflag',
                                  '/IMPLIB:%s' % self.target.import_lib))
+          pdbname = self.msvs_settings.GetPDBName(
+              config_name, self.ExpandSpecial, output + '.pdb')
           output = [output, self.target.import_lib]
+          if pdbname:
+            output.append(pdbname)
       elif not self.is_mac_bundle:
         output = [output, output + '.TOC']
       else:
         command = command + '_notoc'
+    elif self.flavor == 'win':
+      extra_bindings.append(('binary', output))
+      pdbname = self.msvs_settings.GetPDBName(
+          config_name, self.ExpandSpecial, output + '.pdb')
+      if pdbname:
+        output = [output, pdbname]
+
 
     if len(solibs):
       extra_bindings.append(('solibs', gyp.common.EncodePOSIXShellList(solibs)))
@@ -1505,10 +1522,7 @@ def CalculateGeneratorInputInfo(params):
 
 def OpenOutput(path, mode='w'):
   """Open |path| for writing, creating directories if necessary."""
-  try:
-    os.makedirs(os.path.dirname(path))
-  except OSError:
-    pass
+  gyp.common.EnsureDirExists(path)
   return open(path, mode)
 
 
@@ -1543,7 +1557,10 @@ def GetDefaultConcurrentLinks():
 
     mem_limit = max(1, stat.ullTotalPhys / (4 * (2 ** 30)))  # total / 4GB
     hard_cap = max(1, int(os.getenv('GYP_LINK_CONCURRENCY_MAX', 2**32)))
-    return min(mem_limit, hard_cap)
+    # return min(mem_limit, hard_cap)
+    # TODO(scottmg): Temporary speculative fix for OOM on builders
+    # See http://crbug.com/333000.
+    return 2
   elif sys.platform.startswith('linux'):
     with open("/proc/meminfo") as meminfo:
       memtotal_re = re.compile(r'^MemTotal:\s*(\d*)\s*kB')
@@ -1567,90 +1584,57 @@ def GetDefaultConcurrentLinks():
     return 1
 
 
-def _GetWinLinkRuleNameSuffix(embed_manifest, link_incremental):
+def _GetWinLinkRuleNameSuffix(embed_manifest):
   """Returns the suffix used to select an appropriate linking rule depending on
-  whether the manifest embedding and/or incremental linking is enabled."""
-  suffix = ''
-  if embed_manifest:
-    suffix += '_embed'
-    if link_incremental:
-      suffix += '_inc'
-  return suffix
+  whether the manifest embedding is enabled."""
+  return '_embed' if embed_manifest else ''
 
 
-def _AddWinLinkRules(master_ninja, embed_manifest, link_incremental):
+def _AddWinLinkRules(master_ninja, embed_manifest):
   """Adds link rules for Windows platform to |master_ninja|."""
   def FullLinkCommand(ldcmd, out, binary_type):
-    """Returns a one-liner written for cmd.exe to handle multiphase linker
-    operations including manifest file generation. The command will be
-    structured as follows:
-      cmd /c (linkcmd1 a b) && (linkcmd2 x y) && ... &&
-      if not "$manifests"=="" ((manifestcmd1 a b) && (manifestcmd2 x y) && ... )
-    Note that $manifests becomes empty when no manifest file is generated."""
-    link_commands = ['%(ldcmd)s',
-                     'if exist %(out)s.manifest del %(out)s.manifest']
-    mt_cmd = ('%(python)s gyp-win-tool manifest-wrapper'
-              ' $arch $mt -nologo -manifest $manifests')
-    if embed_manifest and not link_incremental:
-      # Embed manifest into a binary. If incremental linking is enabled,
-      # embedding is postponed to the re-linking stage (see below).
-      mt_cmd += ' -outputresource:%(out)s;%(resname)s'
-    else:
-      # Save manifest as an external file.
-      mt_cmd += ' -out:%(out)s.manifest'
-    manifest_commands = [mt_cmd]
-    if link_incremental:
-      # There is no point in generating separate rule for the case when
-      # incremental linking is enabled, but manifest embedding is disabled.
-      # In that case the basic rule should be used (e.g. 'link').
-      # See also implementation of _GetWinLinkRuleNameSuffix().
-      assert embed_manifest
-      # Make .rc file out of manifest, compile it to .res file and re-link.
-      manifest_commands += [
-        ('%(python)s gyp-win-tool manifest-to-rc $arch %(out)s.manifest'
-         ' %(out)s.manifest.rc %(resname)s'),
-        '%(python)s gyp-win-tool rc-wrapper $arch $rc %(out)s.manifest.rc',
-        '%(ldcmd)s %(out)s.manifest.res']
-    cmd = 'cmd /c %s && if not "$manifests"=="" (%s)' % (
-      ' && '.join(['(%s)' % c for c in link_commands]),
-      ' && '.join(['(%s)' % c for c in manifest_commands]))
     resource_name = {
       'exe': '1',
       'dll': '2',
     }[binary_type]
-    return cmd % {'python': sys.executable,
-                  'out': out,
-                  'ldcmd': ldcmd,
-                  'resname': resource_name}
-
-  rule_name_suffix = _GetWinLinkRuleNameSuffix(embed_manifest, link_incremental)
-  dlldesc = 'LINK%s(DLL) $dll' % rule_name_suffix.upper()
-  dllcmd = ('%s gyp-win-tool link-wrapper $arch '
-            '$ld /nologo $implibflag /DLL /OUT:$dll '
-            '/PDB:$dll.pdb @$dll.rsp' % sys.executable)
-  dllcmd = FullLinkCommand(dllcmd, '$dll', 'dll')
+    return '%(python)s gyp-win-tool link-with-manifests $arch %(embed)s ' \
+           '%(out)s "%(ldcmd)s" %(resname)s $mt $rc "$intermediatemanifest" ' \
+           '$manifests' % {
+               'python': sys.executable,
+               'out': out,
+               'ldcmd': ldcmd,
+               'resname': resource_name,
+               'embed': embed_manifest }
+  rule_name_suffix = _GetWinLinkRuleNameSuffix(embed_manifest)
+  use_separate_mspdbsrv = (
+      int(os.environ.get('GYP_USE_SEPARATE_MSPDBSRV', '0')) != 0)
+  dlldesc = 'LINK%s(DLL) $binary' % rule_name_suffix.upper()
+  dllcmd = ('%s gyp-win-tool link-wrapper $arch %s '
+            '$ld /nologo $implibflag /DLL /OUT:$binary '
+            '@$binary.rsp' % (sys.executable, use_separate_mspdbsrv))
+  dllcmd = FullLinkCommand(dllcmd, '$binary', 'dll')
   master_ninja.rule('solink' + rule_name_suffix,
                     description=dlldesc, command=dllcmd,
-                    rspfile='$dll.rsp',
+                    rspfile='$binary.rsp',
                     rspfile_content='$libs $in_newline $ldflags',
                     restat=True,
                     pool='link_pool')
   master_ninja.rule('solink_module' + rule_name_suffix,
                     description=dlldesc, command=dllcmd,
-                    rspfile='$dll.rsp',
+                    rspfile='$binary.rsp',
                     rspfile_content='$libs $in_newline $ldflags',
                     restat=True,
                     pool='link_pool')
   # Note that ldflags goes at the end so that it has the option of
   # overriding default settings earlier in the command line.
-  exe_cmd = ('%s gyp-win-tool link-wrapper $arch '
-             '$ld /nologo /OUT:$out /PDB:$out.pdb @$out.rsp' %
-              sys.executable)
-  exe_cmd = FullLinkCommand(exe_cmd, '$out', 'exe')
+  exe_cmd = ('%s gyp-win-tool link-wrapper $arch %s '
+             '$ld /nologo /OUT:$binary @$binary.rsp' %
+              (sys.executable, use_separate_mspdbsrv))
+  exe_cmd = FullLinkCommand(exe_cmd, '$binary', 'exe')
   master_ninja.rule('link' + rule_name_suffix,
-                    description='LINK%s $out' % rule_name_suffix.upper(),
+                    description='LINK%s $binary' % rule_name_suffix.upper(),
                     command=exe_cmd,
-                    rspfile='$out.rsp',
+                    rspfile='$binary.rsp',
                     rspfile_content='$in_newline $libs $ldflags',
                     pool='link_pool')
 
@@ -1910,17 +1894,13 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
     master_ninja.rule(
         'alink',
         description='LIB $out',
-        command=('%s gyp-win-tool link-wrapper $arch '
+        command=('%s gyp-win-tool link-wrapper $arch False '
                  '$ar /nologo /ignore:4221 /OUT:$out @$out.rsp' %
                  sys.executable),
         rspfile='$out.rsp',
         rspfile_content='$in_newline $libflags')
-    _AddWinLinkRules(master_ninja, embed_manifest=True, link_incremental=True)
-    _AddWinLinkRules(master_ninja, embed_manifest=True, link_incremental=False)
-    _AddWinLinkRules(master_ninja, embed_manifest=False, link_incremental=False)
-    # Do not generate rules for embed_manifest=False and link_incremental=True
-    # because in that case rules for (False, False) should be used (see
-    # implementation of _GetWinLinkRuleNameSuffix()).
+    _AddWinLinkRules(master_ninja, embed_manifest=True)
+    _AddWinLinkRules(master_ninja, embed_manifest=False)
   else:
     master_ninja.rule(
       'objc',
@@ -2064,7 +2044,8 @@ def GenerateOutputForConfig(target_list, target_dicts, data, params,
 
     this_make_global_settings = data[build_file].get('make_global_settings', [])
     assert make_global_settings == this_make_global_settings, (
-        "make_global_settings needs to be the same for all targets.")
+        "make_global_settings needs to be the same for all targets. %s vs. %s" %
+        (this_make_global_settings, make_global_settings))
 
     spec = target_dicts[qualified_target]
     if flavor == 'mac':
