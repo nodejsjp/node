@@ -26,7 +26,6 @@
 #include "node.h"
 #include "node_buffer.h"
 #include "string_bytes.h"
-#include "node_root_certs.h"
 
 #include <string.h>
 #ifdef _MSC_VER
@@ -63,6 +62,12 @@ static const int X509_NAME_FLAGS = ASN1_STRFLGS_ESC_CTRL
                                  | XN_FLAG_FN_SN;
 
 namespace node {
+
+const char* root_certs[] = {
+#include "node_root_certs.h"  // NOLINT(build/include_order)
+  NULL
+};
+
 namespace crypto {
 
 using namespace v8;
@@ -1315,7 +1320,7 @@ Handle<Value> Connection::EncIn(const Arguments& args) {
 
   size_t off = args[1]->Int32Value();
   size_t len = args[2]->Int32Value();
-  if (off + len > buffer_length) {
+  if (!Buffer::IsWithinBounds(off, len, buffer_length)) {
     return ThrowException(Exception::Error(
           String::New("off + len > buffer.length")));
   }
@@ -1356,7 +1361,7 @@ Handle<Value> Connection::ClearOut(const Arguments& args) {
 
   size_t off = args[1]->Int32Value();
   size_t len = args[2]->Int32Value();
-  if (off + len > buffer_length) {
+  if (!Buffer::IsWithinBounds(off, len, buffer_length)) {
     return ThrowException(Exception::Error(
           String::New("off + len > buffer.length")));
   }
@@ -1432,7 +1437,7 @@ Handle<Value> Connection::EncOut(const Arguments& args) {
 
   size_t off = args[1]->Int32Value();
   size_t len = args[2]->Int32Value();
-  if (off + len > buffer_length) {
+  if (!Buffer::IsWithinBounds(off, len, buffer_length)) {
     return ThrowException(Exception::Error(
           String::New("off + len > buffer.length")));
   }
@@ -1466,7 +1471,7 @@ Handle<Value> Connection::ClearIn(const Arguments& args) {
 
   size_t off = args[1]->Int32Value();
   size_t len = args[2]->Int32Value();
-  if (off + len > buffer_length) {
+  if (!Buffer::IsWithinBounds(off, len, buffer_length)) {
     return ThrowException(Exception::Error(
           String::New("off + len > buffer.length")));
   }
@@ -3005,9 +3010,15 @@ class Sign : public ObjectWrap {
     if(!BIO_write(bp, key_pem, key_pemLen)) return 0;
 
     pkey = PEM_read_bio_PrivateKey( bp, NULL, NULL, NULL );
-    if (pkey == NULL) return 0;
+    if (pkey == NULL) {
+      ERR_print_errors_fp(stderr);
+      return 0;
+    }
 
-    EVP_SignFinal(&mdctx, *md_value, md_len, pkey);
+    if (!EVP_SignFinal(&mdctx, *md_value, md_len, pkey)) {
+      ERR_print_errors_fp(stderr);
+      return 0;
+    }
     EVP_MD_CTX_cleanup(&mdctx);
     initialised_ = false;
     EVP_PKEY_free(pkey);
@@ -3107,8 +3118,11 @@ class Sign : public ObjectWrap {
 
     int r = sign->SignFinal(&md_value, &md_len, buf, len);
     if (r == 0) {
+      delete [] buf;
+      delete [] md_value;
       md_value = NULL;
       md_len = r;
+      return ThrowException(Exception::Error(String::New("SignFinal error")));
     }
 
     delete [] buf;

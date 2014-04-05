@@ -251,16 +251,26 @@ Example: the definition of `console.log`
 
 <!--
 `process.stderr` and `process.stdout` are unlike other streams in Node in
-that writes to them are usually blocking.  They are blocking in the case
-that they refer to regular files or TTY file descriptors. In the case they
-refer to pipes, they are non-blocking like other streams.
+that writes to them are usually blocking.
 -->
 
-`process.stderr` と `process.stdout` は他のストリームと異なり、
-書き込みは通常ブロックします。
-それらが通常ファイルや TTY のファイル記述子を参照しているケースでは、
-それらはブロックします。
-パイプを参照しているケースでは、他のストリームと同様にブロックしません。
+`process.stderr` と `process.stdout` は Node の他のストリームと異なり、
+それらへの書き込みは通常ブロックします。
+
+<!--
+- They are blocking in the case that they refer to regular files or TTY file
+  descriptors.
+- In the case they refer to pipes:
+  - They are blocking in Linux/Unix.
+  - They are non-blocking like other streams in Windows.
+-->
+
+- ファイル記述子が通常ファイルや TTY を参照しているケースでは、
+  それらはブロックします。
+- パイプを参照しているケースでは:
+  - Linux/Unix ではそれらはブロックします。
+  - Windows では他のストリームと同様にブロックしません。
+
 
 <!--
 To check if Node is being run in a TTY context, read the `isTTY` property
@@ -293,30 +303,36 @@ See [the tty docs](tty.html#tty_tty) for more information.
 A writable stream to stderr.
 
 `process.stderr` and `process.stdout` are unlike other streams in Node in
-that writes to them are usually blocking.  They are blocking in the case
-that they refer to regular files or TTY file descriptors. In the case they
-refer to pipes, they are non-blocking like other streams.
+that writes to them are usually blocking.
 -->
 
 `stderr` に対する `Writable Stream` です。
 
-`process.stderr` と `process.stdout` は他のストリームと異なり、
-書き込みは通常ブロックします。
-それらが通常ファイルや TTY のファイル記述子を参照しているケースでは、
-それらはブロックします。
-パイプを参照しているケースでは、他のストリームと同様にブロックしません。
+`process.stderr` と `process.stdout` は Node の他のストリームと異なり、
+それらへの書き込みは通常ブロックします。
+
+<!--
+- They are blocking in the case that they refer to regular files or TTY file
+  descriptors.
+- In the case they refer to pipes:
+  - They are blocking in Linux/Unix.
+  - They are non-blocking like other streams in Windows.
+-->
+
+- ファイル記述子が通常ファイルや TTY を参照しているケースでは、
+  それらはブロックします。
+- パイプを参照しているケースでは:
+  - Linux/Unix ではそれらはブロックします。
+  - Windows では他のストリームと同様にブロックしません。
 
 
 ## process.stdin
 
 <!--
-A `Readable Stream` for stdin. The stdin stream is paused by default, so one
-must call `process.stdin.resume()` to read from it.
+A `Readable Stream` for stdin. 
 -->
 
 標準入力に対する `Readable Stream` です。
-デフォルトでは、標準入力に対するストリームは中断されているため、
-読み込みのためには `process.stdin.resume()` を呼び出さなければなりません。
 
 <!--
 Example of opening standard input and listening for both events:
@@ -324,17 +340,49 @@ Example of opening standard input and listening for both events:
 
 標準入力をオープンして二つのイベントを監視する例:
 
-    process.stdin.resume();
     process.stdin.setEncoding('utf8');
 
-    process.stdin.on('data', function(chunk) {
-      process.stdout.write('data: ' + chunk);
+    process.stdin.on('readable', function(chunk) {
+      var chunk = process.stdin.read();
+      if (chunk !== null) {
+        process.stdout.write('data: ' + chunk);
+      }
     });
 
     process.stdin.on('end', function() {
       process.stdout.write('end');
     });
 
+<!--
+As a Stream, `process.stdin` can also be used in "old" mode that is compatible
+with scripts written for node prior v0.10.
+For more information see
+[Stream compatibility](stream.html#stream_compatibility_with_older_node_versions).
+-->
+
+ストリームであるため、`process.stdin` は v0.10 以前の node 向けに書かれた
+スクリプトと互換性のある "old" モードで使うことが出来ます。より詳細な情報は
+[Stream compatibility](stream.html#stream_compatibility_with_older_node_versions)
+を参照してください。
+
+<!--
+In "old" Streams mode the stdin stream is paused by default, so one
+must call `process.stdin.resume()` to read from it. Note also that calling
+`process.stdin.resume()` itself would switch stream to "old" mode.
+-->
+
+"old" モードでは標準入力ストリームはデフォルトで中断状態のため、
+読み込みには `process.stdin.resume()` の呼び出しが必須です。
+`process.stdin.resume()` を呼び出すことにより、それ自体がストリームを
+"old" モードに切り替えることに注意してください。
+
+<!--
+If you are starting a new project you should prefer a more recent "new" Streams
+mode over "old" one.
+-->
+
+もし新しいプロジェクトを始めるなら、"old" よりも
+"new" ストリームを好むべきです。
 
 ## process.argv
 

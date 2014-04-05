@@ -1088,11 +1088,14 @@ Alternatively, you could just opt out of pooling entirely using `agent:false`:
 
 <!--
 By default set to 5. Determines how many concurrent sockets the agent can have
-open per host.
+open per origin. Origin is either a 'host:port' or 'host:port:localAddress'
+combination.
 -->
 
 デフォルトでは 5 に設定されます。
-エージェントがいくつのソケットを並行にオープンするかを決定します。
+エージェントがオリジン毎にいくつのソケットを並行にオープンするかを決定します。
+オリジンは `'host:port'` または `'host:port:localAddress'`
+の組み合わせのいずれかです。
 
 ### agent.sockets
 
