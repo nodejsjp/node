@@ -92,22 +92,22 @@ First we create a file `hello.cc`:
 最初に `hello.cc` というファイルを作成します:
 
 
+    // hello.cc
     #include <node.h>
 
     using namespace v8;
 
-    Handle<Value> Method(const Arguments& args) {
+    void Method(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
-      return scope.Close(String::New("world"));
+      args.GetReturnValue().Set(String::NewFromUtf8(isolate, "world"));
     }
 
     void init(Handle<Object> exports) {
-      exports->Set(String::NewSymbol("hello"),
-          FunctionTemplate::New(Method)->GetFunction());
+      NODE_SET_METHOD(exports, "hello", Method);
     }
 
-    NODE_MODULE(hello, init)
+    NODE_MODULE(addon, init)
 
 <!--
 Note that all Node addons must export an initialization function:
@@ -126,7 +126,7 @@ There is no semi-colon after `NODE_MODULE` as it's not a function (see
 The `module_name` needs to match the filename of the final binary (minus the
 .node suffix).
 
-The source code needs to be built into `hello.node`, the binary Addon. To
+The source code needs to be built into `addon.node`, the binary Addon. To
 do this we create a file called `binding.gyp` which describes the configuration
 to build your module in a JSON-like format. This file gets compiled by
 [node-gyp](https://github.com/TooTallNate/node-gyp).
@@ -138,7 +138,7 @@ to build your module in a JSON-like format. This file gets compiled by
 `module_name` は最終的なバイナリのファイル名 (拡張子 .node を除く)
 とマッチする必要があります。
 
-このソースコードは、`hello.node` というバイナリアドオンとしてビルドされる必要が有ります。
+このソースコードは、`addon.node` というバイナリアドオンとしてビルドされる必要が有ります。
 そのために `binding.gyp` と呼ばれる、あなたのモジュールをビルドするための
 構成を JSON 的なフォーマットで記述したファイルを作成します。
 このファイルは [node-gyp](https://github.com/TooTallNate/node-gyp)
@@ -147,7 +147,7 @@ to build your module in a JSON-like format. This file gets compiled by
     {
       "targets": [
         {
-          "target_name": "hello",
+          "target_name": "addon",
           "sources": [ "hello.cc" ]
         }
       ]
@@ -189,7 +189,8 @@ You can now use the binary addon in a Node project `hello.js` by pointing
 このバイナリアドオンを Node プロジェクトの `hello.js` から利用することが
 可能になります。
 
-    var addon = require('./build/Release/hello');
+    // hello.js
+    var addon = require('./build/Release/addon');
 
     console.log(addon.hello()); // 'world'
 
@@ -269,33 +270,35 @@ function calls and return a result. This is the main and only needed source
 以下のパターンは JavaScript から呼び出された関数で引数を読み出したり、
 結果を返す方法を示します。これは `addon.cc` でのみ必要となります。
 
+    // addon.cc
     #include <node.h>
 
     using namespace v8;
 
-    Handle<Value> Add(const Arguments& args) {
+    void Add(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       if (args.Length() < 2) {
-        ThrowException(Exception::TypeError(
-            String::New("Wrong number of arguments")));
-        return scope.Close(Undefined(isolate));
+        isolate->ThrowException(Exception::TypeError(
+            String::NewFromUtf8(isolate, "Wrong number of arguments")));
+        return;
       }
 
       if (!args[0]->IsNumber() || !args[1]->IsNumber()) {
-        ThrowException(Exception::TypeError(String::New("Wrong arguments")));
-        return scope.Close(Undefined(isolate));
+        isolate->ThrowException(Exception::TypeError(
+            String::NewFromUtf8(isolate, "Wrong arguments")));
+        return;
       }
 
       Local<Number> num = Number::New(args[0]->NumberValue() +
           args[1]->NumberValue());
-      return scope.Close(num);
+
+      args.GetReturnValue().Set(num);
     }
 
     void Init(Handle<Object> exports) {
-      exports->Set(String::NewSymbol("add"),
-          FunctionTemplate::New(Add)->GetFunction());
+      NODE_SET_METHOD(exports, "add", Add);
     }
 
     NODE_MODULE(addon, Init)
@@ -306,6 +309,7 @@ You can test it with the following JavaScript snippet:
 
 以下の JavaScript コード片でテストすることができます。
 
+    // test.js
     var addon = require('./build/Release/addon');
 
     console.log( 'This should be eight:', addon.add(3,5) );
@@ -321,25 +325,23 @@ there. Here's `addon.cc`:
 JavaScript の関数を C++ の関数に渡してそこから呼び出すことができます。
 これは `addon.cc` です:
 
+    // addon.cc
     #include <node.h>
 
     using namespace v8;
 
-    Handle<Value> RunCallback(const Arguments& args) {
+    void RunCallback(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       Local<Function> cb = Local<Function>::Cast(args[0]);
       const unsigned argc = 1;
-      Local<Value> argv[argc] = { String::New("hello world") };
+      Local<Value> argv[argc] = { String::NewFromUtf8(isolate, "hello world") };
       cb->Call(Context::GetCurrent()->Global(), argc, argv);
-
-      return scope.Close(Undefined(isolate));
     }
 
     void Init(Handle<Object> exports, Handle<Object> module) {
-      module->Set(String::NewSymbol("exports"),
-          FunctionTemplate::New(RunCallback)->GetFunction());
+      NODE_SET_METHOD(module, "exports", RunCallback);
     }
 
     NODE_MODULE(addon, Init)
@@ -362,6 +364,7 @@ To test it run the following JavaScript snippet:
 
 以下の JavaScript コード片でテストすることができます。
 
+    // test.js
     var addon = require('./build/Release/addon');
 
     addon(function(msg){
@@ -381,23 +384,23 @@ C++ 関数の中から新しいオブジェクトを作成して返すことが�
 以下の `addon.cc` のパターンでは、`createObject()` に渡された文字列を
 反映する `msg` プロパティを持ったオブジェクトを返します。
 
+    // addon.cc
     #include <node.h>
 
     using namespace v8;
 
-    Handle<Value> CreateObject(const Arguments& args) {
+    void CreateObject(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       Local<Object> obj = Object::New();
-      obj->Set(String::NewSymbol("msg"), args[0]->ToString());
+      obj->Set(String::NewFromUtf8(isolate, "msg"), args[0]->ToString());
 
-      return scope.Close(obj);
+      args.GetReturnValue().Set(obj);
     }
 
     void Init(Handle<Object> exports, Handle<Object> module) {
-      module->Set(String::NewSymbol("exports"),
-          FunctionTemplate::New(CreateObject)->GetFunction());
+      NODE_SET_METHOD(module, "exports", CreateObject);
     }
 
     NODE_MODULE(addon, Init)
@@ -408,6 +411,7 @@ To test it in JavaScript:
 
 テスト用の JavaScript:
 
+    // test.js
     var addon = require('./build/Release/addon');
 
     var obj1 = addon('hello');
@@ -425,17 +429,18 @@ wraps a C++ function:
 このパターンは C++ 関数をラップした JavaScript 関数を作成して返す方法を
 示します。
 
+    // addon.cc
     #include <node.h>
 
     using namespace v8;
 
-    Handle<Value> MyFunction(const Arguments& args) {
+    void MyFunction(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
-      return scope.Close(String::New("hello world"));
+      args.GetReturnValue().Set(String::NewFromUtf8(isolate, "hello world"));
     }
 
-    Handle<Value> CreateFunction(const Arguments& args) {
+    void CreateFunction(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
@@ -443,14 +448,13 @@ wraps a C++ function:
       Local<Function> fn = tpl->GetFunction();
 
       // omit this to make it anonymous
-      fn->SetName(String::NewSymbol("theFunction"));
+      fn->SetName(String::NewFromUtf8(isolate, "theFunction"));
 
-      return scope.Close(fn);
+      args.GetReturnValue().Set(fn);
     }
 
     void Init(Handle<Object> exports, Handle<Object> module) {
-      module->Set(String::NewSymbol("exports"),
-          FunctionTemplate::New(CreateFunction)->GetFunction());
+      NODE_SET_METHOD(module, "exports", CreateFunction);
     }
 
     NODE_MODULE(addon, Init)
@@ -461,6 +465,7 @@ To test:
 
 テスト:
 
+    // test.js
     var addon = require('./build/Release/addon');
 
     var fn = addon();
@@ -480,6 +485,7 @@ C++ オブジェクト／クラスをラップし、JavaScript から new 演算
 インスタンス化できる `MyObject` を作成します。
 最初にメインモジュール `addon.cc` を準備します:
 
+    // addon.cc
     #include <node.h>
     #include "myobject.h"
 
@@ -497,10 +503,12 @@ Then in `myobject.h` make your wrapper inherit from `node::ObjectWrap`:
 
 次に、`node::ObjectWrap` を継承したラッパーを `myobject.h` に作成します。
 
+    // myobject.h
     #ifndef MYOBJECT_H
     #define MYOBJECT_H
 
     #include <node.h>
+    #include <node_object_wrap.h>
 
     class MyObject : public node::ObjectWrap {
      public:
@@ -510,8 +518,8 @@ Then in `myobject.h` make your wrapper inherit from `node::ObjectWrap`:
       explicit MyObject(double value = 0);
       ~MyObject();
 
-      static v8::Handle<v8::Value> New(const v8::Arguments& args);
-      static v8::Handle<v8::Value> PlusOne(const v8::Arguments& args);
+      static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
+      static void PlusOne(const v8::FunctionCallbackInfo<v8::Value>& args);
       static v8::Persistent<v8::Function> constructor;
       double value_;
     };
@@ -527,8 +535,7 @@ prototype:
 公開したい様々なメソッドを `myobject.cc` に実装します。
 ここでは、コンストラクタに渡された値に加算する `plusOne` を公開しています:
 
-    #include <node.h>
-    #include <node_object_wrap.h>
+    // myobject.cc
     #include "myobject.h"
 
     using namespace v8;
@@ -546,20 +553,18 @@ prototype:
 
       // Prepare constructor template
       Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-      tpl->SetClassName(String::NewSymbol("MyObject"));
+      tpl->SetClassName(String::NewFromUtf8(isolate, "MyObject"));
       tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
       // Prototype
-      tpl->PrototypeTemplate()->Set(String::NewSymbol("plusOne"),
-          FunctionTemplate::New(PlusOne)->GetFunction());
+      NODE_SET_PROTOTYPE_METHOD(tpl, "plusOne", PlusOne);
 
-      Persistent<Function> constructor
-          = Persistent<Function>::New(isolate, tpl->GetFunction());
-
-      exports->Set(String::NewSymbol("MyObject"), constructor);
+      constructor.Reset(isolate, tpl->GetFunction());
+      exports->Set(String::NewFromUtf8(isolate, "MyObject"),
+                   tpl->GetFunction());
     }
 
-    Handle<Value> MyObject::New(const Arguments& args) {
+    void MyObject::New(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
@@ -568,23 +573,24 @@ prototype:
         double value = args[0]->IsUndefined() ? 0 : args[0]->NumberValue();
         MyObject* obj = new MyObject(value);
         obj->Wrap(args.This());
-        return args.This();
+        args.GetReturnValue().Set(args.This());
       } else {
         // Invoked as plain function `MyObject(...)`, turn into construct call.
         const int argc = 1;
         Local<Value> argv[argc] = { args[0] };
-        return scope.Close(constructor->NewInstance(argc, argv));
+        Local<Function> cons = Local<Function>::New(isolate, constructor);
+        args.GetReturnValue().Set(cons->NewInstance(argc, argv));
       }
     }
 
-    Handle<Value> MyObject::PlusOne(const Arguments& args) {
+    void MyObject::PlusOne(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       MyObject* obj = ObjectWrap::Unwrap<MyObject>(args.This());
       obj->value_ += 1;
 
-      return scope.Close(Number::New(obj->value_));
+      args.GetReturnValue().Set(Number::New(obj->value_));
     }
 
 <!--
@@ -593,6 +599,7 @@ Test it with:
 
 これでテストします:
 
+    // test.js
     var addon = require('./build/Release/addon');
 
     var obj = new addon.MyObject(10);
@@ -620,22 +627,22 @@ Let's register our `createObject` method in `addon.cc`:
 
 createObject` を `addon.cc` に登録しましょう:
 
+    // addon.cc
     #include <node.h>
     #include "myobject.h"
 
     using namespace v8;
 
-    Handle<Value> CreateObject(const Arguments& args) {
+    void CreateObject(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
-      return scope.Close(MyObject::NewInstance(args));
+      MyObject::NewInstance(args);
     }
 
     void InitAll(Handle<Object> exports, Handle<Object> module) {
       MyObject::Init();
 
-      module->Set(String::NewSymbol("exports"),
-          FunctionTemplate::New(CreateObject)->GetFunction());
+      NODE_SET_METHOD(module, "exports", CreateObject);
     }
 
     NODE_MODULE(addon, InitAll)
@@ -648,22 +655,24 @@ care of instantiating the object (i.e. it does the job of `new` in JavaScript):
 `myobject.h` にオブジェクトを生成する static メソッド `NewInstance` を
 導入しましょう (すなわち，それが JavaScript 内の `new` の働きをします)。
 
+    // myobject.h
     #ifndef MYOBJECT_H
     #define MYOBJECT_H
 
     #include <node.h>
+    #include <node_object_wrap.h>
 
     class MyObject : public node::ObjectWrap {
      public:
       static void Init();
-      static v8::Handle<v8::Value> NewInstance(const v8::Arguments& args);
+      static void NewInstance(const v8::FunctionCallbackInfo<v8::Value>& args);
 
      private:
       explicit MyObject(double value = 0);
       ~MyObject();
 
-      static v8::Handle<v8::Value> New(const v8::Arguments& args);
-      static v8::Handle<v8::Value> PlusOne(const v8::Arguments& args);
+      static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
+      static void PlusOne(const v8::FunctionCallbackInfo<v8::Value>& args);
       static v8::Persistent<v8::Function> constructor;
       double value_;
     };
@@ -676,6 +685,7 @@ The implementation is similar to the above in `myobject.cc`:
 
 実装は前述の `myobject.cc` と同様です:
 
+    // myobject.cc
     #include <node.h>
     #include "myobject.h"
 
@@ -693,17 +703,16 @@ The implementation is similar to the above in `myobject.cc`:
       Isolate* isolate = Isolate::GetCurrent();
       // Prepare constructor template
       Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-      tpl->SetClassName(String::NewSymbol("MyObject"));
+      tpl->SetClassName(String::NewFromUtf8(isolate, "MyObject"));
       tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
       // Prototype
-      tpl->PrototypeTemplate()->Set(String::NewSymbol("plusOne"),
-          FunctionTemplate::New(PlusOne)->GetFunction());
+      NODE_SET_PROTOTYPE_METHOD(tpl, "plusOne", PlusOne);
 
-      constructor = Persistent<Function>::New(isolate, tpl->GetFunction());
+      constructor.Reset(isolate, tpl->GetFunction());
     }
 
-    Handle<Value> MyObject::New(const Arguments& args) {
+    void MyObject::New(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
@@ -712,34 +721,36 @@ The implementation is similar to the above in `myobject.cc`:
         double value = args[0]->IsUndefined() ? 0 : args[0]->NumberValue();
         MyObject* obj = new MyObject(value);
         obj->Wrap(args.This());
-        return args.This();
+        args.GetReturnValue().Set(args.This());
       } else {
         // Invoked as plain function `MyObject(...)`, turn into construct call.
         const int argc = 1;
         Local<Value> argv[argc] = { args[0] };
-        return scope.Close(constructor->NewInstance(argc, argv));
+        Local<Function> cons = Local<Function>::New(isolate, constructor);
+        args.GetReturnValue().Set(cons->NewInstance(argc, argv));
       }
     }
 
-    Handle<Value> MyObject::NewInstance(const Arguments& args) {
+    void MyObject::NewInstance(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       const unsigned argc = 1;
       Handle<Value> argv[argc] = { args[0] };
-      Local<Object> instance = constructor->NewInstance(argc, argv);
+      Local<Function> cons = Local<Function>::New(isolate, constructor);
+      Local<Object> instance = cons->NewInstance(argc, argv);
 
-      return scope.Close(instance);
+      args.GetReturnValue().Set(instance);
     }
 
-    Handle<Value> MyObject::PlusOne(const Arguments& args) {
+    void MyObject::PlusOne(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       MyObject* obj = ObjectWrap::Unwrap<MyObject>(args.This());
       obj->value_ += 1;
 
-      return scope.Close(Number::New(obj->value_));
+      args.GetReturnValue().Set(Number::New(obj->value_));
     }
 
 <!--
@@ -748,6 +759,7 @@ Test it with:
 
 これでテストします:
 
+    // test.js
     var createObject = require('./build/Release/addon');
 
     var obj = createObject(10);
@@ -775,19 +787,20 @@ C++ オブジェクトをラップして返すことに加えて、Node が提�
 以下の `addon.cc` では、二つの `MyObject` オブジェクトを受け取る `add()`
 関数を導入します:
 
+    // addon.cc
     #include <node.h>
     #include <node_object_wrap.h>
     #include "myobject.h"
 
     using namespace v8;
 
-    Handle<Value> CreateObject(const Arguments& args) {
+    void CreateObject(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
-      return scope.Close(MyObject::NewInstance(args));
+      MyObject::NewInstance(args);
     }
 
-    Handle<Value> Add(const Arguments& args) {
+    void Add(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
@@ -796,18 +809,15 @@ C++ オブジェクトをラップして返すことに加えて、Node が提�
       MyObject* obj2 = node::ObjectWrap::Unwrap<MyObject>(
           args[1]->ToObject());
 
-      double sum = obj1->Value() + obj2->Value();
-      return scope.Close(Number::New(sum));
+      double sum = obj1->value() + obj2->value();
+      args.GetReturnValue().Set(Number::New(sum));
     }
 
     void InitAll(Handle<Object> exports) {
       MyObject::Init();
 
-      exports->Set(String::NewSymbol("createObject"),
-          FunctionTemplate::New(CreateObject)->GetFunction());
-
-      exports->Set(String::NewSymbol("add"),
-          FunctionTemplate::New(Add)->GetFunction());
+      NODE_SET_METHOD(exports, "createObject", CreateObject);
+      NODE_SET_METHOD(exports, "add", Add);
     }
 
     NODE_MODULE(addon, InitAll)
@@ -821,6 +831,7 @@ can probe private values after unwrapping the object:
 したがって、アンラップされたオブジェクトのプライベート変数を調べることが
 できます。
 
+    // myobject.h
     #ifndef MYOBJECT_H
     #define MYOBJECT_H
 
@@ -830,14 +841,14 @@ can probe private values after unwrapping the object:
     class MyObject : public node::ObjectWrap {
      public:
       static void Init();
-      static v8::Handle<v8::Value> NewInstance(const v8::Arguments& args);
-      double Value() const { return value_; }
+      static void NewInstance(const v8::FunctionCallbackInfo<v8::Value>& args);
+      inline double value() const { return value_; }
 
      private:
       explicit MyObject(double value = 0);
       ~MyObject();
 
-      static v8::Handle<v8::Value> New(const v8::Arguments& args);
+      static void New(const v8::FunctionCallbackInfo<v8::Value>& args);
       static v8::Persistent<v8::Function> constructor;
       double value_;
     };
@@ -850,6 +861,7 @@ The implementation of `myobject.cc` is similar as before:
 
 `myobject.cc` の実装はこれまでと同様です:
 
+    // myobject.cc
     #include <node.h>
     #include "myobject.h"
 
@@ -868,13 +880,13 @@ The implementation of `myobject.cc` is similar as before:
 
       // Prepare constructor template
       Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-      tpl->SetClassName(String::NewSymbol("MyObject"));
+      tpl->SetClassName(String::NewFromUtf8(isolate, "MyObject"));
       tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
-      constructor = Persistent<Function>::New(isolate, tpl->GetFunction());
+      constructor.Reset(isolate, tpl->GetFunction());
     }
 
-    Handle<Value> MyObject::New(const Arguments& args) {
+    void MyObject::New(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
@@ -883,24 +895,26 @@ The implementation of `myobject.cc` is similar as before:
         double value = args[0]->IsUndefined() ? 0 : args[0]->NumberValue();
         MyObject* obj = new MyObject(value);
         obj->Wrap(args.This());
-        return args.This();
+        args.GetReturnValue().Set(args.This());
       } else {
         // Invoked as plain function `MyObject(...)`, turn into construct call.
         const int argc = 1;
         Local<Value> argv[argc] = { args[0] };
-        return scope.Close(constructor->NewInstance(argc, argv));
+        Local<Function> cons = Local<Function>::New(isolate, constructor);
+        args.GetReturnValue().Set(cons->NewInstance(argc, argv));
       }
     }
 
-    Handle<Value> MyObject::NewInstance(const Arguments& args) {
+    void MyObject::NewInstance(const FunctionCallbackInfo<Value>& args) {
       Isolate* isolate = Isolate::GetCurrent();
       HandleScope scope(isolate);
 
       const unsigned argc = 1;
       Handle<Value> argv[argc] = { args[0] };
-      Local<Object> instance = constructor->NewInstance(argc, argv);
+      Local<Function> cons = Local<Function>::New(isolate, constructor);
+      Local<Object> instance = cons->NewInstance(argc, argv);
 
-      return scope.Close(instance);
+      args.GetReturnValue().Set(instance);
     }
 
 <!--
@@ -909,6 +923,7 @@ Test it with:
 
 これでテストします:
 
+    // test.js
     var addon = require('./build/Release/addon');
 
     var obj1 = addon.createObject(10);

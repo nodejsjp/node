@@ -635,7 +635,7 @@ Use `env` to specify environment variables that will be visible to the new proce
 Example of running `ls -lh /usr`, capturing `stdout`, `stderr`, and the exit code:
 -->
 
-ls -lh /usr` を実行して `stdout`、`stderr`、および終了コードを取得する例:
+`ls -lh /usr` を実行して `stdout`、`stderr`、および終了コードを取得する例:
 
     var spawn = require('child_process').spawn,
         ls    = spawn('ls', ['-lh', '/usr']);
@@ -748,7 +748,9 @@ index corresponds to a fd in the child.  The value is one of the following:
 4. `Stream` object - Share a readable or writable stream that refers to a tty,
    file, socket, or a pipe with the child process. The stream's underlying
    file descriptor is duplicated in the child process to the fd that 
-   corresponds to the index in the `stdio` array.
+   corresponds to the index in the `stdio` array. Note that the stream must
+   have an underlying descriptor (file streams do not until the `'open'`
+   event has occurred).
 5. Positive integer - The integer value is interpreted as a file descriptor 
    that is is currently open in the parent process. It is shared with the child
    process, similar to how `Stream` objects can be shared.
@@ -778,6 +780,9 @@ index corresponds to a fd in the child.  The value is one of the following:
    読み込みまたは書き込み可能なストリームを子プロセスと共有します。
    ストリームの下層にあるファイル記述子は、子プロセスの `stdio` 配列の
    対応する位置にコピーされます。
+   ストリームは下層のファイル記述を持っていなければならないことに
+   注意してください (ファイルストリームは `'open'` イベントが発生するまで
+   それを持ちません)。
 5. 非負整数 - 整数の値を親プロセスが現在オープンしているファイル記述子として
    解釈されます。
    それは `Stream` オブジェクトの場合と同様に子プロセスに共有されます。
@@ -994,7 +999,7 @@ the child process is killed.
 `maxBuffer` は標準出力と標準エラーの最大のデータ量を指定します － この値を超えると子プロセスは kill されます。
 
 
-## child_process.execFile(file, args, options, callback)
+## child_process.execFile(file, [args], [options], [callback])
 
 <!--
 * `file` {String} The filename of the program to run
@@ -1051,8 +1056,10 @@ leaner than `child_process.exec`. It has the same options.
   * `execPath` {String} Executable used to create the child process
   * `execArgv` {Array} List of string arguments passed to the executable
     (Default: `process.execArgv`)
-  * `silent` {Boolean} If true, prevent stdout and stderr in the spawned node
-    process from being associated with the parent's (default is false)
+  * `silent` {Boolean} If true, stdin, stdout, and stderr of the child will be
+    piped to the parent, otherwise they will be inherited from the parent, see
+    the "pipe" and "inherit" options for `spawn()`'s `stdio` for more details
+    (default is false)
 * Return: ChildProcess object
 -->
 
@@ -1065,8 +1072,11 @@ leaner than `child_process.exec`. It has the same options.
   * `execPath` {String} 子プロセスの作成に使われる実行ファイル
   * `execArgv` {Array} 実行ファイルに渡される引数を表す文字列の配列
     (デフォルトは `process.execArgv`)。
-  * `silent` {Boolean} `true` の場合、起動された子プロセスの標準入力と標準出力が
-    親プロセスに関連づけられるのを抑止します (デフォルトは `false`)。
+  * `silent` {Boolean} `true` の場合、子プロセスの標準入力、標準出力、
+    標準エラー出力は親プロセスにパイプされます。
+    そうでない場合は親プロセスから継承します。
+    より詳細は `spawn()` の `pipe` および `inherit` オプションを参照してください
+    (デフォルトは `false`)。
 * Return: ChildProcess object
 
 <!--

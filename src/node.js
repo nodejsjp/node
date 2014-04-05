@@ -224,11 +224,14 @@
       // First run through error handlers from asyncListener.
       var caught = _errorHandler(er);
 
+      if (process.domain && process.domain._errorHandler)
+        caught = process.domain._errorHandler(er) || caught;
+
       if (!caught)
         caught = process.emit('uncaughtException', er);
 
-      // If someone handled it, then great. Otherwise die in C++ since
-      // that means we'll exit the process, emit the 'exit' event.
+      // If someone handled it, then great.  otherwise, die in C++ land
+      // since that means that we'll exit the process, emit the 'exit' event
       if (!caught) {
         try {
           if (!process._exiting) {
@@ -253,9 +256,19 @@
   };
 
   startup.processAsyncListener = function() {
-    var asyncStack = [];
-    var asyncQueue = [];
-    var uid = 0;
+    // new Array() is used here because it is more efficient for sparse
+    // arrays. Please *do not* change these to simple bracket notation.
+
+    // Track the active queue of AsyncListeners that have been added.
+    var asyncQueue = new Array();
+
+    // Keep the stack of all contexts that have been loaded in the
+    // execution chain of asynchronous events.
+    var contextStack = new Array();
+    var currentContext = undefined;
+
+    // Incremental uid for new AsyncListener instances.
+    var alUid = 0;
 
     // Stateful flags shared with Environment for quick JS/C++
     // communication.
@@ -269,7 +282,13 @@
     var inErrorTick = false;
 
     // Needs to be the same as src/env.h
-    var kCount = 0;
+    var kHasListener = 0;
+
+    // Flags to determine what async listeners are available.
+    var HAS_CREATE_AL = 1 << 0;
+    var HAS_BEFORE_AL = 1 << 1;
+    var HAS_AFTER_AL = 1 << 2;
+    var HAS_ERROR_AL = 1 << 3;
 
     // _errorHandler is scoped so it's also accessible by _fatalException.
     _errorHandler = errorHandler;
@@ -291,184 +310,153 @@
     process._setupAsyncListener(asyncFlags,
                                 runAsyncQueue,
                                 loadAsyncQueue,
-                                unloadAsyncQueue,
-                                pushListener,
-                                stripListener);
+                                unloadAsyncQueue);
 
-    function popQueue() {
-      if (asyncStack.length > 0)
-        asyncQueue = asyncStack.pop();
-      else
-        asyncQueue = [];
+    // Load the currently executing context as the current context, and
+    // create a new asyncQueue that can receive any added queue items
+    // during the executing of the callback.
+    function loadContext(ctx) {
+      contextStack.push(currentContext);
+      currentContext = ctx;
+
+      asyncFlags[kHasListener] = 1;
+    }
+
+    function unloadContext() {
+      currentContext = contextStack.pop();
+
+      if (currentContext === undefined && asyncQueue.length === 0)
+        asyncFlags[kHasListener] = 0;
     }
 
     // Run all the async listeners attached when an asynchronous event is
     // instantiated.
     function runAsyncQueue(context) {
-      var queue = [];
-      var queueItem, item, i, value;
-
-      inAsyncTick = true;
-      for (i = 0; i < asyncQueue.length; i++) {
-        queueItem = asyncQueue[i];
-        // Not passing "this" context because it hasn't actually been
-        // instantiated yet, so accessing some of the object properties
-        // can cause a segfault.
-        // Passing the original value will allow users to manipulate the
-        // original value object, while also allowing them to return a
-        // new value for current async call tracking.
-        value = queueItem.listener(queueItem.value);
-        if (typeof value !== 'undefined') {
-          item = {
-            callbacks: queueItem.callbacks,
-            value: value,
-            listener: queueItem.listener,
-            uid: queueItem.uid
-          };
-        } else {
-          item = queueItem;
-        }
-        queue[i] = item;
-      }
-      inAsyncTick = false;
+      var queue = new Array();
+      var data = new Array();
+      var ccQueue, i, item, queueItem, value;
 
       context._asyncQueue = queue;
-    }
+      context._asyncData = data;
+      context._asyncFlags = 0;
 
-    // Uses the _asyncQueue object attached by runAsyncQueue.
-    function loadAsyncQueue(context) {
-      var queue = context._asyncQueue;
-      var item, before, i;
-
-      asyncStack.push(asyncQueue);
-      asyncQueue = queue.slice();
-      // Since the async listener callback is required, the number of
-      // objects in the asyncQueue implies the number of async listeners
-      // there are to be processed.
-      asyncFlags[kCount] = queue.length;
-
-      // Run "before" callbacks.
       inAsyncTick = true;
-      for (i = 0; i < queue.length; i++) {
-        item = queue[i];
-        if (!item.callbacks)
-          continue;
-        before = item.callbacks.before;
-        if (typeof before === 'function')
-          before(context, item.value);
-      }
-      inAsyncTick = false;
-    }
 
-    // Unload one level of the async stack. Returns true if there are
-    // still listeners somewhere in the stack.
-    function unloadAsyncQueue(context) {
-      var queue = context._asyncQueue;
-      var item, after, i;
-
-      // Run "after" callbacks.
-      inAsyncTick = true;
-      for (i = 0; i < queue.length; i++) {
-        item = queue[i];
-        if (!item.callbacks)
-          continue;
-        after = item.callbacks.after;
-        if (typeof after === 'function')
-          after(context, item.value);
-      }
-      inAsyncTick = false;
-
-      // Unload the current queue from the stack.
-      popQueue();
-
-      asyncFlags[kCount] = asyncQueue.length;
-
-      return asyncQueue.length > 0 || asyncStack.length > 0;
-    }
-
-    // Create new async listener object. Useful when instantiating a new
-    // object and want the listener instance, but not add it to the stack.
-    function createAsyncListener(listener, callbacks, value) {
-      return {
-        callbacks: callbacks,
-        value: value,
-        listener: listener,
-        uid: uid++
-      };
-    }
-
-    // Add a listener to the current queue.
-    function addAsyncListener(listener, callbacks, value) {
-      // Accept new listeners or previous created listeners.
-      if (typeof listener === 'function')
-        callbacks = createAsyncListener(listener, callbacks, value);
-      else
-        callbacks = listener;
-
-      var inQueue = false;
-      // The asyncQueue will be small. Probably always <= 3 items.
-      for (var i = 0; i < asyncQueue.length; i++) {
-        if (callbacks.uid === asyncQueue[i].uid) {
-          inQueue = true;
-          break;
-        }
-      }
-
-      // Make sure the callback doesn't already exist in the queue.
-      if (!inQueue)
-        asyncQueue.push(callbacks);
-
-      asyncFlags[kCount] = asyncQueue.length;
-      return callbacks;
-    }
-
-    // Remove listener from the current queue and the entire stack.
-    function removeAsyncListener(obj) {
-      var i, j;
-
-      for (i = 0; i < asyncQueue.length; i++) {
-        if (obj.uid === asyncQueue[i].uid) {
-          asyncQueue.splice(i, 1);
-          break;
-        }
-      }
-
-      for (i = 0; i < asyncStack.length; i++) {
-        for (j = 0; j < asyncStack[i].length; j++) {
-          if (obj.uid === asyncStack[i][j].uid) {
-            asyncStack[i].splice(j, 1);
-            break;
+      // First run through all callbacks in the currentContext. These may
+      // add new AsyncListeners to the asyncQueue during execution. Hence
+      // why they need to be evaluated first.
+      if (currentContext) {
+        ccQueue = currentContext._asyncQueue;
+        context._asyncFlags |= currentContext._asyncFlags;
+        for (i = 0; i < ccQueue.length; i++) {
+          queueItem = ccQueue[i];
+          queue[queue.length] = queueItem;
+          if ((queueItem.flags & HAS_CREATE_AL) === 0) {
+            data[queueItem.uid] = queueItem.data;
+            continue;
           }
+          value = queueItem.create(queueItem.data);
+          data[queueItem.uid] = (value === undefined) ? queueItem.data : value;
         }
       }
 
-      asyncFlags[kCount] = asyncQueue.length;
+      // Then run through all items in the asyncQueue
+      if (asyncQueue) {
+        for (i = 0; i < asyncQueue.length; i++) {
+          queueItem = asyncQueue[i];
+          // Quick way to check if an AL instance with the same uid was
+          // already run from currentContext.
+          if (data[queueItem.uid] !== undefined)
+            continue;
+          queue[queue.length] = queueItem;
+          context._asyncFlags |= queueItem.flags;
+          if ((queueItem.flags & HAS_CREATE_AL) === 0) {
+            data[queueItem.uid] = queueItem.data;
+            continue;
+          }
+          value = queueItem.create(queueItem.data);
+          data[queueItem.uid] = (value === undefined) ? queueItem.data : value;
+        }
+      }
+
+      inAsyncTick = false;
     }
 
-    // Error handler used by _fatalException to run through all error
-    // callbacks in the current asyncQueue.
-    function errorHandler(er) {
-      var handled = false;
-      var error, item, i;
+    // Load the AsyncListener queue attached to context and run all
+    // "before" callbacks, if they exist.
+    function loadAsyncQueue(context) {
+      loadContext(context);
 
+      if ((context._asyncFlags & HAS_BEFORE_AL) === 0)
+        return;
+
+      var queue = context._asyncQueue;
+      var data = context._asyncData;
+      var i, queueItem;
+
+      inAsyncTick = true;
+      for (i = 0; i < queue.length; i++) {
+        queueItem = queue[i];
+        if ((queueItem.flags & HAS_BEFORE_AL) > 0)
+          queueItem.before(context, data[queueItem.uid]);
+      }
+      inAsyncTick = false;
+    }
+
+    // Unload the AsyncListener queue attached to context and run all
+    // "after" callbacks, if they exist.
+    function unloadAsyncQueue(context) {
+      if ((context._asyncFlags & HAS_AFTER_AL) === 0) {
+        unloadContext();
+        return;
+      }
+
+      var queue = context._asyncQueue;
+      var data = context._asyncData;
+      var i, queueItem;
+
+      inAsyncTick = true;
+      for (i = 0; i < queue.length; i++) {
+        queueItem = queue[i];
+        if ((queueItem.flags & HAS_AFTER_AL) > 0)
+          queueItem.after(context, data[queueItem.uid]);
+      }
+      inAsyncTick = false;
+
+      unloadContext();
+    }
+
+    // Handle errors that are thrown while in the context of an
+    // AsyncListener. If an error is thrown from an AsyncListener
+    // callback error handlers will be called once more to report
+    // the error, then the application will die forcefully.
+    function errorHandler(er) {
       if (inErrorTick)
         return false;
 
+      var handled = false;
+      var i, queueItem, threw;
+
       inErrorTick = true;
-      for (i = 0; i < asyncQueue.length; i++) {
-        item = asyncQueue[i];
-        if (!item.callbacks)
-          continue;
-        error = item.callbacks.error;
-        if (typeof error === 'function') {
+
+      // First process error callbacks from the current context.
+      if (currentContext && (currentContext._asyncFlags & HAS_ERROR_AL) > 0) {
+        var queue = currentContext._asyncQueue;
+        var data = currentContext._asyncData;
+        for (i = 0; i < queue.length; i++) {
+          queueItem = queue[i];
+          if ((queueItem.flags & HAS_ERROR_AL) === 0)
+            continue;
           try {
-            var threw = true;
-            handled = error(item.value, er) || handled;
+            threw = true;
+            // While it would be possible to pass in currentContext, if
+            // the error is thrown from the "create" callback then there's
+            // a chance the object hasn't been fully constructed.
+            handled = queueItem.error(data[queueItem.uid], er) || handled;
             threw = false;
           } finally {
-            // If the error callback throws then we're going to die
-            // quickly with no chance of recovery. Only thing we're going
-            // to allow is execution of process exit event callbacks.
+            // If the error callback thew then die quickly. Only allow the
+            // exit events to be processed.
             if (threw) {
               process._exiting = true;
               process.emit('exit', 1);
@@ -476,51 +464,126 @@
           }
         }
       }
+
+      // Now process callbacks from any existing queue.
+      if (asyncQueue) {
+        for (i = 0; i < asyncQueue.length; i++) {
+          queueItem = asyncQueue[i];
+          if ((queueItem.flags & HAS_ERROR_AL) === 0 ||
+              (data && data[queueItem.uid] !== undefined))
+            continue;
+          try {
+            threw = true;
+            handled = queueItem.error(queueItem.data, er) || handled;
+            threw = false;
+          } finally {
+            // If the error callback thew then die quickly. Only allow the
+            // exit events to be processed.
+            if (threw) {
+              process._exiting = true;
+              process.emit('exit', 1);
+            }
+          }
+        }
+      }
+
       inErrorTick = false;
 
-      // Unload the current queue from the stack.
-      popQueue();
+      unloadContext();
+
+      // TODO(trevnorris): If the error was handled, should the after callbacks
+      // be fired anyways?
 
       return handled && !inAsyncTick;
     }
 
-    // Used by AsyncWrap::AddAsyncListener() to add an individual listener
-    // to the async queue. It will check the uid of the listener and only
-    // allow it to be added once.
-    function pushListener(obj) {
-      if (!this._asyncQueue)
-        this._asyncQueue = [];
+    // Instance function of an AsyncListener object.
+    function AsyncListenerInst(callbacks, data) {
+      if (typeof callbacks.create === 'function') {
+        this.create = callbacks.create;
+        this.flags |= HAS_CREATE_AL;
+      }
+      if (typeof callbacks.before === 'function') {
+        this.before = callbacks.before;
+        this.flags |= HAS_BEFORE_AL;
+      }
+      if (typeof callbacks.after === 'function') {
+        this.after = callbacks.after;
+        this.flags |= HAS_AFTER_AL;
+      }
+      if (typeof callbacks.error === 'function') {
+        this.error = callbacks.error;
+        this.flags |= HAS_ERROR_AL;
+      }
 
-      var queue = this._asyncQueue;
+      this.uid = ++alUid;
+      this.data = data === undefined ? null : data;
+    }
+    AsyncListenerInst.prototype.create = undefined;
+    AsyncListenerInst.prototype.before = undefined;
+    AsyncListenerInst.prototype.after = undefined;
+    AsyncListenerInst.prototype.error = undefined;
+    AsyncListenerInst.prototype.data = undefined;
+    AsyncListenerInst.prototype.uid = 0;
+    AsyncListenerInst.prototype.flags = 0;
+
+    // Create new async listener object. Useful when instantiating a new
+    // object and want the listener instance, but not add it to the stack.
+    // If an existing AsyncListenerInst is passed then any new "data" is
+    // ignored.
+    function createAsyncListener(callbacks, data) {
+      if (typeof callbacks !== 'object' || callbacks == null)
+        throw new TypeError('callbacks argument must be an object');
+
+      if (callbacks instanceof AsyncListenerInst)
+        return callbacks;
+      else
+        return new AsyncListenerInst(callbacks, data);
+    }
+
+    // Add a listener to the current queue.
+    function addAsyncListener(callbacks, data) {
+      // Fast track if a new AsyncListenerInst has to be created.
+      if (!(callbacks instanceof AsyncListenerInst)) {
+        callbacks = createAsyncListener(callbacks, data);
+        asyncQueue.push(callbacks);
+        asyncFlags[kHasListener] = 1;
+        return callbacks;
+      }
+
       var inQueue = false;
       // The asyncQueue will be small. Probably always <= 3 items.
-      for (var i = 0; i < queue.length; i++) {
-        if (obj.uid === queue.uid) {
+      for (var i = 0; i < asyncQueue.length; i++) {
+        if (callbacks === asyncQueue[i]) {
           inQueue = true;
           break;
         }
       }
 
-      if (!inQueue)
-        queue.push(obj);
+      // Make sure the callback doesn't already exist in the queue.
+      if (!inQueue) {
+        asyncQueue.push(callbacks);
+        asyncFlags[kHasListener] = 1;
+      }
+
+      return callbacks;
     }
 
-    // Used by AsyncWrap::RemoveAsyncListener() to remove an individual
-    // listener from the async queue, and return whether there are still
-    // listeners in the queue.
-    function stripListener(obj) {
-      if (!this._asyncQueue || this._asyncQueue.length === 0)
-        return false;
-
-      // The asyncQueue will be small. Probably always <= 3 items.
-      for (var i = 0; i < this._asyncQueue.length; i++) {
-        if (obj.uid === this._asyncQueue[i].uid) {
-          this._asyncQueue.splice(i, 1);
+    // Remove listener from the current queue. Though this will not remove
+    // the listener from the current context. So callback propagation will
+    // continue.
+    function removeAsyncListener(obj) {
+      for (var i = 0; i < asyncQueue.length; i++) {
+        if (obj === asyncQueue[i]) {
+          asyncQueue.splice(i, 1);
           break;
         }
       }
 
-      return this._asyncQueue.length > 0;
+      if (asyncQueue.length > 0 || currentContext !== undefined)
+        asyncFlags[kHasListener] = 1;
+      else
+        asyncFlags[kHasListener] = 0;
     }
   };
 
@@ -568,6 +631,7 @@
     process.nextTick = nextTick;
     // Needs to be accessible from beyond this scope.
     process._tickCallback = _tickCallback;
+    process._tickDomainCallback = _tickDomainCallback;
 
     process._setupNextTick(tickInfo, _tickCallback);
 
@@ -585,6 +649,7 @@
     }
 
     // Run callbacks that have no domain.
+    // Using domains will cause this to be overridden.
     function _tickCallback() {
       var callback, hasQueue, threw, tock;
 
@@ -611,6 +676,37 @@
       tickDone();
     }
 
+    function _tickDomainCallback() {
+      var callback, domain, hasQueue, threw, tock;
+
+      while (tickInfo[kIndex] < tickInfo[kLength]) {
+        tock = nextTickQueue[tickInfo[kIndex]++];
+        callback = tock.callback;
+        domain = tock.domain;
+        hasQueue = !!tock._asyncQueue;
+        if (hasQueue)
+          _loadAsyncQueue(tock);
+        if (domain)
+          domain.enter();
+        threw = true;
+        try {
+          callback();
+          threw = false;
+        } finally {
+          if (threw)
+            tickDone();
+        }
+        if (hasQueue)
+          _unloadAsyncQueue(tock);
+        if (1e4 < tickInfo[kIndex])
+          tickDone();
+        if (domain)
+          domain.exit();
+      }
+
+      tickDone();
+    }
+
     function nextTick(callback) {
       // on the way out, don't bother. it won't get fired anyway.
       if (process._exiting)
@@ -618,6 +714,7 @@
 
       var obj = {
         callback: callback,
+        domain: process.domain || null,
         _asyncQueue: undefined
       };
 
@@ -674,7 +771,7 @@
 
       case 'FILE':
         var fs = NativeModule.require('fs');
-        stream = new fs.SyncWriteStream(fd);
+        stream = new fs.SyncWriteStream(fd, { autoClose: false });
         stream._type = 'fs';
         break;
 
@@ -761,7 +858,7 @@
 
         case 'FILE':
           var fs = NativeModule.require('fs');
-          stdin = new fs.ReadStream(null, { fd: fd });
+          stdin = new fs.ReadStream(null, { fd: fd, autoClose: false });
           break;
 
         case 'PIPE':

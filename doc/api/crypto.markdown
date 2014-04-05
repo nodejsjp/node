@@ -32,6 +32,45 @@ decipher, sign and verify methods.
 同時に OpenSSL のハッシュ、HMAC、暗号、復号、署名、そして検証へのラッパーを一式提供します。
 
 
+## crypto.setEngine(engine, [flags])
+
+<!--
+Load and set engine for some/all OpenSSL functions (selected by flags).
+-->
+
+一部または全ての OpenSSL 関数のために、エンジンをロードまたは設定します
+(フラグによって選択されます)。
+
+<!--
+`engine` could be either an id or a path to the to the engine's shared library.
+-->
+
+`engine` は id か、エンジンの共有ライブラリへのパスかのいずれかです。
+
+<!--
+`flags` is optional and has `ENGINE_METHOD_ALL` value by default. It could take
+one of or mix of following flags (defined in `constants` module):
+-->
+
+`flags` はオプションで、デフォルトは `ENGINE_METHOD_ALL` です。
+以下のフラグから一つまたは組み合わせを指定することが出来ます
+(`constants` モジュールに定義されています)。
+
+* `ENGINE_METHOD_RSA`
+* `ENGINE_METHOD_DSA`
+* `ENGINE_METHOD_DH`
+* `ENGINE_METHOD_RAND`
+* `ENGINE_METHOD_ECDH`
+* `ENGINE_METHOD_ECDSA`
+* `ENGINE_METHOD_CIPHERS`
+* `ENGINE_METHOD_DIGESTS`
+* `ENGINE_METHOD_STORE`
+* `ENGINE_METHOD_PKEY_METH`
+* `ENGINE_METHOD_PKEY_ASN1_METH`
+* `ENGINE_METHOD_ALL`
+* `ENGINE_METHOD_NONE`
+
+
 ## crypto.getCiphers()
 
 <!--
@@ -966,20 +1005,42 @@ Example (obtaining a shared secret):
     /* alice_secret and bob_secret should be the same */
     console.log(alice_secret == bob_secret);
 
-## crypto.pbkdf2(password, salt, iterations, keylen, callback)
+## crypto.pbkdf2(password, salt, iterations, keylen, [digest], callback)
 
 <!--
-Asynchronous PBKDF2 applies pseudorandom function HMAC-SHA1 to derive
-a key of given length from the given password, salt and iterations.
-The callback gets two arguments `(err, derivedKey)`.
+Asynchronous PBKDF2 function.  Applies the selected HMAC digest function
+(default: SHA1) to derive a key of the requested length from the password,
+salt and number of iterations.  The callback gets two arguments:
+`(err, derivedKey)`.
 -->
 
-疑似乱数を HMAC-SHA1 関数に適用して、与えられたパスワードと salt 
-(ランダムなバイト値)、および繰り返しから、指定された長さの鍵を生成する、
-非同期の PBKDF2 です。
-コールバック関数は二つの引数を受け取る `(err, derivedKey)` です。
+非同期の PBKDF2 関数です。
+選択された HMAC ダイジェスト関数 (デフォルト: SHA1) を適用して、
+要求されたパスワード、salt、および繰り返しの数から、
+指定された長さの鍵を生成します。
+コールバック関数は二つの引数を受け取ります: `(err, derivedKey)`
 
-## crypto.pbkdf2Sync(password, salt, iterations, keylen)
+<!--
+Example:
+-->
+
+例:
+
+    crypto.pbkdf2('secret', 'salt', 4096, 512, 'sha256', function(err, key) {
+      if (err)
+        throw err;
+      console.log(key.toString('hex'));  // 'c5e478d...1469e50'
+    });
+
+<!--
+You can get a list of supported digest functions with
+[crypto.getHashes()](#crypto_crypto_gethashes).
+-->
+
+[crypto.getHashes()](#crypto_crypto_gethashes) からサポートされる
+ダイジェスト関数の一覧を得ることが出来ます。
+
+## crypto.pbkdf2Sync(password, salt, iterations, keylen, [digest])
 
 <!--
 Synchronous PBKDF2 function.  Returns derivedKey or throws error.

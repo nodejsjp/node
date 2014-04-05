@@ -83,6 +83,7 @@ using v8::FunctionTemplate;
 using v8::Handle;
 using v8::HandleScope;
 using v8::Integer;
+using v8::Isolate;
 using v8::Local;
 using v8::Null;
 using v8::Object;
@@ -222,7 +223,7 @@ bool EntropySource(unsigned char* buffer, size_t length) {
 void SecureContext::Initialize(Environment* env, Handle<Object> target) {
   Local<FunctionTemplate> t = FunctionTemplate::New(SecureContext::New);
   t->InstanceTemplate()->SetInternalFieldCount(1);
-  t->SetClassName(FIXED_ONE_BYTE_STRING(node_isolate, "SecureContext"));
+  t->SetClassName(FIXED_ONE_BYTE_STRING(env->isolate(), "SecureContext"));
 
   NODE_SET_PROTOTYPE_METHOD(t, "init", SecureContext::Init);
   NODE_SET_PROTOTYPE_METHOD(t, "setKey", SecureContext::SetKey);
@@ -242,7 +243,7 @@ void SecureContext::Initialize(Environment* env, Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "getTicketKeys", SecureContext::GetTicketKeys);
   NODE_SET_PROTOTYPE_METHOD(t, "setTicketKeys", SecureContext::SetTicketKeys);
 
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "SecureContext"),
+  target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "SecureContext"),
               t->GetFunction());
   env->set_secure_context_constructor_template(t);
 }
@@ -256,7 +257,7 @@ void SecureContext::New(const FunctionCallbackInfo<Value>& args) {
 
 
 void SecureContext::Init(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -382,7 +383,7 @@ static X509* LoadX509(Handle<Value> v) {
 
 
 void SecureContext::SetKey(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -488,7 +489,7 @@ int SSL_CTX_use_certificate_chain(SSL_CTX *ctx, BIO *in) {
 
 
 void SecureContext::SetCert(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -516,7 +517,7 @@ void SecureContext::SetCert(const FunctionCallbackInfo<Value>& args) {
 
 void SecureContext::AddCACert(const FunctionCallbackInfo<Value>& args) {
   bool newCAStore = false;
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -545,7 +546,7 @@ void SecureContext::AddCACert(const FunctionCallbackInfo<Value>& args) {
 
 
 void SecureContext::AddCRL(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -577,7 +578,7 @@ void SecureContext::AddCRL(const FunctionCallbackInfo<Value>& args) {
 
 
 void SecureContext::AddRootCerts(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -614,7 +615,7 @@ void SecureContext::AddRootCerts(const FunctionCallbackInfo<Value>& args) {
 
 
 void SecureContext::SetCiphers(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -628,7 +629,7 @@ void SecureContext::SetCiphers(const FunctionCallbackInfo<Value>& args) {
 
 
 void SecureContext::SetECDHCurve(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -655,7 +656,7 @@ void SecureContext::SetECDHCurve(const FunctionCallbackInfo<Value>& args) {
 
 
 void SecureContext::SetOptions(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -669,7 +670,7 @@ void SecureContext::SetOptions(const FunctionCallbackInfo<Value>& args) {
 
 void SecureContext::SetSessionIdContext(
     const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -692,12 +693,12 @@ void SecureContext::SetSessionIdContext(
 
   bio = BIO_new(BIO_s_mem());
   if (bio == NULL) {
-    message = FIXED_ONE_BYTE_STRING(node_isolate,
+    message = FIXED_ONE_BYTE_STRING(args.GetIsolate(),
                                     "SSL_CTX_set_session_id_context error");
   } else {
     ERR_print_errors(bio);
     BIO_get_mem_ptr(bio, &mem);
-    message = OneByteString(node_isolate, mem->data, mem->length);
+    message = OneByteString(args.GetIsolate(), mem->data, mem->length);
     BIO_free_all(bio);
   }
 
@@ -706,7 +707,7 @@ void SecureContext::SetSessionIdContext(
 
 
 void SecureContext::SetSessionTimeout(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SecureContext* sc = Unwrap<SecureContext>(args.This());
 
@@ -720,7 +721,7 @@ void SecureContext::SetSessionTimeout(const FunctionCallbackInfo<Value>& args) {
 
 
 void SecureContext::Close(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
   SecureContext* sc = Unwrap<SecureContext>(args.This());
   sc->FreeCTXMem();
 }
@@ -728,7 +729,7 @@ void SecureContext::Close(const FunctionCallbackInfo<Value>& args) {
 
 // Takes .pfx or .p12 and password in string or buffer format
 void SecureContext::LoadPKCS12(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   BIO* in = NULL;
   PKCS12* p12 = NULL;
@@ -819,7 +820,7 @@ void SecureContext::GetTicketKeys(const FunctionCallbackInfo<Value>& args) {
 
 void SecureContext::SetTicketKeys(const FunctionCallbackInfo<Value>& args) {
 #if !defined(OPENSSL_NO_TLSEXT) && defined(SSL_CTX_get_tlsext_ticket_keys)
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   if (args.Length() < 1 ||
       !Buffer::HasInstance(args[0]) ||
@@ -855,6 +856,10 @@ void SSLWrap<Base>::AddMethods(Handle<FunctionTemplate> t) {
   NODE_SET_PROTOTYPE_METHOD(t, "endParser", EndParser);
   NODE_SET_PROTOTYPE_METHOD(t, "renegotiate", Renegotiate);
   NODE_SET_PROTOTYPE_METHOD(t, "shutdown", Shutdown);
+
+#ifdef SSL_set_max_send_fragment
+  NODE_SET_PROTOTYPE_METHOD(t, "setMaxSendFragment", SetMaxSendFragment);
+#endif  // SSL_set_max_send_fragment
 
 #ifdef OPENSSL_NPN_NEGOTIATED
   NODE_SET_PROTOTYPE_METHOD(t, "getNegotiatedProtocol", GetNegotiatedProto);
@@ -962,10 +967,13 @@ void SSLWrap<Base>::OnClientHello(void* arg,
 template <class Base>
 void SSLWrap<Base>::GetPeerCertificate(
     const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
   Environment* env = w->ssl_env();
+
+  ClearErrorOnReturn clear_error_on_return;
+  (void) &clear_error_on_return;  // Silence unused variable warning.
 
   Local<Object> info = Object::New();
   X509* peer_cert = SSL_get_peer_certificate(w->ssl_);
@@ -978,7 +986,7 @@ void SSLWrap<Base>::GetPeerCertificate(
                            X509_NAME_FLAGS) > 0) {
       BIO_get_mem_ptr(bio, &mem);
       info->Set(env->subject_string(),
-                OneByteString(node_isolate, mem->data, mem->length));
+                OneByteString(args.GetIsolate(), mem->data, mem->length));
     }
     (void) BIO_reset(bio);
 
@@ -986,7 +994,7 @@ void SSLWrap<Base>::GetPeerCertificate(
     if (X509_NAME_print_ex(bio, issuer_name, 0, X509_NAME_FLAGS) > 0) {
       BIO_get_mem_ptr(bio, &mem);
       info->Set(env->issuer_string(),
-                OneByteString(node_isolate, mem->data, mem->length));
+                OneByteString(args.GetIsolate(), mem->data, mem->length));
     }
     (void) BIO_reset(bio);
 
@@ -1003,7 +1011,7 @@ void SSLWrap<Base>::GetPeerCertificate(
 
       BIO_get_mem_ptr(bio, &mem);
       info->Set(env->subjectaltname_string(),
-                OneByteString(node_isolate, mem->data, mem->length));
+                OneByteString(args.GetIsolate(), mem->data, mem->length));
 
       (void) BIO_reset(bio);
     }
@@ -1017,13 +1025,13 @@ void SSLWrap<Base>::GetPeerCertificate(
         BN_print(bio, rsa->n);
         BIO_get_mem_ptr(bio, &mem);
         info->Set(env->modulus_string(),
-                  OneByteString(node_isolate, mem->data, mem->length));
+                  OneByteString(args.GetIsolate(), mem->data, mem->length));
         (void) BIO_reset(bio);
 
         BN_print(bio, rsa->e);
         BIO_get_mem_ptr(bio, &mem);
         info->Set(env->exponent_string(),
-                  OneByteString(node_isolate, mem->data, mem->length));
+                  OneByteString(args.GetIsolate(), mem->data, mem->length));
         (void) BIO_reset(bio);
     }
 
@@ -1039,13 +1047,13 @@ void SSLWrap<Base>::GetPeerCertificate(
     ASN1_TIME_print(bio, X509_get_notBefore(peer_cert));
     BIO_get_mem_ptr(bio, &mem);
     info->Set(env->valid_from_string(),
-              OneByteString(node_isolate, mem->data, mem->length));
+              OneByteString(args.GetIsolate(), mem->data, mem->length));
     (void) BIO_reset(bio);
 
     ASN1_TIME_print(bio, X509_get_notAfter(peer_cert));
     BIO_get_mem_ptr(bio, &mem);
     info->Set(env->valid_to_string(),
-              OneByteString(node_isolate, mem->data, mem->length));
+              OneByteString(args.GetIsolate(), mem->data, mem->length));
     BIO_free_all(bio);
 
     unsigned int md_size, i;
@@ -1068,7 +1076,7 @@ void SSLWrap<Base>::GetPeerCertificate(
       }
 
       info->Set(env->fingerprint_string(),
-                OneByteString(node_isolate, fingerprint));
+                OneByteString(args.GetIsolate(), fingerprint));
     }
 
     STACK_OF(ASN1_OBJECT)* eku = static_cast<STACK_OF(ASN1_OBJECT)*>(
@@ -1080,7 +1088,7 @@ void SSLWrap<Base>::GetPeerCertificate(
       int j = 0;
       for (int i = 0; i < sk_ASN1_OBJECT_num(eku); i++) {
         if (OBJ_obj2txt(buf, sizeof(buf), sk_ASN1_OBJECT_value(eku, i), 1) >= 0)
-          ext_key_usage->Set(j++, OneByteString(node_isolate, buf));
+          ext_key_usage->Set(j++, OneByteString(args.GetIsolate(), buf));
       }
 
       sk_ASN1_OBJECT_pop_free(eku, ASN1_OBJECT_free);
@@ -1091,7 +1099,7 @@ void SSLWrap<Base>::GetPeerCertificate(
       if (BIGNUM* bn = ASN1_INTEGER_to_BN(serial_number, NULL)) {
         if (char* buf = BN_bn2hex(bn)) {
           info->Set(env->serial_number_string(),
-                    OneByteString(node_isolate, buf));
+                    OneByteString(args.GetIsolate(), buf));
           OPENSSL_free(buf);
         }
         BN_free(bn);
@@ -1107,7 +1115,7 @@ void SSLWrap<Base>::GetPeerCertificate(
 
 template <class Base>
 void SSLWrap<Base>::GetSession(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
 
@@ -1128,7 +1136,7 @@ void SSLWrap<Base>::GetSession(const FunctionCallbackInfo<Value>& args) {
 
 template <class Base>
 void SSLWrap<Base>::SetSession(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
 
@@ -1166,7 +1174,7 @@ void SSLWrap<Base>::SetSession(const FunctionCallbackInfo<Value>& args) {
 
 template <class Base>
 void SSLWrap<Base>::LoadSession(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
   Environment* env = w->ssl_env();
@@ -1186,10 +1194,10 @@ void SSLWrap<Base>::LoadSession(const FunctionCallbackInfo<Value>& args) {
     Local<Object> info = Object::New();
 #ifndef OPENSSL_NO_TLSEXT
     if (sess->tlsext_hostname == NULL) {
-      info->Set(env->servername_string(), False(node_isolate));
+      info->Set(env->servername_string(), False(args.GetIsolate()));
     } else {
       info->Set(env->servername_string(),
-                OneByteString(node_isolate, sess->tlsext_hostname));
+                OneByteString(args.GetIsolate(), sess->tlsext_hostname));
     }
 #endif
     args.GetReturnValue().Set(info);
@@ -1199,7 +1207,7 @@ void SSLWrap<Base>::LoadSession(const FunctionCallbackInfo<Value>& args) {
 
 template <class Base>
 void SSLWrap<Base>::IsSessionReused(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
   Base* w = Unwrap<Base>(args.This());
   bool yes = SSL_session_reused(w->ssl_);
   args.GetReturnValue().Set(yes);
@@ -1208,7 +1216,7 @@ void SSLWrap<Base>::IsSessionReused(const FunctionCallbackInfo<Value>& args) {
 
 template <class Base>
 void SSLWrap<Base>::EndParser(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
   Base* w = Unwrap<Base>(args.This());
   w->hello_parser_.End();
 }
@@ -1216,7 +1224,7 @@ void SSLWrap<Base>::EndParser(const FunctionCallbackInfo<Value>& args) {
 
 template <class Base>
 void SSLWrap<Base>::Renegotiate(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
 
@@ -1230,7 +1238,7 @@ void SSLWrap<Base>::Renegotiate(const FunctionCallbackInfo<Value>& args) {
 
 template <class Base>
 void SSLWrap<Base>::Shutdown(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
 
@@ -1239,41 +1247,55 @@ void SSLWrap<Base>::Shutdown(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+#ifdef SSL_set_max_send_fragment
+template <class Base>
+void SSLWrap<Base>::SetMaxSendFragment(
+    const v8::FunctionCallbackInfo<v8::Value>& args) {
+  HandleScope scope(node_isolate);
+  CHECK(args.Length() >= 1 && args[0]->IsNumber());
+
+  Base* w = Unwrap<Base>(args.This());
+
+  int rv = SSL_set_max_send_fragment(w->ssl_, args[0]->Int32Value());
+  args.GetReturnValue().Set(rv);
+}
+#endif  // SSL_set_max_send_fragment
+
+
 template <class Base>
 void SSLWrap<Base>::IsInitFinished(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
   Base* w = Unwrap<Base>(args.This());
   bool yes = SSL_is_init_finished(w->ssl_);
   args.GetReturnValue().Set(yes);
 }
 
 
-#define CASE_X509_ERR(CODE) case X509_V_ERR_##CODE: reason = #CODE; break;
 template <class Base>
 void SSLWrap<Base>::VerifyError(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
 
-  // XXX(indutny) Do this check in JS land?
-  X509* peer_cert = SSL_get_peer_certificate(w->ssl_);
-  if (peer_cert == NULL) {
-    // We requested a certificate and they did not send us one.
-    // Definitely an error.
-    // XXX(indutny) is this the right error message?
-    Local<String> s =
-        FIXED_ONE_BYTE_STRING(node_isolate, "UNABLE_TO_GET_ISSUER_CERT");
-    return args.GetReturnValue().Set(Exception::Error(s));
+  // XXX(bnoordhuis) The UNABLE_TO_GET_ISSUER_CERT error when there is no
+  // peer certificate is questionable but it's compatible with what was
+  // here before.
+  long x509_verify_error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT;
+  if (X509* peer_cert = SSL_get_peer_certificate(w->ssl_)) {
+    X509_free(peer_cert);
+    x509_verify_error = SSL_get_verify_result(w->ssl_);
   }
-  X509_free(peer_cert);
 
-  long x509_verify_error = SSL_get_verify_result(w->ssl_);
+  if (x509_verify_error == X509_V_OK)
+    return args.GetReturnValue().SetNull();
 
-  const char* reason = NULL;
-  Local<String> s;
+  // XXX(bnoordhuis) X509_verify_cert_error_string() is not actually thread-safe
+  // in the presence of invalid error codes.  Probably academical but something
+  // to keep in mind if/when node ever grows multi-isolate capabilities.
+  const char* reason = X509_verify_cert_error_string(x509_verify_error);
+  const char* code = reason;
+#define CASE_X509_ERR(CODE) case X509_V_ERR_##CODE: code = #CODE; break;
   switch (x509_verify_error) {
-    case X509_V_OK:
-      return args.GetReturnValue().SetNull();
     CASE_X509_ERR(UNABLE_TO_GET_ISSUER_CERT)
     CASE_X509_ERR(UNABLE_TO_GET_CRL)
     CASE_X509_ERR(UNABLE_TO_DECRYPT_CERT_SIGNATURE)
@@ -1301,23 +1323,22 @@ void SSLWrap<Base>::VerifyError(const FunctionCallbackInfo<Value>& args) {
     CASE_X509_ERR(INVALID_PURPOSE)
     CASE_X509_ERR(CERT_UNTRUSTED)
     CASE_X509_ERR(CERT_REJECTED)
-    default:
-      s = OneByteString(node_isolate,
-                        X509_verify_cert_error_string(x509_verify_error));
-      break;
   }
-
-  if (s.IsEmpty())
-    s = OneByteString(node_isolate, reason);
-
-  args.GetReturnValue().Set(Exception::Error(s));
-}
 #undef CASE_X509_ERR
+
+  Isolate* isolate = args.GetIsolate();
+  Local<String> reason_string = OneByteString(isolate, reason);
+  Local<Value> exception_value = Exception::Error(reason_string);
+  Local<Object> exception_object = exception_value->ToObject();
+  exception_object->Set(FIXED_ONE_BYTE_STRING(isolate, "code"),
+                        OneByteString(isolate, code));
+  args.GetReturnValue().Set(exception_object);
+}
 
 
 template <class Base>
 void SSLWrap<Base>::GetCurrentCipher(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
   Environment* env = w->ssl_env();
@@ -1328,9 +1349,10 @@ void SSLWrap<Base>::GetCurrentCipher(const FunctionCallbackInfo<Value>& args) {
 
   Local<Object> info = Object::New();
   const char* cipher_name = SSL_CIPHER_get_name(c);
-  info->Set(env->name_string(), OneByteString(node_isolate, cipher_name));
+  info->Set(env->name_string(), OneByteString(args.GetIsolate(), cipher_name));
   const char* cipher_version = SSL_CIPHER_get_version(c);
-  info->Set(env->version_string(), OneByteString(node_isolate, cipher_version));
+  info->Set(env->version_string(),
+            OneByteString(args.GetIsolate(), cipher_version));
   args.GetReturnValue().Set(info);
 }
 
@@ -1351,7 +1373,7 @@ int SSLWrap<Base>::AdvertiseNextProtoCallback(SSL* s,
     *data = reinterpret_cast<const unsigned char*>("");
     *len = 0;
   } else {
-    Local<Object> obj = PersistentToLocal(node_isolate, w->npn_protos_);
+    Local<Object> obj = PersistentToLocal(env->isolate(), w->npn_protos_);
     *data = reinterpret_cast<const unsigned char*>(Buffer::Data(obj));
     *len = Buffer::Length(obj);
   }
@@ -1382,12 +1404,12 @@ int SSLWrap<Base>::SelectNextProtoCallback(SSL* s,
     *outlen = 8;
 
     // set status: unsupported
-    w->selected_npn_proto_.Reset(node_isolate, False(node_isolate));
+    w->selected_npn_proto_.Reset(env->isolate(), False(env->isolate()));
 
     return SSL_TLSEXT_ERR_OK;
   }
 
-  Local<Object> obj = PersistentToLocal(node_isolate, w->npn_protos_);
+  Local<Object> obj = PersistentToLocal(env->isolate(), w->npn_protos_);
   const unsigned char* npn_protos =
       reinterpret_cast<const unsigned char*>(Buffer::Data(obj));
   size_t len = Buffer::Length(obj);
@@ -1396,20 +1418,20 @@ int SSLWrap<Base>::SelectNextProtoCallback(SSL* s,
   Handle<Value> result;
   switch (status) {
     case OPENSSL_NPN_UNSUPPORTED:
-      result = Null(node_isolate);
+      result = Null(env->isolate());
       break;
     case OPENSSL_NPN_NEGOTIATED:
-      result = OneByteString(node_isolate, *out, *outlen);
+      result = OneByteString(env->isolate(), *out, *outlen);
       break;
     case OPENSSL_NPN_NO_OVERLAP:
-      result = False(node_isolate);
+      result = False(env->isolate());
       break;
     default:
       break;
   }
 
   if (!result.IsEmpty())
-    w->selected_npn_proto_.Reset(node_isolate, result);
+    w->selected_npn_proto_.Reset(env->isolate(), result);
 
   return SSL_TLSEXT_ERR_OK;
 }
@@ -1418,7 +1440,7 @@ int SSLWrap<Base>::SelectNextProtoCallback(SSL* s,
 template <class Base>
 void SSLWrap<Base>::GetNegotiatedProto(
     const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
 
@@ -1438,20 +1460,20 @@ void SSLWrap<Base>::GetNegotiatedProto(
     return args.GetReturnValue().Set(false);
 
   args.GetReturnValue().Set(
-      OneByteString(node_isolate, npn_proto, npn_proto_len));
+      OneByteString(args.GetIsolate(), npn_proto, npn_proto_len));
 }
 
 
 template <class Base>
 void SSLWrap<Base>::SetNPNProtocols(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Base* w = Unwrap<Base>(args.This());
 
   if (args.Length() < 1 || !Buffer::HasInstance(args[0]))
     return ThrowTypeError("Must give a Buffer as first argument");
 
-  w->npn_protos_.Reset(node_isolate, args[0].As<Object>());
+  w->npn_protos_.Reset(args.GetIsolate(), args[0].As<Object>());
 }
 #endif  // OPENSSL_NPN_NEGOTIATED
 
@@ -1612,7 +1634,7 @@ void Connection::SetShutdownFlags() {
 void Connection::Initialize(Environment* env, Handle<Object> target) {
   Local<FunctionTemplate> t = FunctionTemplate::New(Connection::New);
   t->InstanceTemplate()->SetInternalFieldCount(1);
-  t->SetClassName(FIXED_ONE_BYTE_STRING(node_isolate, "Connection"));
+  t->SetClassName(FIXED_ONE_BYTE_STRING(env->isolate(), "Connection"));
 
   NODE_SET_PROTOTYPE_METHOD(t, "encIn", Connection::EncIn);
   NODE_SET_PROTOTYPE_METHOD(t, "clearOut", Connection::ClearOut);
@@ -1640,7 +1662,7 @@ void Connection::Initialize(Environment* env, Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "setSNICallback",  Connection::SetSNICallback);
 #endif
 
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Connection"),
+  target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "Connection"),
               t->GetFunction());
 }
 
@@ -1693,29 +1715,28 @@ int VerifyCallback(int preverify_ok, X509_STORE_CTX* ctx) {
 
 #ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
 int Connection::SelectSNIContextCallback_(SSL *s, int *ad, void* arg) {
-  HandleScope scope(node_isolate);
-
   Connection* conn = static_cast<Connection*>(SSL_get_app_data(s));
   Environment* env = conn->env();
+  HandleScope scope(env->isolate());
 
   const char* servername = SSL_get_servername(s, TLSEXT_NAMETYPE_host_name);
 
   if (servername) {
-    conn->servername_.Reset(node_isolate,
-                            OneByteString(node_isolate, servername));
+    conn->servername_.Reset(env->isolate(),
+                            OneByteString(env->isolate(), servername));
 
     // Call the SNI callback and use its return value as context
     if (!conn->sniObject_.IsEmpty()) {
       conn->sniContext_.Dispose();
 
-      Local<Value> arg = PersistentToLocal(node_isolate, conn->servername_);
+      Local<Value> arg = PersistentToLocal(env->isolate(), conn->servername_);
       Local<Value> ret = conn->MakeCallback(env->onselect_string(), 1, &arg);
 
       // If ret is SecureContext
       Local<FunctionTemplate> secure_context_constructor_template =
           env->secure_context_constructor_template();
       if (secure_context_constructor_template->HasInstance(ret)) {
-        conn->sniContext_.Reset(node_isolate, ret);
+        conn->sniContext_.Reset(env->isolate(), ret);
         SecureContext* sc = Unwrap<SecureContext>(ret.As<Object>());
         InitNPN(sc, conn);
         SSL_set_SSL_CTX(s, sc->ctx_);
@@ -1730,7 +1751,7 @@ int Connection::SelectSNIContextCallback_(SSL *s, int *ad, void* arg) {
 #endif
 
 void Connection::New(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   if (args.Length() < 1 || !args[0]->IsObject()) {
     return ThrowError("First argument must be a crypto module Credentials");
@@ -1824,7 +1845,7 @@ void Connection::SSLInfoCallback(const SSL *ssl_, int where, int ret) {
 
 
 void Connection::EncIn(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Connection* conn = Unwrap<Connection>(args.This());
 
@@ -1874,7 +1895,7 @@ void Connection::EncIn(const FunctionCallbackInfo<Value>& args) {
 
 
 void Connection::ClearOut(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Connection* conn = Unwrap<Connection>(args.This());
 
@@ -1929,7 +1950,7 @@ void Connection::ClearOut(const FunctionCallbackInfo<Value>& args) {
 
 
 void Connection::ClearPending(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
   Connection* conn = Unwrap<Connection>(args.This());
   int bytes_pending = BIO_pending(conn->bio_read_);
   args.GetReturnValue().Set(bytes_pending);
@@ -1937,7 +1958,7 @@ void Connection::ClearPending(const FunctionCallbackInfo<Value>& args) {
 
 
 void Connection::EncPending(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
   Connection* conn = Unwrap<Connection>(args.This());
   int bytes_pending = BIO_pending(conn->bio_write_);
   args.GetReturnValue().Set(bytes_pending);
@@ -1945,7 +1966,7 @@ void Connection::EncPending(const FunctionCallbackInfo<Value>& args) {
 
 
 void Connection::EncOut(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Connection* conn = Unwrap<Connection>(args.This());
 
@@ -1976,7 +1997,7 @@ void Connection::EncOut(const FunctionCallbackInfo<Value>& args) {
 
 
 void Connection::ClearIn(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Connection* conn = Unwrap<Connection>(args.This());
 
@@ -2031,7 +2052,7 @@ void Connection::ClearIn(const FunctionCallbackInfo<Value>& args) {
 
 
 void Connection::Start(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Connection* conn = Unwrap<Connection>(args.This());
 
@@ -2056,7 +2077,7 @@ void Connection::Start(const FunctionCallbackInfo<Value>& args) {
 
 
 void Connection::Close(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Connection* conn = Unwrap<Connection>(args.This());
 
@@ -2069,7 +2090,7 @@ void Connection::Close(const FunctionCallbackInfo<Value>& args) {
 
 #ifdef SSL_CTRL_SET_TLSEXT_SERVERNAME_CB
 void Connection::GetServername(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Connection* conn = Unwrap<Connection>(args.This());
 
@@ -2082,7 +2103,7 @@ void Connection::GetServername(const FunctionCallbackInfo<Value>& args) {
 
 
 void Connection::SetSNICallback(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Connection* conn = Unwrap<Connection>(args.This());
 
@@ -2091,8 +2112,8 @@ void Connection::SetSNICallback(const FunctionCallbackInfo<Value>& args) {
   }
 
   Local<Object> obj = Object::New();
-  obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "onselect"), args[0]);
-  conn->sniObject_.Reset(node_isolate, obj);
+  obj->Set(FIXED_ONE_BYTE_STRING(args.GetIsolate(), "onselect"), args[0]);
+  conn->sniObject_.Reset(args.GetIsolate(), obj);
 }
 #endif
 
@@ -2110,7 +2131,7 @@ void CipherBase::Initialize(Environment* env, Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "getAuthTag", GetAuthTag);
   NODE_SET_PROTOTYPE_METHOD(t, "setAuthTag", SetAuthTag);
 
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "CipherBase"),
+  target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "CipherBase"),
               t->GetFunction());
 }
 
@@ -2165,7 +2186,7 @@ void CipherBase::Init(const char* cipher_type,
 
 
 void CipherBase::Init(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   CipherBase* cipher = Unwrap<CipherBase>(args.This());
 
@@ -2217,7 +2238,7 @@ void CipherBase::InitIv(const char* cipher_type,
 
 
 void CipherBase::InitIv(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   CipherBase* cipher = Unwrap<CipherBase>(args.This());
 
@@ -2376,7 +2397,7 @@ bool CipherBase::SetAutoPadding(bool auto_padding) {
 
 
 void CipherBase::SetAutoPadding(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
   CipherBase* cipher = Unwrap<CipherBase>(args.This());
   cipher->SetAutoPadding(args.Length() < 1 || args[0]->BooleanValue());
 }
@@ -2444,7 +2465,7 @@ void Hmac::Initialize(Environment* env, v8::Handle<v8::Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "update", HmacUpdate);
   NODE_SET_PROTOTYPE_METHOD(t, "digest", HmacDigest);
 
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Hmac"), t->GetFunction());
+  target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "Hmac"), t->GetFunction());
 }
 
 
@@ -2474,7 +2495,7 @@ void Hmac::HmacInit(const char* hash_type, const char* key, int key_len) {
 
 
 void Hmac::HmacInit(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Hmac* hmac = Unwrap<Hmac>(args.This());
 
@@ -2500,7 +2521,7 @@ bool Hmac::HmacUpdate(const char* data, int len) {
 
 
 void Hmac::HmacUpdate(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Hmac* hmac = Unwrap<Hmac>(args.This());
 
@@ -2542,7 +2563,7 @@ bool Hmac::HmacDigest(unsigned char** md_value, unsigned int* md_len) {
 
 
 void Hmac::HmacDigest(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Hmac* hmac = Unwrap<Hmac>(args.This());
 
@@ -2575,12 +2596,12 @@ void Hash::Initialize(Environment* env, v8::Handle<v8::Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "update", HashUpdate);
   NODE_SET_PROTOTYPE_METHOD(t, "digest", HashDigest);
 
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Hash"), t->GetFunction());
+  target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "Hash"), t->GetFunction());
 }
 
 
 void Hash::New(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   if (args.Length() == 0 || !args[0]->IsString()) {
     return ThrowError("Must give hashtype string as argument");
@@ -2617,7 +2638,7 @@ bool Hash::HashUpdate(const char* data, int len) {
 
 
 void Hash::HashUpdate(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Hash* hash = Unwrap<Hash>(args.This());
 
@@ -2648,7 +2669,7 @@ void Hash::HashUpdate(const FunctionCallbackInfo<Value>& args) {
 
 
 void Hash::HashDigest(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Hash* hash = Unwrap<Hash>(args.This());
 
@@ -2674,6 +2695,46 @@ void Hash::HashDigest(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+void SignBase::CheckThrow(SignBase::Error error) {
+  HandleScope scope(node_isolate);
+
+  switch (error) {
+    case kSignUnknownDigest:
+      return ThrowError("Unknown message digest");
+
+    case kSignNotInitialised:
+      return ThrowError("Not initialised");
+
+    case kSignInit:
+    case kSignUpdate:
+    case kSignPrivateKey:
+    case kSignPublicKey:
+      {
+        unsigned long err = ERR_get_error();
+        if (err)
+          return ThrowCryptoError(err);
+        switch (error) {
+          case kSignInit:
+            return ThrowError("EVP_SignInit_ex failed");
+          case kSignUpdate:
+            return ThrowError("EVP_SignUpdate failed");
+          case kSignPrivateKey:
+            return ThrowError("PEM_read_bio_PrivateKey failed");
+          case kSignPublicKey:
+            return ThrowError("PEM_read_bio_PUBKEY failed");
+          default:
+            abort();
+        }
+      }
+
+    case kSignOk:
+      return;
+  }
+}
+
+
+
+
 void Sign::Initialize(Environment* env, v8::Handle<v8::Object> target) {
   Local<FunctionTemplate> t = FunctionTemplate::New(New);
 
@@ -2683,7 +2744,7 @@ void Sign::Initialize(Environment* env, v8::Handle<v8::Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "update", SignUpdate);
   NODE_SET_PROTOTYPE_METHOD(t, "sign", SignFinal);
 
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Sign"), t->GetFunction());
+  target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "Sign"), t->GetFunction());
 }
 
 
@@ -2694,22 +2755,23 @@ void Sign::New(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void Sign::SignInit(const char* sign_type) {
-  HandleScope scope(node_isolate);
-
+SignBase::Error Sign::SignInit(const char* sign_type) {
   assert(md_ == NULL);
   md_ = EVP_get_digestbyname(sign_type);
-  if (!md_) {
-    return ThrowError("Uknown message digest");
-  }
+  if (!md_)
+    return kSignUnknownDigest;
+
   EVP_MD_CTX_init(&mdctx_);
-  EVP_SignInit_ex(&mdctx_, md_, NULL);
+  if (!EVP_SignInit_ex(&mdctx_, md_, NULL))
+    return kSignInit;
   initialised_ = true;
+
+  return kSignOk;
 }
 
 
 void Sign::SignInit(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Sign* sign = Unwrap<Sign>(args.This());
 
@@ -2718,27 +2780,28 @@ void Sign::SignInit(const FunctionCallbackInfo<Value>& args) {
   }
 
   const String::Utf8Value sign_type(args[0]);
-  sign->SignInit(*sign_type);
+  CheckThrow(sign->SignInit(*sign_type));
 }
 
 
-bool Sign::SignUpdate(const char* data, int len) {
+SignBase::Error Sign::SignUpdate(const char* data, int len) {
   if (!initialised_)
-    return false;
-  EVP_SignUpdate(&mdctx_, data, len);
-  return true;
+    return kSignNotInitialised;
+  if (!EVP_SignUpdate(&mdctx_, data, len))
+    return kSignUpdate;
+  return kSignOk;
 }
 
 
 void Sign::SignUpdate(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Sign* sign = Unwrap<Sign>(args.This());
 
   ASSERT_IS_STRING_OR_BUFFER(args[0]);
 
   // Only copy the data if we have to, because it's a string
-  int r;
+  Error err;
   if (args[0]->IsString()) {
     Local<String> string = args[0].As<String>();
     enum encoding encoding = ParseEncoding(args[1], BINARY);
@@ -2747,29 +2810,25 @@ void Sign::SignUpdate(const FunctionCallbackInfo<Value>& args) {
     size_t buflen = StringBytes::StorageSize(string, encoding);
     char* buf = new char[buflen];
     size_t written = StringBytes::Write(buf, buflen, string, encoding);
-    r = sign->SignUpdate(buf, written);
+    err = sign->SignUpdate(buf, written);
     delete[] buf;
   } else {
     char* buf = Buffer::Data(args[0]);
     size_t buflen = Buffer::Length(args[0]);
-    r = sign->SignUpdate(buf, buflen);
+    err = sign->SignUpdate(buf, buflen);
   }
 
-  if (!r) {
-    return ThrowTypeError("SignUpdate fail");
-  }
+  CheckThrow(err);
 }
 
 
-bool Sign::SignFinal(const char* key_pem,
-                     int key_pem_len,
-                     const char* passphrase,
-                     unsigned char** sig,
-                     unsigned int *sig_len) {
-  if (!initialised_) {
-    ThrowError("Sign not initalised");
-    return false;
-  }
+SignBase::Error Sign::SignFinal(const char* key_pem,
+                                int key_pem_len,
+                                const char* passphrase,
+                                unsigned char** sig,
+                                unsigned int *sig_len) {
+  if (!initialised_)
+    return kSignNotInitialised;
 
   BIO* bp = NULL;
   EVP_PKEY* pkey = NULL;
@@ -2802,22 +2861,15 @@ bool Sign::SignFinal(const char* key_pem,
 
   EVP_MD_CTX_cleanup(&mdctx_);
 
-  if (fatal) {
-    unsigned long err = ERR_get_error();
-    if (err) {
-      ThrowCryptoError(err);
-    } else {
-      ThrowError("PEM_read_bio_PrivateKey");
-    }
-    return false;
-  }
+  if (fatal)
+    return kSignPrivateKey;
 
-  return true;
+  return kSignOk;
 }
 
 
 void Sign::SignFinal(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Sign* sign = Unwrap<Sign>(args.This());
 
@@ -2839,15 +2891,17 @@ void Sign::SignFinal(const FunctionCallbackInfo<Value>& args) {
   md_len = 8192;  // Maximum key size is 8192 bits
   md_value = new unsigned char[md_len];
 
-  bool r = sign->SignFinal(buf,
-                           buf_len,
-                           len >= 3 && !args[2]->IsNull() ? *passphrase : NULL,
-                           &md_value,
-                           &md_len);
-  if (!r) {
+  Error err = sign->SignFinal(
+      buf,
+      buf_len,
+      len >= 3 && !args[2]->IsNull() ? *passphrase : NULL,
+      &md_value,
+      &md_len);
+  if (err != kSignOk) {
     delete[] md_value;
     md_value = NULL;
     md_len = 0;
+    return CheckThrow(err);
   }
 
   Local<Value> rc = StringBytes::Encode(
@@ -2866,7 +2920,8 @@ void Verify::Initialize(Environment* env, v8::Handle<v8::Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "update", VerifyUpdate);
   NODE_SET_PROTOTYPE_METHOD(t, "verify", VerifyFinal);
 
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "Verify"), t->GetFunction());
+  target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "Verify"),
+              t->GetFunction());
 }
 
 
@@ -2877,23 +2932,23 @@ void Verify::New(const FunctionCallbackInfo<Value>& args) {
 }
 
 
-void Verify::VerifyInit(const char* verify_type) {
-  HandleScope scope(node_isolate);
-
+SignBase::Error Verify::VerifyInit(const char* verify_type) {
   assert(md_ == NULL);
   md_ = EVP_get_digestbyname(verify_type);
-  if (md_ == NULL) {
-    return ThrowError("Unknown message digest");
-  }
+  if (md_ == NULL)
+    return kSignUnknownDigest;
 
   EVP_MD_CTX_init(&mdctx_);
-  EVP_VerifyInit_ex(&mdctx_, md_, NULL);
+  if (!EVP_VerifyInit_ex(&mdctx_, md_, NULL))
+    return kSignInit;
   initialised_ = true;
+
+  return kSignOk;
 }
 
 
 void Verify::VerifyInit(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Verify* verify = Unwrap<Verify>(args.This());
 
@@ -2902,27 +2957,30 @@ void Verify::VerifyInit(const FunctionCallbackInfo<Value>& args) {
   }
 
   const String::Utf8Value verify_type(args[0]);
-  verify->VerifyInit(*verify_type);
+  CheckThrow(verify->VerifyInit(*verify_type));
 }
 
 
-bool Verify::VerifyUpdate(const char* data, int len) {
+SignBase::Error Verify::VerifyUpdate(const char* data, int len) {
   if (!initialised_)
-    return false;
-  EVP_VerifyUpdate(&mdctx_, data, len);
-  return true;
+    return kSignNotInitialised;
+
+  if (!EVP_VerifyUpdate(&mdctx_, data, len))
+    return kSignUpdate;
+
+  return kSignOk;
 }
 
 
 void Verify::VerifyUpdate(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Verify* verify = Unwrap<Verify>(args.This());
 
   ASSERT_IS_STRING_OR_BUFFER(args[0]);
 
   // Only copy the data if we have to, because it's a string
-  bool r;
+  Error err;
   if (args[0]->IsString()) {
     Local<String> string = args[0].As<String>();
     enum encoding encoding = ParseEncoding(args[1], BINARY);
@@ -2931,30 +2989,25 @@ void Verify::VerifyUpdate(const FunctionCallbackInfo<Value>& args) {
     size_t buflen = StringBytes::StorageSize(string, encoding);
     char* buf = new char[buflen];
     size_t written = StringBytes::Write(buf, buflen, string, encoding);
-    r = verify->VerifyUpdate(buf, written);
+    err = verify->VerifyUpdate(buf, written);
     delete[] buf;
   } else {
     char* buf = Buffer::Data(args[0]);
     size_t buflen = Buffer::Length(args[0]);
-    r = verify->VerifyUpdate(buf, buflen);
+    err = verify->VerifyUpdate(buf, buflen);
   }
 
-  if (!r) {
-    return ThrowTypeError("VerifyUpdate fail");
-  }
+  CheckThrow(err);
 }
 
 
-bool Verify::VerifyFinal(const char* key_pem,
-                         int key_pem_len,
-                         const char* sig,
-                         int siglen) {
-  HandleScope scope(node_isolate);
-
-  if (!initialised_) {
-    ThrowError("Verify not initalised");
-    return false;
-  }
+SignBase::Error Verify::VerifyFinal(const char* key_pem,
+                                    int key_pem_len,
+                                    const char* sig,
+                                    int siglen,
+                                    bool* verify_result) {
+  if (!initialised_)
+    return kSignNotInitialised;
 
   ClearErrorOnReturn clear_error_on_return;
   (void) &clear_error_on_return;  // Silence compiler warning.
@@ -3017,18 +3070,16 @@ bool Verify::VerifyFinal(const char* key_pem,
   EVP_MD_CTX_cleanup(&mdctx_);
   initialised_ = false;
 
-  if (fatal) {
-    unsigned long err = ERR_get_error();
-    ThrowCryptoError(err);
-    return false;
-  }
+  if (fatal)
+    return kSignPublicKey;
 
-  return r == 1;
+  *verify_result = r == 1;
+  return kSignOk;
 }
 
 
 void Verify::VerifyFinal(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Verify* verify = Unwrap<Verify>(args.This());
 
@@ -3055,11 +3106,13 @@ void Verify::VerifyFinal(const FunctionCallbackInfo<Value>& args) {
     hbuf = Buffer::Data(args[1]);
   }
 
-  bool rc = verify->VerifyFinal(kbuf, klen, hbuf, hlen);
-  if (args[1]->IsString()) {
+  bool verify_result;
+  Error err = verify->VerifyFinal(kbuf, klen, hbuf, hlen, &verify_result);
+  if (args[1]->IsString())
     delete[] hbuf;
-  }
-  args.GetReturnValue().Set(rc);
+  if (err != kSignOk)
+    return CheckThrow(err);
+  args.GetReturnValue().Set(verify_result);
 }
 
 
@@ -3077,7 +3130,7 @@ void DiffieHellman::Initialize(Environment* env, Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t, "setPublicKey", SetPublicKey);
   NODE_SET_PROTOTYPE_METHOD(t, "setPrivateKey", SetPrivateKey);
 
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "DiffieHellman"),
+  target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "DiffieHellman"),
               t->GetFunction());
 
   Local<FunctionTemplate> t2 = FunctionTemplate::New(DiffieHellmanGroup);
@@ -3090,7 +3143,7 @@ void DiffieHellman::Initialize(Environment* env, Handle<Object> target) {
   NODE_SET_PROTOTYPE_METHOD(t2, "getPublicKey", GetPublicKey);
   NODE_SET_PROTOTYPE_METHOD(t2, "getPrivateKey", GetPrivateKey);
 
-  target->Set(FIXED_ONE_BYTE_STRING(node_isolate, "DiffieHellmanGroup"),
+  target->Set(FIXED_ONE_BYTE_STRING(env->isolate(), "DiffieHellmanGroup"),
               t2->GetFunction());
 }
 
@@ -3131,7 +3184,7 @@ bool DiffieHellman::Init(const char* p, int p_len, const char* g, int g_len) {
 
 void DiffieHellman::DiffieHellmanGroup(
     const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Environment* env = Environment::GetCurrent(args.GetIsolate());
   DiffieHellman* diffieHellman = new DiffieHellman(env, args.This());
@@ -3159,7 +3212,7 @@ void DiffieHellman::DiffieHellmanGroup(
 
 
 void DiffieHellman::New(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Environment* env = Environment::GetCurrent(args.GetIsolate());
   DiffieHellman* diffieHellman =
@@ -3182,7 +3235,7 @@ void DiffieHellman::New(const FunctionCallbackInfo<Value>& args) {
 
 
 void DiffieHellman::GenerateKeys(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   DiffieHellman* diffieHellman = Unwrap<DiffieHellman>(args.This());
 
@@ -3205,7 +3258,7 @@ void DiffieHellman::GenerateKeys(const FunctionCallbackInfo<Value>& args) {
 
 
 void DiffieHellman::GetPrime(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   DiffieHellman* diffieHellman = Unwrap<DiffieHellman>(args.This());
 
@@ -3223,7 +3276,7 @@ void DiffieHellman::GetPrime(const FunctionCallbackInfo<Value>& args) {
 
 
 void DiffieHellman::GetGenerator(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   DiffieHellman* diffieHellman = Unwrap<DiffieHellman>(args.This());
 
@@ -3241,7 +3294,7 @@ void DiffieHellman::GetGenerator(const FunctionCallbackInfo<Value>& args) {
 
 
 void DiffieHellman::GetPublicKey(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   DiffieHellman* diffieHellman = Unwrap<DiffieHellman>(args.This());
 
@@ -3264,7 +3317,7 @@ void DiffieHellman::GetPublicKey(const FunctionCallbackInfo<Value>& args) {
 
 
 void DiffieHellman::GetPrivateKey(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   DiffieHellman* diffieHellman = Unwrap<DiffieHellman>(args.This());
 
@@ -3287,7 +3340,7 @@ void DiffieHellman::GetPrivateKey(const FunctionCallbackInfo<Value>& args) {
 
 
 void DiffieHellman::ComputeSecret(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   DiffieHellman* diffieHellman = Unwrap<DiffieHellman>(args.This());
 
@@ -3358,7 +3411,7 @@ void DiffieHellman::ComputeSecret(const FunctionCallbackInfo<Value>& args) {
 
 
 void DiffieHellman::SetPublicKey(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   DiffieHellman* diffieHellman = Unwrap<DiffieHellman>(args.This());
 
@@ -3378,7 +3431,7 @@ void DiffieHellman::SetPublicKey(const FunctionCallbackInfo<Value>& args) {
 
 
 void DiffieHellman::SetPrivateKey(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   DiffieHellman* diffieHellman = Unwrap<DiffieHellman>(args.This());
 
@@ -3418,6 +3471,7 @@ class PBKDF2Request : public AsyncWrap {
  public:
   PBKDF2Request(Environment* env,
                 Local<Object> object,
+                const EVP_MD* digest,
                 ssize_t passlen,
                 char* pass,
                 ssize_t saltlen,
@@ -3425,6 +3479,7 @@ class PBKDF2Request : public AsyncWrap {
                 ssize_t iter,
                 ssize_t keylen)
       : AsyncWrap(env, object),
+        digest_(digest),
         error_(0),
         passlen_(passlen),
         pass_(pass),
@@ -3443,6 +3498,10 @@ class PBKDF2Request : public AsyncWrap {
 
   uv_work_t* work_req() {
     return &work_req_;
+  }
+
+  inline const EVP_MD* digest() const {
+    return digest_;
   }
 
   inline ssize_t passlen() const {
@@ -3494,6 +3553,7 @@ class PBKDF2Request : public AsyncWrap {
   uv_work_t work_req_;
 
  private:
+  const EVP_MD* digest_;
   int error_;
   ssize_t passlen_;
   char* pass_;
@@ -3506,12 +3566,13 @@ class PBKDF2Request : public AsyncWrap {
 
 
 void EIO_PBKDF2(PBKDF2Request* req) {
-  req->set_error(PKCS5_PBKDF2_HMAC_SHA1(
+  req->set_error(PKCS5_PBKDF2_HMAC(
     req->pass(),
     req->passlen(),
     reinterpret_cast<unsigned char*>(req->salt()),
     req->saltlen(),
     req->iter(),
+    req->digest(),
     req->keylen(),
     reinterpret_cast<unsigned char*>(req->key())));
   memset(req->pass(), 0, req->passlen());
@@ -3556,6 +3617,7 @@ void PBKDF2(const FunctionCallbackInfo<Value>& args) {
   HandleScope handle_scope(args.GetIsolate());
   Environment* env = Environment::GetCurrent(args.GetIsolate());
 
+  const EVP_MD* digest = NULL;
   const char* type_error = NULL;
   char* pass = NULL;
   char* salt = NULL;
@@ -3568,7 +3630,7 @@ void PBKDF2(const FunctionCallbackInfo<Value>& args) {
   PBKDF2Request* req = NULL;
   Local<Object> obj;
 
-  if (args.Length() != 4 && args.Length() != 5) {
+  if (args.Length() != 5 && args.Length() != 6) {
     type_error = "Bad parameter";
     goto err;
   }
@@ -3623,11 +3685,35 @@ void PBKDF2(const FunctionCallbackInfo<Value>& args) {
     goto err;
   }
 
-  obj = Object::New();
-  req = new PBKDF2Request(env, obj, passlen, pass, saltlen, salt, iter, keylen);
+  if (args[4]->IsString()) {
+    String::Utf8Value digest_name(args[4]);
+    digest = EVP_get_digestbyname(*digest_name);
+    if (digest == NULL) {
+      type_error = "Bad digest name";
+      goto err;
+    }
+  }
 
-  if (args[4]->IsFunction()) {
-    obj->Set(env->ondone_string(), args[4]);
+  if (digest == NULL) {
+    digest = EVP_sha1();
+  }
+
+  obj = Object::New();
+  req = new PBKDF2Request(env,
+                          obj,
+                          digest,
+                          passlen,
+                          pass,
+                          saltlen,
+                          salt,
+                          iter,
+                          keylen);
+
+  if (args[5]->IsFunction()) {
+    obj->Set(env->ondone_string(), args[5]);
+    // XXX(trevnorris): This will need to go with the rest of domains.
+    if (env->in_domain())
+      obj->Set(env->domain_string(), env->domain_array()->Get(0));
     uv_queue_work(env->event_loop(),
                   req->work_req(),
                   EIO_PBKDF2,
@@ -3788,7 +3874,10 @@ void RandomBytes(const FunctionCallbackInfo<Value>& args) {
   RandomBytesRequest* req = new RandomBytesRequest(env, obj, size);
 
   if (args[1]->IsFunction()) {
-    obj->Set(FIXED_ONE_BYTE_STRING(node_isolate, "ondone"), args[1]);
+    obj->Set(FIXED_ONE_BYTE_STRING(args.GetIsolate(), "ondone"), args[1]);
+    // XXX(trevnorris): This will need to go with the rest of domains.
+    if (env->in_domain())
+      obj->Set(env->domain_string(), env->domain_array()->Get(0));
     uv_queue_work(env->event_loop(),
                   req->work_req(),
                   RandomBytesWork<pseudoRandom>,
@@ -3809,7 +3898,7 @@ void RandomBytes(const FunctionCallbackInfo<Value>& args) {
 
 
 void GetSSLCiphers(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   SSL_CTX* ctx = SSL_CTX_new(TLSv1_server_method());
   if (ctx == NULL) {
@@ -3827,7 +3916,7 @@ void GetSSLCiphers(const FunctionCallbackInfo<Value>& args) {
 
   for (int i = 0; i < sk_SSL_CIPHER_num(ciphers); ++i) {
     SSL_CIPHER* cipher = sk_SSL_CIPHER_value(ciphers, i);
-    arr->Set(i, OneByteString(node_isolate, SSL_CIPHER_get_name(cipher)));
+    arr->Set(i, OneByteString(args.GetIsolate(), SSL_CIPHER_get_name(cipher)));
   }
 
   SSL_free(ssl);
@@ -3848,7 +3937,7 @@ static void array_push_back(const TypeName* md,
 
 
 void GetCiphers(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
   Local<Array> arr = Array::New();
   EVP_CIPHER_do_all_sorted(array_push_back<EVP_CIPHER>, &arr);
   args.GetReturnValue().Set(arr);
@@ -3856,7 +3945,7 @@ void GetCiphers(const FunctionCallbackInfo<Value>& args) {
 
 
 void GetHashes(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
   Local<Array> arr = Array::New();
   EVP_MD_do_all_sorted(array_push_back<EVP_MD>, &arr);
   args.GetReturnValue().Set(arr);
@@ -3913,7 +4002,7 @@ bool Certificate::VerifySpkac(const char* data, unsigned int len) {
 
 
 void Certificate::VerifySpkac(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Certificate* certificate = Unwrap<Certificate>(args.This());
   bool i = false;
@@ -3978,7 +4067,7 @@ const char* Certificate::ExportPublicKey(const char* data, int len) {
 
 
 void Certificate::ExportPublicKey(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Certificate* certificate = Unwrap<Certificate>(args.This());
 
@@ -4021,7 +4110,7 @@ const char* Certificate::ExportChallenge(const char* data, int len) {
 
 
 void Certificate::ExportChallenge(const FunctionCallbackInfo<Value>& args) {
-  HandleScope scope(node_isolate);
+  HandleScope scope(args.GetIsolate());
 
   Certificate* crt = Unwrap<Certificate>(args.This());
 
@@ -4053,7 +4142,6 @@ void InitCryptoOnce() {
   SSL_library_init();
   OpenSSL_add_all_algorithms();
   SSL_load_error_strings();
-  ERR_load_crypto_strings();
 
   crypto_lock_init();
   CRYPTO_set_locking_callback(crypto_lock_cb);
@@ -4069,13 +4157,61 @@ void InitCryptoOnce() {
   sk_SSL_COMP_zero(comp_methods);
   assert(sk_SSL_COMP_num(comp_methods) == 0);
 #endif
+
+#ifndef OPENSSL_NO_ENGINE
+  ERR_load_ENGINE_strings();
+  ENGINE_load_builtin_engines();
+#endif  // !OPENSSL_NO_ENGINE
 }
+
+
+#ifndef OPENSSL_NO_ENGINE
+void SetEngine(const FunctionCallbackInfo<Value>& args) {
+  CHECK(args.Length() >= 2 && args[0]->IsString());
+  unsigned int flags = args[1]->Uint32Value();
+
+  ClearErrorOnReturn clear_error_on_return;
+  (void) &clear_error_on_return;  // Silence compiler warning.
+
+  const String::Utf8Value engine_id(args[0]);
+  ENGINE* engine = ENGINE_by_id(*engine_id);
+
+  // Engine not found, try loading dynamically
+  if (engine == NULL) {
+    engine = ENGINE_by_id("dynamic");
+    if (engine != NULL) {
+      if (!ENGINE_ctrl_cmd_string(engine, "SO_PATH", *engine_id, 0) ||
+          !ENGINE_ctrl_cmd_string(engine, "LOAD", NULL, 0)) {
+        ENGINE_free(engine);
+        engine = NULL;
+      }
+    }
+  }
+
+  if (engine == NULL) {
+    int err = ERR_get_error();
+    if (err == 0) {
+      char tmp[1024];
+      snprintf(tmp, sizeof(tmp), "Engine \"%s\" was not found", *engine_id);
+      return ThrowError(tmp);
+    } else {
+      return ThrowCryptoError(err);
+    }
+  }
+
+  int r = ENGINE_set_default(engine, flags);
+  ENGINE_free(engine);
+  if (r == 0)
+    return ThrowCryptoError(ERR_get_error());
+}
+#endif  // !OPENSSL_NO_ENGINE
 
 
 // FIXME(bnoordhuis) Handle global init correctly.
 void InitCrypto(Handle<Object> target,
                 Handle<Value> unused,
-                Handle<Context> context) {
+                Handle<Context> context,
+                void* priv) {
   static uv_once_t init_once = UV_ONCE_INIT;
   uv_once(&init_once, InitCryptoOnce);
 
@@ -4090,6 +4226,9 @@ void InitCrypto(Handle<Object> target,
   Verify::Initialize(env, target);
   Certificate::Initialize(target);
 
+#ifndef OPENSSL_NO_ENGINE
+  NODE_SET_METHOD(target, "setEngine", SetEngine);
+#endif  // !OPENSSL_NO_ENGINE
   NODE_SET_METHOD(target, "PBKDF2", PBKDF2);
   NODE_SET_METHOD(target, "randomBytes", RandomBytes<false>);
   NODE_SET_METHOD(target, "pseudoRandomBytes", RandomBytes<true>);
@@ -4101,4 +4240,4 @@ void InitCrypto(Handle<Object> target,
 }  // namespace crypto
 }  // namespace node
 
-NODE_MODULE_CONTEXT_AWARE(node_crypto, node::crypto::InitCrypto)
+NODE_MODULE_CONTEXT_AWARE_BUILTIN(crypto, node::crypto::InitCrypto)
