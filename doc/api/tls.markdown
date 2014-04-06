@@ -147,6 +147,61 @@ TLS の拡張で、以下を可能にします。
   * SNI - 一つの TLS サーバでホスト名の異なる複数の証明書を使用。
 
 
+## Perfect Forward Secrecy
+
+<!-- type=misc -->
+
+<!--
+The term "[Forward Secrecy]" or "Perfect Forward Secrecy" describes a feature of
+key-agreement (i.e. key-exchange) methods. Practically it means that even if the
+private key of a (your) server is compromised, communication can only be
+decrypted by eavesdroppers if they manage to obtain the key-pair specifically
+generated for each session.
+-->
+
+用語 "[Forward Secrecy]" あるいは "Perfect Forward Secrecy" とは、
+鍵を合意 (すなわち鍵交換) する方法の特徴を説明します。
+実際のところ、それは (あなたの) サーバの秘密鍵が漏洩しても、
+盗聴者によって解読される通信は、特定の各セッション毎に生成される
+鍵のペアを取得したものに限られることを意味します。
+
+<!--
+This is achieved by randomly generating a key pair for key-agreement on every
+handshake (in contrary to the same key for all sessions). Methods implementing
+this technique, thus offering Perfect Forward Secrecy, are called "ephemeral".
+-->
+
+これは、ハンドシェークの度にランダムに生成される鍵のペアによって
+鍵合意することで達成されます (全てのセッションで同じ鍵を使うのとは対照的です)。
+Perfect Forward Secrecy を提供するこの方法の実装は、
+「一時的 (ephemeral)」と呼ばれます。
+
+<!--
+Currently two methods are commonly used to achieve Perfect Forward Secrecy (note 
+the character "E" appended to the traditional abbreviations):
+-->
+
+現在の所、Perfect Forward Secrecyとして2つの方法が一般的に使われています
+(従来の省略形に文字 "E" が負荷されていることに注意してください):
+
+<!--
+  * [DHE] - An ephemeral version of the Diffie Hellman key-agreement protocol.
+  * [ECDHE] - An ephemeral version of the Elliptic Curve Diffie Hellman
+    key-agreement protocol.
+-->
+
+  * [DHE] - ディフィー・ヘルマン鍵合意プロトコルの「一時的」版です。
+  * [ECDHE] - 楕円曲線ディフィー・ヘルマン鍵合意プロトコルの「一時的」版です。
+
+<!--
+Ephemeral methods may have some performance drawbacks, because key generation
+is expensive.
+-->
+
+鍵の生成は高価な処理であるため、「一時的」な方法はパフォーマンスの面で
+不利かもしれません。
+
+
 ## tls.getCiphers()
 
 <!--
@@ -209,22 +264,22 @@ automatically set as a listener for the [secureConnection][] event.  The
     Consult the [OpenSSL cipher list format documentation] for details on the
     format.
 
+    `ECDHE-RSA-AES128-SHA256` and `AES128-GCM-SHA256` are TLS v1.2 ciphers and
+    used when node.js is linked against OpenSSL 1.0.1 or newer, such as the
+    bundled version of OpenSSL.  Note that it is still possible for a TLS v1.2
+    client to negotiate a weaker cipher unless `honorCipherOrder` is enabled.
 
-    `AES128-GCM-SHA256` is used when node.js is linked against OpenSSL 1.0.1
-    or newer and the client speaks TLS 1.2, RC4 is used as a secure fallback.
+    `RC4` is used as a fallback for clients that speak on older version of
+    the TLS protocol.  `RC4` has in recent years come under suspicion and
+    should be considered compromised for anything that is truly sensitive.
+    It is speculated that state-level actors posess the ability to break it.
 
     **NOTE**: Previous revisions of this section suggested `AES256-SHA` as an
     acceptable cipher. Unfortunately, `AES256-SHA` is a CBC cipher and therefore
-    susceptible to BEAST attacks. Do *not* use it.
+    susceptible to [BEAST attacks]. Do *not* use it.
 
-  - `ecdhCurve`: A string describing a named curve to use for ECDH ciphers or
-    false to disable all ECDH ciphers.
-
-    This is required to support ECDH (Elliptic Curve Diffie-Hellman) ciphers.
-    ECDH ciphers are a newer alternative to RSA. The advantages of ECDH over
-    RSA is that it offers [Forward secrecy]. Forward secrecy means that for an
-    attacker it won't be possible to decrypt your previous data exchanges if
-    they get access to your private key.
+  - `ecdhCurve`: A string describing a named curve to use for ECDH key agreement
+    or false to disable ECDH.
 
     Defaults to `prime256v1`. Consult [RFC 4492] for more details.
 
@@ -237,12 +292,13 @@ automatically set as a listener for the [secureConnection][] event.  The
   - `honorCipherOrder` : When choosing a cipher, use the server's preferences
     instead of the client preferences.
 
-    Note that if SSLv2 is used, the server will send its list of preferences
-    to the client, and the client chooses the cipher.
-
     Although, this option is disabled by default, it is *recommended* that you
     use this option in conjunction with the `ciphers` option to mitigate
     BEAST attacks.
+
+    Note: If SSLv2 is used, the server will send its list of preferences to the
+    client, and the client chooses the cipher.  Support for SSLv2 is disabled
+    unless node.js was configured with `./configure --with-sslv2`.
 
   - `requestCert`: If `true` the server will request a certificate from
     clients that connect and attempt to verify that certificate. Default:
@@ -306,23 +362,26 @@ automatically set as a listener for the [secureConnection][] event.  The
     `ECDHE-RSA-AES128-SHA256:AES128-GCM-SHA256:RC4:HIGH:!MD5:!aNULL:!EDH` です。
     詳細は [OpenSSL 暗号リストフォーマットのドキュメント] を参照してください。
 
-    `AES128-GCM-SHA256` は、Node.js が OpenSSL 1.0.1 以降とリンクされていて、
-    クライアントが TLS 1.2 をサポートしている場合に使われます。
-    RC4 は安全なフォールバックとして使われます。
+    `ECDHE-RSA-AES128-SHA256` と `AES128-GCM-SHA256` は TLS v1.2 の暗号で、
+    Node.js が (バンドルされているバージョンなどの) OpenSSL 1.0.1 以降と
+    リンクされている場合に使われます。
+    `honorCipherOrder` が有効でない限り、TLS v1.2 を使用していても
+    クライアントはより弱い暗号を要求出来ることに注意してください。
+
+    `RC4` は、クライアントがより古いバージョンの TLS プロトコルを喋る場合に
+    フォールバックとして使われます。
+    `RC4` は近年疑いをもたれており、真に繊細なものに対しては
+    漏洩を考慮すべきです。
+    国家レベルの何者かがそれを破る力を持っていると推測されています。
 
     **注意**: 以前のバージョンのこのセクションは `AES256-SHA` を
     受け入れ可能な暗号であるかのように示していました。
-    残念ながら、`AES256-SHA` は CBC 暗号であり、したがって BEAST
-    攻撃には弱いです。
+    残念ながら、`AES256-SHA` は CBC 暗号であり、したがって
+    [BEAST 攻撃] には弱いです。
+    *使わない* でください。
 
-  - `ecdhCurve`: ECDH 暗号で使用する曲線を説明する名前、または全ての
-    ECDH 暗号を無効にする `false`。
-
-    これは ECDH (Elliptic Curve Diffie-Hellman) 暗号では必須です。
-    ECDH 暗号は RSA の新たな代替です。
-    RSA を ECDH で置き換えるメリットは、[Forward secrecy] を提供することです。
-    Forward secrecy は、攻撃者があなたの秘密鍵を取得したとしても、
-    彼らがそれ以前に取得したデータを解読出来ないことを意味します。
+  - `ecdhCurve`: ECDH 鍵合意で使用する曲線を説明する名前、または全ての
+    ECDH を無効にする `false`。
 
     デフォルトは `prime256v1` です。より詳細は [RFC 4492] を参照してください。
 
@@ -336,11 +395,13 @@ automatically set as a listener for the [secureConnection][] event.  The
   - `honorCipherOrder` :
     暗号を選択する際に、クライアントではなくサーバの設定を使用します。
 
-    SSLv2 が使われる場合は、サーバは設定のリストをクライアントに送信し、
-    クライアントが暗号を選択することに注意してください。
-
     このオプションはデフォルトでは無効ですが、BEAST 攻撃を抑制するために
     `ciphers` オプションと共に使用することを *推奨* します。
+
+    注意: SSLv2 が使われる場合は、サーバは設定のリストをクライアントに送信し、
+    クライアントが暗号を選択します。
+    SSLv2 のサポートは、node.js が `./configure --with-sslv2` によって
+    構成されない限り無効です。
 
   - `requestCert`: `true` の場合、サーバは接続しようとするクライアントからの
     証明書を要求します。デフォルトは `false` です。
@@ -484,7 +545,7 @@ Creates a new client connection to the given `port` and `host` (old API) or
 
   - `rejectUnauthorized`: If `true`, the server certificate is verified against
     the list of supplied CAs. An `'error'` event is emitted if verification
-    fails. Default: `true`.
+    fails; `err.code` contains the OpenSSL error code. Default: `true`.
 
   - `NPNProtocols`: An array of strings or `Buffer`s containing supported NPN
     protocols. `Buffer`s should have following format: `0x05hello0x05world`,
@@ -523,8 +584,8 @@ Creates a new client connection to the given `port` and `host` (old API) or
 
   - `rejectUnauthorized`: `true` の場合、サーバ証明書は提供された認証局の
     リストによって検証されます。
-    認証されなかった場合は `'error'` イベントが生成されます。
-    認証は HTTP リクエストが送信される *前* にコネクションレベルで行われます。
+    認証されなかった場合は `'error'` イベントが生成されます;
+    `err.code` は OpenSSL のエラーコードを含みます。
     デフォルトは true です。
 
   - `NPNProtocols`: サポートする NPN プロトコルの文字列または `Buffer` 
@@ -1134,6 +1195,35 @@ with an error after `handshakeTimeout` timeout.
 更に注意: サーバとして実行される場合、`handshakeTimeout` 時間が経過した後、
 ソケットはエラーと共に破棄されます。
 
+### tlsSocket.setMaxSendFragment(size)
+
+<!--
+Set maximum TLS fragment size (default and maximum value is: `16384`, minimum
+is: `512`). Returns `true` on success, `false` otherwise.
+-->
+
+最大の TLS フラグメントサイズを設定します (デフォルトおよび最大の値は `16384`、
+最少は `512`)。
+成功すれば `true`、そうでなければ `false` を返します。
+
+<!--
+Smaller fragment size decreases buffering latency on the client: large
+fragments are buffered by the TLS layer until the entire fragment is received
+and its integrity is verified; large fragments can span multiple roundtrips,
+and their processing can be delayed due to packet loss or reordering. However,
+smaller fragments add extra TLS framing bytes and CPU overhead, which may
+decrease overall server throughput.
+-->
+
+小さなフラグメントサイズは、クライアントでのバッファリングの遅延を減少します:
+大きなフラグメントは、全てのフラグメントが受信されてその完全性が確かめられるまで
+TLS 層によってバッファリングされます;
+大きなフラグメントは複数のラウンドトリップに分割され、
+パケットの喪失や並べ替えにより遅延が発生することがあります。
+しかしながら、小さなフラグメントは余分な TLS フレームのバイトと
+CPU のオーバーヘッドを加えるため、全体としてサーバのスループットを
+低下させるでしょう。
+
 ### tlsSocket.address()
 
 <!--
@@ -1200,6 +1290,8 @@ The numeric representation of the local port.
 [SSL_CTX_set_timeout]: http://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html
 [RFC 4492]: http://www.rfc-editor.org/rfc/rfc4492.txt
 [Forward secrecy]: http://en.wikipedia.org/wiki/Perfect_forward_secrecy
+[DHE]: https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange
+[ECDHE]: https://en.wikipedia.org/wiki/Elliptic_curve_Diffie%E2%80%93Hellman
 -->
 
 [OpenSSL 暗号リストフォーマットのドキュメント]: http://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT
@@ -1219,3 +1311,5 @@ The numeric representation of the local port.
 [SSL_CTX_set_timeout]: http://www.openssl.org/docs/ssl/SSL_CTX_set_timeout.html
 [RFC 4492]: http://www.rfc-editor.org/rfc/rfc4492.txt
 [Forward secrecy]: http://en.wikipedia.org/wiki/Perfect_forward_secrecy
+[DHE]: https://en.wikipedia.org/wiki/Diffie%E2%80%93Hellman_key_exchange
+[ECDHE]: https://en.wikipedia.org/wiki/Elliptic_curve_Diffie%E2%80%93Hellman

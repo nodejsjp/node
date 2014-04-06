@@ -130,6 +130,9 @@ static bool use_debug_agent = false;
 static bool debug_wait_connect = false;
 static int debug_port = 5858;
 static bool v8_is_profiling = false;
+static node_module* modpending;
+static node_module* modlist_builtin;
+static node_module* modlist_addon;
 
 // used by C++ modules as well
 bool no_deprecation = false;
@@ -854,14 +857,10 @@ void SetupAsyncListener(const FunctionCallbackInfo<Value>& args) {
   assert(args[1]->IsFunction());
   assert(args[2]->IsFunction());
   assert(args[3]->IsFunction());
-  assert(args[4]->IsFunction());
-  assert(args[5]->IsFunction());
 
   env->set_async_listener_run_function(args[1].As<Function>());
   env->set_async_listener_load_function(args[2].As<Function>());
   env->set_async_listener_unload_function(args[3].As<Function>());
-  env->set_async_listener_push_function(args[4].As<Function>());
-  env->set_async_listener_strip_function(args[5].As<Function>());
 
   Local<Object> async_listener_flag_obj = args[0].As<Object>();
   Environment::AsyncListener* async_listener = env->async_listener();
@@ -876,11 +875,54 @@ void SetupAsyncListener(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+void SetupDomainUse(const FunctionCallbackInfo<Value>& args) {
+  Environment* env = Environment::GetCurrent(args.GetIsolate());
+
+  if (env->using_domains())
+    return;
+  env->set_using_domains(true);
+
+  HandleScope scope(node_isolate);
+  Local<Object> process_object = env->process_object();
+
+  Local<String> tick_callback_function_key =
+      FIXED_ONE_BYTE_STRING(node_isolate, "_tickDomainCallback");
+  Local<Function> tick_callback_function =
+      process_object->Get(tick_callback_function_key).As<Function>();
+
+  if (!tick_callback_function->IsFunction()) {
+    fprintf(stderr, "process._tickDomainCallback assigned to non-function\n");
+    abort();
+  }
+
+  process_object->Set(FIXED_ONE_BYTE_STRING(node_isolate, "_tickCallback"),
+                      tick_callback_function);
+  env->set_tick_callback_function(tick_callback_function);
+
+  assert(args[0]->IsArray());
+  assert(args[1]->IsObject());
+
+  env->set_domain_array(args[0].As<Array>());
+
+  Local<Object> domain_flag_obj = args[1].As<Object>();
+  Environment::DomainFlag* domain_flag = env->domain_flag();
+  domain_flag_obj->SetIndexedPropertiesToExternalArrayData(
+      domain_flag->fields(),
+      kExternalUnsignedIntArray,
+      domain_flag->fields_count());
+
+  // Do a little housekeeping.
+  env->process_object()->Delete(
+      FIXED_ONE_BYTE_STRING(args.GetIsolate(), "_setupDomainUse"));
+}
+
+
 void SetupNextTick(const FunctionCallbackInfo<Value>& args) {
   HandleScope handle_scope(args.GetIsolate());
   Environment* env = Environment::GetCurrent(args.GetIsolate());
 
-  assert(args[0]->IsObject() && args[1]->IsFunction());
+  assert(args[0]->IsObject());
+  assert(args[1]->IsFunction());
 
   // Values use to cross communicate with processNextTick.
   Local<Object> tick_info_obj = args[0].As<Object>();
@@ -897,11 +939,114 @@ void SetupNextTick(const FunctionCallbackInfo<Value>& args) {
 }
 
 
+Handle<Value> MakeDomainCallback(Environment* env,
+                                 Handle<Object> object,
+                                 const Handle<Function> callback,
+                                 int argc,
+                                 Handle<Value> argv[]) {
+  // If you hit this assertion, you forgot to enter the v8::Context first.
+  assert(env->context() == env->isolate()->GetCurrentContext());
+
+  Local<Object> process = env->process_object();
+  Local<Value> domain_v = object->Get(env->domain_string());
+  Local<Object> domain;
+
+  TryCatch try_catch;
+  try_catch.SetVerbose(true);
+
+  // TODO(trevnorris): This is sucky for performance. Fix it.
+  bool has_async_queue = object->Has(env->async_queue_string());
+  if (has_async_queue) {
+    Local<Value> argv[] = { object };
+    env->async_listener_load_function()->Call(process, ARRAY_SIZE(argv), argv);
+
+    if (try_catch.HasCaught())
+      return Undefined(node_isolate);
+  }
+
+  bool has_domain = domain_v->IsObject();
+  if (has_domain) {
+    domain = domain_v.As<Object>();
+
+    if (domain->Get(env->disposed_string())->IsTrue()) {
+      // domain has been disposed of.
+      return Undefined(node_isolate);
+    }
+
+    Local<Function> enter =
+        domain->Get(env->enter_string()).As<Function>();
+    assert(enter->IsFunction());
+    enter->Call(domain, 0, NULL);
+
+    if (try_catch.HasCaught()) {
+      return Undefined(node_isolate);
+    }
+  }
+
+  Local<Value> ret = callback->Call(object, argc, argv);
+
+  if (try_catch.HasCaught()) {
+    return Undefined(node_isolate);
+  }
+
+  if (has_domain) {
+    Local<Function> exit =
+        domain->Get(env->exit_string()).As<Function>();
+    assert(exit->IsFunction());
+    exit->Call(domain, 0, NULL);
+
+    if (try_catch.HasCaught()) {
+      return Undefined(node_isolate);
+    }
+  }
+
+  if (has_async_queue) {
+    Local<Value> val = object.As<Value>();
+    env->async_listener_unload_function()->Call(process, 1, &val);
+
+    if (try_catch.HasCaught())
+      return Undefined(node_isolate);
+  }
+
+  Environment::TickInfo* tick_info = env->tick_info();
+
+  if (tick_info->last_threw() == 1) {
+    tick_info->set_last_threw(0);
+    return ret;
+  }
+
+  if (tick_info->in_tick()) {
+    return ret;
+  }
+
+  if (tick_info->length() == 0) {
+    tick_info->set_index(0);
+    return ret;
+  }
+
+  tick_info->set_in_tick(true);
+
+  env->tick_callback_function()->Call(process, 0, NULL);
+
+  tick_info->set_in_tick(false);
+
+  if (try_catch.HasCaught()) {
+    tick_info->set_last_threw(true);
+    return Undefined(node_isolate);
+  }
+
+  return ret;
+}
+
+
 Handle<Value> MakeCallback(Environment* env,
                            Handle<Object> object,
                            const Handle<Function> callback,
                            int argc,
                            Handle<Value> argv[]) {
+  if (env->using_domains())
+    return MakeDomainCallback(env, object, callback, argc, argv);
+
   // If you hit this assertion, you forgot to enter the v8::Context first.
   assert(env->context() == env->isolate()->GetCurrentContext());
 
@@ -1028,6 +1173,19 @@ Handle<Value> MakeCallback(const Handle<Object> object,
   Context::Scope context_scope(context);
   HandleScope handle_scope(env->isolate());
   return handle_scope.Close(MakeCallback(env, object, callback, argc, argv));
+}
+
+
+Handle<Value> MakeDomainCallback(const Handle<Object> object,
+                                 const Handle<Function> callback,
+                                 int argc,
+                                 Handle<Value> argv[]) {
+  Local<Context> context = object->CreationContext();
+  Environment* env = Environment::GetCurrent(context);
+  Context::Scope context_scope(context);
+  HandleScope handle_scope(env->isolate());
+  return handle_scope.Close(
+      MakeDomainCallback(env, object, callback, argc, argv));
 }
 
 
@@ -1727,6 +1885,29 @@ void Hrtime(const FunctionCallbackInfo<Value>& args) {
   args.GetReturnValue().Set(tuple);
 }
 
+extern "C" void node_module_register(void* m) {
+  struct node_module* mp = reinterpret_cast<struct node_module*>(m);
+
+  if (mp->nm_flags & NM_F_BUILTIN) {
+    mp->nm_link = modlist_builtin;
+    modlist_builtin = mp;
+  } else {
+    assert(modpending == NULL);
+    modpending = mp;
+  }
+}
+
+struct node_module* get_builtin_module(const char* name) {
+  struct node_module* mp;
+
+  for (mp = modlist_builtin; mp != NULL; mp = mp->nm_link) {
+    if (strcmp(mp->nm_modname, name) == 0)
+      break;
+  }
+
+  assert(mp == NULL || (mp->nm_flags & NM_F_BUILTIN) != 0);
+  return (mp);
+}
 
 typedef void (UV_DYNAMIC* extInit)(Handle<Object> exports);
 
@@ -1739,12 +1920,12 @@ typedef void (UV_DYNAMIC* extInit)(Handle<Object> exports);
 void DLOpen(const FunctionCallbackInfo<Value>& args) {
   HandleScope handle_scope(args.GetIsolate());
   Environment* env = Environment::GetCurrent(args.GetIsolate());
-  char symbol[1024], *base, *pos;
+  struct node_module* mp;
   uv_lib_t lib;
-  int r;
 
   if (args.Length() < 2) {
-    return ThrowError("process.dlopen takes exactly 2 arguments.");
+    ThrowError("process.dlopen takes exactly 2 arguments.");
+    return;
   }
 
   Local<Object> module = args[0]->ToObject();  // Cast
@@ -1763,68 +1944,43 @@ void DLOpen(const FunctionCallbackInfo<Value>& args) {
     return;
   }
 
-  String::Utf8Value path(args[1]);
-  base = *path;
-
-  /* Find the shared library filename within the full path. */
-#ifdef __POSIX__
-  pos = strrchr(base, '/');
-  if (pos != NULL) {
-    base = pos + 1;
-  }
-#else  // Windows
-  for (;;) {
-    pos = strpbrk(base, "\\/:");
-    if (pos == NULL) {
-      break;
-    }
-    base = pos + 1;
-  }
-#endif  // __POSIX__
-
-  /* Strip the .node extension. */
-  pos = strrchr(base, '.');
-  if (pos != NULL) {
-    *pos = '\0';
-  }
-
-  /* Add the `_module` suffix to the extension name. */
-  r = snprintf(symbol, sizeof symbol, "%s_module", base);
-  if (r <= 0 || static_cast<size_t>(r) >= sizeof symbol) {
-    return ThrowError("Out of memory.");
-  }
-
-  /* Replace dashes with underscores. When loading foo-bar.node,
-   * look for foo_bar_module, not foo-bar_module.
+  /*
+   * Objects containing v14 or later modules will have registered themselves
+   * on the pending list.  Activate all of them now.  At present, only one
+   * module per object is supported.
    */
-  for (pos = symbol; *pos != '\0'; ++pos) {
-    if (*pos == '-')
-      *pos = '_';
-  }
+  mp = modpending;
+  modpending = NULL;
 
-  node_module_struct *mod;
-  if (uv_dlsym(&lib, symbol, reinterpret_cast<void**>(&mod))) {
-    char errmsg[1024];
-    snprintf(errmsg, sizeof(errmsg), "Symbol %s not found.", symbol);
-    return ThrowError(errmsg);
+  if (mp == NULL) {
+    ThrowError("Module did not self-register.");
+    return;
   }
-
-  if (mod->version != NODE_MODULE_VERSION) {
+  if (mp->nm_version != NODE_MODULE_VERSION) {
     char errmsg[1024];
     snprintf(errmsg,
              sizeof(errmsg),
              "Module version mismatch. Expected %d, got %d.",
-             NODE_MODULE_VERSION, mod->version);
-    return ThrowError(errmsg);
+             NODE_MODULE_VERSION, mp->nm_version);
+    ThrowError(errmsg);
+    return;
+  }
+  if (mp->nm_flags & NM_F_BUILTIN) {
+    ThrowError("Built-in module self-registered.");
+    return;
   }
 
-  // Execute the C++ module
-  if (mod->register_context_func != NULL) {
-    mod->register_context_func(exports, module, env->context());
-  } else if (mod->register_func != NULL) {
-    mod->register_func(exports, module);
+  mp->nm_dso_handle = lib.handle;
+  mp->nm_link = modlist_addon;
+  modlist_addon = mp;
+
+  if (mp->nm_context_register_func != NULL) {
+    mp->nm_context_register_func(exports, module, env->context(), mp->nm_priv);
+  } else if (mp->nm_register_func != NULL) {
+    mp->nm_register_func(exports, module, mp->nm_priv);
   } else {
-    return ThrowError("Module has no declared entry point.");
+    ThrowError("Module has no declared entry point.");
+    return;
   }
 
   // Tell coverity that 'handle' should not be freed when we return.
@@ -1839,10 +1995,7 @@ static void OnFatalError(const char* location, const char* message) {
     fprintf(stderr, "FATAL ERROR: %s\n", message);
   }
   fflush(stderr);
-#if defined(DEBUG)
   abort();
-#endif
-  exit(5);
 }
 
 
@@ -1930,14 +2083,15 @@ static void Binding(const FunctionCallbackInfo<Value>& args) {
   uint32_t l = modules->Length();
   modules->Set(l, OneByteString(node_isolate, buf));
 
-  node_module_struct* mod = get_builtin_module(*module_v);
+  node_module* mod = get_builtin_module(*module_v);
   if (mod != NULL) {
     exports = Object::New();
     // Internal bindings don't have a "module" object, only exports.
-    assert(mod->register_func == NULL);
-    assert(mod->register_context_func != NULL);
+    assert(mod->nm_register_func == NULL);
+    assert(mod->nm_context_register_func != NULL);
     Local<Value> unused = Undefined(env->isolate());
-    mod->register_context_func(exports, unused, env->context());
+    mod->nm_context_register_func(exports, unused,
+      env->context(), mod->nm_priv);
     cache->Set(module, exports);
   } else if (!strcmp(*module_v, "constants")) {
     exports = Object::New();
@@ -2482,6 +2636,7 @@ void SetupProcessObject(Environment* env,
 
   NODE_SET_METHOD(process, "_setupAsyncListener", SetupAsyncListener);
   NODE_SET_METHOD(process, "_setupNextTick", SetupNextTick);
+  NODE_SET_METHOD(process, "_setupDomainUse", SetupDomainUse);
 
   // values use to cross communicate with processNextTick
   Local<Object> tick_info_obj = Object::New();
@@ -2714,7 +2869,9 @@ static void ParseArgs(int* argc,
           fprintf(stderr, "%s: %s requires an argument\n", argv[0], arg);
           exit(9);
         }
-      } else if (argv[index + 1] != NULL && argv[index + 1][0] != '-') {
+      } else if ((index + 1 < nargs) &&
+                 argv[index + 1] != NULL &&
+                 argv[index + 1][0] != '-') {
         args_consumed += 1;
         eval_string = argv[index + 1];
         if (strncmp(eval_string, "\\-", 2) == 0) {
@@ -3162,7 +3319,7 @@ void AtExit(void (*cb)(void* arg), void* arg) {
 }
 
 
-void EmitExit(Environment* env) {
+int EmitExit(Environment* env) {
   // process.emit('exit')
   HandleScope handle_scope(env->isolate());
   Context::Scope context_scope(env->context());
@@ -3179,7 +3336,7 @@ void EmitExit(Environment* env) {
   };
 
   MakeCallback(env, process_object, "emit", ARRAY_SIZE(args), args);
-  exit(code);
+  return code;
 }
 
 
@@ -3253,6 +3410,7 @@ int Start(int argc, char** argv) {
   V8::SetEntropySource(crypto::EntropySource);
 #endif
 
+  int code;
   V8::Initialize();
   {
     Locker locker(node_isolate);
@@ -3264,7 +3422,7 @@ int Start(int argc, char** argv) {
     // be removed.
     Context::Scope context_scope(env->context());
     uv_run(env->event_loop(), UV_RUN_DEFAULT);
-    EmitExit(env);
+    code = EmitExit(env);
     RunAtExit(env);
     env->Dispose();
     env = NULL;
@@ -3278,7 +3436,7 @@ int Start(int argc, char** argv) {
   delete[] exec_argv;
   exec_argv = NULL;
 
-  return 0;
+  return code;
 }
 
 

@@ -24,6 +24,7 @@
 
 var common = require('../common');
 var assert = require('assert');
+var util = require('util');
 
 try {
   var crypto = require('crypto');
@@ -912,8 +913,23 @@ testPBKDF2('pass\0word', 'sa\0lt', 4096, 16,
            '\x56\xfa\x6a\xa7\x55\x48\x09\x9d\xcc\x37\xd7\xf0\x34' +
            '\x25\xe0\xc3');
 
+(function() {
+  var expected =
+      '64c486c55d30d4c5a079b8823b7d7cb37ff0556f537da8410233bcec330ed956';
+  var key = crypto.pbkdf2Sync('password', 'salt', 32, 32, 'sha256');
+  assert.equal(key.toString('hex'), expected);
+
+  crypto.pbkdf2('password', 'salt', 32, 32, 'sha256', common.mustCall(ondone));
+  function ondone(err, key) {
+    if (err) throw err;
+    assert.equal(key.toString('hex'), expected);
+  }
+})();
+
 function assertSorted(list) {
-  assert.deepEqual(list, list.sort());
+  // Array#sort() modifies the list in place so make a copy.
+  var sorted = util._extend([], list).sort();
+  assert.deepEqual(list, sorted);
 }
 
 // Assume that we have at least AES-128-CBC.
@@ -1005,6 +1021,19 @@ assert.throws(function() {
 assert.throws(function() {
   crypto.createVerify('RSA-SHA1').update('0', 'hex');
 }, /Bad input string/);
+
+assert.throws(function() {
+  var private = [
+    '-----BEGIN RSA PRIVATE KEY-----',
+    'MIGrAgEAAiEA+3z+1QNF2/unumadiwEr+C5vfhezsb3hp4jAnCNRpPcCAwEAAQIgQNriSQK4',
+    'EFwczDhMZp2dvbcz7OUUyt36z3S4usFPHSECEQD/41K7SujrstBfoCPzwC1xAhEA+5kt4BJy',
+    'eKN7LggbF3Dk5wIQN6SL+fQ5H/+7NgARsVBp0QIRANxYRukavs4QvuyNhMx+vrkCEQCbf6j/',
+    'Ig6/HueCK/0Jkmp+',
+    '-----END RSA PRIVATE KEY-----',
+    ''
+  ].join('\n');
+  crypto.createSign('RSA-SHA256').update('test').sign(private);
+}, /RSA_sign:digest too big for rsa key/);
 
 // Make sure memory isn't released before being returned
 console.log(crypto.randomBytes(16));
