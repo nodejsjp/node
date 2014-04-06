@@ -239,6 +239,10 @@ an empty string.  Examples:
     // returns
     '.html'
 
+    path.extname('index.coffee.md')
+    // returns
+    '.md'
+
     path.extname('index.')
     // returns
     '.'

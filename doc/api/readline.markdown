@@ -71,7 +71,7 @@ the following values:
    `isTTY` でチェックします。
 
 <!--
-The `completer` function is given a the current line entered by the user, and
+The `completer` function is given the current line entered by the user, and
 is supposed to return an Array with 2 entries:
 -->
 
@@ -499,3 +499,47 @@ line interface:
       console.log('Have a great day!');
       process.exit(0);
     });
+
+## readline.cursorTo(stream, x, y)
+
+<!--
+Move cursor to the specified position in a given TTY stream.
+-->
+
+カーソルを与えられた TTY スクリーンの指定の位置に移動します。
+
+## readline.moveCursor(stream, dx, dy)
+
+<!--
+Move cursor relative to it's current position in a given TTY stream.
+-->
+
+カーソルを与えられた TTY スクリーンの現在の位置からの相対位置に移動します。
+
+## readline.clearLine(stream, dir)
+
+<!--
+Clears current line of given TTY stream in a specified direction.
+`dir` should have one of following values:
+-->
+
+与えられた TTY スクリーンの現在の行を指定された方向に消去します。
+`dir` は以下の値のいずれか:
+
+<!--
+* `-1` - to the left from cursor
+* `1` - to the right from cursor
+* `0` - the entire line
+-->
+
+* `-1` - カーソルから左方向
+* `1` - カーソルから右方向
+* `0` - 行全体
+
+## readline.clearScreenDown(stream)
+
+<!--
+Clears the screen from the current position of the cursor down.
+-->
+
+スクリーンのカーソルより下を消去します。

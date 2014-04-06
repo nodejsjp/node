@@ -14,13 +14,13 @@ this module in order to use them.
 
 <!--
 To schedule execution of a one-time `callback` after `delay` milliseconds. Returns a
-`timeoutId` for possible use with `clearTimeout()`. Optionally you can
+`timeoutObject` for possible use with `clearTimeout()`. Optionally you can
 also pass arguments to the callback.
 -->
 
 `delay` ミリ秒が経過した後で、
 `callback` が一度だけ実行されるようにスケジュールします。
-`clearTimeout()` で使うことができる `timeoutId` を返します。
+`clearTimeout()` で使うことができる `timeoutObject` を返します。
 オプションとして、コールバックへの引数を渡すこともできます。
 
 <!--
@@ -36,7 +36,7 @@ Node.js はコールバックが呼び出される正確なタイミングも、
 呼び出される順番も保証しません。
 コールバックはできるだけ指定された時間に近いタイミングで呼び出されます。
 
-## clearTimeout(timeoutId)
+## clearTimeout(timeoutObject)
 
 <!--
 Prevents a timeout from triggering.
@@ -48,15 +48,15 @@ Prevents a timeout from triggering.
 
 <!--
 To schedule the repeated execution of `callback` every `delay` milliseconds.
-Returns a `intervalId` for possible use with `clearInterval()`. Optionally
+Returns a `intervalObject` for possible use with `clearInterval()`. Optionally
 you can also pass arguments to the callback.
 -->
 
 `delay` ミリ秒が経過するごとに繰り返し `callback` が実行されるようにスケジュールします。
-`clearInterval()` で使うことができる `intervalId` を返します。
+`clearInterval()` で使うことができる `intervalObject` を返します。
 オプションとして、コールバックへの引数を渡すこともできます。
 
-## clearInterval(intervalId)
+## clearInterval(intervalObject)
 
 <!--
 Stops a interval from triggering.
@@ -106,13 +106,13 @@ request the timer hold the program open. If the timer is already `ref`d calling
 <!--
 To schedule the "immediate" execution of `callback` after I/O events
 callbacks and before `setTimeout` and `setInterval` . Returns an
-`immediateId` for possible use with `clearImmediate()`. Optionally you
+`immediateObject` for possible use with `clearImmediate()`. Optionally you
 can also pass arguments to the callback.
 -->
 
 `callback` を「即時」 (I/O イベントのコールバックより後、`setTimeout` および
 `setInterval` よりも前) に実行するようスケジュールします。
-`clearImmediate()` に渡すことのできる `immediatedId` を返します。
+`clearImmediate()` に渡すことのできる `immediateObject` を返します。
 オプションとして、コールバックへの引数を渡すことができます。
 
 <!--
@@ -133,7 +133,7 @@ fire between any two scheduled immediate callbacks.
 二つの `setImmediate()` のコールバックが実行される順序は維持されますが、
 他の I/O が間に挟まるかもしれません。
 
-## clearImmediate(immediateId)
+## clearImmediate(immediateObject)
 
 <!--
 Stops an immediate from triggering.

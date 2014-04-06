@@ -1632,6 +1632,9 @@ how to implement Writable streams in your programs.
     returning false. Default=16kb
   * `decodeStrings` {Boolean} Whether or not to decode strings into
     Buffers before passing them to [`_write()`][].  Default=true
+  * `objectMode` {Boolean} Whether or not the `write(anyObj)` is
+    a valid operation. If set you can write arbitrary data instead
+    of only `Buffer` / `String` data.  Default=false
 -->
 
 * `options` {Object} (任意)
@@ -1639,6 +1642,10 @@ how to implement Writable streams in your programs.
     バッファレベル。デフォルトは 16kb。
   * `decodeStrings` {Boolean} 文字列が [`_write()`][] に渡される前に
     バッファにデコードするかどうか。デフォルトは `true`。
+  * `objectMode` {Boolean} `write(anyObj)` が妥当な操作かどうか。
+    もし `true` を設定すると、`Buffer` / `String` データのみではなく、
+    任意のデータを書き込むことができるようになります。
+    デフォルトは `false`。
 
 <!--
 In classes that extend the Writable class, make sure to call the

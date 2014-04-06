@@ -635,7 +635,7 @@ Use `env` to specify environment variables that will be visible to the new proce
 Example of running `ls -lh /usr`, capturing `stdout`, `stderr`, and the exit code:
 -->
 
-ls -lh /usr` を実行して `stdout`、`stderr`、および終了コードを取得する例:
+`ls -lh /usr` を実行して `stdout`、`stderr`、および終了コードを取得する例:
 
     var spawn = require('child_process').spawn,
         ls    = spawn('ls', ['-lh', '/usr']);
@@ -951,16 +951,16 @@ Runs a command in a shell and buffers the output.
 
 <!--
 The callback gets the arguments `(error, stdout, stderr)`. On success, `error`
-will be `null`.  On error, `error` will be an instance of `Error` and `err.code`
-will be the exit code of the child process, and `err.signal` will be set to the
+will be `null`.  On error, `error` will be an instance of `Error` and `error.code`
+will be the exit code of the child process, and `error.signal` will be set to the
 signal that terminated the process.
 -->
 
 コールバックは引数 `(error, stdout, stderr)` を得ます。
 成功すると、`error` は `null` になります。
 エラーだと、`error` は `Error` のインスタンスとなり、
-`err.code` は子プロセスの終了コード、
-`err.signal` はプロセスを終了させたシグナルとなります。
+`error.code` は子プロセスの終了コード、
+`error.signal` はプロセスを終了させたシグナルとなります。
 
 <!--
 There is a second optional argument to specify several options. The
